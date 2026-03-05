@@ -1,13 +1,13 @@
 {
   "project_info": {
-    "project_number": "692186991050",
-    "project_id": "egitim-16657",
-    "storage_bucket": "egitim-16657.firebasestorage.app"
+    "project_number": "54104143654",
+    "project_id": "ai-tutor-4a3e8",
+    "storage_bucket": "ai-tutor-4a3e8.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:692186991050:android:0450c7fae4c3da1afae733",
+        "mobilesdk_app_id": "1:54104143654:android:48ccea892392bc7a7173e7",
         "android_client_info": {
           "package_name": "com.egitim_ai_tutor.app"
         }
@@ -15,7 +15,7 @@
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyD0CFcUt5PtH63kQyQINo8Xx2Blc5g2fEE"
+          "current_key": "AIzaSyD4yEi1zZY1bTJ0ZvaNsccPU5kGyqkR0Xs"
         }
       ],
       "services": {

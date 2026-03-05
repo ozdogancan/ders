@@ -2,9 +2,9 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-
 import 'app.dart';
 import 'core/config/env.dart';
+import 'firebase_options.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -13,7 +13,6 @@ void main() {
 
 class _BootstrapApp extends StatefulWidget {
   const _BootstrapApp();
-
   @override
   State<_BootstrapApp> createState() => _BootstrapAppState();
 }
@@ -23,7 +22,9 @@ class _BootstrapAppState extends State<_BootstrapApp> {
 
   Future<void> _initializeBackends() async {
     try {
-      await Firebase.initializeApp();
+      await Firebase.initializeApp(
+        options: DefaultFirebaseOptions.currentPlatform,
+      );
     } catch (error) {
       debugPrint('Firebase init skipped: $error');
     }
@@ -51,7 +52,6 @@ class _BootstrapAppState extends State<_BootstrapApp> {
             home: Scaffold(body: Center(child: CircularProgressIndicator())),
           );
         }
-
         return const AiTutorApp();
       },
     );

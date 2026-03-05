@@ -93,7 +93,7 @@ class _MathTutorScreenState extends State<MathTutorScreen>
 
     String response;
     try {
-      if (Env.openAiApiKey.isEmpty) {
+      if (Env.openAiApiKey.isEmpty && Env.geminiApiKey.isEmpty) {
         response = _buildOfflineTutorResponse(input);
         _lastApiError =
             'OPENAI_API_KEY yok. Demo yanit acik. Gercek cevap icin: '
