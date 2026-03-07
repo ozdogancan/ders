@@ -1,115 +1,540 @@
+import 'dart:async';
 import 'dart:convert';
-import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/config/env.dart';
+import '../core/constants/app_colors.dart';
+import '../core/constants/lgs_math_learning_catalog.dart';
 import '../core/constants/math_topic_catalog.dart';
+import '../models/guided_lesson.dart';
 import '../services/chatgpt_service.dart';
-import '../services/tutor_voice_service.dart';
-import '../widgets/question_share_fab.dart';
+import '../services/credit_service.dart';
+import '../services/did_service.dart';
+import '../services/learning_resume_service.dart';
+import '../services/supabase_storage_service.dart';
+import '../widgets/did_video_view.dart';
+import '../widgets/experience_ui.dart';
+
+const String _kTutorAvatarUrl =
+    'https://create-images-results.d-id.com/DefaultPresenters/Noelle_f/thumbnail.jpeg';
+const String _kSelectedAvatarKey = 'lgs_math_selected_avatar_v3';
+const String _kUnlockedAvatarsKey = 'lgs_math_unlocked_avatars_v3';
+const int _kVideoCoachCreditCost = 12;
+
+enum _CoachStage { discover, guided, practice, boss }
+
+extension _CoachStageUi on _CoachStage {
+  String get title => switch (this) {
+    _CoachStage.discover => 'Fikri Yakala',
+    _CoachStage.guided => 'Birlikte Çöz',
+    _CoachStage.practice => 'Sıra Sende',
+    _CoachStage.boss => 'Boss Soru',
+  };
+
+  String get subtitle => switch (this) {
+    _CoachStage.discover => 'Konunun mantığını canlandır',
+    _CoachStage.guided => 'Örnek üstünden akışı kur',
+    _CoachStage.practice => 'Kontrollü deneme yap',
+    _CoachStage.boss => 'Yeni nesil soru ile sabitle',
+  };
+
+  String get promptGoal => switch (this) {
+    _CoachStage.discover => 'Kavramın sezgisini kur, sıkıcı olma.',
+    _CoachStage.guided => 'Çözümü öğrenciyi de dahil ederek anlat.',
+    _CoachStage.practice => 'Öğrenciye kısa bir deneme alanı aç.',
+    _CoachStage.boss => 'Zorlayıcı ama öğretici bir son meydan okuma kur.',
+  };
+
+  IconData get icon => switch (this) {
+    _CoachStage.discover => Icons.lightbulb_rounded,
+    _CoachStage.guided => Icons.route_rounded,
+    _CoachStage.practice => Icons.sports_score_rounded,
+    _CoachStage.boss => Icons.emoji_events_rounded,
+  };
+}
 
 class MathTutorScreen extends StatefulWidget {
   const MathTutorScreen({
     super.key,
     required this.examName,
     required this.subjectName,
+    this.initialJourneyId,
+    this.initialStageName,
   });
 
   final String examName;
   final String subjectName;
+  final String? initialJourneyId;
+  final String? initialStageName;
 
   @override
   State<MathTutorScreen> createState() => _MathTutorScreenState();
 }
 
-class _MathTutorScreenState extends State<MathTutorScreen>
-    with SingleTickerProviderStateMixin {
+class _MathTutorScreenState extends State<MathTutorScreen> {
   final ChatGptService _chatGptService = ChatGptService();
-  final TutorVoiceService _voiceService = TutorVoiceService();
-  final TextEditingController _topicController = TextEditingController();
+  final DidService _didService = DidService();
+  final SupabaseStorageService _storageService = SupabaseStorageService();
+  final CreditService _creditService = CreditService();
+  final LearningResumeService _resumeService = LearningResumeService();
+  final TextEditingController _coachQuestionController =
+      TextEditingController();
   final ScrollController _scrollController = ScrollController();
-  final List<_TutorMessage> _messages = <_TutorMessage>[];
 
-  late final AnimationController _mouthController;
-  late final List<String> _topics;
+  late final List<LgsMathJourney> _journeys;
+  late LgsMathJourney _selectedJourney;
 
-  bool _sending = false;
-  bool _speaking = false;
-  bool _chalkMode = true;
-  String? _activeTopic;
+  final List<_CoachMessage> _messages = <_CoachMessage>[];
+  final Map<String, GuidedLesson> _lessonCache = <String, GuidedLesson>{};
+  final Map<String, Set<_CoachStage>> _completedStages =
+      <String, Set<_CoachStage>>{};
+
+  _CoachStage _activeStage = _CoachStage.discover;
+  String? _selectedAvatarId;
+  Set<String> _unlockedAvatarIds = <String>{'atlas'};
+  int _credits = 0;
+  bool _loadingCredits = true;
+  bool _loadingLesson = false;
+  bool _sendingQuestion = false;
+  bool _videoCoachLoading = false;
   String? _lastApiError;
-  String _tutorAssetPath = 'assets/tutors/Geometri Man.png';
-  TutorVoiceGender _tutorVoiceGender = TutorVoiceGender.male;
+  String? _videoUrl;
+  String? _tutorPublicUrl;
+
+  static const List<_TutorAvatarOption> _avatarOptions = <_TutorAvatarOption>[
+    _TutorAvatarOption(
+      id: 'atlas',
+      name: 'Atlas',
+      role: 'Net anlatan ana koç',
+      assetPath: 'assets/tutors/Matematik Man.png',
+      unlockCost: 0,
+      accent: AppColors.subjectMat,
+    ),
+    _TutorAvatarOption(
+      id: 'mira',
+      name: 'Mira',
+      role: 'Geometri sezgisi güçlü koç',
+      assetPath: 'assets/tutors/Fizik Woman.png',
+      unlockCost: 18,
+      accent: AppColors.subjectFizik,
+    ),
+    _TutorAvatarOption(
+      id: 'nova',
+      name: 'Nova',
+      role: 'Hızlı tekrar ve boss soru koçu',
+      assetPath: 'assets/tutors/Geometri Man.png',
+      unlockCost: 30,
+      accent: AppColors.teal,
+    ),
+  ];
+
+  _TutorAvatarOption get _selectedAvatar {
+    return _avatarOptions.firstWhere(
+      (_TutorAvatarOption option) => option.id == _selectedAvatarId,
+      orElse: () => _avatarOptions.first,
+    );
+  }
+
+  String get _journeyKey => _selectedJourney.id;
+  String get _lessonKey => '${_selectedJourney.id}_${_activeStage.name}';
+  GuidedLesson? get _currentLesson => _lessonCache[_lessonKey];
+
+  Set<_CoachStage> get _completedForSelectedJourney {
+    return _completedStages[_journeyKey] ?? <_CoachStage>{};
+  }
+
+  double get _progressValue =>
+      _completedForSelectedJourney.length / _CoachStage.values.length;
+
+  int get _earnedXp =>
+      (_selectedJourney.xpReward * _completedForSelectedJourney.length) ~/
+      _CoachStage.values.length;
 
   @override
   void initState() {
     super.initState();
-    _topics = MathTopicCatalog.topicsForExam(widget.examName);
-    _mouthController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 220),
-    );
-    _resolveTutorAsset();
+    _journeys = _buildJourneys();
+    _selectedJourney = _resolveInitialJourney(widget.initialJourneyId);
+    _activeStage = _stageFromName(widget.initialStageName);
+    _loadStudioState();
+    _loadResumeSelection();
+    _loadCredits();
+    _loadLesson();
+    _persistLearningResume();
   }
 
   @override
   void dispose() {
-    _voiceService.stop();
-    _mouthController.dispose();
-    _topicController.dispose();
+    _coachQuestionController.dispose();
     _scrollController.dispose();
     super.dispose();
   }
 
-  String get _systemPrompt {
-    final String topicFocus = (_activeTopic ?? '').trim();
-    return 'Sen ogrenciye matematik anlatan profesyonel AI egitmensin. '
-        'Dil Turkce. Uslup net ve adim adim olsun. '
-        'Her yeni konuda once "Alt Basliklar" listesini cikar. '
-        'Ardindan o alt basliklari kolaydan zora anlat ve mini kontrol sorusu sor. '
-        'Sinav: ${widget.examName}. Brans: ${widget.subjectName}. '
-        '${topicFocus.isEmpty ? '' : 'Aktif konu: $topicFocus. Cevaplari bu konuya odakla.'}';
+  List<LgsMathJourney> _buildJourneys() {
+    if (widget.examName.trim() == 'LGS') {
+      return LgsMathLearningCatalog.journeys;
+    }
+
+    final List<String> topics = MathTopicCatalog.topicsForExam(widget.examName);
+    return List<LgsMathJourney>.generate(topics.length, (int index) {
+      final String topic = topics[index];
+      return LgsMathJourney(
+        id: 'generic_$index',
+        topicName: topic,
+        heroName: topic,
+        tagline: '$topic konusunu daha anlaşılır, kısa bloklarla çalış.',
+        masteryGoal: '$topic sorularında işlem yerine mantığı oturt.',
+        commonTrap:
+            '$topic sorularında ilk bilgiyi yanlış okuyup akışı kaçırmak.',
+        warmUpQuestion: '$topic için giriş seviyesinde bir örnekle başla.',
+        bossQuestion: '$topic için zorlayıcı ama öğretici bir soru çöz.',
+        skillChips: <String>['Temel mantık', 'Örnek soru', 'Mini tekrar'],
+        quickPrompts: <String>[
+          '$topic konusunu kısa anlat.',
+          '$topic için bir örnek çöz.',
+          '$topic için mini kontrol sorusu ver.',
+        ],
+        icon: Icons.auto_stories_rounded,
+        accent: AppColors.subjectMat,
+        xpReward: 80,
+        difficulty: 2,
+      );
+    });
   }
 
-  Future<void> _sendPrompt({String? presetTopic}) async {
-    final String input = (presetTopic ?? _topicController.text).trim();
-    if (input.isEmpty || _sending) {
+  LgsMathJourney _resolveInitialJourney(String? journeyId) {
+    if (journeyId == null || journeyId.isEmpty) {
+      return _journeys.first;
+    }
+    for (final LgsMathJourney journey in _journeys) {
+      if (journey.id == journeyId) {
+        return journey;
+      }
+    }
+    return _journeys.first;
+  }
+
+  _CoachStage _stageFromName(String? stageName) {
+    if (stageName == null || stageName.isEmpty) {
+      return _CoachStage.discover;
+    }
+    for (final _CoachStage stage in _CoachStage.values) {
+      if (stage.name == stageName) {
+        return stage;
+      }
+    }
+    return _CoachStage.discover;
+  }
+
+  Future<void> _loadResumeSelection() async {
+    if (widget.initialJourneyId != null) {
+      return;
+    }
+
+    final LearningResumeSnapshot? snapshot = await _resumeService.load();
+    if (snapshot == null ||
+        snapshot.examName != widget.examName ||
+        snapshot.subjectName != widget.subjectName ||
+        !mounted) {
       return;
     }
 
     setState(() {
-      if (presetTopic != null) {
-        _activeTopic = presetTopic;
+      _selectedJourney = _resolveInitialJourney(snapshot.journeyId);
+      _activeStage = _stageFromName(snapshot.stageName);
+    });
+    if (_currentLesson == null) {
+      await _loadLesson();
+    }
+  }
+
+  Future<void> _persistLearningResume() {
+    return _resumeService.save(
+      LearningResumeSnapshot(
+        examName: widget.examName,
+        subjectName: widget.subjectName,
+        journeyId: _selectedJourney.id,
+        journeyName: _selectedJourney.heroName,
+        stageName: _activeStage.name,
+        progressPercent: (_progressValue * 100).round(),
+        earnedXp: _earnedXp,
+      ),
+    );
+  }
+
+  Future<void> _loadStudioState() async {
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    final String? savedAvatar = prefs.getString(_kSelectedAvatarKey);
+    final List<String> unlocked =
+        prefs.getStringList(_kUnlockedAvatarsKey) ?? const <String>['atlas'];
+
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _selectedAvatarId = savedAvatar ?? 'atlas';
+      _unlockedAvatarIds = unlocked.toSet()..add('atlas');
+    });
+    await _syncTutorAvatar();
+  }
+
+  Future<void> _saveAvatarState() async {
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_kSelectedAvatarKey, _selectedAvatar.id);
+    await prefs.setStringList(
+      _kUnlockedAvatarsKey,
+      _unlockedAvatarIds.toList(),
+    );
+  }
+
+  Future<void> _loadCredits() async {
+    final int credits = await _creditService.getCredits();
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _credits = credits;
+      _loadingCredits = false;
+    });
+  }
+
+  Future<void> _syncTutorAvatar() async {
+    await _uploadTutorAvatar(_selectedAvatar.assetPath);
+  }
+
+  Future<void> _uploadTutorAvatar(String assetPath) async {
+    try {
+      final ByteData data = await rootBundle.load(assetPath);
+      final Uint8List bytes = data.buffer.asUint8List();
+      final String fileName = assetPath.split('/').last;
+      final String url = await _storageService.uploadAvatarBytes(
+        bytes: bytes,
+        fileName: fileName,
+      );
+      if (mounted) {
+        setState(() => _tutorPublicUrl = url);
       }
-      _sending = true;
-      _messages.add(_TutorMessage(role: 'user', text: input));
-      if (presetTopic != null) {
-        _topicController.text = presetTopic;
+    } catch (_) {
+      if (mounted) {
+        setState(() => _tutorPublicUrl = null);
+      }
+    }
+  }
+
+  Future<void> _loadLesson() async {
+    if (_loadingLesson) {
+      return;
+    }
+
+    setState(() {
+      _loadingLesson = true;
+      _lastApiError = null;
+    });
+
+    try {
+      GuidedLesson lesson;
+      if (Env.openAiApiKey.isEmpty && Env.geminiApiKey.isEmpty) {
+        lesson = _buildOfflineLesson();
+        _lastApiError =
+            'API anahtarı yok. Şimdilik bu uygulamaya özel demo akışı gösteriliyor.';
+      } else {
+        final String raw = await _chatGptService.askConversation(
+          systemPrompt: _lessonSystemPrompt,
+          messages: <Map<String, String>>[
+            <String, String>{'role': 'user', 'content': _buildLessonPrompt()},
+          ],
+        );
+        lesson = GuidedLesson.fromJson(_extractJsonObject(raw));
+      }
+
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _lessonCache[_lessonKey] = lesson;
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _lessonCache[_lessonKey] = _buildOfflineLesson();
+        _lastApiError = '$error';
+      });
+    } finally {
+      if (mounted) {
+        setState(() => _loadingLesson = false);
+      }
+    }
+  }
+
+  String get _lessonSystemPrompt => '''
+Sen bu uygulamanın matematik koçusun.
+Sıkıcı ders notu gibi konuşma. Öğrenciye küçük kazanımlar ver, sezgi kur, sonra örnek aç.
+Her cevap Türkçe olsun.
+8. sınıf öğrencisine göre yaz.
+Sadece geçerli JSON döndür. Markdown, açıklama veya ekstra anahtar ekleme.
+Şema:
+{
+  "title": "string",
+  "opening": "string",
+  "why_it_matters": "string",
+  "coach_steps": ["string", "string", "string"],
+  "challenge": "string",
+  "checkpoint": "string",
+  "watch_out": "string",
+  "celebration": "string",
+  "next_move": "string"
+}
+Kurallar:
+- coach_steps her biri 1-2 cümle olsun.
+- Öğrenciye hitap et.
+- Yeni nesil soru mantığını ihmal etme.
+- Ezber yerine mantık ve his oluştur.
+''';
+
+  String _buildLessonPrompt() {
+    return '''
+Sınav: ${widget.examName}
+Branş: ${widget.subjectName}
+Konu: ${_selectedJourney.topicName}
+Konunun sahne adı: ${_selectedJourney.heroName}
+Konu tonu: ${_selectedJourney.tagline}
+Hedef kazanım: ${_selectedJourney.masteryGoal}
+Yaygın tuzak: ${_selectedJourney.commonTrap}
+Bu aşama: ${_activeStage.title}
+Aşama amacı: ${_activeStage.promptGoal}
+Başlangıç sorusu: ${_selectedJourney.warmUpQuestion}
+Boss soru yönü: ${_selectedJourney.bossQuestion}
+Hızlı odak etiketleri: ${_selectedJourney.skillChips.join(', ')}
+
+Öğrenci bu ekranda gerçekten öğrendiğini hissetmeli. Bu yüzden:
+1. opening kısmı merak uyandırsın.
+2. why_it_matters kısmı neden öğrendiğini anlatsın.
+3. challenge kısmı öğrenciyi denemeye itsin.
+4. checkpoint kısmı tek kısa kontrol sorusu olsun.
+5. celebration kısmı motive edici ama abartısız olsun.
+''';
+  }
+
+  GuidedLesson _buildOfflineLesson() {
+    final String stageHook = switch (_activeStage) {
+      _CoachStage.discover =>
+        'Bu turda önce konunun neden çalıştığını zihninde oturtacağız.',
+      _CoachStage.guided =>
+        'Şimdi çözüm akışını benimle birlikte kurup güven kazanacağız.',
+      _CoachStage.practice =>
+        'Bu kez top sende; ben yön vereceğim ama düşünmeyi sana bırakacağım.',
+      _CoachStage.boss =>
+        'Artık konu sıcak. Şimdi yeni nesil bir boss soruyla seviyeyi sabitleyelim.',
+    };
+
+    final List<String> steps = switch (_activeStage) {
+      _CoachStage.discover => <String>[
+        '${_selectedJourney.topicName} konusunu işlem kalıbı değil, ${_selectedJourney.masteryGoal.toLowerCase()} olarak düşün.',
+        'İlk bakışta hangi bilgi anahtar, hangi bilgi dikkat dağıtıcı bunu ayır.',
+        '${_selectedJourney.commonTrap} tuzağına düşmemek için çözümden önce kısa bir plan kur.',
+      ],
+      _CoachStage.guided => <String>[
+        'Soruda senden ne istendiğini tek cümlede söyle.',
+        'Verilen bilgilerden işe yarayanları sırala ve bir ara adım çıkar.',
+        'Sonucu bulduktan sonra yeni nesil sorularda birim, yön ve yorum kontrolü yap.',
+      ],
+      _CoachStage.practice => <String>[
+        'Ben sadece yönü söyleyeceğim: ilk adımda ilişkileri yaz.',
+        'İkinci adımda işlemi değil mantığı kontrol et; neden o yöntemi seçtiğini söyle.',
+        'Son adımda cevabını yorumlayıp yanlış yapmaya açık noktayı fark et.',
+      ],
+      _CoachStage.boss => <String>[
+        'Boss soruda birden fazla fikir birleşir; bu yüzden önce soruyu parçala.',
+        'Kolay parçayı çöz, sonra zor parçaya geri dön.',
+        'Son kontrolde tuzak kelimeleri ve eksik yorum ihtimalini tara.',
+      ],
+    };
+
+    return GuidedLesson(
+      title: '${_activeStage.title} · ${_selectedJourney.heroName}',
+      opening: stageHook,
+      whyItMatters:
+          'Bu konu LGS\'de sadece işlem için değil, düşünme ritmini kurmak için kritik. ${_selectedJourney.tagline}',
+      coachSteps: steps,
+      challenge: _activeStage == _CoachStage.boss
+          ? _selectedJourney.bossQuestion
+          : _selectedJourney.warmUpQuestion,
+      checkpoint:
+          '${_selectedJourney.topicName} çalışırken bugün aklında tutman gereken tek fikir ne?',
+      watchOut: _selectedJourney.commonTrap,
+      celebration:
+          'Bir adımı temiz geçtiğinde konu gözünde küçülmeye başlar. Şu an tam o eşiği kuruyorsun.',
+      nextMove: _activeStage == _CoachStage.boss
+          ? 'İstersen şimdi koça kendi cümlenle takıldığın noktayı sor.'
+          : 'Hazırsan bu adımı tamamlayıp bir sonraki göreve geç.',
+    );
+  }
+
+  Map<String, dynamic> _extractJsonObject(String raw) {
+    final String cleaned = raw.trim();
+    final String withoutFence = cleaned
+        .replaceAll(RegExp(r'^```json\s*', caseSensitive: false), '')
+        .replaceAll(RegExp(r'^```\s*', caseSensitive: false), '')
+        .replaceAll(RegExp(r'\s*```$'), '')
+        .trim();
+
+    final Match? match = RegExp(r'\{[\s\S]*\}').firstMatch(withoutFence);
+    final String candidate = match?.group(0) ?? withoutFence;
+    final dynamic decoded = jsonDecode(candidate);
+    if (decoded is! Map<String, dynamic>) {
+      throw const FormatException('Model çıktısı JSON nesnesi değil.');
+    }
+    return decoded;
+  }
+
+  Future<void> _sendCoachQuestion({String? preset}) async {
+    final String input = (preset ?? _coachQuestionController.text).trim();
+    if (input.isEmpty || _sendingQuestion) {
+      return;
+    }
+
+    setState(() {
+      _sendingQuestion = true;
+      _messages.add(_CoachMessage(role: 'user', text: input));
+      if (preset != null) {
+        _coachQuestionController.text = preset;
       }
     });
-    _scrollToBottom();
 
     String response;
     try {
       if (Env.openAiApiKey.isEmpty && Env.geminiApiKey.isEmpty) {
-        response = _buildOfflineTutorResponse(input);
-        _lastApiError =
-            'OPENAI_API_KEY yok. Demo yanit acik. Gercek cevap icin: '
-            'flutter run --dart-define=OPENAI_API_KEY=...';
+        response =
+            'Kısa koç notu:\n- Bu soruyu ${_selectedJourney.topicName} mantığıyla parçalayalım.\n- Önce verilenleri netleştir.\n- Sonra hangi kuralın gerçekten işine yarayacağını seç.\n- İstersen şimdi tek bir adımını yaz, ben oradan devam edeyim.';
       } else {
         response = await _chatGptService.askConversation(
-          systemPrompt: _systemPrompt,
+          systemPrompt:
+              '''
+Sen öğrenciyi sıkmadan konuya sokan bir matematik koçusun.
+Türkçe yaz.
+Kısa bloklar kullan.
+Önce sezgi ver, sonra yön göster, en sonda mini kontrol sorusu sor.
+Konu: ${_selectedJourney.topicName}
+Aşama: ${_activeStage.title}
+''',
           messages: _messages
-              .map((m) => <String, String>{'role': m.role, 'content': m.text})
+              .map(
+                (_CoachMessage message) => <String, String>{
+                  'role': message.role,
+                  'content': message.text,
+                },
+              )
               .toList(),
         );
-        _lastApiError = null;
       }
     } catch (error) {
-      // API hatasinda akisi kesmemek icin yerel anlatima dus.
-      response = _buildOfflineTutorResponse(input);
+      response =
+          'Burada kısa bir koç molası verelim. Soruyu bir cümlede yeniden kur, sonra hangi bilginin asıl anahtar olduğunu beraber seçelim.';
       _lastApiError = '$error';
     }
 
@@ -117,62 +542,11 @@ class _MathTutorScreenState extends State<MathTutorScreen>
       return;
     }
     setState(() {
-      _messages.add(_TutorMessage(role: 'assistant', text: response));
-      _topicController.clear();
-      _sending = false;
+      _messages.add(_CoachMessage(role: 'assistant', text: response));
+      _coachQuestionController.clear();
+      _sendingQuestion = false;
     });
     _scrollToBottom();
-    await _speak(response);
-  }
-
-  Future<void> _speak(String text) async {
-    if (text.trim().isEmpty) {
-      return;
-    }
-
-    setState(() => _speaking = true);
-    _mouthController.repeat(reverse: true);
-    try {
-      await _voiceService.speak(text, gender: _tutorVoiceGender);
-    } catch (_) {
-      // TTS unavailable case.
-    } finally {
-      if (mounted) {
-        _mouthController.stop();
-        _mouthController.value = 0;
-        setState(() => _speaking = false);
-      }
-    }
-  }
-
-  String _buildOfflineTutorResponse(String topic) {
-    final String normalizedInput = topic.trim().toLowerCase();
-    final String scopedTopic = (_activeTopic ?? topic).trim();
-    final bool looksLikeQuestion =
-        normalizedInput.contains('?') ||
-        RegExp(
-          r'^(neden|nasil|niye|kac|ne|hangi|coz|cozer|hesapla|bul)\b',
-          caseSensitive: false,
-        ).hasMatch(normalizedInput);
-
-    if (looksLikeQuestion) {
-      return 'Soru: $topic\n'
-          'Konu: $scopedTopic\n\n'
-          'Hizli Yanit:\n'
-          '- Sorunu bu konuda adim adim cozelim.\n'
-          '- Once verilenleri yaz, sonra bilinmeyeni belirle.\n'
-          '- Uygun kurali sec ve islem adimlarini tek tek uygula.\n'
-          '- Sonucu kontrol ederek bitir.\n\n'
-          'Istersen sorunu buraya tam metin olarak yaz, ben tek tek cozumunu cikarayim.';
-    }
-
-    return 'Konu secildi: $scopedTopic\n\n'
-        'Alt Basliklar:\n'
-        '1) Temel kavramlar\n'
-        '2) Soru cozme adimlari\n'
-        '3) SIK yapilan hatalar\n'
-        '4) Yeni nesil soru taktigi\n\n'
-        'Simdi bu konuda istedigin soruyu yaz, direkt cevaplayayim.';
   }
 
   void _scrollToBottom() {
@@ -181,234 +555,609 @@ class _MathTutorScreenState extends State<MathTutorScreen>
         return;
       }
       _scrollController.animateTo(
-        _scrollController.position.maxScrollExtent + 180,
+        _scrollController.position.maxScrollExtent + 120,
         duration: const Duration(milliseconds: 260),
-        curve: Curves.easeOut,
+        curve: Curves.easeOutCubic,
       );
     });
   }
 
-  String _normalizeForMatch(String value) {
-    return value
-        .toLowerCase()
-        .replaceAll('ı', 'i')
-        .replaceAll('ğ', 'g')
-        .replaceAll('ü', 'u')
-        .replaceAll('ş', 's')
-        .replaceAll('ö', 'o')
-        .replaceAll('ç', 'c')
-        .replaceAll('â', 'a')
-        .replaceAll('î', 'i')
-        .replaceAll('û', 'u');
+  void _selectJourney(LgsMathJourney journey) {
+    setState(() {
+      _selectedJourney = journey;
+      _activeStage = _CoachStage.discover;
+    });
+    _persistLearningResume();
+    if (_currentLesson == null) {
+      _loadLesson();
+    }
   }
 
-  TutorVoiceGender _detectGenderFromPath(String path) {
-    final String lower = path.toLowerCase();
-    if (lower.contains('woman') ||
-        lower.contains('women') ||
-        lower.contains('female') ||
-        lower.contains('kadin')) {
-      return TutorVoiceGender.female;
+  void _selectStage(_CoachStage stage) {
+    setState(() => _activeStage = stage);
+    _persistLearningResume();
+    if (_currentLesson == null) {
+      _loadLesson();
     }
-    if (lower.contains('man') ||
-        lower.contains('male') ||
-        lower.contains('erkek')) {
-      return TutorVoiceGender.male;
-    }
-    return TutorVoiceGender.neutral;
   }
 
-  Future<void> _resolveTutorAsset() async {
-    try {
-      final String manifestRaw = await rootBundle.loadString(
-        'AssetManifest.json',
+  void _markStageCompleted() {
+    final Set<_CoachStage> completed =
+        _completedStages[_journeyKey] ?? <_CoachStage>{};
+    if (completed.contains(_activeStage)) {
+      return;
+    }
+    setState(() {
+      completed.add(_activeStage);
+      _completedStages[_journeyKey] = completed;
+    });
+
+    final int currentIndex = _CoachStage.values.indexOf(_activeStage);
+    if (currentIndex < _CoachStage.values.length - 1) {
+      setState(() => _activeStage = _CoachStage.values[currentIndex + 1]);
+      if (_currentLesson == null) {
+        _loadLesson();
+      }
+    }
+    _persistLearningResume();
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          '${_activeStage.title} tamamlandı. ${_selectedJourney.xpReward ~/ 4} XP kazandın.',
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showAvatarStudio() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (BuildContext context) {
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          child: FrostedCard(
+            radius: 32,
+            child: SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    Container(
+                      width: 48,
+                      height: 5,
+                      decoration: BoxDecoration(
+                        color: AppColors.border,
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    SectionHeading(
+                      eyebrow: 'AVATAR STÜDYOSU',
+                      title: 'Koçunu seç',
+                      subtitle:
+                          'Avatar hep ekranda durmak zorunda değil. Buradan seçilir, video koç çağrısında devreye girer.',
+                    ),
+                    const SizedBox(height: 16),
+                    ..._avatarOptions.map((_TutorAvatarOption option) {
+                      final bool unlocked = _unlockedAvatarIds.contains(
+                        option.id,
+                      );
+                      final bool selected = option.id == _selectedAvatar.id;
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: FrostedCard(
+                          child: Row(
+                            children: <Widget>[
+                              _PortraitBadge(
+                                assetPath: option.assetPath,
+                                size: 68,
+                                accent: option.accent,
+                              ),
+                              const SizedBox(width: 14),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: <Widget>[
+                                    Row(
+                                      children: <Widget>[
+                                        Expanded(
+                                          child: Text(
+                                            option.name,
+                                            style: Theme.of(
+                                              context,
+                                            ).textTheme.titleMedium,
+                                          ),
+                                        ),
+                                        if (selected)
+                                          const InfoPill(
+                                            label: 'Seçili',
+                                            backgroundColor:
+                                                AppColors.brandLight,
+                                            foregroundColor: AppColors.brand,
+                                          ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      option.role,
+                                      style: Theme.of(
+                                        context,
+                                      ).textTheme.bodyMedium,
+                                    ),
+                                    const SizedBox(height: 10),
+                                    Text(
+                                      unlocked
+                                          ? 'Kilidi açık'
+                                          : '${option.unlockCost} kredi ile açılır',
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .titleSmall
+                                          ?.copyWith(color: option.accent),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              FilledButton(
+                                onPressed: () => _handleAvatarAction(option),
+                                child: Text(
+                                  unlocked
+                                      ? (selected ? 'Seçili' : 'Seç')
+                                      : 'Aç',
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    }),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _handleAvatarAction(_TutorAvatarOption option) async {
+    if (_unlockedAvatarIds.contains(option.id)) {
+      setState(() => _selectedAvatarId = option.id);
+      await _saveAvatarState();
+      await _syncTutorAvatar();
+      if (!mounted) {
+        return;
+      }
+      Navigator.of(context).pop();
+      return;
+    }
+
+    if (_credits < option.unlockCost) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Bu avatarı açmak için daha fazla kredi gerekiyor.'),
+        ),
       );
-      final Map<String, dynamic> manifest =
-          jsonDecode(manifestRaw) as Map<String, dynamic>;
-      final List<String> tutorAssets = manifest.keys
-          .where((String path) => path.startsWith('assets/tutors/'))
-          .toList();
+      return;
+    }
 
-      final String subject = _normalizeForMatch(widget.subjectName);
-      String? match;
+    final int updated = await _creditService.spendCredits(option.unlockCost);
+    setState(() {
+      _credits = updated;
+      _unlockedAvatarIds = <String>{..._unlockedAvatarIds, option.id};
+      _selectedAvatarId = option.id;
+    });
+    await _saveAvatarState();
+    await _syncTutorAvatar();
 
-      // Try exact math tutor first.
-      if (subject.contains('matematik')) {
-        match = tutorAssets.firstWhere(
-          (String p) => _normalizeForMatch(p).contains('matematik'),
-          orElse: () => '',
-        );
-      }
+    if (!mounted) {
+      return;
+    }
+    Navigator.of(context).pop();
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('${option.name} koçu açıldı.')));
+  }
 
-      // Fallbacks for math branch.
-      if (match == null || match.isEmpty) {
-        match = tutorAssets.firstWhere(
-          (String p) => _normalizeForMatch(p).contains('geometri'),
-          orElse: () => '',
-        );
-      }
+  Future<void> _launchVideoCoach() async {
+    if (_videoCoachLoading) {
+      return;
+    }
+    if (_credits < _kVideoCoachCreditCost) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Video koç açmak için en az 12 kredi gerekiyor.'),
+        ),
+      );
+      return;
+    }
+
+    setState(() => _videoCoachLoading = true);
+    try {
+      final int updatedCredits = await _creditService.spendCredits(
+        _kVideoCoachCreditCost,
+      );
+      final String avatarUrl = _tutorPublicUrl ?? _kTutorAvatarUrl;
+      final GuidedLesson? lesson = _currentLesson;
+      final String speechText = lesson == null
+          ? '${_selectedJourney.topicName} için hazırım. Önce mantığı kuracağız, sonra seni kısa bir denemeye sokacağım.'
+          : '${lesson.opening} Şimdi bir adım daha ilerleyelim. Kontrol sorum şu: ${lesson.checkpoint}';
+      final String shortText = speechText.length > 220
+          ? '${speechText.substring(0, 220)}...'
+          : speechText;
+
+      final String videoUrl = await _didService.createTalkingVideo(
+        imageUrl: avatarUrl,
+        text: shortText,
+      );
 
       if (!mounted) {
         return;
       }
-      if (match.isNotEmpty) {
-        setState(() {
-          _tutorAssetPath = match!;
-          _tutorVoiceGender = _detectGenderFromPath(match);
-        });
+      setState(() {
+        _credits = updatedCredits;
+        _videoUrl = videoUrl;
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
       }
-    } catch (_) {
-      // Keep default tutor asset and voice.
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Video koç başlatılamadı: $error')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _videoCoachLoading = false);
+      }
     }
   }
 
-  TextStyle _chalkTextStyle({
-    double size = 15,
-    FontWeight weight = FontWeight.w500,
-  }) {
-    return TextStyle(
-      fontFamily: 'monospace',
-      fontSize: size,
-      fontWeight: weight,
-      color: const Color(0xFFF4F8EE),
-      letterSpacing: 0.3,
-      height: 1.32,
-      shadows: const <Shadow>[
-        Shadow(color: Color(0x66FFFFFF), blurRadius: 0.8, offset: Offset(0, 0)),
-      ],
-    );
+  void _closeVideoCoach() {
+    setState(() => _videoUrl = null);
   }
 
   @override
   Widget build(BuildContext context) {
+    final GuidedLesson? lesson = _currentLesson;
+
     return Scaffold(
       appBar: AppBar(
-        title: Text('${widget.examName} Matematik Egitmeni'),
+        title: Text('${widget.examName} · Matematik Koçu'),
         actions: <Widget>[
-          IconButton(
-            tooltip: _chalkMode ? 'Normal gorunum' : 'Tebesir modu',
-            onPressed: () => setState(() => _chalkMode = !_chalkMode),
-            icon: Icon(_chalkMode ? Icons.dark_mode : Icons.edit_note),
+          Padding(
+            padding: const EdgeInsets.only(right: 16),
+            child: Center(
+              child: InfoPill(
+                label: _loadingCredits ? '...' : '$_credits kredi',
+                icon: Icons.bolt_rounded,
+                backgroundColor: AppColors.brandLight,
+                foregroundColor: AppColors.brand,
+              ),
+            ),
           ),
         ],
       ),
-      floatingActionButton: const QuestionShareFab(heroTag: 'fab_math_tutor'),
-      body: LayoutBuilder(
-        builder: (BuildContext context, BoxConstraints constraints) {
-          final double tutorHeight = math.min(
-            240,
-            math.max(140, constraints.maxHeight * 0.28),
-          );
-          const double composerHeight = 140;
-
-          return Stack(
-            children: <Widget>[
-              Positioned.fill(
-                child: _BoardBackground(
-                  chalkMode: _chalkMode,
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+      body: Stack(
+        children: <Widget>[
+          AppBackdrop(
+            primaryGlow: _selectedJourney.accent,
+            secondaryGlow: AppColors.cyan,
+            child: SafeArea(
+              top: false,
+              child: ListView(
+                controller: _scrollController,
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 32),
+                children: <Widget>[
+                  _CoachHero(
+                    journey: _selectedJourney,
+                    avatar: _selectedAvatar,
+                    credits: _credits,
+                    progressValue: _progressValue,
+                    earnedXp: _earnedXp,
+                    onAvatarTap: _showAvatarStudio,
+                    onVideoCoachTap: _launchVideoCoach,
+                    videoCoachLoading: _videoCoachLoading,
+                  ),
+                  if (_lastApiError != null) ...<Widget>[
+                    const SizedBox(height: 14),
+                    FrostedCard(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 14,
+                      ),
+                      color: AppColors.accentLight,
+                      borderColor: AppColors.rose,
+                      child: Text(
+                        _lastApiError!,
+                        style: Theme.of(
+                          context,
+                        ).textTheme.bodyMedium?.copyWith(color: AppColors.ink),
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 24),
+                  SectionHeading(
+                    eyebrow: 'KONU HARİTASI',
+                    title: 'Konuyu ezbersiz değil, görev mantığıyla seç.',
+                    subtitle:
+                        'Kartlar artık düz konu listesi değil. Her biri ayrı beceri ve oyunlaştırılmış akış taşıyor.',
+                  ),
+                  const SizedBox(height: 14),
+                  GridView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: _journeys.length,
+                    gridDelegate:
+                        const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 2,
+                          mainAxisSpacing: 14,
+                          crossAxisSpacing: 14,
+                          childAspectRatio: 0.95,
+                        ),
+                    itemBuilder: (_, int index) {
+                      final LgsMathJourney journey = _journeys[index];
+                      return _JourneyCard(
+                        journey: journey,
+                        selected: journey.id == _selectedJourney.id,
+                        completedStages:
+                            _completedStages[journey.id]?.length ?? 0,
+                        onTap: () => _selectJourney(journey),
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 24),
+                  SectionHeading(
+                    eyebrow: 'BUGÜNKÜ ROTA',
+                    title: '${_selectedJourney.heroName} için dört akıllı adım',
+                    subtitle:
+                        'Kunduz benzeri bir cevap hissi yerine, öğrenme ilerlemesini görünür kılan bir görev zinciri kurduk.',
+                  ),
+                  const SizedBox(height: 14),
+                  SizedBox(
+                    height: 126,
+                    child: ListView.separated(
+                      scrollDirection: Axis.horizontal,
+                      itemCount: _CoachStage.values.length,
+                      separatorBuilder: (_, _) => const SizedBox(width: 12),
+                      itemBuilder: (_, int index) {
+                        final _CoachStage stage = _CoachStage.values[index];
+                        return _StageCard(
+                          stage: stage,
+                          accent: _selectedJourney.accent,
+                          selected: stage == _activeStage,
+                          completed: _completedForSelectedJourney.contains(
+                            stage,
+                          ),
+                          onTap: () => _selectStage(stage),
+                        );
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  FrostedCard(
+                    child: _loadingLesson
+                        ? const SizedBox(
+                            height: 220,
+                            child: Center(child: CircularProgressIndicator()),
+                          )
+                        : lesson == null
+                        ? _LessonEmptyState(onLoad: _loadLesson)
+                        : _LessonPanel(
+                            lesson: lesson,
+                            journey: _selectedJourney,
+                            stage: _activeStage,
+                            accent: _selectedJourney.accent,
+                            onReload: _loadLesson,
+                            onComplete: _markStageCompleted,
+                          ),
+                  ),
+                  const SizedBox(height: 24),
+                  SectionHeading(
+                    eyebrow: 'KOÇA SOR',
+                    title: 'Takıldığın yeri kendi cümlenle aç.',
+                    subtitle:
+                        'Serbest soru alanı hâlâ var; ama artık ana deneyim değil, görev akışını tamamlayan destek katmanı.',
+                  ),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 10,
+                    runSpacing: 10,
+                    children: _selectedJourney.quickPrompts.map((
+                      String prompt,
+                    ) {
+                      return _QuickPromptChip(
+                        label: prompt,
+                        accent: _selectedJourney.accent,
+                        onTap: () => _sendCoachQuestion(preset: prompt),
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 12),
+                  FrostedCard(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: <Widget>[
-                        if (_lastApiError != null)
-                          Container(
-                            margin: const EdgeInsets.only(bottom: 8),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 8,
-                            ),
-                            decoration: BoxDecoration(
-                              color: _chalkMode
-                                  ? const Color(0x2AE7C56A)
-                                  : const Color(0xFFFFF4D6),
-                              borderRadius: BorderRadius.circular(10),
-                              border: Border.all(
-                                color: _chalkMode
-                                    ? const Color(0x77EEDC9A)
-                                    : const Color(0xFFE4C978),
-                              ),
-                            ),
-                            child: Text(
-                              _lastApiError!,
-                              style: TextStyle(
-                                color: _chalkMode
-                                    ? const Color(0xFFFFF6D1)
-                                    : const Color(0xFF6E5A18),
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                        SizedBox(
-                          height: 42,
-                          child: ListView.separated(
-                            scrollDirection: Axis.horizontal,
-                            itemCount: _topics.length,
-                            separatorBuilder: (_, _) =>
-                                const SizedBox(width: 8),
-                            itemBuilder: (_, int index) {
-                              final String topic = _topics[index];
-                              return _TopicPill(
-                                label: topic,
-                                chalkMode: _chalkMode,
-                                selected: _activeTopic == topic,
-                                onPressed: _sending
-                                    ? null
-                                    : () => _sendPrompt(presetTopic: topic),
-                              );
-                            },
+                        TextField(
+                          controller: _coachQuestionController,
+                          minLines: 1,
+                          maxLines: 4,
+                          textInputAction: TextInputAction.send,
+                          onSubmitted: (_) => _sendCoachQuestion(),
+                          decoration: InputDecoration(
+                            labelText: 'Koça sor',
+                            hintText:
+                                '${_selectedJourney.topicName} konusunda takıldığın yeri yaz',
+                            prefixIcon: const Icon(Icons.forum_rounded),
                           ),
                         ),
-                        const SizedBox(height: 10),
-                        Expanded(
-                          child: ListView.separated(
-                            controller: _scrollController,
-                            padding: EdgeInsets.only(
-                              bottom: tutorHeight + composerHeight + 24,
+                        const SizedBox(height: 12),
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: FilledButton.icon(
+                            onPressed: _sendingQuestion
+                                ? null
+                                : () => _sendCoachQuestion(),
+                            icon: _sendingQuestion
+                                ? const SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                : const Icon(Icons.send_rounded),
+                            label: Text(
+                              _sendingQuestion
+                                  ? 'Gönderiliyor...'
+                                  : 'Koçu Çağır',
                             ),
-                            itemCount: _messages.length,
-                            separatorBuilder: (_, _) =>
-                                const SizedBox(height: 8),
-                            itemBuilder: (_, int index) {
-                              final _TutorMessage message = _messages[index];
-                              final bool isUser = message.role == 'user';
-                              return Align(
-                                alignment: isUser
-                                    ? Alignment.centerRight
-                                    : Alignment.centerLeft,
-                                child: ConstrainedBox(
-                                  constraints: const BoxConstraints(
-                                    maxWidth: 620,
-                                  ),
-                                  child: DecoratedBox(
-                                    decoration: BoxDecoration(
-                                      color: _chalkMode
-                                          ? (isUser
-                                                ? const Color(0x2A80CBC4)
-                                                : const Color(0x22000000))
-                                          : (isUser
-                                                ? const Color(0xFFEAF4FF)
-                                                : Colors.white),
-                                      borderRadius: BorderRadius.circular(12),
-                                      border: Border.all(
-                                        color: _chalkMode
-                                            ? const Color(0x6699E2CC)
-                                            : const Color(0xFFD8DFE8),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  if (_messages.isEmpty)
+                    const _ChatEmptyState()
+                  else
+                    ..._messages.map((_CoachMessage message) {
+                      final bool isUser = message.role == 'user';
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: Align(
+                          alignment: isUser
+                              ? Alignment.centerRight
+                              : Alignment.centerLeft,
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 620),
+                            child: FrostedCard(
+                              padding: const EdgeInsets.all(16),
+                              color: isUser
+                                  ? AppColors.brandLight
+                                  : AppColors.white.withValues(alpha: 0.9),
+                              borderColor: isUser
+                                  ? AppColors.brand.withValues(alpha: 0.16)
+                                  : AppColors.white,
+                              child: Text(
+                                message.text,
+                                style: Theme.of(context).textTheme.bodyMedium
+                                    ?.copyWith(color: AppColors.textPrimary),
+                              ),
+                            ),
+                          ),
+                        ),
+                      );
+                    }),
+                ],
+              ),
+            ),
+          ),
+          if (_videoUrl != null || _videoCoachLoading)
+            Positioned.fill(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: AppColors.ink.withValues(alpha: 0.74),
+                ),
+                child: SafeArea(
+                  child: Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Column(
+                      children: <Widget>[
+                        Align(
+                          alignment: Alignment.topRight,
+                          child: IconButton(
+                            onPressed: _closeVideoCoach,
+                            icon: const Icon(Icons.close_rounded),
+                            color: AppColors.white,
+                          ),
+                        ),
+                        Expanded(
+                          child: Center(
+                            child: FrostedCard(
+                              radius: 36,
+                              color: AppColors.inkSoft.withValues(alpha: 0.84),
+                              borderColor: AppColors.white.withValues(
+                                alpha: 0.1,
+                              ),
+                              padding: const EdgeInsets.all(20),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: <Widget>[
+                                  Row(
+                                    children: <Widget>[
+                                      _PortraitBadge(
+                                        assetPath: _selectedAvatar.assetPath,
+                                        size: 64,
+                                        accent: _selectedAvatar.accent,
                                       ),
-                                    ),
-                                    child: Padding(
-                                      padding: const EdgeInsets.all(10),
-                                      child: Text(
-                                        message.text,
-                                        style: _chalkMode
-                                            ? _chalkTextStyle(size: 14)
-                                            : null,
+                                      const SizedBox(width: 14),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: <Widget>[
+                                            Text(
+                                              '${_selectedAvatar.name} · Video Koç',
+                                              style: Theme.of(context)
+                                                  .textTheme
+                                                  .titleLarge
+                                                  ?.copyWith(
+                                                    color: AppColors.white,
+                                                  ),
+                                            ),
+                                            const SizedBox(height: 4),
+                                            Text(
+                                              _videoCoachLoading
+                                                  ? 'Koç bağlanıyor...'
+                                                  : 'Kısa bir odak konuşması ile seni derse geri sokuyor.',
+                                              style: Theme.of(context)
+                                                  .textTheme
+                                                  .bodyMedium
+                                                  ?.copyWith(
+                                                    color: AppColors.white
+                                                        .withValues(alpha: 0.7),
+                                                  ),
+                                            ),
+                                          ],
+                                        ),
                                       ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 18),
+                                  Expanded(
+                                    child: ClipRRect(
+                                      borderRadius: BorderRadius.circular(28),
+                                      child: _videoCoachLoading
+                                          ? DecoratedBox(
+                                              decoration: BoxDecoration(
+                                                gradient: LinearGradient(
+                                                  begin: Alignment.topLeft,
+                                                  end: Alignment.bottomRight,
+                                                  colors: <Color>[
+                                                    _selectedAvatar.accent
+                                                        .withValues(alpha: 0.4),
+                                                    AppColors.inkSoft,
+                                                  ],
+                                                ),
+                                              ),
+                                              child: const Center(
+                                                child:
+                                                    CircularProgressIndicator(),
+                                              ),
+                                            )
+                                          : DidVideoView(
+                                              videoUrl: _videoUrl!,
+                                              onEnded: _closeVideoCoach,
+                                            ),
                                     ),
                                   ),
-                                ),
-                              );
-                            },
+                                ],
+                              ),
+                            ),
                           ),
                         ),
                       ],
@@ -416,158 +1165,389 @@ class _MathTutorScreenState extends State<MathTutorScreen>
                   ),
                 ),
               ),
-              Positioned(
-                left: 10,
-                bottom: composerHeight + 16,
-                child: _TutorCharacter(
-                  speaking: _speaking,
-                  mouthAnimation: _mouthController,
-                  height: tutorHeight,
-                  chalkMode: _chalkMode,
-                  assetPath: _tutorAssetPath,
-                ),
-              ),
-              Positioned(
-                left: 0,
-                right: 0,
-                bottom: 0,
-                child: _ComposerBar(
-                  controller: _topicController,
-                  sending: _sending,
-                  chalkMode: _chalkMode,
-                  onSubmit: () => _sendPrompt(),
-                ),
-              ),
-            ],
-          );
-        },
+            ),
+        ],
       ),
     );
   }
 }
 
-class _BoardBackground extends StatelessWidget {
-  const _BoardBackground({required this.child, required this.chalkMode});
+class _CoachHero extends StatelessWidget {
+  const _CoachHero({
+    required this.journey,
+    required this.avatar,
+    required this.credits,
+    required this.progressValue,
+    required this.earnedXp,
+    required this.onAvatarTap,
+    required this.onVideoCoachTap,
+    required this.videoCoachLoading,
+  });
 
-  final Widget child;
-  final bool chalkMode;
+  final LgsMathJourney journey;
+  final _TutorAvatarOption avatar;
+  final int credits;
+  final double progressValue;
+  final int earnedXp;
+  final VoidCallback onAvatarTap;
+  final VoidCallback onVideoCoachTap;
+  final bool videoCoachLoading;
 
   @override
   Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: chalkMode
-              ? const <Color>[Color(0xFF0E4E43), Color(0xFF0B3D35)]
-              : const <Color>[Color(0xFFF6FAFF), Color(0xFFE9F2FC)],
+    return FrostedCard(
+      padding: const EdgeInsets.all(0),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(34),
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: <Color>[
+              AppColors.ink,
+              AppColors.inkSoft,
+              journey.accent.withValues(alpha: 0.96),
+            ],
+          ),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        const InfoPill(
+                          label: 'LGS Matematik Koçu',
+                          icon: Icons.psychology_alt_rounded,
+                        ),
+                        const SizedBox(height: 18),
+                        Text(
+                          journey.heroName,
+                          style: Theme.of(context).textTheme.headlineMedium
+                              ?.copyWith(color: AppColors.white),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          journey.topicName,
+                          style: Theme.of(context).textTheme.titleLarge
+                              ?.copyWith(color: AppColors.white),
+                        ),
+                        const SizedBox(height: 10),
+                        Text(
+                          journey.tagline,
+                          style: Theme.of(context).textTheme.bodyMedium
+                              ?.copyWith(
+                                color: AppColors.white.withValues(alpha: 0.74),
+                              ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Column(
+                    children: <Widget>[
+                      _PortraitBadge(
+                        assetPath: avatar.assetPath,
+                        size: 86,
+                        accent: avatar.accent,
+                      ),
+                      const SizedBox(height: 10),
+                      OutlinedButton(
+                        onPressed: onAvatarTap,
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: AppColors.white,
+                          side: BorderSide(
+                            color: AppColors.white.withValues(alpha: 0.14),
+                          ),
+                        ),
+                        child: const Text('Avatar'),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              const SizedBox(height: 18),
+              Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: journey.skillChips
+                    .map((String chip) => InfoPill(label: chip))
+                    .toList(),
+              ),
+              const SizedBox(height: 22),
+              LinearProgressIndicator(
+                value: progressValue,
+                minHeight: 10,
+                borderRadius: BorderRadius.circular(999),
+                backgroundColor: AppColors.white.withValues(alpha: 0.16),
+                valueColor: const AlwaysStoppedAnimation<Color>(AppColors.sun),
+              ),
+              const SizedBox(height: 14),
+              Wrap(
+                spacing: 20,
+                runSpacing: 14,
+                children: <Widget>[
+                  HighlightMetric(
+                    value: '${(progressValue * 100).round()}%',
+                    label: 'rota ilerlemesi',
+                    light: true,
+                  ),
+                  HighlightMetric(
+                    value: '$earnedXp XP',
+                    label: 'bugün kazanılan',
+                    light: true,
+                  ),
+                  HighlightMetric(
+                    value: '$credits',
+                    label: 'mevcut kredi',
+                    light: true,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 22),
+              Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                children: <Widget>[
+                  FilledButton.icon(
+                    onPressed: onVideoCoachTap,
+                    icon: videoCoachLoading
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.videocam_rounded),
+                    label: const Text('Video Koç · 12 kredi'),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: onAvatarTap,
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.white,
+                      side: BorderSide(
+                        color: AppColors.white.withValues(alpha: 0.14),
+                      ),
+                    ),
+                    icon: const Icon(Icons.tune_rounded),
+                    label: const Text('Avatar Stüdyosu'),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
-      child: CustomPaint(painter: _GridPainter(chalkMode), child: child),
     );
   }
 }
 
-class _GridPainter extends CustomPainter {
-  _GridPainter(this.chalkMode);
-
-  final bool chalkMode;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final Paint linePaint = Paint()
-      ..color = chalkMode ? const Color(0x22E4F8EB) : const Color(0xFFD8E4F1)
-      ..strokeWidth = 1;
-    const double gap = 34;
-    final Paint dustPaint = Paint()
-      ..color = chalkMode ? const Color(0x22FFFFFF) : const Color(0x0A000000);
-
-    for (double y = 0; y < size.height; y += gap) {
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), linePaint);
-    }
-
-    for (double x = 0; x < size.width; x += 120) {
-      canvas.drawCircle(
-        Offset(x + 20, (x * 1.7) % size.height),
-        2.2,
-        dustPaint,
-      );
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
-}
-
-class _TutorCharacter extends StatelessWidget {
-  const _TutorCharacter({
-    required this.speaking,
-    required this.mouthAnimation,
-    required this.height,
-    required this.chalkMode,
-    required this.assetPath,
+class _JourneyCard extends StatelessWidget {
+  const _JourneyCard({
+    required this.journey,
+    required this.selected,
+    required this.completedStages,
+    required this.onTap,
   });
 
-  final bool speaking;
-  final AnimationController mouthAnimation;
-  final double height;
-  final bool chalkMode;
-  final String assetPath;
+  final LgsMathJourney journey;
+  final bool selected;
+  final int completedStages;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(28),
+        child: Ink(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(28),
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: selected
+                  ? <Color>[
+                      journey.accent,
+                      journey.accent.withValues(alpha: 0.72),
+                    ]
+                  : <Color>[
+                      AppColors.white,
+                      journey.accent.withValues(alpha: 0.08),
+                    ],
+            ),
+            border: Border.all(
+              color: selected
+                  ? Colors.transparent
+                  : journey.accent.withValues(alpha: 0.12),
+            ),
+            boxShadow: <BoxShadow>[
+              BoxShadow(
+                color: journey.accent.withValues(alpha: selected ? 0.22 : 0.08),
+                blurRadius: 26,
+                offset: const Offset(0, 12),
+              ),
+            ],
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(18),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Row(
+                  children: <Widget>[
+                    Container(
+                      width: 42,
+                      height: 42,
+                      decoration: BoxDecoration(
+                        color: selected
+                            ? AppColors.white.withValues(alpha: 0.16)
+                            : journey.accent.withValues(alpha: 0.14),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Icon(
+                        journey.icon,
+                        color: selected ? AppColors.white : journey.accent,
+                      ),
+                    ),
+                    const Spacer(),
+                    InfoPill(
+                      label: '$completedStages/4',
+                      backgroundColor: selected
+                          ? AppColors.white.withValues(alpha: 0.14)
+                          : AppColors.brandLight,
+                      foregroundColor: selected
+                          ? AppColors.white
+                          : AppColors.brand,
+                    ),
+                  ],
+                ),
+                const Spacer(),
+                Text(
+                  journey.heroName,
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    color: selected ? AppColors.white : AppColors.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  journey.topicName,
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    color: selected
+                        ? AppColors.white.withValues(alpha: 0.92)
+                        : journey.accent,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  journey.masteryGoal,
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: selected
+                        ? AppColors.white.withValues(alpha: 0.74)
+                        : AppColors.textSecondary,
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Row(
+                  children: <Widget>[
+                    Text(
+                      '${journey.xpReward} XP',
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        color: selected
+                            ? AppColors.white
+                            : AppColors.textPrimary,
+                      ),
+                    ),
+                    const Spacer(),
+                    ...List<Widget>.generate(journey.difficulty, (int index) {
+                      return Padding(
+                        padding: const EdgeInsets.only(left: 4),
+                        child: Icon(
+                          Icons.flash_on_rounded,
+                          size: 16,
+                          color: selected
+                              ? AppColors.sun
+                              : journey.accent.withValues(alpha: 0.8),
+                        ),
+                      );
+                    }),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _StageCard extends StatelessWidget {
+  const _StageCard({
+    required this.stage,
+    required this.accent,
+    required this.selected,
+    required this.completed,
+    required this.onTap,
+  });
+
+  final _CoachStage stage;
+  final Color accent;
+  final bool selected;
+  final bool completed;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      width: height * 0.72,
-      height: height,
-      child: Card(
-        margin: EdgeInsets.zero,
-        clipBehavior: Clip.antiAlias,
-        elevation: chalkMode ? 0 : 3,
-        color: chalkMode ? const Color(0x44102823) : null,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-          side: BorderSide(
-            color: chalkMode ? const Color(0x66C4E6D6) : Colors.transparent,
-          ),
-        ),
-        child: Stack(
-          alignment: Alignment.bottomCenter,
+      width: 168,
+      child: FrostedCard(
+        onTap: onTap,
+        color: selected
+            ? accent.withValues(alpha: 0.16)
+            : AppColors.white.withValues(alpha: 0.86),
+        borderColor: selected ? accent : AppColors.white,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            Positioned.fill(
-              child: Image.asset(
-                assetPath,
-                fit: BoxFit.cover,
-                errorBuilder: (_, _, _) => Image.asset(
-                  'assets/tutors/Geometri Man.png',
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, _, _) => const ColoredBox(
-                    color: Color(0xFFE5EDF6),
-                    child: Center(child: Icon(Icons.person, size: 56)),
+            Row(
+              children: <Widget>[
+                Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color: selected
+                        ? accent.withValues(alpha: 0.16)
+                        : AppColors.brandLight,
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Icon(
+                    completed ? Icons.check_rounded : stage.icon,
+                    color: accent,
                   ),
                 ),
-              ),
+                const Spacer(),
+                if (completed)
+                  const InfoPill(
+                    label: 'Tamam',
+                    backgroundColor: AppColors.successLight,
+                    foregroundColor: AppColors.success,
+                  ),
+              ],
             ),
-            Positioned(
-              bottom: 22,
-              child: AnimatedBuilder(
-                animation: mouthAnimation,
-                builder: (_, child) {
-                  final double h = speaking
-                      ? 7 + (mouthAnimation.value * 10)
-                      : 6;
-                  return Container(
-                    width: 24,
-                    height: h,
-                    decoration: BoxDecoration(
-                      color: const Color(0xB3222222),
-                      borderRadius: BorderRadius.circular(30),
-                      border: Border.all(color: Colors.white70),
-                    ),
-                  );
-                },
-              ),
-            ),
+            const Spacer(),
+            Text(stage.title, style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 6),
+            Text(stage.subtitle, style: Theme.of(context).textTheme.bodySmall),
           ],
         ),
       ),
@@ -575,164 +1555,365 @@ class _TutorCharacter extends StatelessWidget {
   }
 }
 
-class _ComposerBar extends StatelessWidget {
-  const _ComposerBar({
-    required this.controller,
-    required this.sending,
-    required this.chalkMode,
-    required this.onSubmit,
+class _LessonPanel extends StatelessWidget {
+  const _LessonPanel({
+    required this.lesson,
+    required this.journey,
+    required this.stage,
+    required this.accent,
+    required this.onReload,
+    required this.onComplete,
   });
 
-  final TextEditingController controller;
-  final bool sending;
-  final bool chalkMode;
-  final VoidCallback onSubmit;
+  final GuidedLesson lesson;
+  final LgsMathJourney journey;
+  final _CoachStage stage;
+  final Color accent;
+  final Future<void> Function() onReload;
+  final VoidCallback onComplete;
 
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
-      top: false,
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
-        decoration: BoxDecoration(
-          color: chalkMode ? const Color(0xCC0A322D) : Colors.white,
-          boxShadow: <BoxShadow>[
-            BoxShadow(
-              color: chalkMode
-                  ? const Color(0x33000000)
-                  : const Color(0x22000000),
-              blurRadius: 8,
-              offset: Offset(0, -2),
-            ),
-          ],
-        ),
-        child: Row(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
             Expanded(
-              child: Theme(
-                data: Theme.of(context).copyWith(
-                  inputDecorationTheme: InputDecorationTheme(
-                    hintStyle: TextStyle(
-                      color: chalkMode ? const Color(0xB3E7F7EC) : null,
-                    ),
-                    labelStyle: TextStyle(
-                      color: chalkMode ? const Color(0xE6F4FBF2) : null,
-                    ),
-                    filled: true,
-                    fillColor: chalkMode
-                        ? const Color(0x3330A89A)
-                        : const Color(0xFFF5F8FC),
-                    enabledBorder: OutlineInputBorder(
-                      borderSide: BorderSide(
-                        color: chalkMode
-                            ? const Color(0x66A6DDC8)
-                            : const Color(0xFFD8E1ED),
-                      ),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderSide: BorderSide(
-                        color: chalkMode
-                            ? const Color(0xFFBDF2DC)
-                            : const Color(0xFF8AB8E6),
-                      ),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  InfoPill(
+                    label: stage.title,
+                    icon: stage.icon,
+                    backgroundColor: accent.withValues(alpha: 0.12),
+                    foregroundColor: accent,
                   ),
-                ),
-                child: TextField(
-                  controller: controller,
-                  minLines: 1,
-                  maxLines: 3,
-                  style: TextStyle(
-                    color: chalkMode ? const Color(0xFFF0FAF2) : null,
-                    fontFamily: chalkMode ? 'monospace' : null,
-                    letterSpacing: chalkMode ? 0.25 : null,
+                  const SizedBox(height: 14),
+                  Text(
+                    lesson.title.isEmpty ? journey.heroName : lesson.title,
+                    style: Theme.of(context).textTheme.headlineSmall,
                   ),
-                  textInputAction: TextInputAction.send,
-                  onSubmitted: (_) => onSubmit(),
-                  decoration: const InputDecoration(
-                    hintText: 'Calismak istedigin konuyu yaz',
+                  const SizedBox(height: 8),
+                  Text(
+                    lesson.opening,
+                    style: Theme.of(context).textTheme.bodyLarge,
                   ),
-                ),
+                ],
               ),
             ),
-            const SizedBox(width: 8),
-            FilledButton.icon(
-              onPressed: sending ? null : onSubmit,
-              icon: sending
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.send),
-              label: Text(sending ? '...' : 'Sor'),
+            const SizedBox(width: 12),
+            IconButton.filledTonal(
+              onPressed: onReload,
+              icon: const Icon(Icons.refresh_rounded),
             ),
           ],
         ),
+        const SizedBox(height: 18),
+        _LessonInsightCard(
+          title: 'Neden önemli?',
+          description: lesson.whyItMatters,
+          accent: accent,
+          icon: Icons.visibility_rounded,
+        ),
+        const SizedBox(height: 12),
+        ...List<Widget>.generate(lesson.coachSteps.length, (int index) {
+          final String step = lesson.coachSteps[index];
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: FrostedCard(
+              color: AppColors.white.withValues(alpha: 0.9),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Container(
+                    width: 34,
+                    height: 34,
+                    decoration: BoxDecoration(
+                      color: accent.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Center(
+                      child: Text(
+                        '${index + 1}',
+                        style: Theme.of(
+                          context,
+                        ).textTheme.titleSmall?.copyWith(color: accent),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      step,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }),
+        _LessonInsightCard(
+          title: 'Mini meydan okuma',
+          description: lesson.challenge,
+          accent: AppColors.accent,
+          icon: Icons.sports_score_rounded,
+        ),
+        const SizedBox(height: 12),
+        _LessonInsightCard(
+          title: 'Dikkat et',
+          description: lesson.watchOut,
+          accent: AppColors.warning,
+          icon: Icons.warning_amber_rounded,
+        ),
+        const SizedBox(height: 12),
+        _LessonInsightCard(
+          title: 'Kontrol sorusu',
+          description: lesson.checkpoint,
+          accent: AppColors.teal,
+          icon: Icons.help_center_rounded,
+        ),
+        const SizedBox(height: 16),
+        Text(
+          lesson.celebration,
+          style: Theme.of(
+            context,
+          ).textTheme.bodyMedium?.copyWith(color: AppColors.textPrimary),
+        ),
+        const SizedBox(height: 8),
+        Text(lesson.nextMove, style: Theme.of(context).textTheme.bodySmall),
+        const SizedBox(height: 18),
+        Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          children: <Widget>[
+            FilledButton.icon(
+              onPressed: onComplete,
+              icon: const Icon(Icons.check_circle_rounded),
+              label: const Text('Bu Adımı Tamamladım'),
+            ),
+            OutlinedButton.icon(
+              onPressed: onReload,
+              icon: const Icon(Icons.auto_awesome_rounded),
+              label: const Text('Bu Adımı Yeniden Kur'),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _LessonInsightCard extends StatelessWidget {
+  const _LessonInsightCard({
+    required this.title,
+    required this.description,
+    required this.accent,
+    required this.icon,
+  });
+
+  final String title;
+  final String description;
+  final Color accent;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    return FrostedCard(
+      color: accent.withValues(alpha: 0.08),
+      borderColor: accent.withValues(alpha: 0.12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: accent.withValues(alpha: 0.14),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Icon(icon, color: accent),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(title, style: Theme.of(context).textTheme.titleMedium),
+                const SizedBox(height: 6),
+                Text(
+                  description,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
 }
 
-class _TutorMessage {
-  const _TutorMessage({required this.role, required this.text});
-
-  final String role;
-  final String text;
-}
-
-class _TopicPill extends StatelessWidget {
-  const _TopicPill({
+class _QuickPromptChip extends StatelessWidget {
+  const _QuickPromptChip({
     required this.label,
-    required this.chalkMode,
-    required this.selected,
-    required this.onPressed,
+    required this.accent,
+    required this.onTap,
   });
 
   final String label;
-  final bool chalkMode;
-  final bool selected;
-  final VoidCallback? onPressed;
+  final Color accent;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final Color bg = chalkMode
-        ? (selected ? const Color(0xAA40AFA0) : const Color(0x8823554D))
-        : (selected ? const Color(0xFFD8ECFF) : const Color(0xFFECF3FB));
-    final Color fg = chalkMode
-        ? const Color(0xFFF4FAF1)
-        : const Color(0xFF18324D);
-    final Color border = chalkMode
-        ? const Color(0x88CEF1E2)
-        : const Color(0xFFD0DEEC);
-
     return Material(
       color: Colors.transparent,
       child: InkWell(
+        onTap: onTap,
         borderRadius: BorderRadius.circular(999),
-        onTap: onPressed,
         child: Ink(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
           decoration: BoxDecoration(
-            color: bg,
+            color: accent.withValues(alpha: 0.08),
             borderRadius: BorderRadius.circular(999),
-            border: Border.all(color: border),
+            border: Border.all(color: accent.withValues(alpha: 0.14)),
           ),
           child: Text(
             label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              color: fg,
-              fontWeight: FontWeight.w700,
-              fontFamily: chalkMode ? 'monospace' : null,
-              letterSpacing: chalkMode ? 0.2 : 0,
-            ),
+            style: Theme.of(
+              context,
+            ).textTheme.titleSmall?.copyWith(color: accent),
           ),
         ),
       ),
     );
   }
+}
+
+class _ChatEmptyState extends StatelessWidget {
+  const _ChatEmptyState();
+
+  @override
+  Widget build(BuildContext context) {
+    return FrostedCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text('Koç alanı boş', style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 8),
+          Text(
+            'Önce hızlı promptlardan birine dokun ya da kendi cümlenle nerede takıldığını yaz. Sistem seni doğrudan görev mantığı içinden yanıtlayacak.',
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _LessonEmptyState extends StatelessWidget {
+  const _LessonEmptyState({required this.onLoad});
+
+  final Future<void> Function() onLoad;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: <Widget>[
+        Text(
+          'Bu adım henüz üretilmedi.',
+          style: Theme.of(context).textTheme.titleLarge,
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Görev mantığını kurmak için bu aşamayı başlat. Sistem, konuya özel yapılandırılmış öğretim kartları üretecek.',
+          textAlign: TextAlign.center,
+          style: Theme.of(context).textTheme.bodyMedium,
+        ),
+        const SizedBox(height: 18),
+        FilledButton.icon(
+          onPressed: onLoad,
+          icon: const Icon(Icons.play_arrow_rounded),
+          label: const Text('Aşamayı Başlat'),
+        ),
+      ],
+    );
+  }
+}
+
+class _PortraitBadge extends StatelessWidget {
+  const _PortraitBadge({
+    required this.assetPath,
+    required this.size,
+    required this.accent,
+  });
+
+  final String assetPath;
+  final double size;
+  final Color accent;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: size,
+      height: size,
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: RadialGradient(
+          colors: <Color>[
+            accent.withValues(alpha: 0.38),
+            accent.withValues(alpha: 0.05),
+          ],
+        ),
+        border: Border.all(color: accent.withValues(alpha: 0.22)),
+      ),
+      child: CircleAvatar(
+        backgroundColor: AppColors.surface,
+        child: ClipOval(
+          child: Image.asset(
+            assetPath,
+            width: size,
+            height: size,
+            fit: BoxFit.cover,
+            alignment: Alignment.topCenter,
+            errorBuilder: (_, _, _) =>
+                Icon(Icons.person_rounded, color: accent, size: size * 0.42),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TutorAvatarOption {
+  const _TutorAvatarOption({
+    required this.id,
+    required this.name,
+    required this.role,
+    required this.assetPath,
+    required this.unlockCost,
+    required this.accent,
+  });
+
+  final String id;
+  final String name;
+  final String role;
+  final String assetPath;
+  final int unlockCost;
+  final Color accent;
+}
+
+class _CoachMessage {
+  const _CoachMessage({required this.role, required this.text});
+
+  final String role;
+  final String text;
 }

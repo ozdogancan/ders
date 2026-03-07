@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
 
@@ -10,8 +11,8 @@ class ChatGptService {
 
   final http.Client _client;
   static const String _defaultSystemPrompt =
-      'Sen net, sabirli ve ogretici bir ogretmensin. '
-      'Cevabi adim adim, sade ve anlasilir ver.';
+      'Sen Turkce konusan, net, sabirli ve ogretici bir ogretmensin. '
+      'Gerektiginde kisa bir yol haritasi ver, sonra cozumu adim adim ve sade bir dille anlat.';
 
   Future<String> askText(String question) async {
     if (question.trim().isEmpty) {
@@ -30,8 +31,12 @@ class ChatGptService {
   }
 
   Future<String> askImage(File imageFile, {String? prompt}) async {
-    final List<int> bytes = await imageFile.readAsBytes();
-    final String base64Image = base64Encode(bytes);
+    final Uint8List bytes = await imageFile.readAsBytes();
+    return askImageBytes(bytes, prompt: prompt);
+  }
+
+  Future<String> askImageBytes(Uint8List imageBytes, {String? prompt}) async {
+    final String base64Image = base64Encode(imageBytes);
 
     if (Env.aiProvider == AiProvider.gemini) {
       return _geminiImage(base64Image, prompt: prompt);
@@ -64,7 +69,10 @@ class ChatGptService {
     }
 
     if (Env.aiProvider == AiProvider.gemini) {
-      return _geminiConversation(systemPrompt: systemPrompt, messages: messages);
+      return _geminiConversation(
+        systemPrompt: systemPrompt,
+        messages: messages,
+      );
     }
 
     if (Env.openAiApiKey.isEmpty) {
@@ -238,7 +246,8 @@ class ChatGptService {
     }
     final Map<String, dynamic> content =
         (candidates.first as Map<String, dynamic>)['content']
-            as Map<String, dynamic>? ?? <String, dynamic>{};
+            as Map<String, dynamic>? ??
+        <String, dynamic>{};
     final List<dynamic> parts =
         content['parts'] as List<dynamic>? ?? <dynamic>[];
     if (parts.isEmpty) {

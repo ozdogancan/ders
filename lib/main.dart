@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'app.dart';
 import 'core/config/env.dart';
+import 'widgets/experience_ui.dart';
 import 'firebase_options.dart';
 
 void main() {
@@ -49,7 +50,12 @@ class _BootstrapAppState extends State<_BootstrapApp> {
         if (snapshot.connectionState != ConnectionState.done) {
           return const MaterialApp(
             debugShowCheckedModeBanner: false,
-            home: Scaffold(body: Center(child: CircularProgressIndicator())),
+            home: Scaffold(
+              body: AppBackdrop(
+                showGrid: false,
+                child: Center(child: CircularProgressIndicator()),
+              ),
+            ),
           );
         }
         return const AiTutorApp();
