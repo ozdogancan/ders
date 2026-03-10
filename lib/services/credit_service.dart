@@ -114,7 +114,30 @@ class CreditService {
 
   /// Refund one credit (AI error)
   Future<int> refundOneCredit() async {
-    return addCredits(1);
+    final current = await getCredits();
+    final next = current + 1;
+    if (_uid != null) {
+      try {
+        await Supabase.instance.client
+            .from('users')
+            .update({
+              'credits': next,
+              'updated_at': DateTime.now().toIso8601String(),
+            })
+            .eq('id', _uid!);
+        await Supabase.instance.client.from('credit_transactions').insert({
+          'user_id': _uid!,
+          'amount': 1,
+          'type': 'refund',
+          'source': 'ai_error',
+          'balance_after': next,
+        });
+      } catch (_) {}
+    }
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('credit_balance_v1', next);
+    return next;
   }
 }
+
 
