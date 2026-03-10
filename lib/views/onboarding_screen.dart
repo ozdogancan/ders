@@ -77,6 +77,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
   Widget build(BuildContext context) {
     final pg = _pages[_idx];
     return Scaffold(
+      extendBodyBehindAppBar: true,
       body: Stack(fit: StackFit.expand, children: [
         AnimatedContainer(
           duration: const Duration(milliseconds: 600),
@@ -387,7 +388,7 @@ class _Page2State extends State<_Page2> with SingleTickerProviderStateMixin {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 8, 24, 8),
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 0),
       child: Center(
         child: AnimatedBuilder(
           animation: _anim,
@@ -400,9 +401,7 @@ class _Page2State extends State<_Page2> with SingleTickerProviderStateMixin {
                 color: const Color(0xFF0F172A).withAlpha(200),
                 border: Border.all(color: Colors.white.withAlpha(15)),
               ),
-              child: SingleChildScrollView(
-                physics: const NeverScrollableScrollPhysics(),
-                child: Column(
+              child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -511,7 +510,6 @@ class _Page2State extends State<_Page2> with SingleTickerProviderStateMixin {
                       ),
                   ],
                 ),
-              ),
             );
           },
         ),
@@ -639,3 +637,4 @@ class _PD {
   final Color c2;
   final int t;
 }
+
