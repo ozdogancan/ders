@@ -205,7 +205,9 @@ Kurallar:
   }
 
   Widget _buildPicker() {
-    return Center(key: const ValueKey(0), child: Padding(padding: const EdgeInsets.all(32),
+    return Center(key: const ValueKey(0), child: Container(
+      constraints: const BoxConstraints(maxWidth: 420),
+      padding: const EdgeInsets.all(32),
       child: Column(mainAxisSize: MainAxisSize.min, children: [
         Container(width: 120, height: 120,
           decoration: BoxDecoration(shape: BoxShape.circle, color: const Color(0xFF6366F1).withAlpha(15)),
@@ -232,8 +234,12 @@ Kurallar:
   }
 
   Widget _buildConfig() {
-    return SingleChildScrollView(key: const ValueKey(1), padding: const EdgeInsets.all(20),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+    final wide = MediaQuery.of(context).size.width > 700;
+    return SingleChildScrollView(key: const ValueKey(1),
+      child: Center(child: Container(
+        constraints: BoxConstraints(maxWidth: wide ? 560 : double.infinity),
+        padding: EdgeInsets.all(wide ? 32 : 20),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Container(
           decoration: BoxDecoration(borderRadius: BorderRadius.circular(16), border: Border.all(color: const Color(0xFFE2E8F0))),
           child: Column(children: [
@@ -306,7 +312,7 @@ Kurallar:
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
             icon: const Icon(Icons.send_rounded, size: 20),
             label: const Text('G\u00d6NDER', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, letterSpacing: 0.5)))),
-      ]));
+      ]))));
   }
 
   Widget _buildSolving() {
@@ -333,7 +339,8 @@ Kurallar:
       child: TweenAnimationBuilder<double>(
         tween: Tween(begin: 0.0, end: 1.0), duration: const Duration(milliseconds: 600), curve: Curves.easeOutBack,
         builder: (_, v, child) => Transform.scale(scale: 0.8 + 0.2 * v, child: Opacity(opacity: v.clamp(0.0, 1.0), child: child)),
-        child: Padding(padding: const EdgeInsets.all(32),
+        child: Container(constraints: const BoxConstraints(maxWidth: 420),
+          padding: const EdgeInsets.all(32),
           child: Column(mainAxisSize: MainAxisSize.min, children: [
             Stack(alignment: Alignment.center, children: [
               Container(width: 130, height: 130, decoration: BoxDecoration(shape: BoxShape.circle,

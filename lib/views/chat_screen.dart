@@ -22,7 +22,7 @@ class _ChatScreenState extends State<ChatScreen> {
   final ScrollController _scroll = ScrollController();
   bool _sending = false;
   bool _coachMode = false;
-  int _credits = 0;
+  int _credits = -1;
   bool _popupDone = false;
   
   bool _feedbackMode = false;
@@ -258,7 +258,7 @@ class _ChatScreenState extends State<ChatScreen> {
               child: Row(mainAxisSize: MainAxisSize.min, children: [
                 const Icon(Icons.bolt_rounded, size: 14, color: Color(0xFF6366F1)),
                 const SizedBox(width: 3),
-                Text('$_credits', style: const TextStyle(color: Color(0xFF6366F1), fontWeight: FontWeight.w800, fontSize: 13)),
+                Text(_credits < 0 ? '' : '$_credits', style: const TextStyle(color: Color(0xFF6366F1), fontWeight: FontWeight.w800, fontSize: 13)),
               ]))),
         ],
       ),
