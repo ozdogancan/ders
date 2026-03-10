@@ -111,4 +111,10 @@ class CreditService {
   Future<int> spendOneCredit() async {
     return spendCredits(1);
   }
+
+  /// Refund one credit (AI error)
+  Future<int> refundOneCredit() async {
+    return addCredits(1);
+  }
 }
+

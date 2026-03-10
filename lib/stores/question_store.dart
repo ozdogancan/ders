@@ -311,6 +311,8 @@ class QuestionStore extends ChangeNotifier {
     final q = getById(id);
     if (q == null) return;
     q.status = QStatus.error;
+    q.answer = null;
+    q.chatMessages = [ChatMsg(role: 'ai', text: 'Cozum sirasinda bir hata olustu. Harcanan kredin hesabina iade edildi. Tekrar denemek icin yeni soru gonderebilirsin.')];
     notifyListeners();
     _updateQuestionStatusInDb(id, 'error');
   }
@@ -458,6 +460,7 @@ String tutorNameForSubject(String subject) {
   if (s.contains('ing')) return 'Cem Hoca';
   return 'Kaan Hoca';
 }
+
 
 
 
