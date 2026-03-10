@@ -7,6 +7,7 @@ import 'services/analytics_service.dart';
 import 'core/config/env.dart';
 import 'widgets/experience_ui.dart';
 import 'firebase_options.dart';
+import 'stores/question_store.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -41,6 +42,8 @@ class _BootstrapAppState extends State<_BootstrapApp> {
         debugPrint('Supabase init skipped: $error');
       }
     }
+
+
   }
 
   @override
@@ -66,3 +69,4 @@ class _BootstrapAppState extends State<_BootstrapApp> {
     );
   }
 }
+

@@ -24,6 +24,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   String? _fStatus;
   int _visCount = 15;
   int _credits = 0;
+  bool _isLoading = true;
 
   @override
   void initState() {
@@ -31,6 +32,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     QuestionStore.instance.addListener(_onStore);
     _scrollCtrl.addListener(_onScroll);
     _loadCredits();
+    _initLoad();
   }
 
   @override
@@ -43,6 +45,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   final Set<String> _notified = {};
 
+  Future<void> _initLoad() async {
+    setState(() => _isLoading = true);
+    await QuestionStore.instance.loadFromSupabase(force: true);
+    for (final q in QuestionStore.instance.questions) {
+      _notified.add(q.id);
+    }
+    if (mounted) setState(() => _isLoading = false);
+  }
+
   Future<void> _loadCredits() async {
     final c = await _creditService.getCredits();
     if (mounted) setState(() => _credits = c);
@@ -52,6 +63,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     if (!mounted) return;
     _loadCredits();
     setState(() {});
+    if (_isLoading) return;
     for (final q in QuestionStore.instance.questions) {
       if (q.status == QStatus.solved && q.answer != null && !_notified.contains(q.id)) {
         _notified.add(q.id);
@@ -59,7 +71,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       }
     }
   }
-
   void _onScroll() {
     if (_scrollCtrl.position.pixels >= _scrollCtrl.position.maxScrollExtent - 100) {
       final f = _filtered();
@@ -72,7 +83,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       behavior: SnackBarBehavior.floating, backgroundColor: const Color(0xFF1E293B),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      margin: const EdgeInsets.fromLTRB(16, 0, 16, 16), duration: const Duration(seconds: 3),
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 16), duration: const Duration(seconds: 2),
       content: Row(children: [
         Container(width: 26, height: 26, decoration: BoxDecoration(shape: BoxShape.circle, color: const Color(0xFF22C55E).withAlpha(30)),
           child: const Icon(Icons.check_rounded, color: Color(0xFF22C55E), size: 14)),
@@ -115,7 +126,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       content: const Text('Bu soru ve çözümü silinecek.'),
       actions: [
         TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Vazgeç')),
-        FilledButton(onPressed: () { QuestionStore.instance.remove(q.id); Navigator.pop(ctx); },
+        FilledButton(onPressed: () { QuestionStore.instance.remove(q.id); Navigator.pop(ctx); ScaffoldMessenger.of(context).clearSnackBars(); ScaffoldMessenger.of(context).showSnackBar(SnackBar(behavior: SnackBarBehavior.floating, backgroundColor: const Color(0xFF1E293B), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)), margin: const EdgeInsets.fromLTRB(16, 0, 16, 16), duration: const Duration(seconds: 2), content: const Row(children: [Icon(Icons.delete_outline_rounded, color: Color(0xFFEF4444), size: 18), SizedBox(width: 10), Text('Soru silindi', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 14))]))); },
           style: FilledButton.styleFrom(backgroundColor: const Color(0xFFEF4444)), child: const Text('Sil')),
       ]));
   }
@@ -320,6 +331,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   child: Icon(Icons.tune_rounded, size: 20, color: hasF ? Colors.white : Colors.grey.shade500))),
             ]))),
 
+        // LOADING SKELETON
+        if (_isLoading)
+          SliverToBoxAdapter(child: Padding(
+            padding: EdgeInsets.fromLTRB(wide ? hPad : 20, 8, wide ? hPad : 20, 0),
+            child: Column(children: List.generate(3, (i) =>
+              _ShimmerCard(delay: i * 150)))))
+        else
         // ── WELCOME (no questions)
         if (vis.isEmpty && !hasF && _search.isEmpty)
           SliverToBoxAdapter(child: Padding(padding: EdgeInsets.fromLTRB(hPad, wide ? 60 : 30, hPad, 0),
@@ -512,4 +530,91 @@ class _B extends StatelessWidget {
     else if (ic != null) Icon(ic, size: 11, color: c),
     const SizedBox(width: 3),
     Text(l, style: TextStyle(fontSize: 10, color: c, fontWeight: FontWeight.w600))]);
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+class _ShimmerCard extends StatefulWidget {
+  const _ShimmerCard({this.delay = 0});
+  final int delay;
+  @override
+  State<_ShimmerCard> createState() => _ShimmerCardState();
+}
+
+class _ShimmerCardState extends State<_ShimmerCard> with SingleTickerProviderStateMixin {
+  late AnimationController _ctrl;
+  late Animation<double> _anim;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 1500))..repeat();
+    _anim = Tween<double>(begin: -1.0, end: 2.0).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut));
+    if (widget.delay > 0) {
+      _ctrl.stop();
+      Future.delayed(Duration(milliseconds: widget.delay), () { if (mounted) _ctrl.repeat(); });
+    }
+  }
+
+  @override
+  void dispose() { _ctrl.dispose(); super.dispose(); }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _anim,
+      builder: (_, __) => Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: const Color(0xFFEEF2F7)),
+        ),
+        child: Row(children: [
+          Container(width: 56, height: 56,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(16),
+              gradient: LinearGradient(
+                begin: Alignment(_anim.value - 1, 0),
+                end: Alignment(_anim.value, 0),
+                colors: const [Color(0xFFF1F5F9), Color(0xFFE2E8F0), Color(0xFFF1F5F9)]))),
+          const SizedBox(width: 14),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Container(width: 90, height: 14,
+              decoration: BoxDecoration(borderRadius: BorderRadius.circular(7),
+                gradient: LinearGradient(
+                  begin: Alignment(_anim.value - 1, 0),
+                  end: Alignment(_anim.value, 0),
+                  colors: const [Color(0xFFF1F5F9), Color(0xFFE2E8F0), Color(0xFFF1F5F9)]))),
+            const SizedBox(height: 10),
+            Container(width: double.infinity, height: 11,
+              decoration: BoxDecoration(borderRadius: BorderRadius.circular(6),
+                gradient: LinearGradient(
+                  begin: Alignment(_anim.value - 1, 0),
+                  end: Alignment(_anim.value, 0),
+                  colors: const [Color(0xFFF8FAFC), Color(0xFFEEF2F7), Color(0xFFF8FAFC)]))),
+            const SizedBox(height: 7),
+            Container(width: 180, height: 11,
+              decoration: BoxDecoration(borderRadius: BorderRadius.circular(6),
+                gradient: LinearGradient(
+                  begin: Alignment(_anim.value - 1, 0),
+                  end: Alignment(_anim.value, 0),
+                  colors: const [Color(0xFFF8FAFC), Color(0xFFEEF2F7), Color(0xFFF8FAFC)]))),
+          ])),
+        ]),
+      ),
+    );
+  }
 }

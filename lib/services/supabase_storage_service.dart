@@ -1,4 +1,3 @@
-﻿import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -13,8 +12,9 @@ class SupabaseStorageService {
 
   SupabaseClient get _client => _clientOverride ?? Supabase.instance.client;
 
-  Future<String> uploadQuestionImage({
-    required File imageFile,
+  /// Web-uyumlu: Uint8List ile fotograf upload
+  Future<String> uploadQuestionImageBytes({
+    required Uint8List bytes,
     required String userId,
   }) async {
     if (!Env.hasSupabaseConfig) {
@@ -24,7 +24,6 @@ class SupabaseStorageService {
     }
 
     final String filePath = 'question_images/$userId/${const Uuid().v4()}.jpg';
-    final Uint8List bytes = await imageFile.readAsBytes();
 
     await _client.storage
         .from(Env.supabaseBucket)
@@ -48,7 +47,8 @@ class SupabaseStorageService {
     await _client.storage
         .from(Env.supabaseBucket)
         .uploadBinary(filePath, bytes,
-            fileOptions: const FileOptions(contentType: 'image/png', upsert: true));
+            fileOptions:
+                const FileOptions(contentType: 'image/png', upsert: true));
     return _client.storage.from(Env.supabaseBucket).getPublicUrl(filePath);
   }
 }

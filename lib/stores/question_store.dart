@@ -2,7 +2,10 @@ import 'dart:convert';
 import 'dart:typed_data';
 import 'package:firebase_auth/firebase_auth.dart' hide User;
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart' hide User;
+
+import '../services/supabase_storage_service.dart';
 
 enum QStatus { solving, solved, error }
 
@@ -70,7 +73,7 @@ class LocalQuestion {
   });
 
   final String id;
-  final Uint8List imageBytes;
+  Uint8List imageBytes;
   final String subject;
   final DateTime createdAt;
   QStatus status;
@@ -96,7 +99,13 @@ class QuestionStore extends ChangeNotifier {
   final List<LocalQuestion> _questions = [];
   List<LocalQuestion> get questions => List.unmodifiable(_questions);
 
-  String? get _uid => FirebaseAuth.instance.currentUser?.uid;
+  bool _loaded = false;
+  bool get loaded => _loaded;
+
+  String? get _uid {
+    final firebaseUid = FirebaseAuth.instance.currentUser?.uid;
+    return firebaseUid;
+  }
 
   SupabaseClient get _sb => Supabase.instance.client;
 
@@ -107,7 +116,143 @@ class QuestionStore extends ChangeNotifier {
     return null;
   }
 
-  /// Add a new question (local + Supabase)
+  Future<void> loadFromSupabase({bool force = false}) async {
+    if (_loaded && !force) return;
+    _loaded = false;
+    final uid = _uid;
+    if (uid == null) {
+      debugPrint('loadFromSupabase: No user, skipping.');
+      _loaded = true;
+      notifyListeners();
+      return;
+    }
+    _questions.clear();
+
+    try {
+      final rows = await _sb
+          .from('questions')
+          .select()
+          .eq('user_id', uid)
+          .order('created_at', ascending: false);
+
+      for (final row in rows) {
+        final id = row['id'] as String;
+        if (getById(id) != null) continue;
+
+        final imageUrl = row['image_url'] as String?;
+        Uint8List imageBytes = Uint8List(0);
+
+        if (imageUrl != null && imageUrl.isNotEmpty) {
+          try {
+            final response = await http.get(Uri.parse(imageUrl));
+            if (response.statusCode == 200) {
+              imageBytes = response.bodyBytes;
+            }
+          } catch (e) {
+            debugPrint('Image download failed for $id: $e');
+          }
+        }
+
+        final statusStr = row['status'] as String? ?? 'solving';
+        QStatus status;
+        switch (statusStr) {
+          case 'solved':
+            status = QStatus.solved;
+            break;
+          case 'error':
+            status = QStatus.error;
+            break;
+          default:
+            status = QStatus.solving;
+        }
+
+        final aiAnswer = row['ai_answer'] as String?;
+        StructuredAnswer? structured;
+        final structuredJson = row['structured_answer'];
+        if (structuredJson != null && structuredJson is Map<String, dynamic>) {
+          try {
+            structured = StructuredAnswer.fromJson(structuredJson);
+          } catch (_) {}
+        }
+        if (structured == null && aiAnswer != null) {
+          structured = StructuredAnswer.tryParse(aiAnswer);
+        }
+
+        final q = LocalQuestion(
+          id: id,
+          imageBytes: imageBytes,
+          subject: row['subject'] as String? ?? 'Matematik',
+          createdAt: DateTime.tryParse(row['created_at'] as String? ?? '') ?? DateTime.now(),
+          status: status,
+          answer: aiAnswer,
+          structuredAnswer: structured,
+          imageUrl: imageUrl,
+        );
+
+        _questions.add(q);
+      }
+
+      await _loadChatsFromDb();
+      await _loadRatingsFromDb();
+
+      _loaded = true;
+      notifyListeners();
+      debugPrint('loadFromSupabase: ${_questions.length} questions loaded.');
+    } catch (e) {
+      debugPrint('loadFromSupabase error: $e');
+      _loaded = true;
+      notifyListeners();
+    }
+  }
+
+  Future<void> _loadChatsFromDb() async {
+    final uid = _uid;
+    if (uid == null) return;
+    try {
+      final rows = await _sb
+          .from('chat_messages')
+          .select()
+          .eq('user_id', uid)
+          .order('created_at', ascending: true);
+
+      for (final row in rows) {
+        final qId = row['question_id'] as String?;
+        if (qId == null) continue;
+        final q = getById(qId);
+        if (q == null) continue;
+        final msg = ChatMsg(
+          role: row['role'] as String? ?? 'ai',
+          text: row['content'] as String? ?? '',
+          time: DateTime.tryParse(row['created_at'] as String? ?? ''),
+        );
+        q.chatMessages = [...q.chatMessages, msg];
+      }
+    } catch (e) {
+      debugPrint('Load chats error: $e');
+    }
+  }
+
+  Future<void> _loadRatingsFromDb() async {
+    final uid = _uid;
+    if (uid == null) return;
+    try {
+      final rows = await _sb
+          .from('question_ratings')
+          .select()
+          .eq('user_id', uid);
+
+      for (final row in rows) {
+        final qId = row['question_id'] as String?;
+        if (qId == null) continue;
+        final q = getById(qId);
+        if (q == null) continue;
+        q.rating = row['rating'] as int?;
+      }
+    } catch (e) {
+      debugPrint('Load ratings error: $e');
+    }
+  }
+
   LocalQuestion add({required Uint8List imageBytes, required String subject, String? imageUrl}) {
     final q = LocalQuestion(
       id: 'q_${DateTime.now().millisecondsSinceEpoch}',
@@ -118,14 +263,32 @@ class QuestionStore extends ChangeNotifier {
     );
     _questions.insert(0, q);
     notifyListeners();
-
-    // Async save to Supabase
-    _saveQuestionToDb(q);
-
+    _uploadAndSave(q, imageBytes);
     return q;
   }
 
-  /// Mark question as solved
+  Future<void> _uploadAndSave(LocalQuestion q, Uint8List imageBytes) async {
+    final uid = _uid;
+    if (uid == null) {
+      await _saveQuestionToDb(q);
+      return;
+    }
+    try {
+      final storageService = SupabaseStorageService();
+      final url = await storageService.uploadQuestionImageBytes(
+        bytes: imageBytes,
+        userId: uid,
+      );
+      q.imageUrl = url;
+      notifyListeners();
+      await _saveQuestionToDb(q);
+      debugPrint('Question saved with image: $url');
+    } catch (e) {
+      debugPrint('Upload failed, saving without image: $e');
+      await _saveQuestionToDb(q);
+    }
+  }
+
   void solve(String id, String answer) {
     final q = getById(id);
     if (q == null) return;
@@ -134,67 +297,47 @@ class QuestionStore extends ChangeNotifier {
     q.structuredAnswer = StructuredAnswer.tryParse(answer);
     q.chatMessages = [ChatMsg(role: 'ai', text: answer)];
     notifyListeners();
-
-    // Async update Supabase
     _updateQuestionInDb(q);
-    // Save the first AI chat message
     _saveChatToDb(q.id, 'ai', answer, false);
   }
 
-  /// Remove question
   void remove(String id) {
     _questions.removeWhere((q) => q.id == id);
     notifyListeners();
-
-    // Async delete from Supabase
     _deleteQuestionFromDb(id);
   }
 
-  /// Set error status
   void setError(String id) {
     final q = getById(id);
     if (q == null) return;
     q.status = QStatus.error;
     notifyListeners();
-
     _updateQuestionStatusInDb(id, 'error');
   }
 
-  /// Add chat message
   void addChat(String id, ChatMsg msg) {
     final q = getById(id);
     if (q == null) return;
     q.chatMessages = [...q.chatMessages, msg];
     notifyListeners();
-
-    // Async save chat to Supabase
     _saveChatToDb(id, msg.role, msg.text, false);
   }
 
-  /// Rate a question
   void rate(String id, int stars) {
     final q = getById(id);
     if (q == null) return;
     q.rating = stars;
     notifyListeners();
-
-    // Async save rating to Supabase
     _saveRatingToDb(id, stars, null);
   }
 
-  /// Rate with feedback
   void rateWithFeedback(String id, int stars, String feedback) {
     final q = getById(id);
     if (q == null) return;
     q.rating = stars;
     notifyListeners();
-
     _saveRatingToDb(id, stars, feedback);
   }
-
-  // ═══════════════════════════════════════════
-  // SUPABASE DB OPERATIONS
-  // ═══════════════════════════════════════════
 
   Future<void> _saveQuestionToDb(LocalQuestion q) async {
     if (_uid == null) return;
@@ -228,7 +371,6 @@ class QuestionStore extends ChangeNotifier {
           'tip': structured.tip,
         };
       }
-
       await _sb.from('questions').update({
         'status': 'solved',
         'ai_answer': q.answer,
@@ -306,13 +448,17 @@ String tutorNameForSubject(String subject) {
   final s = subject.toLowerCase();
   if (s.contains('mat')) return 'Kaan Hoca';
   if (s.contains('geo')) return 'Emre Hoca';
-  if (s.contains('fiz')) return 'Asl\u0131 Hoca';
+  if (s.contains('fiz')) return 'Asli Hoca';
   if (s.contains('kim')) return 'Kaan Hoca';
   if (s.contains('bio')) return 'Mert Hoca';
   if (s.contains('ede') || s.contains('turk')) return 'Selin Hoca';
   if (s.contains('tar')) return 'Elif Hoca';
-  if (s.contains('cog')) return 'Ay\u015fe Hoca';
+  if (s.contains('cog')) return 'Ayse Hoca';
   if (s.contains('fel')) return 'Defne Hoca';
   if (s.contains('ing')) return 'Cem Hoca';
   return 'Kaan Hoca';
 }
+
+
+
+

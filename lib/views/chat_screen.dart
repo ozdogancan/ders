@@ -559,7 +559,7 @@ class _ChatScreenState extends State<ChatScreen> {
             const SizedBox(width: 8),
             Expanded(child: FilledButton(onPressed: () {
               setState(() => _feedbackMode = false);
-              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              ScaffoldMessenger.of(context).clearSnackBars(); ScaffoldMessenger.of(context).showSnackBar(SnackBar(
                 behavior: SnackBarBehavior.floating, backgroundColor: const Color(0xFF1E293B),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                 margin: const EdgeInsets.fromLTRB(16, 0, 16, 16), duration: const Duration(seconds: 3),
