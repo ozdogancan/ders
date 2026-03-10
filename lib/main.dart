@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'app.dart';
+import 'services/analytics_service.dart';
 import 'core/config/env.dart';
 import 'widgets/experience_ui.dart';
 import 'firebase_options.dart';
@@ -58,6 +59,8 @@ class _BootstrapAppState extends State<_BootstrapApp> {
             ),
           );
         }
+        Analytics.instance.init(platform: 'web', appVersion: '1.0.0');
+        Analytics.appOpened();
         return const AiTutorApp();
       },
     );

@@ -5,7 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_cropper/image_cropper.dart';
 import 'package:image_picker/image_picker.dart';
 
-import '../core/constants/app_colors.dart';
+import '../widgets/experience_ui.dart';
 import '../models/question.dart';
 import '../providers/app_providers.dart';
 import 'solution_screen.dart';

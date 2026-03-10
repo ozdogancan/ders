@@ -1,12 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-
 import '../core/config/env.dart';
-import '../core/constants/app_colors.dart';
 import '../core/constants/lgs_math_learning_catalog.dart';
 import '../core/constants/math_topic_catalog.dart';
 import '../models/guided_lesson.dart';
@@ -17,7 +14,6 @@ import '../services/learning_resume_service.dart';
 import '../services/supabase_storage_service.dart';
 import '../widgets/did_video_view.dart';
 import '../widgets/experience_ui.dart';
-
 const String _kTutorAvatarUrl =
     'https://create-images-results.d-id.com/DefaultPresenters/Noelle_f/thumbnail.jpeg';
 const String _kSelectedAvatarKey = 'lgs_math_selected_avatar_v3';

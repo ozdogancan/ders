@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../constants/app_colors.dart';
+import '../../widgets/experience_ui.dart';
 
 class AppTheme {
   const AppTheme._();

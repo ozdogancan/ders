@@ -1,4 +1,4 @@
-import 'dart:io';
+﻿import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -34,6 +34,21 @@ class SupabaseStorageService {
           fileOptions: const FileOptions(contentType: 'image/jpeg'),
         );
 
+    return _client.storage.from(Env.supabaseBucket).getPublicUrl(filePath);
+  }
+
+  Future<String> uploadAvatarBytes({
+    required Uint8List bytes,
+    required String fileName,
+  }) async {
+    if (!Env.hasSupabaseConfig) {
+      throw StateError('Supabase config missing.');
+    }
+    final String filePath = 'avatars/$fileName';
+    await _client.storage
+        .from(Env.supabaseBucket)
+        .uploadBinary(filePath, bytes,
+            fileOptions: const FileOptions(contentType: 'image/png', upsert: true));
     return _client.storage.from(Env.supabaseBucket).getPublicUrl(filePath);
   }
 }

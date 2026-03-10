@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../core/constants/app_colors.dart';
+import '../widgets/experience_ui.dart';
 import '../models/question.dart';
 import '../providers/app_providers.dart';
 import '../widgets/math_text_block.dart';

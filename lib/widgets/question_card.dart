@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
-import '../core/constants/app_colors.dart';
+import '../widgets/experience_ui.dart';
 import '../models/question.dart';
 
 class QuestionCard extends StatelessWidget {

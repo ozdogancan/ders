@@ -1,34 +1,57 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
-import '../providers/app_providers.dart';
-import 'home_screen.dart';
+import 'main_shell.dart';
 import 'onboarding_screen.dart';
+import 'login_screen.dart';
 
-class AuthGate extends ConsumerWidget {
+class AuthGate extends StatefulWidget {
   const AuthGate({super.key});
+  @override
+  State<AuthGate> createState() => _AuthGateState();
+}
+
+class _AuthGateState extends State<AuthGate> {
+  late Future<Widget> _routeFuture;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final authState = ref.watch(authStateProvider);
+  void initState() {
+    super.initState();
+    _routeFuture = _decideRoute();
+  }
 
-    return authState.when(
-      data: (user) {
-        if (user == null) {
-          return const OnboardingScreen();
+  Future<Widget> _decideRoute() async {
+    final prefs = await SharedPreferences.getInstance();
+    final onboardingDone = prefs.getBool('onboarding_done') ?? false;
+    final user = FirebaseAuth.instance.currentUser;
+
+    if (!onboardingDone) {
+      return const OnboardingScreen();
+    }
+
+    if (user == null) {
+      return const LoginScreen();
+    }
+
+    return const MainShell();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<Widget>(
+      future: _routeFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const Scaffold(
+            backgroundColor: Color(0xFFFAFBFD),
+            body: Center(
+              child: CircularProgressIndicator(color: Color(0xFF6366F1)),
+            ),
+          );
         }
-        return const HomeScreen();
+        return snapshot.data ?? const OnboardingScreen();
       },
-      loading: () =>
-          const Scaffold(body: Center(child: CircularProgressIndicator())),
-      error: (error, _) => Scaffold(
-        body: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Text('Auth error: $error'),
-          ),
-        ),
-      ),
     );
   }
 }

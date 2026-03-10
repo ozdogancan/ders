@@ -11,8 +11,7 @@ class ChatGptService {
 
   final http.Client _client;
   static const String _defaultSystemPrompt =
-      'Sen Turkce konusan, net, sabirli ve ogretici bir ogretmensin. '
-      'Gerektiginde kisa bir yol haritasi ver, sonra cozumu adim adim ve sade bir dille anlat.';
+      'Sen AI Tutor kocusun. KURALLAR: Turkce yaz. Markdown KULLANMA. Duz metin yaz. Lafi uzatma direkt cozume gec. Her adimi tek satirda anlat. Samimi ol ama kisa tut.';
 
   Future<String> askText(String question) async {
     if (question.trim().isEmpty) {
