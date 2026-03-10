@@ -1,3 +1,4 @@
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_math_fork/flutter_math.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -463,7 +464,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 child: Center(child: Text('${i + 1}', style: TextStyle(color: c, fontSize: 13, fontWeight: FontWeight.w800)))),
               const SizedBox(width: 12),
               Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(step.explanation, style: const TextStyle(fontSize: 14, color: Color(0xFF334155), height: 1.5)),
+                _renderMixedText(step.explanation),
                 if (step.formula != null && step.formula!.isNotEmpty) ...[
                   const SizedBox(height: 8),
                   Container(width: double.infinity, padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
@@ -591,6 +592,58 @@ class _ChatScreenState extends State<ChatScreen> {
   // WIDGETS
   // ═══════════════════════════════════════
 
+  Widget _renderMixedText(String text) {
+    final regex = RegExp(r'([a-zA-Z0-9]*[\^_\\{}\(\)][a-zA-Z0-9\^_\\{}\(\)\+\-\=\s\.\,\/]*)');
+    final parts = <InlineSpan>[];
+    int lastEnd = 0;
+    for (final match in regex.allMatches(text)) {
+      if (match.start > lastEnd) {
+        parts.add(TextSpan(text: text.substring(lastEnd, match.start),
+          style: const TextStyle(fontSize: 14, color: Color(0xFF334155), height: 1.5)));
+      }
+      final formula = match.group(0)!.trim();
+      if (formula.contains('^') || formula.contains('\\') || formula.contains('_')) {
+        parts.add(WidgetSpan(alignment: PlaceholderAlignment.middle,
+          child: Math.tex(_cleanLatex(formula),
+            textStyle: const TextStyle(fontSize: 15, color: Color(0xFF6366F1)),
+            onErrorFallback: (_) => Text(formula,
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF6366F1))))));
+      } else {
+        parts.add(TextSpan(text: formula,
+          style: const TextStyle(fontSize: 14, color: Color(0xFF334155), height: 1.5)));
+      }
+      lastEnd = match.end;
+    }
+    if (lastEnd < text.length) {
+      parts.add(TextSpan(text: text.substring(lastEnd),
+        style: const TextStyle(fontSize: 14, color: Color(0xFF334155), height: 1.5)));
+    }
+    if (parts.isEmpty) {
+      return Text(text, style: const TextStyle(fontSize: 14, color: Color(0xFF334155), height: 1.5));
+    }
+    return RichText(text: TextSpan(children: parts));
+  }
+
+  void _showFullImage(Uint8List bytes) {
+    Navigator.of(context).push(PageRouteBuilder(
+      opaque: false,
+      barrierColor: Colors.black87,
+      barrierDismissible: true,
+      transitionDuration: const Duration(milliseconds: 300),
+      reverseTransitionDuration: const Duration(milliseconds: 250),
+      pageBuilder: (context, anim, __) {
+        return FadeTransition(opacity: anim,
+          child: GestureDetector(
+            onTap: () => Navigator.pop(context),
+            onVerticalDragEnd: (d) { if (d.primaryVelocity != null && d.primaryVelocity!.abs() > 200) Navigator.pop(context); },
+            child: Center(child: InteractiveViewer(
+              minScale: 0.5, maxScale: 4.0,
+              child: Padding(padding: const EdgeInsets.all(24),
+                child: ClipRRect(borderRadius: BorderRadius.circular(16),
+                  child: Image.memory(bytes, fit: BoxFit.contain)))))));
+      }));
+  }
+
   Widget _avatar(double s) {
     return Container(width: s, height: s,
       decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: const Color(0xFF6366F1).withAlpha(30))),
@@ -683,3 +736,8 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
 }
+
+
+
+
+

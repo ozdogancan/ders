@@ -126,7 +126,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       content: const Text('Bu soru ve çözümü silinecek.'),
       actions: [
         TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Vazgeç')),
-        FilledButton(onPressed: () { QuestionStore.instance.remove(q.id); Navigator.pop(ctx); ScaffoldMessenger.of(context).clearSnackBars(); ScaffoldMessenger.of(context).showSnackBar(SnackBar(behavior: SnackBarBehavior.floating, backgroundColor: const Color(0xFF1E293B), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)), margin: const EdgeInsets.fromLTRB(16, 0, 16, 16), duration: const Duration(seconds: 2), content: const Row(children: [Icon(Icons.delete_outline_rounded, color: Color(0xFFEF4444), size: 18), SizedBox(width: 10), Text('Soru silindi', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 14))]))); },
+        FilledButton(onPressed: () { QuestionStore.instance.remove(q.id); Navigator.pop(ctx); ScaffoldMessenger.of(context).clearSnackBars(); ScaffoldMessenger.of(context).showSnackBar(SnackBar(behavior: SnackBarBehavior.floating, backgroundColor: const Color(0xFF1E293B), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)), margin: const EdgeInsets.fromLTRB(16, 0, 16, 16), duration: const Duration(seconds: 2), content: const Row(children: [Icon(Icons.delete_outline_rounded, color: Color(0xFFEF4444), size: 18), SizedBox(width: 10), Text('Soru silindi', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 14))]))); Future.delayed(const Duration(seconds: 2), () { if (mounted) ScaffoldMessenger.of(context).hideCurrentSnackBar(); }); },
           style: FilledButton.styleFrom(backgroundColor: const Color(0xFFEF4444)), child: const Text('Sil')),
       ]));
   }
@@ -618,4 +618,6 @@ class _ShimmerCardState extends State<_ShimmerCard> with SingleTickerProviderSta
     );
   }
 }
+
+
 
