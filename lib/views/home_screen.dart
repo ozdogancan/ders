@@ -71,6 +71,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       }
     }
   }
+
   void _onScroll() {
     if (_scrollCtrl.position.pixels >= _scrollCtrl.position.maxScrollExtent - 100) {
       final f = _filtered();
@@ -80,19 +81,24 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   void _toast(LocalQuestion q) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      behavior: SnackBarBehavior.floating, backgroundColor: const Color(0xFF1E293B),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      margin: const EdgeInsets.fromLTRB(16, 0, 16, 16), duration: const Duration(seconds: 2),
-      content: Row(children: [
-        Container(width: 26, height: 26, decoration: BoxDecoration(shape: BoxShape.circle, color: const Color(0xFF22C55E).withAlpha(30)),
-          child: const Icon(Icons.check_rounded, color: Color(0xFF22C55E), size: 14)),
-        const SizedBox(width: 10),
-        Expanded(child: Text('${q.subject} sorun çözüldü!',
-          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 14))),
-      ]),
-      action: SnackBarAction(label: 'Gör', textColor: const Color(0xFF818CF8),
-        onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => ChatScreen(questionId: q.id))))));
+    _showOverlayToast(
+      icon: Icons.check_rounded,
+      iconColor: const Color(0xFF22C55E),
+      message: '${q.subject} sorun \u00e7\u00f6z\u00fcld\u00fc!',
+      actionLabel: 'G\u00f6r',
+      onAction: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => ChatScreen(questionId: q.id))),
+    );
+  }
+
+  void _showOverlayToast({required IconData icon, required Color iconColor, required String message, String? actionLabel, VoidCallback? onAction}) {
+    final overlay = Overlay.of(context);
+    late OverlayEntry entry;
+    entry = OverlayEntry(builder: (ctx) => _ToastOverlay(
+      icon: icon, iconColor: iconColor, message: message,
+      actionLabel: actionLabel, onAction: onAction,
+      onDismiss: () { entry.remove(); },
+    ));
+    overlay.insert(entry);
   }
 
   List<LocalQuestion> _filtered() {
@@ -126,7 +132,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       content: const Text('Bu soru ve çözümü silinecek.'),
       actions: [
         TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Vazgeç')),
-        FilledButton(onPressed: () { QuestionStore.instance.remove(q.id); Navigator.pop(ctx); ScaffoldMessenger.of(context).clearSnackBars(); ScaffoldMessenger.of(context).showSnackBar(SnackBar(behavior: SnackBarBehavior.floating, backgroundColor: const Color(0xFF1E293B), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)), margin: const EdgeInsets.fromLTRB(16, 0, 16, 16), duration: const Duration(seconds: 2), content: const Row(children: [Icon(Icons.delete_outline_rounded, color: Color(0xFFEF4444), size: 18), SizedBox(width: 10), Text('Soru silindi', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 14))]))); Future.delayed(const Duration(seconds: 2), () { if (mounted) ScaffoldMessenger.of(context).hideCurrentSnackBar(); }); },
+        FilledButton(onPressed: () { QuestionStore.instance.remove(q.id); Navigator.pop(ctx); ScaffoldMessenger.of(context).clearSnackBars(); ScaffoldMessenger.of(context).showSnackBar(SnackBar(behavior: SnackBarBehavior.floating, backgroundColor: const Color(0xFF1E293B), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)), margin: const EdgeInsets.fromLTRB(16, 0, 16, 16), duration: const Duration(seconds: 2), content: const Row(children: [Icon(Icons.delete_outline_rounded, color: Color(0xFFEF4444), size: 18), SizedBox(width: 10), Text('Soru silindi', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 14))]))); },
           style: FilledButton.styleFrom(backgroundColor: const Color(0xFFEF4444)), child: const Text('Sil')),
       ]));
   }
@@ -505,6 +511,7 @@ class _Tile extends StatelessWidget {
   }
 
   String _prev(LocalQuestion q) {
+    if (q.status == QStatus.error) return 'Bir hata olustu, kredin iade edildi.';
     if (q.status == QStatus.solving) return 'Koala çözüm üretiyor...';
     if (q.answer == null) return '';
     final s = StructuredAnswer.tryParse(q.answer!);
@@ -619,5 +626,68 @@ class _ShimmerCardState extends State<_ShimmerCard> with SingleTickerProviderSta
   }
 }
 
+class _ToastOverlay extends StatefulWidget {
+  const _ToastOverlay({required this.icon, required this.iconColor, required this.message, this.actionLabel, this.onAction, required this.onDismiss});
+  final IconData icon;
+  final Color iconColor;
+  final String message;
+  final String? actionLabel;
+  final VoidCallback? onAction;
+  final VoidCallback onDismiss;
+  @override
+  State<_ToastOverlay> createState() => _ToastOverlayState();
+}
 
+class _ToastOverlayState extends State<_ToastOverlay> with SingleTickerProviderStateMixin {
+  late AnimationController _ctrl;
+  late Animation<double> _fadeAnim;
+  late Animation<Offset> _slideAnim;
 
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 300));
+    _fadeAnim = CurvedAnimation(parent: _ctrl, curve: Curves.easeOut);
+    _slideAnim = Tween<Offset>(begin: const Offset(0, 1), end: Offset.zero).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOutCubic));
+    _ctrl.forward();
+    Future.delayed(const Duration(seconds: 2), _dismiss);
+  }
+
+  void _dismiss() {
+    if (!mounted) return;
+    _ctrl.reverse().then((_) { if (mounted) widget.onDismiss(); });
+  }
+
+  @override
+  void dispose() { _ctrl.dispose(); super.dispose(); }
+
+  @override
+  Widget build(BuildContext context) {
+    return Positioned(
+      bottom: MediaQuery.of(context).padding.bottom + 16,
+      left: 16, right: 16,
+      child: SlideTransition(position: _slideAnim,
+        child: FadeTransition(opacity: _fadeAnim,
+          child: Material(color: Colors.transparent,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              decoration: BoxDecoration(
+                color: const Color(0xFF1E293B),
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [BoxShadow(color: Colors.black.withAlpha(30), blurRadius: 12, offset: const Offset(0, 4))],
+              ),
+              child: Row(children: [
+                Container(width: 26, height: 26,
+                  decoration: BoxDecoration(shape: BoxShape.circle, color: widget.iconColor.withAlpha(30)),
+                  child: Icon(widget.icon, color: widget.iconColor, size: 14)),
+                const SizedBox(width: 10),
+                Expanded(child: Text(widget.message,
+                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 14, decoration: TextDecoration.none))),
+                if (widget.actionLabel != null)
+                  GestureDetector(
+                    onTap: () { _dismiss(); widget.onAction?.call(); },
+                    child: Text(widget.actionLabel!, style: const TextStyle(color: Color(0xFF818CF8), fontWeight: FontWeight.w700, fontSize: 14, decoration: TextDecoration.none))),
+              ]),
+            )))));
+  }
+}

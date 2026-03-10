@@ -39,8 +39,11 @@ class _ChatScreenState extends State<ChatScreen> {
     
     _loadCredits();
     _loadPopup();
+    _scroll.addListener(_checkScrollButton);
     Analytics.chatOpened(widget.questionId, _q?.subject ?? '');
-    WidgetsBinding.instance.addPostFrameCallback((_) => _scrollEnd(false));
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _firstOpen = false;
+    });
   }
 
   @override
@@ -54,10 +57,13 @@ class _ChatScreenState extends State<ChatScreen> {
 
   void _onUpdate() {
     if (mounted) setState(() {});
-    _scrollEnd(false);
+    if (!_firstOpen) _scrollEnd(true);
   }
 
 
+
+  bool _firstOpen = true;
+  bool _showScrollDown = false;
 
   void _scrollEnd(bool animate) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -69,6 +75,12 @@ class _ChatScreenState extends State<ChatScreen> {
         _scroll.jumpTo(_scroll.position.maxScrollExtent);
       }
     });
+  }
+
+  void _checkScrollButton() {
+    if (!_scroll.hasClients) return;
+    final show = _scroll.position.maxScrollExtent - _scroll.position.pixels > 200;
+    if (show != _showScrollDown && mounted) setState(() => _showScrollDown = show);
   }
 
   Future<void> _loadCredits() async {
@@ -338,7 +350,25 @@ class _ChatScreenState extends State<ChatScreen> {
                 ]))),
         ]),
 
-
+        // Scroll to bottom button
+        if (_showScrollDown)
+          Positioned(
+            bottom: solved ? 120 : 20,
+            right: 16,
+            child: GestureDetector(
+              onTap: () => _scrollEnd(true),
+              child: Container(
+                width: 40, height: 40,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.white,
+                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                  boxShadow: [BoxShadow(color: Colors.black.withAlpha(15), blurRadius: 8, offset: const Offset(0, 2))],
+                ),
+                child: const Icon(Icons.keyboard_arrow_down_rounded, color: Color(0xFF6366F1), size: 24),
+              ),
+            ),
+          ),
       ]),
     ));
   }
@@ -392,11 +422,11 @@ class _ChatScreenState extends State<ChatScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               decoration: BoxDecoration(color: c.withAlpha(8), borderRadius: BorderRadius.circular(14),
                 border: Border.all(color: c.withAlpha(25))),
-              child: SingleChildScrollView(scrollDirection: Axis.horizontal,
-                child: Math.tex(_cleanLatex(formulaText),
-                  textStyle: TextStyle(fontSize: 20, color: c),
+              child: Math.tex(_cleanLatex(formulaText),
+                  textStyle: TextStyle(fontSize: 18, color: c),
+                  mathStyle: MathStyle.display,
                   onErrorFallback: (_) => Text(formulaText,
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: c, fontFamily: 'monospace')))));
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: c, fontFamily: 'monospace'))));
           }
           
           if (isQuestion) {
@@ -470,11 +500,11 @@ class _ChatScreenState extends State<ChatScreen> {
                   const SizedBox(height: 8),
                   Container(width: double.infinity, padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                     decoration: BoxDecoration(color: c.withAlpha(8), borderRadius: BorderRadius.circular(10)),
-                    child: SingleChildScrollView(scrollDirection: Axis.horizontal,
-                      child: Math.tex(_cleanLatex(step.formula!),
-                        textStyle: TextStyle(fontSize: 18, color: c),
-                        onErrorFallback: (_) => Text(_cleanLatex(step.formula!),
-                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: c, fontFamily: 'monospace'))))),
+                    child: Math.tex(_cleanLatex(step.formula!),
+                      textStyle: TextStyle(fontSize: 16, color: c),
+                      mathStyle: MathStyle.display,
+                      onErrorFallback: (_) => Text(_cleanLatex(step.formula!),
+                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: c, fontFamily: 'monospace')))),
                 ],
               ])),
             ]));
@@ -594,21 +624,27 @@ class _ChatScreenState extends State<ChatScreen> {
   // ═══════════════════════════════════════
 
   Widget _renderMixedText(String text) {
-    final regex = RegExp(r'([a-zA-Z0-9]*[\^_\\{}\(\)][a-zA-Z0-9\^_\\{}\(\)\+\-\=\s\.\,\/]*)');
+    // Split text by comma or period followed by space to find formula boundaries
+    // Look for LaTeX-like patterns: things with ^, _, \frac, \left etc.
+    final formulaRegex = RegExp(r'(?<![a-zA-ZığüşöçİĞÜŞÖÇ])([a-zA-Z0-9]*(?:\\[a-zA-Z]+|[\^_])[^\s,\.;:!?]*(?:\{[^}]*\})*[^\s,\.;:!?]*)(?![a-zA-ZığüşöçİĞÜŞÖÇ])');
     final parts = <InlineSpan>[];
     int lastEnd = 0;
-    for (final match in regex.allMatches(text)) {
+    
+    for (final match in formulaRegex.allMatches(text)) {
+      // Add text before the formula
       if (match.start > lastEnd) {
         parts.add(TextSpan(text: text.substring(lastEnd, match.start),
           style: const TextStyle(fontSize: 14, color: Color(0xFF334155), height: 1.5)));
       }
       final formula = match.group(0)!.trim();
-      if (formula.contains('^') || formula.contains('\\') || formula.contains('_')) {
+      // Only render as LaTeX if it actually looks like math
+      if (formula.contains('^') || formula.contains('\\') || formula.contains('_') || formula.contains('\\frac')) {
         parts.add(WidgetSpan(alignment: PlaceholderAlignment.middle,
-          child: Math.tex(_cleanLatex(formula),
-            textStyle: const TextStyle(fontSize: 15, color: Color(0xFF6366F1)),
-            onErrorFallback: (_) => Text(formula,
-              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF6366F1))))));
+          child: Padding(padding: const EdgeInsets.symmetric(horizontal: 2),
+            child: Math.tex(_cleanLatex(formula),
+              textStyle: const TextStyle(fontSize: 15, color: Color(0xFF6366F1)),
+              onErrorFallback: (_) => Text(formula,
+                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF6366F1)))))));
       } else {
         parts.add(TextSpan(text: formula,
           style: const TextStyle(fontSize: 14, color: Color(0xFF334155), height: 1.5)));
@@ -622,7 +658,7 @@ class _ChatScreenState extends State<ChatScreen> {
     if (parts.isEmpty) {
       return Text(text, style: const TextStyle(fontSize: 14, color: Color(0xFF334155), height: 1.5));
     }
-    return RichText(text: TextSpan(children: parts));
+    return Text.rich(TextSpan(children: parts));
   }
 
   void _showFullImage(Uint8List bytes) {
