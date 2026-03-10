@@ -116,28 +116,12 @@ class _QuestionShareScreenState extends State<QuestionShareScreen> {
     }
   }
 
+
   void _solveInBackground(String qId, Uint8List bytes, String subject) async {
     try {
       final sw = Stopwatch()..start();
       final answer = await _chatGptService.askImageBytes(bytes,
-        prompt: '''$subject dersinden bu soruyu coz.
-SADECE gecerli JSON dondur, baska hicbir sey yazma.
-JSON semasi:
-{
-  "summary": "Sorunun tek cumlede ozeti",
-  "steps": [
-    {"explanation": "Adim aciklamasi", "formula": "LaTeX formulu (dolar isareti KULLANMA) veya null"},
-    {"explanation": "Adim aciklamasi", "formula": "LaTeX formulu (dolar isareti KULLANMA) veya null"}
-  ],
-  "final_answer": "Sonuc",
-  "tip": "Kisa motive edici cumle"
-}
-Kurallar:
-- Turkce yaz
-- Her adim 1 cumle olsun, net ve sade
-- Formul varsa LaTeX formatinda yaz (ornek: 2x + 5 = 11)
-- Gereksiz adim ekleme, bombing yapma
-- tip kisminda samimi ve enerjik ol''');
+        prompt: '$subject dersinden bu soruyu coz. SADECE gecerli JSON dondur, baska hicbir sey yazma. JSON semasi: {"summary": "Sorunun tek cumlede ozeti", "steps": [{"explanation": "Adim aciklamasi", "formula": "LaTeX formulu veya null"}], "final_answer": "Sonuc (sadece cevap, ornek: x = 3 veya B)", "tip": "Kisa motive edici cumle"} Kurallar: Turkce yaz, sade ve net ol. Her adimi ayri step olarak yaz, 1-2 cumle yeterli. Formuller MUTLAKA LaTeX formatinda olsun. Ust ifadeler: x^{2}, f^{-1}(x), (fog^{-1})^{-1}. Kesirler: \\frac{a}{b}, \\frac{n-1}{2}. Buyuk parantez: \\left( \\right). Ok isareti: \\implies. Carpma: \\cdot veya \\times. Dolar isareti KULLANMA. Formulleri explanation icinde YAZMA, sadece formula alanina koy. Cozumu adim adim goster, her adimda bir islem yap. Gereksiz adim ekleme, 4-6 adim ideal. final_answer kisa olsun: sadece sonuc. tip kisminda samimi ve enerjik ol, emoji kullanma.');
       final elapsed = sw.elapsedMilliseconds;
       if (elapsed < 10000) {
         await Future.delayed(Duration(milliseconds: 10000 - elapsed));
@@ -147,6 +131,7 @@ Kurallar:
     } catch (_) {
       QuestionStore.instance.setError(qId);
       Analytics.questionSolveError(qId);
+      try { await CreditService().refundOneCredit(); } catch (_) {}
     }
   }
 

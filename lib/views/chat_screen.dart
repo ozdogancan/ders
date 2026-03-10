@@ -268,14 +268,15 @@ class _ChatScreenState extends State<ChatScreen> {
           Expanded(
             child: ListView(controller: _scroll, padding: const EdgeInsets.fromLTRB(16, 8, 16, 16), children: [
               // Question image
-              Center(child: Container(margin: const EdgeInsets.only(bottom: 16),
+              // Question image
+              Center(child: GestureDetector(
+                onTap: () => _showFullImage(q.imageBytes),
+                child: Container(margin: const EdgeInsets.only(bottom: 16),
                 constraints: const BoxConstraints(maxWidth: 220, maxHeight: 160),
                 decoration: BoxDecoration(borderRadius: BorderRadius.circular(16),
                   border: Border.all(color: const Color(0xFFE2E8F0)),
                   boxShadow: [BoxShadow(color: Colors.black.withAlpha(10), blurRadius: 8, offset: const Offset(0, 4))]),
-                child: ClipRRect(borderRadius: BorderRadius.circular(16), child: Image.memory(q.imageBytes, fit: BoxFit.cover)))),
-
-              if (q.status == QStatus.solving && q.chatMessages.isEmpty) _solvingBubble(),
+                child: ClipRRect(borderRadius: BorderRadius.circular(16), child: Image.memory(q.imageBytes, fit: BoxFit.cover))))),
 
               // All messages
               ...q.chatMessages.asMap().entries.map((e) {
