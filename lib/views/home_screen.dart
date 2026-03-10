@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../services/credit_service.dart';
@@ -109,6 +110,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     }
     if (_fSubject != null) list = list.where((i) => i.subject == _fSubject).toList();
     if (_fStatus == 'solving') list = list.where((i) => i.status == QStatus.solving).toList();
+    else if (_fStatus == 'waiting') list = list.where((i) => i.status == QStatus.waitingAnswer).toList();
     else if (_fStatus == 'solved') list = list.where((i) => i.status == QStatus.solved).toList();
     if (_fDate != null) {
       final now = DateTime.now(); final today = DateTime(now.year, now.month, now.day);
@@ -214,7 +216,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     // Content padding scales with screen
     final hPad = wide ? (screenW * 0.06).clamp(24.0, 80.0) : 20.0;
 
-    return Scaffold(backgroundColor: wide ? const Color(0xFFF1F5F9) : const Color(0xFFF8FAFC),
+    return Scaffold(backgroundColor: Colors.white,
       body: SafeArea(child: CustomScrollView(controller: _scrollCtrl, slivers: [
         // ── HEADER (web: navbar style)
         SliverToBoxAdapter(child: Container(
@@ -239,7 +241,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 constraints: const BoxConstraints(maxWidth: 480),
                 padding: const EdgeInsets.symmetric(horizontal: 14),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFF8FAFC),
+                  color: Colors.white,
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(color: const Color(0xFFE8ECF4))),
                 child: Row(children: [
@@ -293,13 +295,21 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 await Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ProfileScreen()));
                 _loadCredits();
               },
-              child: Container(
-                width: 38, height: 38,
-                decoration: const BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: LinearGradient(colors: [Color(0xFF6366F1), Color(0xFF8B5CF6)])),
-                child: const Icon(Icons.person_rounded, color: Colors.white, size: 18),
-              ),
+              child: Builder(builder: (_) {
+                final photoUrl = FirebaseAuth.instance.currentUser?.photoURL;
+                return Container(
+                  width: 38, height: 38,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: photoUrl == null ? const LinearGradient(colors: [Color(0xFF6366F1), Color(0xFF8B5CF6)]) : null,
+                    border: photoUrl != null ? Border.all(color: const Color(0xFF6366F1).withAlpha(40), width: 2) : null,
+                  ),
+                  child: photoUrl != null
+                    ? ClipOval(child: Image.network(photoUrl, width: 38, height: 38, fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => const Icon(Icons.person_rounded, color: Colors.white, size: 18)))
+                    : const Icon(Icons.person_rounded, color: Colors.white, size: 18),
+                );
+              }),
             ),
           ]))),
 
@@ -307,13 +317,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         if (!wide)
           SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
             child: Row(children: [
-              Expanded(child: Container(height: 52,
+              Expanded(child: Container(height: 48,
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 decoration: BoxDecoration(
                   color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: const Color(0xFFE8ECF4)),
-                  boxShadow: [BoxShadow(color: Colors.black.withAlpha(4), blurRadius: 8, offset: const Offset(0, 2))]),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: const Color(0xFFE2E8F0))),
                 child: Row(children: [
                   Icon(Icons.search_rounded, size: 20, color: Colors.grey.shade400),
                   const SizedBox(width: 12),
@@ -328,12 +337,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 ]))),
               const SizedBox(width: 10),
               GestureDetector(onTap: _showFilter,
-                child: Container(width: 52, height: 52,
+                child: Container(width: 48, height: 48,
                   decoration: BoxDecoration(
                     color: hasF ? const Color(0xFF6366F1) : Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: hasF ? const Color(0xFF6366F1) : const Color(0xFFE8ECF4)),
-                    boxShadow: [BoxShadow(color: Colors.black.withAlpha(4), blurRadius: 8, offset: const Offset(0, 2))]),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: hasF ? const Color(0xFF6366F1) : const Color(0xFFE2E8F0))),
                   child: Icon(Icons.tune_rounded, size: 20, color: hasF ? Colors.white : Colors.grey.shade500))),
             ]))),
 
@@ -512,6 +520,7 @@ class _Tile extends StatelessWidget {
 
   String _prev(LocalQuestion q) {
     if (q.status == QStatus.error) return 'Bir hata olustu, kredin iade edildi.';
+    if (q.status == QStatus.waitingAnswer) return 'Koala sana bir soru sordu, cevabini bekliyor...';
     if (q.status == QStatus.solving) return 'Koala çözüm üretiyor...';
     if (q.answer == null) return '';
     final s = StructuredAnswer.tryParse(q.answer!);

@@ -152,9 +152,9 @@ class _ChatScreenState extends State<ChatScreen> {
       final msgs = q.chatMessages.map((m) => <String, String>{'role': m.role == 'ai' ? 'assistant' : 'user', 'content': m.text}).toList();
 
       final sys = _coachMode
-        ? 'Sen Koala uygulamasinin AI kocusun. Ogrenciyle benzer soru cozuyorsun. '
+        ? 'Sen Koala uygulamasinin ' + q.subject + ' dersi AI kocusun. Ogrenciyle benzer bir soru cozduruyorsun. '
           'Turkce yaz. Markdown KULLANMA. Duz metin yaz. '
-          'Soruyu KENDIN COZME. Ogrenciye yonlendirici soru sor. '
+          'Soruyu KENDIN COZME. Once benzer ama FARKLI sayilarla/degerlerle yeni bir soru olustur, sonra ogrenciye yonlendirici soru sor. '
           'Dogru cevap verirse kutla ve sonraki adima gec. Yanlis verirse ipucu ver. '
           'Her mesajda sadece 1 adim sor. Kisa ve net ol, 2-4 satir. '
           'Formulleri duz yazdir (3 x 5 = 15 gibi), LaTeX kullanma.'
@@ -166,6 +166,10 @@ class _ChatScreenState extends State<ChatScreen> {
 
       final reply = await _chat.askConversation(systemPrompt: sys, messages: msgs);
       QuestionStore.instance.addChat(q.id, ChatMsg(role: 'ai', text: reply));
+      // AI soru sorduysa status'u waitingAnswer yap
+      if (reply.trim().endsWith('?') && _coachMode) {
+        QuestionStore.instance.setWaitingAnswer(q.id);
+      }
     } catch (e) {
       QuestionStore.instance.addChat(q.id, ChatMsg(role: 'ai', text: 'Bir hata olu\u015ftu, tekrar dene.'));
     }
@@ -211,8 +215,8 @@ class _ChatScreenState extends State<ChatScreen> {
       return ['Devam edelim', 'Tekrar a\u00e7\u0131kla'];
     }
     if (lower.contains('?')) {
-      if (lower.contains('anla') || lower.contains('bilmek')) return ['Evet, anlat', 'Hay\u0131r, ge\u00e7'];
-      return ['Evet', 'A\u00e7\u0131klar m\u0131s\u0131n?'];
+      if (lower.contains('anla') || lower.contains('bilmek')) return ['Biraz daha a\u00e7\u0131klar m\u0131s\u0131n?', 'Anlad\u0131m, devam'];
+      return ['Bir ipucu verir misin?', 'Anlamad\u0131m, farkl\u0131 anlat'];
     }
     if (lower.contains('cevap') || lower.contains('sonu\u00e7')) return ['Neden b\u00f6yle?', 'Farkl\u0131 y\u00f6ntem var m\u0131?'];
     if (lower.contains('ad\u0131m')) return ['Daha detayl\u0131 anlat', 'Bu ad\u0131m\u0131 atlayabilir miyim?'];

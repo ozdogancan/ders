@@ -11,6 +11,8 @@ import 'stores/question_store.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
+  PaintingBinding.instance.imageCache.maximumSizeBytes = 100 * 1024 * 1024;
+  PaintingBinding.instance.imageCache.maximumSize = 200;
   runApp(const ProviderScope(child: _BootstrapApp()));
 }
 

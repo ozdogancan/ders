@@ -24,6 +24,7 @@ class _QuestionShareScreenState extends State<QuestionShareScreen> {
   String? _detectedSubject;
   String? _selectedSubject;
   bool _detectingSubject = false;
+  bool _detectionFailed = false;
   int _credits = 1;
   bool _loading = true;
   bool _sending = false;
@@ -82,17 +83,21 @@ class _QuestionShareScreenState extends State<QuestionShareScreen> {
       else if (lower.contains('fel')) { matched = 'Felsefe'; }
       else if (lower.contains('ing')) { matched = '\u0130ngilizce'; }
       else if (lower.contains('din')) { matched = 'Din K\u00fclt\u00fcr\u00fc'; }
-      else { matched = 'Matematik'; }
+      else { matched = null; }
       if (!mounted) return;
-      setState(() { _detectedSubject = matched; _selectedSubject = matched; _detectingSubject = false; });
+      if (matched == null) {
+        setState(() { _detectionFailed = true; _detectingSubject = false; });
+      } else {
+        setState(() { _detectionFailed = false; _detectedSubject = matched; _selectedSubject = matched; _detectingSubject = false; });
+      }
     } catch (_) {
       if (!mounted) return;
-      setState(() => _detectingSubject = false);
+      setState(() { _detectingSubject = false; _detectionFailed = true; });
     }
   }
 
   void _retake() {
-    setState(() { _imageBytes = null; _selectedSubject = null; _detectedSubject = null; _step = 0; });
+    setState(() { _imageBytes = null; _selectedSubject = null; _detectedSubject = null; _detectionFailed = false; _step = 0; });
   }
 
   Future<void> _send() async {
@@ -123,8 +128,8 @@ class _QuestionShareScreenState extends State<QuestionShareScreen> {
       final answer = await _chatGptService.askImageBytes(bytes,
         prompt: '$subject dersinden bu soruyu coz. SADECE gecerli JSON dondur, baska hicbir sey yazma. JSON semasi: {"summary": "Sorunun tek cumlede ozeti", "steps": [{"explanation": "Adim aciklamasi", "formula": "LaTeX formulu veya null"}], "final_answer": "Sonuc (sadece cevap, ornek: x = 3 veya B)", "tip": "Kisa motive edici cumle"} Kurallar: Turkce yaz, sade ve net ol. Her adimi ayri step olarak yaz, 1-2 cumle yeterli. Formuller MUTLAKA LaTeX formatinda olsun. Ust ifadeler: x^{2}, f^{-1}(x), (fog^{-1})^{-1}. Kesirler: \\frac{a}{b}, \\frac{n-1}{2}. Buyuk parantez: \\left( \\right). Ok isareti: \\implies. Carpma: \\cdot veya \\times. Dolar isareti KULLANMA. Formulleri explanation icinde YAZMA, sadece formula alanina koy. Cozumu adim adim goster, her adimda bir islem yap. Gereksiz adim ekleme, 4-6 adim ideal. final_answer kisa olsun: sadece sonuc. tip kisminda samimi ve enerjik ol, emoji kullanma.');
       final elapsed = sw.elapsedMilliseconds;
-      if (elapsed < 10000) {
-        await Future.delayed(Duration(milliseconds: 10000 - elapsed));
+      if (elapsed < 5000) {
+        await Future.delayed(Duration(milliseconds: 5000 - elapsed));
       }
       QuestionStore.instance.solve(qId, answer);
       Analytics.questionSolved(qId, elapsed ~/ 1000, subject);
@@ -264,7 +269,22 @@ class _QuestionShareScreenState extends State<QuestionShareScreen> {
               ])),
         ]),
         const SizedBox(height: 4),
-        Text('Otomatik alg\u0131land\u0131, istersen de\u011fi\u015ftir', style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
+        _detectionFailed
+          ? Container(
+              margin: const EdgeInsets.only(bottom: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF59E0B).withAlpha(15),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: const Color(0xFFF59E0B).withAlpha(30))),
+              child: Row(children: [
+                Icon(Icons.info_outline_rounded, color: const Color(0xFFF59E0B), size: 18),
+                const SizedBox(width: 10),
+                Expanded(child: Text('G\u00f6r\u00fcnt\u00fcden konu tespit edilemedi. L\u00fctfen dersi se\u00e7.',
+                  style: TextStyle(fontSize: 13, color: Colors.amber.shade800))),
+              ]),
+            )
+          : Text('Otomatik alg\u0131land\u0131, istersen de\u011fi\u015ftir', style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
         const SizedBox(height: 12),
         Wrap(spacing: 8, runSpacing: 8,
           children: _subjects.map((s) {

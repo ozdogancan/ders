@@ -7,7 +7,7 @@ import 'package:supabase_flutter/supabase_flutter.dart' hide User;
 
 import '../services/supabase_storage_service.dart';
 
-enum QStatus { solving, solved, error }
+enum QStatus { solving, solved, error, waitingAnswer }
 
 class SolutionStep {
   SolutionStep({required this.explanation, this.formula, this.isAnswer = false});
@@ -305,6 +305,13 @@ class QuestionStore extends ChangeNotifier {
     _questions.removeWhere((q) => q.id == id);
     notifyListeners();
     _deleteQuestionFromDb(id);
+  }
+
+  void setWaitingAnswer(String id) {
+    final q = getById(id);
+    if (q == null) return;
+    q.status = QStatus.waitingAnswer;
+    notifyListeners();
   }
 
   void setError(String id) {
