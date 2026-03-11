@@ -56,9 +56,18 @@ class _ChatScreenState extends State<ChatScreen> {
     super.dispose();
   }
 
+  int _lastMsgCount = 0;
+
   void _onUpdate() {
-    if (mounted) setState(() {});
-    if (!_firstOpen) _scrollEnd(true);
+    if (!mounted) return;
+    final q = _q;
+    final currentMsgCount = q?.chatMessages.length ?? 0;
+    setState(() {});
+    // Only auto-scroll if THIS question got a new message
+    if (!_firstOpen && currentMsgCount > _lastMsgCount) {
+      _scrollEnd(true);
+    }
+    _lastMsgCount = currentMsgCount;
   }
 
 

@@ -103,9 +103,7 @@ class _QuestionShareScreenState extends State<QuestionShareScreen> {
   Future<void> _send() async {
     if (_imageBytes == null || _selectedSubject == null) return;
     if (_credits <= 0) { _showNoCredit(); return; }
-
     setState(() { _step = 2; _sending = true; });
-
     try {
       await _creditService.spendOneCredit();
       final q = QuestionStore.instance.add(imageBytes: _imageBytes!, subject: _selectedSubject!);
@@ -121,16 +119,13 @@ class _QuestionShareScreenState extends State<QuestionShareScreen> {
     }
   }
 
-
   void _solveInBackground(String qId, Uint8List bytes, String subject) async {
     try {
       final sw = Stopwatch()..start();
       final answer = await _chatGptService.askImageBytes(bytes,
         prompt: subject == 'Matematik' || subject == 'Geometri' ? _getMathPrompt(subject, bytes) : _getGeneralPrompt(subject));
       final elapsed = sw.elapsedMilliseconds;
-      if (elapsed < 5000) {
-        await Future.delayed(Duration(milliseconds: 5000 - elapsed));
-      }
+      if (elapsed < 5000) await Future.delayed(Duration(milliseconds: 5000 - elapsed));
       QuestionStore.instance.solve(qId, answer);
       Analytics.questionSolved(qId, elapsed ~/ 1000, subject);
     } catch (_) {
@@ -140,19 +135,19 @@ class _QuestionShareScreenState extends State<QuestionShareScreen> {
     }
   }
 
-  
   String _getMathPrompt(String subject, dynamic bytes) {
     return '$subject soruyu coz. SADECE JSON dondur. '
-      'Sema: {"question_type":"hesaplama|problem|grafik|ispat","summary":"ozet",'
+      'Sema: {"question_type":"problem","summary":"ozet",'
       '"given":["veri1"] veya null,"find":"istenen" veya null,"modeling":"LaTeX denklem" veya null,'
-      '"steps":[{"explanation":"ne yaptik","reasoning":"NEDEN yaptik","formula":"LaTeX","is_critical":false}],'
+      '"steps":[{"explanation":"ne yaptik","reasoning":"NEDEN yaptik","formula":"saf matematik LaTeX","is_critical":false}],'
       '"final_answer":"sonuc","golden_rule":"bu tur sorularda ezberle kurali","tip":"motivasyon"} '
       'KURALLAR: Turkce yaz. 4-6 adim. HER adimda reasoning yaz. '
-      'Tam 1 adim is_critical:true sec (kilit nokta). golden_rule zorunlu. '
-      'problem tipinde given/find/modeling doldur. Diger tiplerde null birak. '
-      'LaTeX: x^{2}, \\frac{a}{b}, \\implies, \\cdot, \\times, \\boxed{sonuc}. '
-      'Dolar isareti KULLANMA. Formulleri explanation icinde YAZMA, formula alanina koy. '
-      'final_answer kisa. tip samimi, emoji kullanma.';
+      'Tam 1 adim is_critical:true sec. golden_rule zorunlu. given/find/modeling doldur. '
+      'FORMUL KURALLARI: formula alanina SADECE saf matematik yaz. '
+      'YASAK: \\text, \\mathrm, \\boxed, \\newline, Turkce karakter formula icinde. '
+      'Degiskenleri tek harf yap: x, y, A, B. Aciklamayi explanation alanina yaz. '
+      'LaTeX: \\frac{a}{b}, \\times, \\div, \\Rightarrow, \\cdot. '
+      'Dolar isareti KULLANMA. final_answer kisa. tip samimi.';
   }
 
   String _getGeneralPrompt(String subject) {
@@ -161,10 +156,11 @@ class _QuestionShareScreenState extends State<QuestionShareScreen> {
       '"steps":[{"explanation":"ne yaptik","reasoning":"neden yaptik","formula":"LaTeX veya null","is_critical":false}],'
       '"final_answer":"sonuc","golden_rule":"temel kural","tip":"motivasyon"} '
       'KURALLAR: Turkce yaz. 4-6 adim. HER adimda reasoning yaz. 1 adim is_critical:true. golden_rule zorunlu. '
-      'LaTeX: x^{2}, \\frac{a}{b}. Dolar isareti KULLANMA. formula alanina koy.';
+      'FORMUL KURALLARI: formula alanina SADECE saf matematik. YASAK: \\text, \\boxed, Turkce karakter. '
+      'LaTeX: \\frac{a}{b}. Dolar isareti KULLANMA.';
   }
 
-Future<void> _showNoCredit() async {
+  Future<void> _showNoCredit() async {
     final go = await showDialog<bool>(context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
@@ -173,10 +169,8 @@ Future<void> _showNoCredit() async {
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Vazge\u00e7')),
           FilledButton(onPressed: () => Navigator.pop(ctx, true),
-            style: FilledButton.styleFrom(backgroundColor: const Color(0xFF6366F1)),
-            child: const Text('Kredi Al')),
-        ],
-      ));
+            style: FilledButton.styleFrom(backgroundColor: const Color(0xFF6366F1)), child: const Text('Kredi Al')),
+        ]));
     if (go == true && mounted) {
       await Navigator.of(context).push(MaterialPageRoute(builder: (_) => const CreditStoreScreen()));
       _loadCredits();
@@ -188,7 +182,6 @@ Future<void> _showNoCredit() async {
   @override
   Widget build(BuildContext context) {
     if (_loading) return const Scaffold(body: Center(child: CircularProgressIndicator(color: Color(0xFF6366F1))));
-
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
       appBar: _step == 3 ? null : AppBar(
@@ -201,8 +194,7 @@ Future<void> _showNoCredit() async {
         centerTitle: true,
         actions: [
           Padding(padding: const EdgeInsets.only(right: 12),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            child: Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
               decoration: BoxDecoration(color: const Color(0xFF6366F1).withAlpha(15), borderRadius: BorderRadius.circular(99)),
               child: Row(mainAxisSize: MainAxisSize.min, children: [
                 const Icon(Icons.bolt_rounded, size: 14, color: Color(0xFF6366F1)),
@@ -220,8 +212,7 @@ Future<void> _showNoCredit() async {
 
   Widget _buildPicker() {
     return Center(key: const ValueKey(0), child: Container(
-      constraints: const BoxConstraints(maxWidth: 420),
-      padding: const EdgeInsets.all(32),
+      constraints: const BoxConstraints(maxWidth: 420), padding: const EdgeInsets.all(32),
       child: Column(mainAxisSize: MainAxisSize.min, children: [
         Container(width: 120, height: 120,
           decoration: BoxDecoration(shape: BoxShape.circle, color: const Color(0xFF6366F1).withAlpha(15)),
@@ -254,13 +245,16 @@ Future<void> _showNoCredit() async {
         constraints: BoxConstraints(maxWidth: wide ? 560 : double.infinity),
         padding: EdgeInsets.all(wide ? 32 : 20),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        // ── Image preview: FULL image, no cropping ──
         Container(
-          decoration: BoxDecoration(borderRadius: BorderRadius.circular(16), border: Border.all(color: const Color(0xFFE2E8F0))),
+          decoration: BoxDecoration(borderRadius: BorderRadius.circular(16), border: Border.all(color: const Color(0xFFE2E8F0)), color: const Color(0xFF1E293B)),
           child: Column(children: [
-            ClipRRect(borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-              child: AspectRatio(aspectRatio: 4 / 3,
-                child: _imageBytes != null ? Image.memory(_imageBytes!, fit: BoxFit.cover)
-                  : Container(color: const Color(0xFFF1F5F9)))),
+            ClipRRect(
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+              child: _imageBytes != null
+                ? Container(width: double.infinity, constraints: const BoxConstraints(maxHeight: 400), color: const Color(0xFF1E293B),
+                    child: Image.memory(_imageBytes!, fit: BoxFit.contain))
+                : Container(height: 200, color: const Color(0xFFF1F5F9))),
             Container(padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               decoration: const BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(bottom: Radius.circular(16))),
               child: Row(children: [
@@ -282,32 +276,24 @@ Future<void> _showNoCredit() async {
               Text('AI tespit ediyor...', style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
             ])
           else if (_detectedSubject != null)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
               decoration: BoxDecoration(color: const Color(0xFF6366F1).withAlpha(12), borderRadius: BorderRadius.circular(99),
                 border: Border.all(color: const Color(0xFF6366F1).withAlpha(25))),
               child: const Row(mainAxisSize: MainAxisSize.min, children: [
-                Icon(Icons.auto_awesome, size: 11, color: Color(0xFF6366F1)),
-                SizedBox(width: 4),
+                Icon(Icons.auto_awesome, size: 11, color: Color(0xFF6366F1)), SizedBox(width: 4),
                 Text('AI tespit etti', style: TextStyle(fontSize: 11, color: Color(0xFF6366F1), fontWeight: FontWeight.w600)),
               ])),
         ]),
         const SizedBox(height: 4),
         _detectionFailed
-          ? Container(
-              margin: const EdgeInsets.only(bottom: 4),
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF59E0B).withAlpha(15),
-                borderRadius: BorderRadius.circular(10),
+          ? Container(margin: const EdgeInsets.only(bottom: 4), padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(color: const Color(0xFFF59E0B).withAlpha(15), borderRadius: BorderRadius.circular(10),
                 border: Border.all(color: const Color(0xFFF59E0B).withAlpha(30))),
               child: Row(children: [
-                Icon(Icons.info_outline_rounded, color: const Color(0xFFF59E0B), size: 18),
-                const SizedBox(width: 10),
+                Icon(Icons.info_outline_rounded, color: const Color(0xFFF59E0B), size: 18), const SizedBox(width: 10),
                 Expanded(child: Text('G\u00f6r\u00fcnt\u00fcden konu tespit edilemedi. L\u00fctfen dersi se\u00e7.',
                   style: TextStyle(fontSize: 13, color: Colors.amber.shade800))),
-              ]),
-            )
+              ]))
           : Text('Otomatik alg\u0131land\u0131, istersen de\u011fi\u015ftir', style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
         const SizedBox(height: 12),
         Wrap(spacing: 8, runSpacing: 8,
@@ -316,19 +302,15 @@ Future<void> _showNoCredit() async {
             return GestureDetector(onTap: () => setState(() => _selectedSubject = s),
               child: AnimatedContainer(duration: const Duration(milliseconds: 200),
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                decoration: BoxDecoration(
-                  color: sel ? const Color(0xFF6366F1) : Colors.white,
-                  borderRadius: BorderRadius.circular(99),
+                decoration: BoxDecoration(color: sel ? const Color(0xFF6366F1) : Colors.white, borderRadius: BorderRadius.circular(99),
                   border: Border.all(color: sel ? const Color(0xFF6366F1) : const Color(0xFFE2E8F0)),
                   boxShadow: sel ? [BoxShadow(color: const Color(0xFF6366F1).withAlpha(40), blurRadius: 8, offset: const Offset(0, 3))] : null),
                 child: Text(s, style: TextStyle(color: sel ? Colors.white : const Color(0xFF475569), fontWeight: FontWeight.w600, fontSize: 13))));
           }).toList()),
         const SizedBox(height: 28),
-        Container(padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(color: const Color(0xFFF1F5F9), borderRadius: BorderRadius.circular(14)),
+        Container(padding: const EdgeInsets.all(14), decoration: BoxDecoration(color: const Color(0xFFF1F5F9), borderRadius: BorderRadius.circular(14)),
           child: Row(children: [
-            const Icon(Icons.bolt_rounded, color: Color(0xFF6366F1), size: 20),
-            const SizedBox(width: 8),
+            const Icon(Icons.bolt_rounded, color: Color(0xFF6366F1), size: 20), const SizedBox(width: 8),
             const Expanded(child: Text('1 kredi harcanacak', style: TextStyle(fontSize: 13, color: Color(0xFF475569)))),
             Text('Kalan: $_credits', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF6366F1))),
           ])),
@@ -336,8 +318,7 @@ Future<void> _showNoCredit() async {
         SizedBox(width: double.infinity, height: 54,
           child: FilledButton.icon(
             onPressed: (_selectedSubject != null && !_sending) ? _send : null,
-            style: FilledButton.styleFrom(
-              backgroundColor: _selectedSubject != null ? const Color(0xFF6366F1) : const Color(0xFFCBD5E1),
+            style: FilledButton.styleFrom(backgroundColor: _selectedSubject != null ? const Color(0xFF6366F1) : const Color(0xFFCBD5E1),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
             icon: const Icon(Icons.send_rounded, size: 20),
             label: const Text('G\u00d6NDER', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, letterSpacing: 0.5)))),
@@ -348,8 +329,7 @@ Future<void> _showNoCredit() async {
     return Center(key: const ValueKey(2), child: Padding(padding: const EdgeInsets.all(40),
       child: Column(mainAxisSize: MainAxisSize.min, children: [
         Container(width: 100, height: 100,
-          decoration: BoxDecoration(shape: BoxShape.circle,
-            border: Border.all(color: const Color(0xFF6366F1).withAlpha(40), width: 3),
+          decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: const Color(0xFF6366F1).withAlpha(40), width: 3),
             boxShadow: [BoxShadow(color: const Color(0xFF6366F1).withAlpha(30), blurRadius: 24)]),
           child: ClipOval(child: Image.asset('assets/tutors/Matematik Man.png', fit: BoxFit.cover, alignment: Alignment.topCenter,
             errorBuilder: (_, __, ___) => Container(color: const Color(0xFF6366F1).withAlpha(20),
@@ -368,8 +348,7 @@ Future<void> _showNoCredit() async {
       child: TweenAnimationBuilder<double>(
         tween: Tween(begin: 0.0, end: 1.0), duration: const Duration(milliseconds: 600), curve: Curves.easeOutBack,
         builder: (_, v, child) => Transform.scale(scale: 0.8 + 0.2 * v, child: Opacity(opacity: v.clamp(0.0, 1.0), child: child)),
-        child: Container(constraints: const BoxConstraints(maxWidth: 420),
-          padding: const EdgeInsets.all(32),
+        child: Container(constraints: const BoxConstraints(maxWidth: 420), padding: const EdgeInsets.all(32),
           child: Column(mainAxisSize: MainAxisSize.min, children: [
             Stack(alignment: Alignment.center, children: [
               Container(width: 130, height: 130, decoration: BoxDecoration(shape: BoxShape.circle,
@@ -382,8 +361,7 @@ Future<void> _showNoCredit() async {
               Positioned(bottom: 0, right: 0,
                 child: Container(width: 36, height: 36,
                   decoration: BoxDecoration(shape: BoxShape.circle, color: const Color(0xFF22C55E),
-                    border: Border.all(color: Colors.white, width: 3),
-                    boxShadow: [BoxShadow(color: Colors.black.withAlpha(25), blurRadius: 8)]),
+                    border: Border.all(color: Colors.white, width: 3), boxShadow: [BoxShadow(color: Colors.black.withAlpha(25), blurRadius: 8)]),
                   child: const Icon(Icons.check_rounded, color: Colors.white, size: 20))),
             ]),
             const SizedBox(height: 28),
@@ -392,23 +370,18 @@ Future<void> _showNoCredit() async {
             Text('Koala \u00e7\u00f6z\u00fcm \u00fcretiyor.\nHaz\u0131r olunca bildirim alacaks\u0131n.',
               textAlign: TextAlign.center, style: TextStyle(fontSize: 14, color: Colors.grey.shade500, height: 1.6)),
             const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            Container(padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               decoration: BoxDecoration(color: const Color(0xFF6366F1).withAlpha(10), borderRadius: BorderRadius.circular(12),
                 border: Border.all(color: const Color(0xFF6366F1).withAlpha(20))),
               child: const Row(mainAxisSize: MainAxisSize.min, children: [
-                Icon(Icons.notifications_active_rounded, size: 16, color: Color(0xFF6366F1)),
-                SizedBox(width: 8),
+                Icon(Icons.notifications_active_rounded, size: 16, color: Color(0xFF6366F1)), SizedBox(width: 8),
                 Text('Bildirimleri a\u00e7\u0131k tut', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF6366F1))),
               ])),
             const SizedBox(height: 28),
             SizedBox(width: double.infinity, height: 50,
               child: FilledButton(onPressed: _goHome,
-                style: FilledButton.styleFrom(backgroundColor: const Color(0xFF6366F1),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))),
+                style: FilledButton.styleFrom(backgroundColor: const Color(0xFF6366F1), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))),
                 child: const Text('Ana Sayfaya D\u00f6n', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)))),
           ]))));
   }
 }
-
-
