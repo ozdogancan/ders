@@ -37,10 +37,10 @@ class MathTextBlock extends StatelessWidget {
                       simpler,
                       textStyle: fallbackStyle.copyWith(fontSize: 18),
                       onErrorFallback: (_) =>
-                          Text(chunk.value, style: fallbackStyle),
+                          Text(_humanReadable(chunk.value), style: fallbackStyle),
                     );
                   }
-                  return Text(chunk.value, style: fallbackStyle);
+                  return Text(_humanReadable(chunk.value), style: fallbackStyle);
                 },
               ),
             ),
@@ -244,6 +244,33 @@ class MathTextBlock extends StatelessWidget {
     );
 
     return result;
+  }
+
+  /// Convert LaTeX to human-readable math when rendering fails
+  static String _humanReadable(String latex) {
+    var s = latex;
+    s = s.replaceAllMapped(RegExp(r'\\frac\{([^}]*)\}\{([^}]*)\}'), (m) => '${m.group(1)}/${m.group(2)}');
+    s = s.replaceAllMapped(RegExp(r'\\sqrt\{([^}]*)\}'), (m) => '\u221a(${m.group(1)})');
+    s = s.replaceAll(r'\Rightarrow', ' \u21d2 ');
+    s = s.replaceAll(r'\rightarrow', ' \u2192 ');
+    s = s.replaceAll(r'\times', ' \u00d7 ');
+    s = s.replaceAll(r'\div', ' \u00f7 ');
+    s = s.replaceAll(r'\cdot', ' \u00b7 ');
+    s = s.replaceAll(r'\pm', ' \u00b1 ');
+    s = s.replaceAll(r'\leq', ' \u2264 ');
+    s = s.replaceAll(r'\geq', ' \u2265 ');
+    s = s.replaceAll(r'\neq', ' \u2260 ');
+    s = s.replaceAll(r'\infty', '\u221e');
+    s = s.replaceAll(r'\pi', '\u03c0');
+    s = s.replaceAll(r'\quad', '  ');
+    s = s.replaceAll('^{2}', '\u00b2');
+    s = s.replaceAll('^{3}', '\u00b3');
+    s = s.replaceAllMapped(RegExp(r'\^\{([^}]*)\}'), (m) => '^(${m.group(1)})');
+    s = s.replaceAllMapped(RegExp(r'_\{([^}]*)\}'), (m) => '_${m.group(1)}');
+    s = s.replaceAllMapped(RegExp(r'\\([a-zA-Z]+)'), (m) => m.group(1) ?? '');
+    s = s.replaceAll('{', '').replaceAll('}', '');
+    s = s.replaceAll(RegExp(r'\s{2,}'), ' ');
+    return s.trim();
   }
 }
 

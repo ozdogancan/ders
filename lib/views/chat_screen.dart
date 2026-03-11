@@ -350,6 +350,45 @@ class _ChatScreenState extends State<ChatScreen> {
     return result.trim();
   }
 
+  /// Convert LaTeX to human-readable math when Math.tex fails
+  String _humanReadable(String latex) {
+    var s = latex;
+    // \frac{a}{b} → a/b
+    s = s.replaceAllMapped(RegExp(r'\\frac\{([^}]*)\}\{([^}]*)\}'), (m) => '${m.group(1)}/${m.group(2)}');
+    // \sqrt{x} → √x
+    s = s.replaceAllMapped(RegExp(r'\\sqrt\{([^}]*)\}'), (m) => '\u221a(${m.group(1)})');
+    // Arrow and operators
+    s = s.replaceAll(r'\Rightarrow', ' \u21d2 ');
+    s = s.replaceAll(r'\rightarrow', ' \u2192 ');
+    s = s.replaceAll(r'\times', ' \u00d7 ');
+    s = s.replaceAll(r'\div', ' \u00f7 ');
+    s = s.replaceAll(r'\cdot', ' \u00b7 ');
+    s = s.replaceAll(r'\pm', ' \u00b1 ');
+    s = s.replaceAll(r'\leq', ' \u2264 ');
+    s = s.replaceAll(r'\geq', ' \u2265 ');
+    s = s.replaceAll(r'\neq', ' \u2260 ');
+    s = s.replaceAll(r'\approx', ' \u2248 ');
+    s = s.replaceAll(r'\infty', '\u221e');
+    s = s.replaceAll(r'\pi', '\u03c0');
+    s = s.replaceAll(r'\alpha', '\u03b1');
+    s = s.replaceAll(r'\beta', '\u03b2');
+    s = s.replaceAll(r'\theta', '\u03b8');
+    s = s.replaceAll(r'\quad', '  ');
+    // x^{2} → x²
+    s = s.replaceAll('^{2}', '\u00b2');
+    s = s.replaceAll('^{3}', '\u00b3');
+    // General ^{...} → ^(...)
+    s = s.replaceAllMapped(RegExp(r'\^\{([^}]*)\}'), (m) => '^(${m.group(1)})');
+    // _{...} → subscript
+    s = s.replaceAllMapped(RegExp(r'_\{([^}]*)\}'), (m) => '_${m.group(1)}');
+    // Remove remaining \commands
+    s = s.replaceAllMapped(RegExp(r'\\([a-zA-Z]+)'), (m) => m.group(1) ?? '');
+    // Clean braces
+    s = s.replaceAll('{', '').replaceAll('}', '');
+    s = s.replaceAll(RegExp(r'\s{2,}'), ' ');
+    return s.trim();
+  }
+
   @override
   Widget build(BuildContext context) {
     final q = _q;
@@ -549,8 +588,8 @@ class _ChatScreenState extends State<ChatScreen> {
               child: Math.tex(_cleanLatex(formulaText),
                   textStyle: TextStyle(fontSize: 18, color: c),
                   mathStyle: MathStyle.display,
-                  onErrorFallback: (_) => Text(formulaText,
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: c, fontFamily: 'monospace'))));
+                  onErrorFallback: (_) => Text(_humanReadable(formulaText),
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: c))));
           }
 
           if (isQuestion) {
@@ -700,7 +739,7 @@ class _ChatScreenState extends State<ChatScreen> {
                         _cleanLatex(a.modelEquation!),
                         textStyle: const TextStyle(fontSize: 16, color: Color(0xFF166534)),
                         mathStyle: MathStyle.display,
-                        onErrorFallback: (_) => Text(a.modelEquation!, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Color(0xFF166534))),
+                        onErrorFallback: (_) => Text(_humanReadable(a.modelEquation!), style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Color(0xFF166534))),
                       ),
                     ),
                   ),
@@ -785,8 +824,8 @@ class _ChatScreenState extends State<ChatScreen> {
                               textStyle: TextStyle(fontSize: 16, color: isCrit ? critColor : sc),
                               mathStyle: MathStyle.display,
                               onErrorFallback: (_) => Text(
-                                _cleanLatex(step.formula!),
-                                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: isCrit ? critColor : sc, fontFamily: 'monospace'),
+                                _humanReadable(step.formula!),
+                                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: isCrit ? critColor : sc),
                               ),
                             ),
                           ),
@@ -983,7 +1022,7 @@ class _ChatScreenState extends State<ChatScreen> {
           child: Padding(padding: const EdgeInsets.symmetric(horizontal: 2),
             child: Math.tex(_cleanLatex(formula),
               textStyle: const TextStyle(fontSize: 15, color: Color(0xFF6366F1)),
-              onErrorFallback: (_) => Text(formula,
+              onErrorFallback: (_) => Text(_humanReadable(formula),
                 style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF6366F1)))))));
       } else {
         parts.add(TextSpan(text: formula,
