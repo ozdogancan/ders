@@ -135,16 +135,29 @@ class MathTextBlock extends StatelessWidget {
     // Remove wrapping dollar signs
     result = result.replaceAll(RegExp(r'^\$+|\$+$'), '');
 
+    // ═══ RESCUE: fix broken commands where backslash was eaten ═══
+    result = result.replaceAllMapped(RegExp(r'(?<!\\)rac\{'), (_) => r'\frac{');
+    result = result.replaceAllMapped(RegExp(r'(?<!\\)cdot(?![a-zA-Z])'), (_) => r'\cdot');
+    result = result.replaceAllMapped(RegExp(r'(?<!\\)times(?![a-zA-Z])'), (_) => r'\times');
+    result = result.replaceAllMapped(RegExp(r'(?<!\\)div(?![a-zA-Z])'), (_) => r'\div');
+    result = result.replaceAllMapped(RegExp(r'(?<!\\)sqrt\{'), (_) => r'\sqrt{');
+    result = result.replaceAllMapped(RegExp(r'(?<!\\)Rightarrow(?![a-zA-Z])'), (_) => r'\Rightarrow');
+    result = result.replaceAllMapped(RegExp(r'(?<!\\)quad(?![a-zA-Z])'), (_) => r'\quad');
+
     // ── Unsupported commands → supported equivalents ──
 
     // \implies → \Rightarrow
     result = result.replaceAll(r'\implies', r'\Rightarrow');
 
-    // \newline, \\ at line boundaries → space (flutter_math doesn't support line breaks)
+    // \newline → space (flutter_math doesn't support line breaks)
     result = result.replaceAll(r'\newline', ' \\quad ');
-    // Keep \\ only inside matrix/array environments
+    // Standalone \\ (line break, NOT part of a command like \\frac)
+    // Only match \\ followed by space, end of string, or non-letter
     if (!result.contains(r'\begin{')) {
-      result = result.replaceAll(r'\\', ' \\quad ');
+      result = result.replaceAllMapped(
+        RegExp(r'\\\\(?![a-zA-Z])'),
+        (_) => ' \\quad ',
+      );
     }
 
     // \text{...} → \mathrm{...} (flutter_math_fork supports \mathrm better)

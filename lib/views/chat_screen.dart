@@ -240,6 +240,37 @@ class _ChatScreenState extends State<ChatScreen> {
     result = result.replaceAll(RegExp(r'^\$+|\$+$'), '');
     result = result.replaceAll('\$', '');
 
+    // ═══ RESCUE: fix broken commands where backslash was eaten ═══
+    // e.g. "rac{114}{2}" → "\frac{114}{2}", "cdot" → "\cdot"
+    result = result.replaceAllMapped(
+      RegExp(r'(?<!\\)rac\{'),
+      (_) => r'\frac{',
+    );
+    result = result.replaceAllMapped(
+      RegExp(r'(?<!\\)cdot(?![a-zA-Z])'),
+      (_) => r'\cdot',
+    );
+    result = result.replaceAllMapped(
+      RegExp(r'(?<!\\)times(?![a-zA-Z])'),
+      (_) => r'\times',
+    );
+    result = result.replaceAllMapped(
+      RegExp(r'(?<!\\)div(?![a-zA-Z])'),
+      (_) => r'\div',
+    );
+    result = result.replaceAllMapped(
+      RegExp(r'(?<!\\)sqrt\{'),
+      (_) => r'\sqrt{',
+    );
+    result = result.replaceAllMapped(
+      RegExp(r'(?<!\\)Rightarrow(?![a-zA-Z])'),
+      (_) => r'\Rightarrow',
+    );
+    result = result.replaceAllMapped(
+      RegExp(r'(?<!\\)quad(?![a-zA-Z])'),
+      (_) => r'\quad',
+    );
+
     // First: normalize double backslashes to single
     // (JSON parse sometimes doubles them in the fallback path)
     // But be careful: only replace \\\\ (literal double) not \\ before a command

@@ -70,7 +70,17 @@ class SolutionStep {
     s = s.replaceAll('\u00d6', 'O').replaceAll('\u00c7', 'C');
 
     s = s.replaceAll(RegExp(r'\s{2,}'), ' ');
-    return s.trim().isEmpty ? null : s.trim();
+    s = s.trim();
+    if (s.isEmpty) return null;
+
+    // If formula is mostly letters/words (not real math), discard it
+    // Real math has: digits, operators (+=-), backslash commands, ^, _
+    final mathChars = s.replaceAll(RegExp(r'[a-zA-Z\s{},]'), '');
+    final totalLen = s.replaceAll(RegExp(r'\s'), '').length;
+    // If less than 15% of chars are "math-like", it's probably just text
+    if (totalLen > 5 && mathChars.length < totalLen * 0.15) return null;
+
+    return s;
   }
 }
 
