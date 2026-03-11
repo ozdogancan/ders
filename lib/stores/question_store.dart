@@ -70,10 +70,8 @@ class StructuredAnswer {
       try {
         decoded = jsonDecode(jsonStr) as Map<String, dynamic>;
       } catch (_) {
-        jsonStr = jsonStr.replaceAllMapped(
-          RegExp(r'(?<!\\\\)\\\\(?!\\\\|"|n|t|r|u[0-9a-fA-F])'),
-          (m) => '\\\\\\\\',
-        );
+        // Basit yaklasim: JSON icindeki LaTeX backslash'lerini duzelt
+        jsonStr = jsonStr.replaceAll(RegExp(r'\\(?![\\"/bfnrtu])'), '\\\\');
         decoded = jsonDecode(jsonStr) as Map<String, dynamic>;
       }
       return StructuredAnswer.fromJson(decoded);
