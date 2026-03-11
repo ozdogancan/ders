@@ -230,32 +230,83 @@ class _ChatScreenState extends State<ChatScreen> {
     return ['Daha basit anlat', 'Neden b\u00f6yle?'];
   }
 
+  // ══════════════════════════════════════════════════
+  // CLEAN LATEX - fixes for flutter_math_fork
+  // ══════════════════════════════════════════════════
   String _cleanLatex(String s) {
     var result = s.trim();
+
+    // Remove wrapping dollar signs
     result = result.replaceAll(RegExp(r'^\$+|\$+$'), '');
     result = result.replaceAll('\$', '');
+
+    // First: normalize double backslashes to single
+    // (JSON parse sometimes doubles them in the fallback path)
+    // But be careful: only replace \\\\ (literal double) not \\ before a command
+    // e.g. \\frac should become \frac, but \\ (line break) should become \quad
+    result = result.replaceAllMapped(
+      RegExp(r'\\\\([a-zA-Z])'),
+      (m) => '\\${m.group(1)}',
+    );
+
+    // \implies → \Rightarrow
     result = result.replaceAll(r'\implies', r'\Rightarrow');
+
+    // \newline → \quad (must use raw string so \n is literal)
     result = result.replaceAll(r'\newline', r' \quad ');
+
+    // Standalone \\ (not followed by a letter = not a command) → \quad
     if (!result.contains(r'\begin{')) {
-      result = result.replaceAll(r'\\', r' \quad ');
+      result = result.replaceAllMapped(
+        RegExp(r'\\\\(?![a-zA-Z])'),
+        (_) => r' \quad ',
+      );
     }
+
+    // \text{...} → remove wrapper, keep content as-is for display
     result = result.replaceAllMapped(
-      RegExp(r'\\text\{([^}]*)\}'), (m) => '\\mathrm{${m.group(1)}}');
+      RegExp(r'\\text\{([^}]*)\}'), (m) => m.group(1) ?? '');
     result = result.replaceAllMapped(
-      RegExp(r'\\textbf\{([^}]*)\}'), (m) => '\\mathbf{${m.group(1)}}');
+      RegExp(r'\\mathrm\{([^}]*)\}'), (m) => m.group(1) ?? '');
+    result = result.replaceAllMapped(
+      RegExp(r'\\textbf\{([^}]*)\}'), (m) => m.group(1) ?? '');
     result = result.replaceAllMapped(
       RegExp(r'\\boxed\{([^}]*)\}'), (m) => m.group(1) ?? '');
+    result = result.replaceAllMapped(
+      RegExp(r'\\cancel\{([^}]*)\}'), (m) => m.group(1) ?? '');
+
+    // Remove \displaystyle
     result = result.replaceAll(r'\displaystyle', '');
+
+    // Spacing commands
     result = result.replaceAll(r'\,', ' ');
     result = result.replaceAll(r'\;', ' ');
+    result = result.replaceAll(r'\:', ' ');
     result = result.replaceAll(r'\!', '');
+
+    // Long subscripts: _{gelecek} → remove
+    result = result.replaceAllMapped(
+      RegExp(r'_\{([^}]{3,})\}'),
+      (m) {
+        final content = m.group(1) ?? '';
+        if (RegExp(r'^[0-9]+$').hasMatch(content) || content.length <= 2) {
+          return m.group(0)!;
+        }
+        return '';
+      },
+    );
+
+    // Turkish chars → ascii for math rendering
     result = result.replaceAll('\u0131', 'i').replaceAll('\u011f', 'g');
     result = result.replaceAll('\u00fc', 'u').replaceAll('\u015f', 's');
     result = result.replaceAll('\u00f6', 'o').replaceAll('\u00e7', 'c');
     result = result.replaceAll('\u0130', 'I').replaceAll('\u011e', 'G');
     result = result.replaceAll('\u00dc', 'U').replaceAll('\u015e', 'S');
     result = result.replaceAll('\u00d6', 'O').replaceAll('\u00c7', 'C');
+
+    // Clean up multiple spaces
     result = result.replaceAll(RegExp(r'\s{2,}'), ' ');
+
     return result.trim();
   }
 
@@ -449,7 +500,6 @@ class _ChatScreenState extends State<ChatScreen> {
           final bool isQuestion = trimmed.endsWith('?');
 
           if (isFormula) {
-            // Formula card
             final formulaText = _extractFormula(trimmed);
             final c = stepColors[stepIdx % stepColors.length];
             return Container(width: double.infinity, margin: const EdgeInsets.only(bottom: 8),
@@ -464,7 +514,6 @@ class _ChatScreenState extends State<ChatScreen> {
           }
 
           if (isQuestion) {
-            // Question highlight card
             return Container(width: double.infinity, margin: const EdgeInsets.only(bottom: 8),
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
@@ -478,7 +527,6 @@ class _ChatScreenState extends State<ChatScreen> {
               ]));
           }
 
-          // Regular text card with step number
           final c = stepColors[stepIdx % stepColors.length];
           stepIdx++;
           return Container(width: double.infinity, margin: const EdgeInsets.only(bottom: 8),
