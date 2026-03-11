@@ -10,26 +10,35 @@ import '../services/supabase_storage_service.dart';
 enum QStatus { solving, solved, error, waitingAnswer }
 
 class SolutionStep {
-  SolutionStep({required this.explanation, this.formula, this.isAnswer = false});
+  SolutionStep({required this.explanation, this.formula, this.reasoning, this.isCritical = false, this.isAnswer = false});
   final String explanation;
   final String? formula;
+  final String? reasoning;
+  final bool isCritical;
   final bool isAnswer;
 
   factory SolutionStep.fromJson(Map<String, dynamic> json) {
     return SolutionStep(
       explanation: (json['explanation'] as String? ?? '').trim(),
       formula: (json['formula'] as String?)?.trim(),
+      reasoning: (json['reasoning'] as String?)?.trim(),
+      isCritical: json['is_critical'] as bool? ?? false,
       isAnswer: json['is_answer'] as bool? ?? false,
     );
   }
 }
 
 class StructuredAnswer {
-  StructuredAnswer({required this.summary, required this.steps, required this.finalAnswer, this.tip});
+  StructuredAnswer({required this.summary, required this.steps, required this.finalAnswer, this.tip, this.questionType, this.goldenRule, this.givenData, this.findData, this.modelEquation});
   final String summary;
   final List<SolutionStep> steps;
   final String finalAnswer;
   final String? tip;
+  final String? questionType;
+  final String? goldenRule;
+  final List<String>? givenData;
+  final String? findData;
+  final String? modelEquation;
 
   factory StructuredAnswer.fromJson(Map<String, dynamic> json) {
     final rawSteps = json['steps'] as List<dynamic>? ?? [];
@@ -38,6 +47,11 @@ class StructuredAnswer {
       steps: rawSteps.map((s) => SolutionStep.fromJson(s as Map<String, dynamic>)).toList(),
       finalAnswer: (json['final_answer'] as String? ?? '').trim(),
       tip: (json['tip'] as String?)?.trim(),
+      questionType: (json['question_type'] as String?)?.trim(),
+      goldenRule: (json['golden_rule'] as String?)?.trim(),
+      givenData: json['given'] is List ? (json['given'] as List<dynamic>).map((e) => e.toString()).where((s) => s.isNotEmpty && s != 'null').toList() : null,
+      findData: (json['find'] as String?)?.trim(),
+      modelEquation: (json['modeling'] as String?)?.trim(),
     );
   }
 
@@ -50,7 +64,18 @@ class StructuredAnswer {
           .trim();
       final match = RegExp(r'\{[\s\S]*\}').firstMatch(cleaned);
       if (match == null) return null;
-      final decoded = jsonDecode(match.group(0)!) as Map<String, dynamic>;
+      var jsonStr = match.group(0)!;
+      jsonStr = jsonStr.replaceAll(RegExp(r'[\x00-\x09\x0b\x0c\x0e-\x1f]'), ' ');
+      Map<String, dynamic> decoded;
+      try {
+        decoded = jsonDecode(jsonStr) as Map<String, dynamic>;
+      } catch (_) {
+        jsonStr = jsonStr.replaceAllMapped(
+          RegExp(r'(?<!\\\\)\\\\(?!\\\\|"|n|t|r|u[0-9a-fA-F])'),
+          (m) => '\\\\\\\\',
+        );
+        decoded = jsonDecode(jsonStr) as Map<String, dynamic>;
+      }
       return StructuredAnswer.fromJson(decoded);
     } catch (_) {
       return null;

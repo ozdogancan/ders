@@ -126,7 +126,7 @@ class _QuestionShareScreenState extends State<QuestionShareScreen> {
     try {
       final sw = Stopwatch()..start();
       final answer = await _chatGptService.askImageBytes(bytes,
-        prompt: '$subject dersinden bu soruyu coz. SADECE gecerli JSON dondur, baska hicbir sey yazma. JSON semasi: {"summary": "Sorunun tek cumlede ozeti", "steps": [{"explanation": "Adim aciklamasi", "formula": "LaTeX formulu veya null"}], "final_answer": "Sonuc (sadece cevap, ornek: x = 3 veya B)", "tip": "Kisa motive edici cumle"} Kurallar: Turkce yaz, sade ve net ol. Her adimi ayri step olarak yaz, 1-2 cumle yeterli. Formuller MUTLAKA LaTeX formatinda olsun. Ust ifadeler: x^{2}, f^{-1}(x), (fog^{-1})^{-1}. Kesirler: \\frac{a}{b}, \\frac{n-1}{2}. Buyuk parantez: \\left( \\right). Ok isareti: \\implies. Carpma: \\cdot veya \\times. Dolar isareti KULLANMA. Formulleri explanation icinde YAZMA, sadece formula alanina koy. Cozumu adim adim goster, her adimda bir islem yap. Gereksiz adim ekleme, 4-6 adim ideal. final_answer kisa olsun: sadece sonuc. tip kisminda samimi ve enerjik ol, emoji kullanma.');
+        prompt: subject == 'Matematik' || subject == 'Geometri' ? _getMathPrompt(subject, bytes) : _getGeneralPrompt(subject));
       final elapsed = sw.elapsedMilliseconds;
       if (elapsed < 5000) {
         await Future.delayed(Duration(milliseconds: 5000 - elapsed));
@@ -140,7 +140,31 @@ class _QuestionShareScreenState extends State<QuestionShareScreen> {
     }
   }
 
-  Future<void> _showNoCredit() async {
+  
+  String _getMathPrompt(String subject, dynamic bytes) {
+    return '$subject soruyu coz. SADECE JSON dondur. '
+      'Sema: {"question_type":"hesaplama|problem|grafik|ispat","summary":"ozet",'
+      '"given":["veri1"] veya null,"find":"istenen" veya null,"modeling":"LaTeX denklem" veya null,'
+      '"steps":[{"explanation":"ne yaptik","reasoning":"NEDEN yaptik","formula":"LaTeX","is_critical":false}],'
+      '"final_answer":"sonuc","golden_rule":"bu tur sorularda ezberle kurali","tip":"motivasyon"} '
+      'KURALLAR: Turkce yaz. 4-6 adim. HER adimda reasoning yaz. '
+      'Tam 1 adim is_critical:true sec (kilit nokta). golden_rule zorunlu. '
+      'problem tipinde given/find/modeling doldur. Diger tiplerde null birak. '
+      'LaTeX: x^{2}, \\frac{a}{b}, \\implies, \\cdot, \\times, \\boxed{sonuc}. '
+      'Dolar isareti KULLANMA. Formulleri explanation icinde YAZMA, formula alanina koy. '
+      'final_answer kisa. tip samimi, emoji kullanma.';
+  }
+
+  String _getGeneralPrompt(String subject) {
+    return '$subject soruyu coz. SADECE JSON dondur. '
+      'Sema: {"question_type":"genel","summary":"ozet",'
+      '"steps":[{"explanation":"ne yaptik","reasoning":"neden yaptik","formula":"LaTeX veya null","is_critical":false}],'
+      '"final_answer":"sonuc","golden_rule":"temel kural","tip":"motivasyon"} '
+      'KURALLAR: Turkce yaz. 4-6 adim. HER adimda reasoning yaz. 1 adim is_critical:true. golden_rule zorunlu. '
+      'LaTeX: x^{2}, \\frac{a}{b}. Dolar isareti KULLANMA. formula alanina koy.';
+  }
+
+Future<void> _showNoCredit() async {
     final go = await showDialog<bool>(context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
