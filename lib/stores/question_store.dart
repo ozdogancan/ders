@@ -20,11 +20,57 @@ class SolutionStep {
   factory SolutionStep.fromJson(Map<String, dynamic> json) {
     return SolutionStep(
       explanation: (json['explanation'] as String? ?? '').trim(),
-      formula: (json['formula'] as String?)?.trim(),
+      formula: _cleanFormulaField(json['formula']),
       reasoning: (json['reasoning'] as String?)?.trim(),
       isCritical: json['is_critical'] as bool? ?? false,
       isAnswer: json['is_answer'] as bool? ?? false,
     );
+  }
+
+  /// Clean formula field: remove problematic LaTeX commands after JSON is parsed
+  static String? _cleanFormulaField(dynamic raw) {
+    if (raw == null) return null;
+    var s = raw.toString().trim();
+    if (s.isEmpty || s == 'null') return null;
+
+    // Remove \text{...} → keep content
+    s = s.replaceAllMapped(RegExp(r'\\text\{([^}]*)\}'), (m) => m.group(1) ?? '');
+    s = s.replaceAllMapped(RegExp(r'\\mathrm\{([^}]*)\}'), (m) => m.group(1) ?? '');
+    s = s.replaceAllMapped(RegExp(r'\\textbf\{([^}]*)\}'), (m) => m.group(1) ?? '');
+    s = s.replaceAllMapped(RegExp(r'\\boxed\{([^}]*)\}'), (m) => m.group(1) ?? '');
+    s = s.replaceAllMapped(RegExp(r'\\cancel\{([^}]*)\}'), (m) => m.group(1) ?? '');
+
+    // \implies → \Rightarrow
+    s = s.replaceAll(r'\implies', r'\Rightarrow');
+    s = s.replaceAll(r'\newline', ' ');
+    s = s.replaceAll(r'\displaystyle', '');
+    s = s.replaceAll(r'\:', ' ');
+    s = s.replaceAll(r'\;', ' ');
+    s = s.replaceAll(r'\,', ' ');
+    s = s.replaceAll(r'\!', '');
+
+    // Long subscripts: _{gelecek} → remove
+    s = s.replaceAllMapped(
+      RegExp(r'_\{([^}]{3,})\}'),
+      (m) {
+        final content = m.group(1) ?? '';
+        if (RegExp(r'^[0-9]+$').hasMatch(content) || content.length <= 2) {
+          return m.group(0)!;
+        }
+        return '';
+      },
+    );
+
+    // Turkish chars → ascii for math
+    s = s.replaceAll('\u0131', 'i').replaceAll('\u011f', 'g');
+    s = s.replaceAll('\u00fc', 'u').replaceAll('\u015f', 's');
+    s = s.replaceAll('\u00f6', 'o').replaceAll('\u00e7', 'c');
+    s = s.replaceAll('\u0130', 'I').replaceAll('\u011e', 'G');
+    s = s.replaceAll('\u00dc', 'U').replaceAll('\u015e', 'S');
+    s = s.replaceAll('\u00d6', 'O').replaceAll('\u00c7', 'C');
+
+    s = s.replaceAll(RegExp(r'\s{2,}'), ' ');
+    return s.trim().isEmpty ? null : s.trim();
   }
 }
 
@@ -51,7 +97,7 @@ class StructuredAnswer {
       goldenRule: (json['golden_rule'] as String?)?.trim(),
       givenData: json['given'] is List ? (json['given'] as List<dynamic>).map((e) => e.toString()).where((s) => s.isNotEmpty && s != 'null').toList() : null,
       findData: (json['find'] as String?)?.trim(),
-      modelEquation: (json['modeling'] as String?)?.trim(),
+      modelEquation: SolutionStep._cleanFormulaField(json['modeling']),
     );
   }
 
@@ -490,8 +536,3 @@ String tutorNameForSubject(String subject) {
   if (s.contains('ing')) return 'Cem Hoca';
   return 'Kaan Hoca';
 }
-
-
-
-
-

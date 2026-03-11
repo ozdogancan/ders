@@ -8,6 +8,7 @@ import '../services/credit_service.dart';
 import '../stores/question_store.dart';
 import 'credit_store_screen.dart';
 import '../services/analytics_service.dart';
+import '../core/constants/app_prompts.dart';
 
 class ChatScreen extends StatefulWidget {
   const ChatScreen({super.key, required this.questionId});
@@ -25,7 +26,7 @@ class _ChatScreenState extends State<ChatScreen> {
   bool _coachMode = false;
   int _credits = -1;
   bool _popupDone = false;
-  
+
   bool _feedbackMode = false;
   final TextEditingController _feedbackCtrl = TextEditingController();
 
@@ -36,7 +37,7 @@ class _ChatScreenState extends State<ChatScreen> {
   void initState() {
     super.initState();
     QuestionStore.instance.addListener(_onUpdate);
-    
+
     _loadCredits();
     _loadPopup();
     _scroll.addListener(_checkScrollButton);
@@ -134,6 +135,11 @@ class _ChatScreenState extends State<ChatScreen> {
     return false;
   }
 
+  bool _isFirstCoachMsg(LocalQuestion q) {
+    final userMsgs = q.chatMessages.where((m) => m.role == 'user').length;
+    return userMsgs <= 1;
+  }
+
   Future<void> _sendMsg({String? preset}) async {
     final text = preset ?? _input.text.trim();
     if (text.isEmpty || _sending) return;
@@ -152,23 +158,24 @@ class _ChatScreenState extends State<ChatScreen> {
       final msgs = q.chatMessages.map((m) => <String, String>{'role': m.role == 'ai' ? 'assistant' : 'user', 'content': m.text}).toList();
 
       final sys = _coachMode
-        ? 'Sen Koala uygulamasinin ' + q.subject + ' dersi AI kocusun. Ogrenciyle benzer bir soru cozduruyorsun. '
-          'Turkce yaz. Markdown KULLANMA. Duz metin yaz. '
-          'Soruyu KENDIN COZME. Once benzer ama FARKLI sayilarla/degerlerle yeni bir soru olustur, sonra ogrenciye yonlendirici soru sor. '
-          'Dogru cevap verirse kutla ve sonraki adima gec. Yanlis verirse ipucu ver. '
-          'Her mesajda sadece 1 adim sor. Kisa ve net ol, 2-4 satir. '
-          'Formulleri duz yazdir (3 x 5 = 15 gibi), LaTeX kullanma.'
+        ? (_isFirstCoachMsg(q)
+            ? AppPrompts.coachGeneratePrompt(q.subject)
+            : AppPrompts.coachEvaluatePrompt(q.subject))
         : 'Sen Koala uygulamasinin AI kocusun. Turkce yaz. Markdown KULLANMA. Duz metin yaz. '
           'Kisa ve net cevap ver. Bombing yapma. '
           'Formulleri LaTeX formatinda yaz ama dolar isareti KULLANMA. '
           'SADECE JSON formatinda cevap ver, baska hicbir sey yazma. '
-          'JSON semasi: {"summary":"ozet","steps":[{"explanation":"aciklama","formula":"latex veya null"}],"final_answer":"sonuc","tip":"motivasyon"}';
+          'JSON semasi: {"summary":"ozet","steps":[{"explanation":"aciklama","formula":"latex veya null","reasoning":"neden","is_critical":false}],"final_answer":"sonuc","golden_rule":"kural","tip":"motivasyon","question_type":"coach_feedback"}';
 
       final reply = await _chat.askConversation(systemPrompt: sys, messages: msgs);
       QuestionStore.instance.addChat(q.id, ChatMsg(role: 'ai', text: reply));
-      // AI soru sorduysa status'u waitingAnswer yap
-      if (reply.trim().endsWith('?') && _coachMode) {
-        QuestionStore.instance.setWaitingAnswer(q.id);
+      if (_coachMode) {
+        final parsed = StructuredAnswer.tryParse(reply);
+        final hasQuestion = reply.trim().endsWith('?') ||
+            (parsed != null && parsed.steps.any((s) => s.explanation.contains('?')));
+        if (hasQuestion) {
+          QuestionStore.instance.setWaitingAnswer(q.id);
+        }
       }
     } catch (e) {
       QuestionStore.instance.addChat(q.id, ChatMsg(role: 'ai', text: 'Bir hata olu\u015ftu, tekrar dene.'));
@@ -204,7 +211,7 @@ class _ChatScreenState extends State<ChatScreen> {
     if (msgs.isEmpty) return [];
     final lastAi = msgs.lastWhere((m) => m.role == 'ai', orElse: () => ChatMsg(role: 'ai', text: '')).text;
     final lower = lastAi.toLowerCase();
-    
+
     if (_coachMode) {
       if (lower.contains('?')) {
         if (lower.contains('hangi') || lower.contains('ilk')) return ['Nas\u0131l ba\u015flamal\u0131y\u0131m?', '\u0130pucu ver'];
@@ -223,9 +230,33 @@ class _ChatScreenState extends State<ChatScreen> {
     return ['Daha basit anlat', 'Neden b\u00f6yle?'];
   }
 
-  // Clean LaTeX: remove $ signs
   String _cleanLatex(String s) {
-    return s.replaceAll(RegExp(r'^\$+|\$+$'), '').replaceAll('\$', '').trim();
+    var result = s.trim();
+    result = result.replaceAll(RegExp(r'^\$+|\$+$'), '');
+    result = result.replaceAll('\$', '');
+    result = result.replaceAll(r'\implies', r'\Rightarrow');
+    result = result.replaceAll(r'\newline', r' \quad ');
+    if (!result.contains(r'\begin{')) {
+      result = result.replaceAll(r'\\', r' \quad ');
+    }
+    result = result.replaceAllMapped(
+      RegExp(r'\\text\{([^}]*)\}'), (m) => '\\mathrm{${m.group(1)}}');
+    result = result.replaceAllMapped(
+      RegExp(r'\\textbf\{([^}]*)\}'), (m) => '\\mathbf{${m.group(1)}}');
+    result = result.replaceAllMapped(
+      RegExp(r'\\boxed\{([^}]*)\}'), (m) => m.group(1) ?? '');
+    result = result.replaceAll(r'\displaystyle', '');
+    result = result.replaceAll(r'\,', ' ');
+    result = result.replaceAll(r'\;', ' ');
+    result = result.replaceAll(r'\!', '');
+    result = result.replaceAll('\u0131', 'i').replaceAll('\u011f', 'g');
+    result = result.replaceAll('\u00fc', 'u').replaceAll('\u015f', 's');
+    result = result.replaceAll('\u00f6', 'o').replaceAll('\u00e7', 'c');
+    result = result.replaceAll('\u0130', 'I').replaceAll('\u011e', 'G');
+    result = result.replaceAll('\u00dc', 'U').replaceAll('\u015e', 'S');
+    result = result.replaceAll('\u00d6', 'O').replaceAll('\u00c7', 'C');
+    result = result.replaceAll(RegExp(r'\s{2,}'), ' ');
+    return result.trim();
   }
 
   @override
@@ -283,7 +314,6 @@ class _ChatScreenState extends State<ChatScreen> {
         Column(children: [
           Expanded(
             child: ListView(controller: _scroll, padding: const EdgeInsets.fromLTRB(16, 8, 16, 16), children: [
-              // Question image
               // Question image
               Center(child: GestureDetector(
                 onTap: () => _showFullImage(q.imageBytes),
@@ -388,7 +418,7 @@ class _ChatScreenState extends State<ChatScreen> {
     // Fallback: parse text into visual cards
     final cleaned = raw.replaceAll(RegExp(r'\*\*'), '').replaceAll(RegExp(r'^---+\$', multiLine: true), '').replaceAll(RegExp(r'^#{1,3}\s*', multiLine: true), '').trim();
     final lines = cleaned.split('\n').where((s) => s.trim().isNotEmpty).toList();
-    
+
     if (lines.length <= 1) {
       // Short message - simple bubble
       return Padding(padding: const EdgeInsets.only(bottom: 12, right: 24),
@@ -417,7 +447,7 @@ class _ChatScreenState extends State<ChatScreen> {
           final trimmed = line.trim();
           final bool isFormula = _looksLikeFormula(trimmed);
           final bool isQuestion = trimmed.endsWith('?');
-          
+
           if (isFormula) {
             // Formula card
             final formulaText = _extractFormula(trimmed);
@@ -432,7 +462,7 @@ class _ChatScreenState extends State<ChatScreen> {
                   onErrorFallback: (_) => Text(formulaText,
                     style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: c, fontFamily: 'monospace'))));
           }
-          
+
           if (isQuestion) {
             // Question highlight card
             return Container(width: double.infinity, margin: const EdgeInsets.only(bottom: 8),
@@ -493,7 +523,14 @@ class _ChatScreenState extends State<ChatScreen> {
                 color: const Color(0xFF22C55E).withAlpha(15),
                 borderRadius: BorderRadius.circular(6),
               ),
-              child: const Text('\u00c7\u00f6z\u00fcm', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Color(0xFF22C55E))),
+              child: Text(
+                a.questionType == 'coach_question' ? 'Soru' :
+                a.questionType == 'coach_feedback' ? 'Ko\u00e7' : '\u00c7\u00f6z\u00fcm',
+                style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700,
+                  color: a.questionType == 'coach_question' ? const Color(0xFF6366F1) :
+                         a.questionType == 'coach_feedback' ? const Color(0xFFF59E0B) :
+                         const Color(0xFF22C55E)),
+              ),
             ),
           ]),
           const SizedBox(height: 14),
@@ -843,20 +880,16 @@ class _ChatScreenState extends State<ChatScreen> {
   // ═══════════════════════════════════════
 
   Widget _renderMixedText(String text) {
-    // Split text by comma or period followed by space to find formula boundaries
-    // Look for LaTeX-like patterns: things with ^, _, \frac, \left etc.
-    final formulaRegex = RegExp(r'(?<![a-zA-ZığüşöçİĞÜŞÖÇ])([a-zA-Z0-9]*(?:\\[a-zA-Z]+|[\^_])[^\s,\.;:!?]*(?:\{[^}]*\})*[^\s,\.;:!?]*)(?![a-zA-ZığüşöçİĞÜŞÖÇ])');
+    final formulaRegex = RegExp(r'(?<![a-zA-Z\u0131\u011f\u00fc\u015f\u00f6\u00e7\u0130\u011e\u00dc\u015e\u00d6\u00c7])([a-zA-Z0-9]*(?:\\[a-zA-Z]+|[\^_])[^\s,\.;:!?]*(?:\{[^}]*\})*[^\s,\.;:!?]*)(?![a-zA-Z\u0131\u011f\u00fc\u015f\u00f6\u00e7\u0130\u011e\u00dc\u015e\u00d6\u00c7])');
     final parts = <InlineSpan>[];
     int lastEnd = 0;
-    
+
     for (final match in formulaRegex.allMatches(text)) {
-      // Add text before the formula
       if (match.start > lastEnd) {
         parts.add(TextSpan(text: text.substring(lastEnd, match.start),
           style: const TextStyle(fontSize: 14, color: Color(0xFF334155), height: 1.5)));
       }
       final formula = match.group(0)!.trim();
-      // Only render as LaTeX if it actually looks like math
       if (formula.contains('^') || formula.contains('\\') || formula.contains('_') || formula.contains('\\frac')) {
         parts.add(WidgetSpan(alignment: PlaceholderAlignment.middle,
           child: Padding(padding: const EdgeInsets.symmetric(horizontal: 2),
@@ -972,28 +1005,21 @@ class _ChatScreenState extends State<ChatScreen> {
 
   bool _looksLikeFormula(String s) {
     final trimmed = s.trim();
-    // Only pure formula lines (mostly numbers and operators, minimal text)
-    final textChars = trimmed.replaceAll(RegExp(r'[0-9\s+\-*/÷×=.,()\[\]{}\\]'), '');
-    // If more than 30% is text, it's not a formula
+    final textChars = trimmed.replaceAll(RegExp(r'[0-9\s+\-*/\u00f7\u00d7=.,()\[\]{}\\]'), '');
     if (trimmed.isEmpty) return false;
     if (textChars.length > trimmed.length * 0.3) return false;
-    final mathPattern = RegExp(r'[0-9]+\s*[+\-*/÷×=]\s*[0-9]');
+    final mathPattern = RegExp(r'[0-9]+\s*[+\-*/\u00f7\u00d7=]\s*[0-9]');
     return mathPattern.hasMatch(trimmed);
   }
 
   String _extractFormula(String s) {
     final trimmed = s.trim();
     return trimmed
-      .replaceAll('÷', ' \\div ')
-      .replaceAll('×', ' \\times ')
+      .replaceAll('\u00f7', ' \\div ')
+      .replaceAll('\u00d7', ' \\times ')
       .replaceAll(' x ', ' \\times ')
       .replaceAll(RegExp(r'(?<=\d)x(?=\d)'), ' \\times ')
       .replaceAll(RegExp(r'(\d+)/(\d+)'), r'\\frac{\1}{\2}');
   }
 
 }
-
-
-
-
-
