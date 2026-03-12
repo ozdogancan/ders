@@ -112,6 +112,8 @@ class _QuestionShareScreenState extends State<QuestionShareScreen> {
         setState(() { _detectionFailed = true; _detectingSubject = false; });
       } else {
         setState(() { _detectionFailed = false; _detectedSubject = matched; _selectedSubject = matched; _detectingSubject = false; });
+      // AI tespit ettiyse otomatik gonder
+      _send();
       }
     } catch (_) {
       if (!mounted) return;

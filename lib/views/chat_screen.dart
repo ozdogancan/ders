@@ -203,7 +203,7 @@ class _ChatScreenState extends State<ChatScreen> {
         }
       }
     } catch (e) {
-      QuestionStore.instance.addChat(q.id, ChatMsg(role: 'ai', text: 'Bir hata olu\u015ftu, tekrar dene.'));
+      QuestionStore.instance.addChat(q.id, ChatMsg(role: 'ai', text: 'Baglanti sorunu yasandi. Internet baglantini kontrol edip tekrar dene.'));
     }
     if (mounted) { setState(() => _sending = false); _loadCredits(); }
   }
