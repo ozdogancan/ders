@@ -159,7 +159,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               _chip('Tümü', _fStatus == null, () { ss(() {}); setState(() => _fStatus = null); }),
               _chip('Çözüldü', _fStatus == 'solved', () { ss(() {}); setState(() => _fStatus = 'solved'); }),
               _chip('Cevap bekleniyor', _fStatus == 'waiting', () { ss(() {}); setState(() => _fStatus = 'waiting'); }),
-              _chip('Okunmamis', _fStatus == 'unread', () { ss(() {}); setState(() => _fStatus = 'unread'); }),
+              _chip('Okunmam\u0131\u015f', _fStatus == 'unread', () { ss(() {}); setState(() => _fStatus = 'unread'); }),
             ]),
             if (subjects.isNotEmpty) ...[const SizedBox(height: 18),
               _sec('DERS', [
@@ -478,6 +478,7 @@ class _Tile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final solving = q.status == QStatus.solving;
+    final isUnread = q.status == QStatus.solved && q.chatMessages.where((m) => m.role == 'user').isEmpty;
 
     return Dismissible(key: ValueKey(q.id), direction: wide ? DismissDirection.none : DismissDirection.endToStart,
       background: Container(alignment: Alignment.centerRight, padding: const EdgeInsets.only(right: 24),
@@ -489,7 +490,7 @@ class _Tile extends StatelessWidget {
           hoverColor: const Color(0xFF6366F1).withAlpha(6),
           child: Container(padding: EdgeInsets.all(wide ? 18 : 16),
             decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: const Color(0xFFEEF2F7)),
+              border: Border.all(color: isUnread ? const Color(0xFF6366F1).withAlpha(60) : const Color(0xFFEEF2F7)),
               boxShadow: [BoxShadow(color: c.withAlpha(6), blurRadius: 12, offset: const Offset(0, 3))]),
             child: Row(children: [
               Container(width: wide ? 64 : 80, height: wide ? 64 : 80,
@@ -507,7 +508,6 @@ class _Tile extends StatelessWidget {
                   const SizedBox(width: 6),
                   if (solving) _B(l: 'Çözülüyor', c: Colors.amber.shade700, spin: true)
                   else if (q.status == QStatus.waitingAnswer) const _B(l: 'Cevap bekleniyor', c: Color(0xFF6366F1), ic: Icons.help_outline_rounded)
-                  else if (q.chatMessages.where((m) => m.role == 'user').isEmpty) _B(l: 'Okunmamış', c: const Color(0xFF6366F1), ic: Icons.circle, spin: false)
                   else const _B(l: 'Çözüldü', c: Color(0xFF22C55E), ic: Icons.check_circle_rounded),
                   const Spacer(),
                   Text(_ago(q.createdAt), style: TextStyle(color: Colors.grey.shade400, fontSize: 10)),
