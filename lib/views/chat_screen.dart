@@ -489,11 +489,11 @@ class _ChatScreenState extends State<ChatScreen> {
               Center(child: GestureDetector(
                 onTap: () => _showFullImage(q.imageBytes),
                 child: Container(margin: const EdgeInsets.only(bottom: 16),
-                constraints: const BoxConstraints(maxWidth: 220, maxHeight: 160),
+                constraints: const BoxConstraints(maxWidth: 320, maxHeight: 220),
                 decoration: BoxDecoration(borderRadius: BorderRadius.circular(16),
                   border: Border.all(color: const Color(0xFFE2E8F0)),
                   boxShadow: [BoxShadow(color: Colors.black.withAlpha(10), blurRadius: 8, offset: const Offset(0, 4))]),
-                child: ClipRRect(borderRadius: BorderRadius.circular(16), child: Image.memory(q.imageBytes, fit: BoxFit.cover))))),
+                child: ClipRRect(borderRadius: BorderRadius.circular(16), child: Image.memory(q.imageBytes, fit: BoxFit.contain))))),
 
               // All messages with fade-in
               ...q.chatMessages.asMap().entries.map((e) {
