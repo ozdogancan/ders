@@ -112,6 +112,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     if (_fStatus == 'solving') list = list.where((i) => i.status == QStatus.solving).toList();
     else if (_fStatus == 'waiting') list = list.where((i) => i.status == QStatus.waitingAnswer).toList();
     else if (_fStatus == 'solved') list = list.where((i) => i.status == QStatus.solved).toList();
+    else if (_fStatus == 'unread') list = list.where((i) => i.status == QStatus.solved && i.chatMessages.where((m) => m.role == 'user').isEmpty).toList();
     if (_fDate != null) {
       final now = DateTime.now(); final today = DateTime(now.year, now.month, now.day);
       list = list.where((i) {
@@ -157,7 +158,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             _sec('DURUM', [
               _chip('Tümü', _fStatus == null, () { ss(() {}); setState(() => _fStatus = null); }),
               _chip('Çözüldü', _fStatus == 'solved', () { ss(() {}); setState(() => _fStatus = 'solved'); }),
-              _chip('Çözülüyor', _fStatus == 'solving', () { ss(() {}); setState(() => _fStatus = 'solving'); }),
+              _chip('Cevap bekleniyor', _fStatus == 'waiting', () { ss(() {}); setState(() => _fStatus = 'waiting'); }),
+              _chip('Okunmamis', _fStatus == 'unread', () { ss(() {}); setState(() => _fStatus = 'unread'); }),
             ]),
             if (subjects.isNotEmpty) ...[const SizedBox(height: 18),
               _sec('DERS', [
@@ -490,7 +492,7 @@ class _Tile extends StatelessWidget {
               border: Border.all(color: const Color(0xFFEEF2F7)),
               boxShadow: [BoxShadow(color: c.withAlpha(6), blurRadius: 12, offset: const Offset(0, 3))]),
             child: Row(children: [
-              Container(width: wide ? 52 : 56, height: wide ? 52 : 56,
+              Container(width: wide ? 64 : 80, height: wide ? 64 : 80,
                 decoration: BoxDecoration(borderRadius: BorderRadius.circular(16),
                   gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [c.withAlpha(12), c.withAlpha(6)])),
                 child: ClipRRect(borderRadius: BorderRadius.circular(16),
@@ -505,6 +507,7 @@ class _Tile extends StatelessWidget {
                   const SizedBox(width: 6),
                   if (solving) _B(l: 'Çözülüyor', c: Colors.amber.shade700, spin: true)
                   else if (q.status == QStatus.waitingAnswer) const _B(l: 'Cevap bekleniyor', c: Color(0xFF6366F1), ic: Icons.help_outline_rounded)
+                  else if (q.chatMessages.where((m) => m.role == 'user').isEmpty) _B(l: 'Okunmamış', c: const Color(0xFF6366F1), ic: Icons.circle, spin: false)
                   else const _B(l: 'Çözüldü', c: Color(0xFF22C55E), ic: Icons.check_circle_rounded),
                   const Spacer(),
                   Text(_ago(q.createdAt), style: TextStyle(color: Colors.grey.shade400, fontSize: 10)),
