@@ -47,7 +47,6 @@ class _ChatScreenState extends State<ChatScreen> {
     _scroll.addListener(_checkScrollButton);
     Analytics.chatOpened(widget.questionId, _q?.subject ?? '');
     QuestionStore.instance.markRead(widget.questionId);
-    QuestionStore.instance.touchInteraction(widget.questionId);
 
     // If user already has messages (re-entering chat), scroll to end immediately
     WidgetsBinding.instance.addPostFrameCallback((_) {
