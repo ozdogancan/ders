@@ -504,6 +504,7 @@ class _Tile extends StatelessWidget {
                     child: Text(q.subject, style: TextStyle(color: c, fontSize: 11, fontWeight: FontWeight.w700))),
                   const SizedBox(width: 6),
                   if (solving) _B(l: 'Çözülüyor', c: Colors.amber.shade700, spin: true)
+                  else if (q.status == QStatus.waitingAnswer) const _B(l: 'Cevap bekleniyor', c: Color(0xFF6366F1), ic: Icons.help_outline_rounded)
                   else const _B(l: 'Çözüldü', c: Color(0xFF22C55E), ic: Icons.check_circle_rounded),
                   const Spacer(),
                   Text(_ago(q.createdAt), style: TextStyle(color: Colors.grey.shade400, fontSize: 10)),
@@ -700,3 +701,4 @@ class _ToastOverlayState extends State<_ToastOverlay> with SingleTickerProviderS
             )))));
   }
 }
+

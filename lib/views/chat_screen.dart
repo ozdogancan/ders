@@ -63,10 +63,6 @@ class _ChatScreenState extends State<ChatScreen> {
     final q = _q;
     final currentMsgCount = q?.chatMessages.length ?? 0;
     setState(() {});
-    // Only auto-scroll if THIS question got a new message
-    if (!_firstOpen && currentMsgCount > _lastMsgCount) {
-      _scrollEnd(true);
-    }
     _lastMsgCount = currentMsgCount;
   }
 
@@ -213,30 +209,54 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
-  List<String> _smartChips() {
-    final q = _q;
-    if (q == null) return [];
-    final msgs = q.chatMessages;
-    if (msgs.isEmpty) return [];
-    final lastAi = msgs.lastWhere((m) => m.role == 'ai', orElse: () => ChatMsg(role: 'ai', text: '')).text;
-    final lower = lastAi.toLowerCase();
+  String _tutorName() => tutorNameForSubject(_q?.subject ?? 'Matematik');
 
-    if (_coachMode) {
-      if (lower.contains('?')) {
-        if (lower.contains('hangi') || lower.contains('ilk')) return ['Nas\u0131l ba\u015flamal\u0131y\u0131m?', '\u0130pucu ver'];
-        if (lower.contains('sonuc') || lower.contains('ka\u00e7')) return ['Kontrol eder misin?', '\u0130pucu ver'];
-        return ['Haz\u0131r\u0131m', 'Biraz daha a\u00e7\u0131kla'];
-      }
-      if (lower.contains('tebrik') || lower.contains('do\u011fru')) return ['Sonraki ad\u0131m', 'Ba\u015fka soru'];
-      return ['Devam edelim', 'Tekrar a\u00e7\u0131kla'];
-    }
-    if (lower.contains('?')) {
-      if (lower.contains('anla') || lower.contains('bilmek')) return ['Biraz daha a\u00e7\u0131klar m\u0131s\u0131n?', 'Anlad\u0131m, devam'];
-      return ['Bir ipucu verir misin?', 'Anlamad\u0131m, farkl\u0131 anlat'];
-    }
-    if (lower.contains('cevap') || lower.contains('sonu\u00e7')) return ['Neden b\u00f6yle?', 'Farkl\u0131 y\u00f6ntem var m\u0131?'];
-    if (lower.contains('ad\u0131m')) return ['Daha detayl\u0131 anlat', 'Bu ad\u0131m\u0131 atlayabilir miyim?'];
-    return ['Daha basit anlat', 'Neden b\u00f6yle?'];
+  Widget _tutorCallBtn() {
+    return GestureDetector(
+      onTap: () {
+        // TODO: implement tutor call feature
+        ScaffoldMessenger.of(context).clearSnackBars();
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: const Color(0xFF1E293B),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          duration: const Duration(seconds: 2),
+          content: Row(children: [
+            const Icon(Icons.info_outline_rounded, color: Color(0xFF818CF8), size: 18),
+            const SizedBox(width: 10),
+            const Expanded(child: Text('\u00c7ok yak\u0131nda aktif olacak!', style: TextStyle(color: Colors.white, fontSize: 13))),
+          ]),
+        ));
+      },
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(colors: [const Color(0xFF6366F1).withAlpha(10), const Color(0xFF8B5CF6).withAlpha(8)]),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: const Color(0xFF6366F1).withAlpha(20)),
+        ),
+        child: Row(children: [
+          Container(
+            width: 28, height: 28,
+            decoration: BoxDecoration(shape: BoxShape.circle, color: const Color(0xFF6366F1).withAlpha(15)),
+            child: const Icon(Icons.school_rounded, size: 14, color: Color(0xFF6366F1)),
+          ),
+          const SizedBox(width: 10),
+          Expanded(child: Text('${_tutorName()}\u2019y\u0131 bu konuda ara', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF6366F1)))),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: BoxDecoration(color: const Color(0xFF6366F1), borderRadius: BorderRadius.circular(99)),
+            child: const Row(mainAxisSize: MainAxisSize.min, children: [
+              Icon(Icons.bolt_rounded, size: 10, color: Colors.white),
+              SizedBox(width: 2),
+              Text('5', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w800)),
+            ]),
+          ),
+        ]),
+      ),
+    );
   }
 
   // ══════════════════════════════════════════════════
@@ -395,10 +415,11 @@ class _ChatScreenState extends State<ChatScreen> {
     if (q == null) return Scaffold(appBar: AppBar(), body: const Center(child: Text('Soru bulunamad\u0131')));
 
     final solved = q.status == QStatus.solved;
+    final waiting = q.status == QStatus.waitingAnswer;
+    final canInteract = solved || waiting;
     final hasAi = q.chatMessages.isNotEmpty && q.chatMessages.first.role == 'ai';
     final userCount = q.chatMessages.where((m) => m.role == 'user').length;
     final showCoach = solved && hasAi && !_coachMode && userCount == 0;
-    final chips = _smartChips();
 
     return GestureDetector(
       onHorizontalDragEnd: (details) {
@@ -454,11 +475,19 @@ class _ChatScreenState extends State<ChatScreen> {
                   boxShadow: [BoxShadow(color: Colors.black.withAlpha(10), blurRadius: 8, offset: const Offset(0, 4))]),
                 child: ClipRRect(borderRadius: BorderRadius.circular(16), child: Image.memory(q.imageBytes, fit: BoxFit.cover))))),
 
-              // All messages
+              // All messages with fade-in
               ...q.chatMessages.asMap().entries.map((e) {
+                final i = e.key;
                 final m = e.value;
-                if (m.role == 'user') return _userBubble(m.text);
-                return _smartAiMsg(m.text, q.subject);
+                final delay = (i * 80).clamp(0, 600);
+                return TweenAnimationBuilder<double>(
+                  key: ValueKey('msg_${q.id}_$i'),
+                  tween: Tween(begin: 0.0, end: 1.0),
+                  duration: const Duration(milliseconds: 400),
+                  curve: Curves.easeOut,
+                  builder: (_, v, child) => Opacity(opacity: v, child: Transform.translate(offset: Offset(0, 8 * (1 - v)), child: child)),
+                  child: m.role == 'user' ? _userBubble(m.text) : _smartAiMsg(m.text, q.subject),
+                );
               }),
 
               // Rating
@@ -477,22 +506,13 @@ class _ChatScreenState extends State<ChatScreen> {
               if (_sending) _typingBubble(),
             ])),
 
-          // Input
-          if (solved)
+          // Input - always visible when can interact
+          if (canInteract)
             Container(padding: const EdgeInsets.fromLTRB(16, 8, 12, 12),
               decoration: const BoxDecoration(color: Colors.white, border: Border(top: BorderSide(color: Color(0xFFE2E8F0)))),
               child: SafeArea(top: false,
                 child: Column(mainAxisSize: MainAxisSize.min, children: [
-                  if (chips.isNotEmpty)
-                    Padding(padding: const EdgeInsets.only(bottom: 8),
-                      child: Row(children: chips.map((c) => Expanded(
-                        child: GestureDetector(onTap: () => _sendMsg(preset: c),
-                          child: Container(margin: const EdgeInsets.only(right: 8),
-                            padding: const EdgeInsets.symmetric(vertical: 9),
-                            decoration: BoxDecoration(color: const Color(0xFF6366F1).withAlpha(8),
-                              borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFF6366F1).withAlpha(20))),
-                            child: Text(c, textAlign: TextAlign.center,
-                              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF6366F1))))))).toList())),
+                  _tutorCallBtn(),
                   Row(children: [
                     Expanded(child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -517,7 +537,7 @@ class _ChatScreenState extends State<ChatScreen> {
         // Scroll to bottom button
         if (_showScrollDown)
           Positioned(
-            bottom: solved ? 120 : 20,
+            bottom: canInteract ? 120 : 20,
             right: 16,
             child: GestureDetector(
               onTap: () => _scrollEnd(true),
@@ -691,7 +711,7 @@ class _ChatScreenState extends State<ChatScreen> {
                   const SizedBox(height: 4),
                   ...a.givenData!.where((g) => g.trim().isNotEmpty).map((gItem) => Padding(
                     padding: const EdgeInsets.only(bottom: 2),
-                    child: Text('\u2022 $gItem', style: const TextStyle(fontSize: 13, color: Color(0xFF1E40AF), height: 1.4)),
+                    child: Text('\u2022 ${_humanReadable(gItem)}', style: const TextStyle(fontSize: 13, color: Color(0xFF1E40AF), height: 1.4)),
                   )),
                 ],
               ),
@@ -712,7 +732,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 children: [
                   const Text('\u{1F3AF} \u0130STENEN', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: Color(0xFF991B1B), letterSpacing: 0.5)),
                   const SizedBox(height: 4),
-                  Text(a.findData!, style: const TextStyle(fontSize: 13, color: Color(0xFF991B1B), height: 1.4)),
+                  Text(_humanReadable(a.findData!), style: const TextStyle(fontSize: 13, color: Color(0xFF991B1B), height: 1.4)),
                 ],
               ),
             ),
