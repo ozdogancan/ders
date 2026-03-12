@@ -1,0 +1,62 @@
+// ============================================================
+// chat_screen.dart — SADECE 3 KÜÇÜK DEĞİŞİKLİK
+// Dosyanın geri kalanına dokunma, sadece bu 3 yeri değiştir
+// ============================================================
+
+// ─── DEĞİŞİKLİK 1: Constructor'a 2 yeni parametre ekle ───
+// ARAT:
+class ChatScreen extends StatefulWidget {
+  const ChatScreen({super.key, required this.questionId});
+  final String questionId;
+
+// DEĞİŞTİR:
+class ChatScreen extends StatefulWidget {
+  const ChatScreen({super.key, required this.questionId, this.embedded = false, this.onCreditsChanged});
+  final String questionId;
+  final bool embedded;
+  final VoidCallback? onCreditsChanged;
+
+
+// ─── DEĞİŞİKLİK 2: _loadCredits'te callback çağır ───
+// ARAT:
+  Future<void> _loadCredits() async {
+    final c = await _credit.getCredits();
+    if (mounted) setState(() => _credits = c);
+  }
+
+// DEĞİŞTİR:
+  Future<void> _loadCredits() async {
+    final c = await _credit.getCredits();
+    if (mounted) setState(() => _credits = c);
+    widget.onCreditsChanged?.call();
+  }
+
+
+// ─── DEĞİŞİKLİK 3: AppBar'daki back button'ı embedded modda gizle ───
+// ARAT:
+        leading: IconButton(onPressed: () => Navigator.pop(context),
+          icon: const Icon(Icons.arrow_back_rounded, color: Color(0xFF1E293B))),
+
+// DEĞİŞTİR:
+        leading: widget.embedded ? const SizedBox(width: 16) : IconButton(onPressed: () => Navigator.pop(context),
+          icon: const Icon(Icons.arrow_back_rounded, color: Color(0xFF1E293B))),
+
+
+// ─── DEĞİŞİKLİK 4: Swipe-to-go-back'i embedded modda devre dışı bırak ───
+// ARAT:
+    return GestureDetector(
+      onHorizontalDragEnd: (details) {
+        if (details.primaryVelocity != null && details.primaryVelocity! > 300) {
+          Navigator.of(context).pop();
+        }
+      },
+      child: Scaffold(
+
+// DEĞİŞTİR:
+    return GestureDetector(
+      onHorizontalDragEnd: widget.embedded ? null : (details) {
+        if (details.primaryVelocity != null && details.primaryVelocity! > 300) {
+          Navigator.of(context).pop();
+        }
+      },
+      child: Scaffold(

@@ -11,8 +11,10 @@ import '../services/analytics_service.dart';
 import '../core/constants/app_prompts.dart';
 
 class ChatScreen extends StatefulWidget {
-  const ChatScreen({super.key, required this.questionId});
+  const ChatScreen({super.key, required this.questionId, this.embedded = false, this.onCreditsChanged});
   final String questionId;
+  final bool embedded;
+  final VoidCallback? onCreditsChanged;
   @override
   State<ChatScreen> createState() => _ChatScreenState();
 }
@@ -101,6 +103,7 @@ class _ChatScreenState extends State<ChatScreen> {
   Future<void> _loadCredits() async {
     final c = await _credit.getCredits();
     if (mounted) setState(() => _credits = c);
+    widget.onCreditsChanged?.call();
   }
 
   Future<void> _loadPopup() async {
@@ -442,7 +445,7 @@ class _ChatScreenState extends State<ChatScreen> {
     final showCoach = solved && hasAi && !_coachMode && userCount == 0;
 
     return GestureDetector(
-      onHorizontalDragEnd: (details) {
+      onHorizontalDragEnd: widget.embedded ? null : (details) {
         if (details.primaryVelocity != null && details.primaryVelocity! > 300) {
           Navigator.of(context).pop();
         }
@@ -451,7 +454,7 @@ class _ChatScreenState extends State<ChatScreen> {
       backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
         backgroundColor: Colors.white, surfaceTintColor: Colors.transparent, elevation: 0,
-        leading: IconButton(onPressed: () => Navigator.pop(context),
+        leading: widget.embedded ? const SizedBox(width: 16) : IconButton(onPressed: () => Navigator.pop(context),
           icon: const Icon(Icons.arrow_back_rounded, color: Color(0xFF1E293B))),
         title: Row(mainAxisSize: MainAxisSize.min, children: [
           Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
