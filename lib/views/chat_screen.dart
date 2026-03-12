@@ -28,6 +28,7 @@ class _ChatScreenState extends State<ChatScreen> {
   bool _popupDone = false;
 
   bool _feedbackMode = false;
+  bool _showRating = false;
   final TextEditingController _feedbackCtrl = TextEditingController();
 
   LocalQuestion? get _q => QuestionStore.instance.getById(widget.questionId);
@@ -40,6 +41,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
     _loadCredits();
     _loadPopup();
+    _startRatingTimer();
     _scroll.addListener(_checkScrollButton);
     Analytics.chatOpened(widget.questionId, _q?.subject ?? '');
 
@@ -106,6 +108,17 @@ class _ChatScreenState extends State<ChatScreen> {
     _popupDone = p.getBool('credit_popup_v1') ?? false;
   }
 
+
+  void _startRatingTimer() {
+    // Show rating after 90 seconds, only sometimes
+    Future.delayed(const Duration(seconds: 90), () {
+      if (!mounted) return;
+      final q = _q;
+      if (q == null || q.rating != null) return;
+      if (q.status != QStatus.solved) return;
+      setState(() => _showRating = true);
+    });
+  }
   Future<void> _markPopup() async {
     final p = await SharedPreferences.getInstance();
     await p.setBool('credit_popup_v1', true);
@@ -498,7 +511,7 @@ class _ChatScreenState extends State<ChatScreen> {
               }),
 
               // Rating
-              if (hasAi && solved && q.rating == null && !_coachMode && !_feedbackMode)
+              if (_showRating && hasAi && solved && q.rating == null && !_coachMode && !_feedbackMode)
                 _ratingWidget(q),
 
               // Rating feedback (3 stars or less)
@@ -507,6 +520,21 @@ class _ChatScreenState extends State<ChatScreen> {
               // Rated
               if (q.rating != null && !_feedbackMode) _ratedWidget(q.rating!),
 
+
+              // Action buttons after solution
+              if (hasAi && solved && !_coachMode)
+                Padding(padding: const EdgeInsets.only(bottom: 12),
+                  child: Row(children: [
+                    Expanded(child: GestureDetector(onTap: () => _sendMsg(preset: 'Anlamadim, tekrar anlat'),
+                      child: Container(padding: const EdgeInsets.symmetric(vertical: 12),
+                        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14), border: Border.all(color: const Color(0xFFE2E8F0))),
+                        child: const Text('Anlamadim,\ntekrar anlat', textAlign: TextAlign.center, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF475569)))))),
+                    const SizedBox(width: 8),
+                    Expanded(child: GestureDetector(onTap: _startCoach,
+                      child: Container(padding: const EdgeInsets.symmetric(vertical: 12),
+                        decoration: BoxDecoration(color: const Color(0xFF6366F1).withAlpha(8), borderRadius: BorderRadius.circular(14), border: Border.all(color: const Color(0xFF6366F1).withAlpha(20))),
+                        child: const Text('Benzerini birlikte\ncozelim', textAlign: TextAlign.center, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF6366F1)))))),
+                  ])),
               // Coach
               if (showCoach) _coachBtn(),
 

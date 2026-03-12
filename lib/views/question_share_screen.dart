@@ -6,6 +6,7 @@ import 'package:image_picker/image_picker.dart';
 import '../services/chatgpt_service.dart';
 import '../services/credit_service.dart';
 import '../stores/question_store.dart';
+import 'chat_screen.dart';
 import 'credit_store_screen.dart';
 import '../services/analytics_service.dart';
 
@@ -132,8 +133,11 @@ class _QuestionShareScreenState extends State<QuestionShareScreen> {
       Analytics.questionSubmitted(q.id, _selectedSubject!);
       await Future.delayed(const Duration(milliseconds: 1200));
       if (!mounted) return;
-      setState(() { _step = 3; _sending = false; });
       _solveInBackground(q.id, _imageBytes!, _selectedSubject!);
+      if (!mounted) return;
+      // Direkt chat ekranina git - basarili ekranini gosterme
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => ChatScreen(questionId: q.id)));
     } catch (e) {
       if (!mounted) return;
       setState(() { _step = 1; _sending = false; });
