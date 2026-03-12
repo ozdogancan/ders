@@ -46,6 +46,8 @@ class _ChatScreenState extends State<ChatScreen> {
     _startRatingTimer();
     _scroll.addListener(_checkScrollButton);
     Analytics.chatOpened(widget.questionId, _q?.subject ?? '');
+    QuestionStore.instance.markRead(widget.questionId);
+    QuestionStore.instance.touchInteraction(widget.questionId);
 
     // If user already has messages (re-entering chat), scroll to end immediately
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -474,6 +476,22 @@ class _ChatScreenState extends State<ChatScreen> {
         ]),
         centerTitle: true,
         actions: [
+          // Favorite toggle
+          Builder(builder: (_) {
+            final qq = _q;
+            if (qq == null) return const SizedBox.shrink();
+            return IconButton(
+              onPressed: () {
+                QuestionStore.instance.toggleFavorite(widget.questionId);
+                setState(() {});
+              },
+              icon: Icon(
+                qq.isFavorite ? Icons.star_rounded : Icons.star_outline_rounded,
+                color: qq.isFavorite ? const Color(0xFFFBBF24) : Colors.grey.shade400,
+                size: 22,
+              ),
+            );
+          }),
           Padding(padding: const EdgeInsets.only(right: 12),
             child: Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
               decoration: BoxDecoration(color: const Color(0xFF6366F1).withAlpha(15), borderRadius: BorderRadius.circular(99)),
