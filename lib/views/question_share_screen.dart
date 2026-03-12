@@ -48,6 +48,28 @@ class _QuestionShareScreenState extends State<QuestionShareScreen> {
     setState(() { _credits = c; _loading = false; });
   }
 
+
+  void _showImageSourcePicker() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        margin: const EdgeInsets.all(16),
+        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20)),
+        child: SafeArea(top: false, child: Column(mainAxisSize: MainAxisSize.min, children: [
+          const SizedBox(height: 12),
+          Container(width: 36, height: 4, decoration: BoxDecoration(color: const Color(0xFFE2E8F0), borderRadius: BorderRadius.circular(2))),
+          const SizedBox(height: 20),
+          const Text('Foto\u011fraf Se\u00e7', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: Color(0xFF1E293B))),
+          const SizedBox(height: 20),
+          ListTile(leading: Container(width: 40, height: 40, decoration: BoxDecoration(color: const Color(0xFF6366F1).withAlpha(15), borderRadius: BorderRadius.circular(12)), child: const Icon(Icons.camera_alt_rounded, color: Color(0xFF6366F1), size: 20)), title: const Text('Kamera ile \u00c7ek', style: TextStyle(fontWeight: FontWeight.w600)), onTap: () { Navigator.pop(ctx); _pickImage(ImageSource.camera); }),
+          const Divider(height: 1, indent: 60, endIndent: 20),
+          ListTile(leading: Container(width: 40, height: 40, decoration: BoxDecoration(color: const Color(0xFF0EA5E9).withAlpha(15), borderRadius: BorderRadius.circular(12)), child: const Icon(Icons.photo_library_rounded, color: Color(0xFF0EA5E9), size: 20)), title: const Text('Galeriden Se\u00e7', style: TextStyle(fontWeight: FontWeight.w600)), onTap: () { Navigator.pop(ctx); _pickImage(ImageSource.gallery); }),
+          const SizedBox(height: 8),
+          Padding(padding: const EdgeInsets.symmetric(horizontal: 16), child: SizedBox(width: double.infinity, height: 48, child: TextButton(onPressed: () => Navigator.pop(ctx), child: Text('Vazge\u00e7', style: TextStyle(color: Colors.grey.shade500, fontWeight: FontWeight.w600, fontSize: 15))))),
+          const SizedBox(height: 8),
+        ]))));
+  }
   Future<void> _pickImage(ImageSource source) async {
     final file = await _picker.pickImage(source: source, imageQuality: 90);
     if (file == null) return;
@@ -137,27 +159,29 @@ class _QuestionShareScreenState extends State<QuestionShareScreen> {
 
   String _getMathPrompt(String subject, dynamic bytes) {
     return '$subject soruyu coz. SADECE JSON dondur. '
-      'Sema: {"question_type":"problem","summary":"ozet",'
-      '"given":["veri1"] veya null,"find":"istenen" veya null,"modeling":"LaTeX denklem" veya null,'
-      '"steps":[{"explanation":"ne yaptik","reasoning":"NEDEN yaptik","formula":"saf matematik LaTeX","is_critical":false}],'
-      '"final_answer":"sonuc","golden_rule":"bu tur sorularda ezberle kurali","tip":"motivasyon"} '
-      'KURALLAR: Turkce yaz. 4-6 adim. HER adimda reasoning yaz. '
-      'Tam 1 adim is_critical:true sec. golden_rule zorunlu. given/find/modeling doldur. '
-      'FORMUL KURALLARI: formula alanina SADECE saf matematik yaz. '
-      'YASAK: \\text, \\mathrm, \\boxed, \\newline, Turkce karakter formula icinde. '
-      'Degiskenleri tek harf yap: x, y, A, B. Aciklamayi explanation alanina yaz. '
+      'Once soruya bak: direkt hesaplama ise TIP1, metin problemi ise TIP2 olarak coz. '
+      'TIP1 (3-4 adim, kisa oz): given/find/modeling null birak. Gereksiz uzatma. '
+      'TIP2 (4-6 adim, detayli): given/find/modeling DOLDUR. HER adimda reasoning yaz. 1 adim is_critical:true. Samimi anlat. '
+      'ORTAK JSON: {"question_type":"problem","summary":"aciklama",'
+      '"given":["veri"] veya null,"find":"istenen" veya null,"modeling":"formul" veya null,'
+      '"steps":[{"explanation":"aciklama","formula":"saf LaTeX veya null","reasoning":"neden veya null","is_critical":false}],'
+      '"final_answer":"sonuc","golden_rule":"kural","tip":"motivasyon"} '
+      'FORMUL KURALLARI: formula alanina SADECE saf matematik. '
+      'YASAK: \\text, \\mathrm, \\boxed, \\newline, Turkce karakter. '
+      'Degiskenleri tek harf yap: x, y, A, B. '
       'LaTeX: \\frac{a}{b}, \\times, \\div, \\Rightarrow, \\cdot. '
       'Dolar isareti KULLANMA. final_answer kisa. tip samimi.';
   }
 
   String _getGeneralPrompt(String subject) {
-    return '$subject soruyu coz. SADECE JSON dondur. '
-      'Sema: {"question_type":"genel","summary":"ozet",'
-      '"steps":[{"explanation":"ne yaptik","reasoning":"neden yaptik","formula":"LaTeX veya null","is_critical":false}],'
-      '"final_answer":"sonuc","golden_rule":"temel kural","tip":"motivasyon"} '
-      'KURALLAR: Turkce yaz. 4-6 adim. HER adimda reasoning yaz. 1 adim is_critical:true. golden_rule zorunlu. '
-      'FORMUL KURALLARI: formula alanina SADECE saf matematik. YASAK: \\text, \\boxed, Turkce karakter. '
-      'LaTeX: \\frac{a}{b}. Dolar isareti KULLANMA.';
+    return '$subject soruyu coz. SADECE JSON dondur. Turkce yaz. 4-6 adim. '
+      'HER adimda reasoning yaz. 1 adim is_critical:true. golden_rule zorunlu. '
+      'FORMUL KURALLARI: formula alanina SADECE saf matematik. '
+      'YASAK: \\text, \\boxed, Turkce karakter. '
+      'LaTeX: \\frac{a}{b}, \\times, \\div. Dolar isareti KULLANMA. '
+      'JSON: {"question_type":"genel","summary":"ozet",'
+      '"steps":[{"explanation":"aciklama","reasoning":"neden","formula":"LaTeX veya null","is_critical":false}],'
+      '"final_answer":"sonuc","golden_rule":"kural","tip":"motivasyon"}';
   }
 
   Future<void> _showNoCredit() async {
@@ -224,13 +248,13 @@ class _QuestionShareScreenState extends State<QuestionShareScreen> {
           style: TextStyle(fontSize: 14, color: Colors.grey.shade500, height: 1.5)),
         const SizedBox(height: 32),
         SizedBox(width: double.infinity, height: 54,
-          child: FilledButton.icon(onPressed: () => _pickImage(ImageSource.camera),
+          child: FilledButton.icon(onPressed: _showImageSourcePicker,
             style: FilledButton.styleFrom(backgroundColor: const Color(0xFF6366F1), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
             icon: const Icon(Icons.camera_alt_rounded, size: 20),
             label: const Text('Kamera ile \u00c7ek', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)))),
         const SizedBox(height: 12),
         SizedBox(width: double.infinity, height: 54,
-          child: OutlinedButton.icon(onPressed: () => _pickImage(ImageSource.gallery),
+          child: OutlinedButton.icon(onPressed: _showImageSourcePicker,
             style: OutlinedButton.styleFrom(foregroundColor: const Color(0xFF6366F1), side: const BorderSide(color: Color(0xFFE2E8F0)),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
             icon: const Icon(Icons.photo_library_rounded, size: 20),

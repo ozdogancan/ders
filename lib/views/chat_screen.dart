@@ -42,7 +42,14 @@ class _ChatScreenState extends State<ChatScreen> {
     _loadPopup();
     _scroll.addListener(_checkScrollButton);
     Analytics.chatOpened(widget.questionId, _q?.subject ?? '');
+
+    // If user already has messages (re-entering chat), scroll to end immediately
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      final q = _q;
+      final userMsgs = q?.chatMessages.where((m) => m.role == 'user').length ?? 0;
+      if (userMsgs > 0 && _scroll.hasClients) {
+        _scroll.jumpTo(_scroll.position.maxScrollExtent);
+      }
       _firstOpen = false;
     });
   }
