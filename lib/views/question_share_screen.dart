@@ -1,4 +1,4 @@
-import 'dart:typed_data';
+﻿import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -16,7 +16,7 @@ class QuestionShareScreen extends StatefulWidget {
   State<QuestionShareScreen> createState() => _QuestionShareScreenState();
 }
 
-class _QuestionShareScreenState extends State<QuestionShareScreen> with TickerProviderStateMixin {
+class _QuestionShareScreenState extends State<QuestionShareScreen> {
   final ImagePicker _picker = ImagePicker();
   final CreditService _creditService = CreditService();
   final ChatGptService _chatGptService = ChatGptService();
@@ -29,11 +29,7 @@ class _QuestionShareScreenState extends State<QuestionShareScreen> with TickerPr
   int _credits = 1;
   bool _loading = true;
   bool _sending = false;
-  int _step = 0; // 0=picker, 1=config, 2=sending, 3=sent
-
-  // Sending animation
-  late AnimationController _pulseCtrl;
-  late Animation<double> _pulseAnim;
+  int _step = 0;
 
   static const List<String> _subjects = [
     'Matematik', 'Geometri', 'Fizik', 'Kimya', 'Biyoloji',
@@ -45,14 +41,6 @@ class _QuestionShareScreenState extends State<QuestionShareScreen> with TickerPr
   void initState() {
     super.initState();
     _loadCredits();
-    _pulseCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 1500))..repeat(reverse: true);
-    _pulseAnim = Tween<double>(begin: 0.95, end: 1.08).animate(CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeInOut));
-  }
-
-  @override
-  void dispose() {
-    _pulseCtrl.dispose();
-    super.dispose();
   }
 
   Future<void> _loadCredits() async {
@@ -61,6 +49,28 @@ class _QuestionShareScreenState extends State<QuestionShareScreen> with TickerPr
     setState(() { _credits = c; _loading = false; });
   }
 
+
+  void _showImageSourcePicker() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        margin: const EdgeInsets.all(16),
+        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20)),
+        child: SafeArea(top: false, child: Column(mainAxisSize: MainAxisSize.min, children: [
+          const SizedBox(height: 12),
+          Container(width: 36, height: 4, decoration: BoxDecoration(color: const Color(0xFFE2E8F0), borderRadius: BorderRadius.circular(2))),
+          const SizedBox(height: 20),
+          const Text('Foto\u011fraf Se\u00e7', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: Color(0xFF1E293B))),
+          const SizedBox(height: 20),
+          ListTile(leading: Container(width: 40, height: 40, decoration: BoxDecoration(color: const Color(0xFF6366F1).withAlpha(15), borderRadius: BorderRadius.circular(12)), child: const Icon(Icons.camera_alt_rounded, color: Color(0xFF6366F1), size: 20)), title: const Text('Kamera ile \u00c7ek', style: TextStyle(fontWeight: FontWeight.w600)), onTap: () { Navigator.pop(ctx); _pickImage(ImageSource.camera); }),
+          const Divider(height: 1, indent: 60, endIndent: 20),
+          ListTile(leading: Container(width: 40, height: 40, decoration: BoxDecoration(color: const Color(0xFF0EA5E9).withAlpha(15), borderRadius: BorderRadius.circular(12)), child: const Icon(Icons.photo_library_rounded, color: Color(0xFF0EA5E9), size: 20)), title: const Text('Galeriden Se\u00e7', style: TextStyle(fontWeight: FontWeight.w600)), onTap: () { Navigator.pop(ctx); _pickImage(ImageSource.gallery); }),
+          const SizedBox(height: 8),
+          Padding(padding: const EdgeInsets.symmetric(horizontal: 16), child: SizedBox(width: double.infinity, height: 48, child: TextButton(onPressed: () => Navigator.pop(ctx), child: Text('Vazge\u00e7', style: TextStyle(color: Colors.grey.shade500, fontWeight: FontWeight.w600, fontSize: 15))))),
+          const SizedBox(height: 8),
+        ]))));
+  }
   Future<void> _pickImage(ImageSource source) async {
     final file = await _picker.pickImage(source: source, imageQuality: 90);
     if (file == null) return;
@@ -70,13 +80,12 @@ class _QuestionShareScreenState extends State<QuestionShareScreen> with TickerPr
       _step = 1;
       _detectedSubject = null;
       _selectedSubject = null;
-      _detectionFailed = false;
     });
     _detectSubject(bytes);
   }
 
   Future<void> _detectSubject(Uint8List bytes) async {
-    setState(() { _detectingSubject = true; _detectionFailed = false; });
+    setState(() => _detectingSubject = true);
     try {
       final result = await _chatGptService.askImageBytes(bytes,
         prompt: 'Bu fotograftaki sorunun hangi ders ile ilgili oldugunu tek kelimeyle yaz. '
@@ -103,7 +112,8 @@ class _QuestionShareScreenState extends State<QuestionShareScreen> with TickerPr
         setState(() { _detectionFailed = true; _detectingSubject = false; });
       } else {
         setState(() { _detectionFailed = false; _detectedSubject = matched; _selectedSubject = matched; _detectingSubject = false; });
-        _send();
+      // AI tespit ettiyse otomatik gonder
+      _send();
       }
     } catch (_) {
       if (!mounted) return;
@@ -118,27 +128,16 @@ class _QuestionShareScreenState extends State<QuestionShareScreen> with TickerPr
   Future<void> _send() async {
     if (_imageBytes == null || _selectedSubject == null) return;
     if (_credits <= 0) { _showNoCredit(); return; }
-
-    // Step 2: "Gönderiliyor" animation
     setState(() { _step = 2; _sending = true; });
-
     try {
       await _creditService.spendOneCredit();
       final q = QuestionStore.instance.add(imageBytes: _imageBytes!, subject: _selectedSubject!);
       Analytics.questionSubmitted(q.id, _selectedSubject!);
-
-      // Show "Gönderiliyor" for 1.5s
-      await Future.delayed(const Duration(milliseconds: 1500));
+      await Future.delayed(const Duration(milliseconds: 1200));
       if (!mounted) return;
-
-      // Step 3: "Gönderildi!" for 2s
-      setState(() => _step = 3);
       _solveInBackground(q.id, _imageBytes!, _selectedSubject!);
-
-      await Future.delayed(const Duration(seconds: 2));
       if (!mounted) return;
-
-      // Navigate to chat
+      // Direkt chat ekranina git - basarili ekranini gosterme
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(builder: (_) => ChatScreen(questionId: q.id)));
     } catch (e) {
@@ -208,54 +207,38 @@ class _QuestionShareScreenState extends State<QuestionShareScreen> with TickerPr
     }
   }
 
+  void _goHome() { Navigator.of(context).pop(); }
+
   @override
   Widget build(BuildContext context) {
     if (_loading) return const Scaffold(body: Center(child: CircularProgressIndicator(color: Color(0xFF6366F1))));
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
-      appBar: (_step == 2 || _step == 3) ? null : AppBar(
+      appBar: _step == 3 ? null : AppBar(
         backgroundColor: Colors.white, surfaceTintColor: Colors.transparent, elevation: 0,
         leading: IconButton(
           onPressed: () { if (_step == 1) { _retake(); } else { Navigator.pop(context); } },
           icon: Icon(_step == 1 ? Icons.arrow_back_rounded : Icons.close_rounded, color: const Color(0xFF1E293B))),
-        title: Text(_step == 0 ? 'Soru Sor' : 'Soru G\u00f6nder',
+        title: Text(_step == 0 ? 'Soru Sor' : _step == 1 ? 'Soru G\u00f6nder' : 'G\u00f6nderiliyor...',
           style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: Color(0xFF1E293B))),
         centerTitle: true,
         actions: [
-          GestureDetector(
-            onTap: () async {
-              await Navigator.of(context).push(MaterialPageRoute(builder: (_) => const CreditStoreScreen()));
-              _loadCredits();
-            },
-            child: Padding(padding: const EdgeInsets.only(right: 12),
-              child: Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                decoration: BoxDecoration(color: const Color(0xFF6366F1).withAlpha(15), borderRadius: BorderRadius.circular(99)),
-                child: Row(mainAxisSize: MainAxisSize.min, children: [
-                  const Icon(Icons.bolt_rounded, size: 14, color: Color(0xFF6366F1)),
-                  const SizedBox(width: 3),
-                  Text('$_credits', style: const TextStyle(color: Color(0xFF6366F1), fontWeight: FontWeight.w800, fontSize: 13)),
-                ]))),
-          ),
+          Padding(padding: const EdgeInsets.only(right: 12),
+            child: Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(color: const Color(0xFF6366F1).withAlpha(15), borderRadius: BorderRadius.circular(99)),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                const Icon(Icons.bolt_rounded, size: 14, color: Color(0xFF6366F1)),
+                const SizedBox(width: 3),
+                Text('$_credits', style: const TextStyle(color: Color(0xFF6366F1), fontWeight: FontWeight.w800, fontSize: 13)),
+              ]))),
         ],
       ),
       body: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 400),
-        switchInCurve: Curves.easeOut,
-        switchOutCurve: Curves.easeIn,
-        child: switch (_step) {
-          0 => _buildPicker(),
-          1 => _buildConfig(),
-          2 => _buildSending(),
-          3 => _buildSent(),
-          _ => _buildSending(),
-        },
+        duration: const Duration(milliseconds: 300),
+        child: switch (_step) { 0 => _buildPicker(), 1 => _buildConfig(), 2 => _buildSolving(), _ => _buildSuccess() },
       ),
     );
   }
-
-  // ╔══════════════════════════════════════════════════╗
-  // ║  STEP 0: Pick image (original clean design)     ║
-  // ╚══════════════════════════════════════════════════╝
 
   Widget _buildPicker() {
     return Center(key: const ValueKey(0), child: Container(
@@ -271,23 +254,19 @@ class _QuestionShareScreenState extends State<QuestionShareScreen> with TickerPr
           style: TextStyle(fontSize: 14, color: Colors.grey.shade500, height: 1.5)),
         const SizedBox(height: 32),
         SizedBox(width: double.infinity, height: 54,
-          child: FilledButton.icon(onPressed: () => _pickImage(ImageSource.camera),
+          child: FilledButton.icon(onPressed: _showImageSourcePicker,
             style: FilledButton.styleFrom(backgroundColor: const Color(0xFF6366F1), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
             icon: const Icon(Icons.camera_alt_rounded, size: 20),
             label: const Text('Kamera ile \u00c7ek', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)))),
         const SizedBox(height: 12),
         SizedBox(width: double.infinity, height: 54,
-          child: OutlinedButton.icon(onPressed: () => _pickImage(ImageSource.gallery),
+          child: OutlinedButton.icon(onPressed: _showImageSourcePicker,
             style: OutlinedButton.styleFrom(foregroundColor: const Color(0xFF6366F1), side: const BorderSide(color: Color(0xFFE2E8F0)),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
             icon: const Icon(Icons.photo_library_rounded, size: 20),
             label: const Text('Galeriden Se\u00e7', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)))),
       ])));
   }
-
-  // ╔══════════════════════════════════════════════════╗
-  // ║  STEP 1: Image loaded, detect/select subject    ║
-  // ╚══════════════════════════════════════════════════╝
 
   Widget _buildConfig() {
     final wide = MediaQuery.of(context).size.width > 700;
@@ -296,7 +275,7 @@ class _QuestionShareScreenState extends State<QuestionShareScreen> with TickerPr
         constraints: BoxConstraints(maxWidth: wide ? 560 : double.infinity),
         padding: EdgeInsets.all(wide ? 32 : 20),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        // Image preview
+        // ÔöÇÔöÇ Image preview: FULL image, no cropping ÔöÇÔöÇ
         Container(
           decoration: BoxDecoration(borderRadius: BorderRadius.circular(16), border: Border.all(color: const Color(0xFFE2E8F0)), color: const Color(0xFF1E293B)),
           child: Column(children: [
@@ -341,9 +320,9 @@ class _QuestionShareScreenState extends State<QuestionShareScreen> with TickerPr
               decoration: BoxDecoration(color: const Color(0xFFF59E0B).withAlpha(15), borderRadius: BorderRadius.circular(10),
                 border: Border.all(color: const Color(0xFFF59E0B).withAlpha(30))),
               child: Row(children: [
-                const Icon(Icons.info_outline_rounded, color: Color(0xFFF59E0B), size: 18), const SizedBox(width: 10),
-                Expanded(child: Text('AI tespit edemedi. L\u00fctfen dersi se\u00e7.',
-                  style: TextStyle(fontSize: 13, color: Colors.amber.shade800, fontWeight: FontWeight.w600))),
+                Icon(Icons.info_outline_rounded, color: const Color(0xFFF59E0B), size: 18), const SizedBox(width: 10),
+                Expanded(child: Text('G\u00f6r\u00fcnt\u00fcden konu tespit edilemedi. L\u00fctfen dersi se\u00e7.',
+                  style: TextStyle(fontSize: 13, color: Colors.amber.shade800))),
               ]))
           : Text('Otomatik alg\u0131land\u0131, istersen de\u011fi\u015ftir', style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
         const SizedBox(height: 12),
@@ -376,73 +355,63 @@ class _QuestionShareScreenState extends State<QuestionShareScreen> with TickerPr
       ]))));
   }
 
-  // ╔══════════════════════════════════════════════════╗
-  // ║  STEP 2: "Gönderiliyor..." with pulse animation ║
-  // ╚══════════════════════════════════════════════════╝
-
-  Widget _buildSending() {
+  Widget _buildSolving() {
     return Center(key: const ValueKey(2), child: Padding(padding: const EdgeInsets.all(40),
       child: Column(mainAxisSize: MainAxisSize.min, children: [
-        AnimatedBuilder(
-          animation: _pulseAnim,
-          builder: (_, child) => Transform.scale(scale: _pulseAnim.value, child: child),
-          child: Container(width: 110, height: 110,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: LinearGradient(
-                begin: Alignment.topLeft, end: Alignment.bottomRight,
-                colors: [const Color(0xFF6366F1).withAlpha(20), const Color(0xFF8B5CF6).withAlpha(15)]),
-              border: Border.all(color: const Color(0xFF6366F1).withAlpha(40), width: 3),
-              boxShadow: [BoxShadow(color: const Color(0xFF6366F1).withAlpha(20), blurRadius: 30, spreadRadius: 5)]),
-            child: const Icon(Icons.upload_rounded, size: 44, color: Color(0xFF6366F1)),
-          ),
-        ),
+        Container(width: 100, height: 100,
+          decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: const Color(0xFF6366F1).withAlpha(40), width: 3),
+            boxShadow: [BoxShadow(color: const Color(0xFF6366F1).withAlpha(30), blurRadius: 24)]),
+          child: ClipOval(child: Image.asset('assets/tutors/Matematik Man.png', fit: BoxFit.cover, alignment: Alignment.topCenter,
+            errorBuilder: (_, __, ___) => Container(color: const Color(0xFF6366F1).withAlpha(20),
+              child: const Icon(Icons.person, color: Color(0xFF6366F1), size: 40))))),
+        const SizedBox(height: 24),
+        const Text('Sorun iletiliyor...', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: Color(0xFF1E293B))),
+        const SizedBox(height: 8),
+        Text('Koala haz\u0131rlan\u0131yor', style: TextStyle(fontSize: 14, color: Colors.grey.shade500)),
         const SizedBox(height: 28),
-        const Text('G\u00f6nderiliyor...', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: Color(0xFF1E293B))),
-        const SizedBox(height: 10),
-        Text('Sorun Koala\u2019ya iletiliyor', style: TextStyle(fontSize: 14, color: Colors.grey.shade500)),
-        const SizedBox(height: 32),
-        SizedBox(width: 36, height: 36,
-          child: CircularProgressIndicator(strokeWidth: 3, color: const Color(0xFF6366F1).withAlpha(60))),
+        const SizedBox(width: 32, height: 32, child: CircularProgressIndicator(strokeWidth: 3, color: Color(0xFF6366F1))),
       ])));
   }
 
-  // ╔══════════════════════════════════════════════════╗
-  // ║  STEP 3: "Gönderildi!" with checkmark animation ║
-  // ╚══════════════════════════════════════════════════╝
-
-  Widget _buildSent() {
+  Widget _buildSuccess() {
     return Center(key: const ValueKey(3),
       child: TweenAnimationBuilder<double>(
         tween: Tween(begin: 0.0, end: 1.0), duration: const Duration(milliseconds: 600), curve: Curves.easeOutBack,
-        builder: (_, v, child) => Transform.scale(scale: 0.7 + 0.3 * v, child: Opacity(opacity: v.clamp(0.0, 1.0), child: child)),
-        child: Padding(padding: const EdgeInsets.all(40),
+        builder: (_, v, child) => Transform.scale(scale: 0.8 + 0.2 * v, child: Opacity(opacity: v.clamp(0.0, 1.0), child: child)),
+        child: Container(constraints: const BoxConstraints(maxWidth: 420), padding: const EdgeInsets.all(32),
           child: Column(mainAxisSize: MainAxisSize.min, children: [
-            // Success circle with checkmark
             Stack(alignment: Alignment.center, children: [
-              // Glow
               Container(width: 130, height: 130, decoration: BoxDecoration(shape: BoxShape.circle,
                 boxShadow: [BoxShadow(color: const Color(0xFF22C55E).withAlpha(40), blurRadius: 40, spreadRadius: 10)])),
-              // Circle
               Container(width: 110, height: 110,
-                decoration: BoxDecoration(shape: BoxShape.circle,
-                  gradient: const LinearGradient(
-                    begin: Alignment.topLeft, end: Alignment.bottomRight,
-                    colors: [Color(0xFF22C55E), Color(0xFF16A34A)]),
-                  boxShadow: [BoxShadow(color: const Color(0xFF22C55E).withAlpha(50), blurRadius: 20, offset: const Offset(0, 8))]),
-                child: const Icon(Icons.check_rounded, color: Colors.white, size: 52)),
+                decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: const Color(0xFF22C55E).withAlpha(60), width: 3)),
+                child: ClipOval(child: Image.asset('assets/tutors/Matematik Man.png', fit: BoxFit.cover, alignment: Alignment.topCenter,
+                  errorBuilder: (_, __, ___) => Container(color: const Color(0xFF22C55E).withAlpha(20),
+                    child: const Icon(Icons.person, color: Color(0xFF22C55E), size: 44))))),
+              Positioned(bottom: 0, right: 0,
+                child: Container(width: 36, height: 36,
+                  decoration: BoxDecoration(shape: BoxShape.circle, color: const Color(0xFF22C55E),
+                    border: Border.all(color: Colors.white, width: 3), boxShadow: [BoxShadow(color: Colors.black.withAlpha(25), blurRadius: 8)]),
+                  child: const Icon(Icons.check_rounded, color: Colors.white, size: 20))),
             ]),
             const SizedBox(height: 28),
-            const Text('G\u00f6nderildi!', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: Color(0xFF1E293B))),
+            const Text('Sorun g\u00f6nderildi!', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: Color(0xFF1E293B))),
             const SizedBox(height: 10),
-            Text('Koala \u00e7\u00f6z\u00fcm \u00fcretmeye ba\u015flad\u0131', style: TextStyle(fontSize: 15, color: Colors.grey.shade500)),
-            const SizedBox(height: 8),
-            // Animated dots hint
-            Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-              Icon(Icons.arrow_forward_rounded, size: 16, color: Colors.grey.shade400),
-              const SizedBox(width: 6),
-              Text('\u00c7\u00f6z\u00fcm ekran\u0131na y\u00f6nlendiriliyorsun...', style: TextStyle(fontSize: 13, color: Colors.grey.shade400, fontWeight: FontWeight.w500)),
-            ]),
+            Text('Koala \u00e7\u00f6z\u00fcm \u00fcretiyor.\nHaz\u0131r olunca bildirim alacaks\u0131n.',
+              textAlign: TextAlign.center, style: TextStyle(fontSize: 14, color: Colors.grey.shade500, height: 1.6)),
+            const SizedBox(height: 12),
+            Container(padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(color: const Color(0xFF6366F1).withAlpha(10), borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFF6366F1).withAlpha(20))),
+              child: const Row(mainAxisSize: MainAxisSize.min, children: [
+                Icon(Icons.notifications_active_rounded, size: 16, color: Color(0xFF6366F1)), SizedBox(width: 8),
+                Text('Bildirimleri a\u00e7\u0131k tut', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF6366F1))),
+              ])),
+            const SizedBox(height: 28),
+            SizedBox(width: double.infinity, height: 50,
+              child: FilledButton(onPressed: _goHome,
+                style: FilledButton.styleFrom(backgroundColor: const Color(0xFF6366F1), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))),
+                child: const Text('Ana Sayfaya D\u00f6n', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)))),
           ]))));
   }
 }
