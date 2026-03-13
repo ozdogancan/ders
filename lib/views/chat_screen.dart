@@ -491,14 +491,7 @@ class _ChatScreenState extends State<ChatScreen> {
               ),
             );
           }),
-          Padding(padding: const EdgeInsets.only(right: 12),
-            child: Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-              decoration: BoxDecoration(color: const Color(0xFF6366F1).withAlpha(15), borderRadius: BorderRadius.circular(99)),
-              child: Row(mainAxisSize: MainAxisSize.min, children: [
-                const Icon(Icons.bolt_rounded, size: 14, color: Color(0xFF6366F1)),
-                const SizedBox(width: 3),
-                Text(_credits < 0 ? '' : '$_credits', style: const TextStyle(color: Color(0xFF6366F1), fontWeight: FontWeight.w800, fontSize: 13)),
-              ]))),
+          const SizedBox(width: 8),
         ],
       ),
       body: Stack(children: [

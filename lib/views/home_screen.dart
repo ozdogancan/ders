@@ -8,6 +8,7 @@ import '../widgets/koala_logo.dart';
 import 'chat_screen.dart';
 import 'question_share_screen.dart';
 import 'profile_screen.dart';
+import 'credit_store_screen.dart';
 
 // ── Quick filter enum (WhatsApp style) ──
 enum QuickFilter { all, solved, unread, favorites }
@@ -415,14 +416,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           ),
         ),
         const SizedBox(width: 12),
-        Container(padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-          decoration: BoxDecoration(
-            gradient: LinearGradient(colors: [const Color(0xFF6366F1).withAlpha(15), const Color(0xFF8B5CF6).withAlpha(10)]),
-            borderRadius: BorderRadius.circular(99), border: Border.all(color: const Color(0xFF6366F1).withAlpha(20))),
-          child: Row(mainAxisSize: MainAxisSize.min, children: [
-            const Icon(Icons.bolt_rounded, size: 16, color: Color(0xFF6366F1)), const SizedBox(width: 4),
-            Text('$_credits', style: const TextStyle(color: Color(0xFF6366F1), fontWeight: FontWeight.w800, fontSize: 14)),
-          ])),
+        GestureDetector(
+          onTap: () async {
+            await Navigator.of(context).push(MaterialPageRoute(builder: (_) => const CreditStoreScreen()));
+            _loadCredits();
+          },
+          child: Container(padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(colors: [const Color(0xFF6366F1).withAlpha(15), const Color(0xFF8B5CF6).withAlpha(10)]),
+              borderRadius: BorderRadius.circular(99), border: Border.all(color: const Color(0xFF6366F1).withAlpha(20))),
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              const Icon(Icons.bolt_rounded, size: 16, color: Color(0xFF6366F1)), const SizedBox(width: 4),
+              Text('$_credits', style: const TextStyle(color: Color(0xFF6366F1), fontWeight: FontWeight.w800, fontSize: 14)),
+            ]))),
         const SizedBox(width: 10),
         GestureDetector(
           onTap: () async { await Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ProfileScreen())); _loadCredits(); },
