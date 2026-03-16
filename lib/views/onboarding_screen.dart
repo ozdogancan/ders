@@ -33,35 +33,13 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     ),
   ];
 
-  bool _imageReady = false;
-
   @override
   void initState() {
     super.initState();
+    // Resim AuthGate'de zaten yüklendi — direkt başla
     _entry = AnimationController(
-        vsync: this, duration: const Duration(milliseconds: 400));
-    // Animasyonu hemen başlatma — resim yüklenince başlat
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    if (!_imageReady) {
-      // Resmi yükle, bitince animasyonu başlat
-      precacheImage(
-        const AssetImage('assets/tutors/Matematik Man.png'),
-        context,
-      ).then((_) {
-        if (!mounted) return;
-        setState(() => _imageReady = true);
-        _entry.forward();
-      }).catchError((_) {
-        // Resim yüklenemese bile devam et
-        if (!mounted) return;
-        setState(() => _imageReady = true);
-        _entry.forward();
-      });
-    }
+        vsync: this, duration: const Duration(milliseconds: 400))
+      ..forward();
   }
 
   @override

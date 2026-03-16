@@ -21,6 +21,17 @@ class _AuthGateState extends State<AuthGate> {
     _routeFuture = _decideRoute();
   }
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Onboarding'de kullanılan resmi şimdiden yükle
+    // AuthGate spinner dönerken decode tamamlanır
+    precacheImage(
+      const AssetImage('assets/tutors/Matematik Man.png'),
+      context,
+    );
+  }
+
   Future<Widget> _decideRoute() async {
     final prefs = await SharedPreferences.getInstance();
     final onboardingDone = prefs.getBool('onboarding_done') ?? false;
