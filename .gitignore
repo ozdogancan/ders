@@ -46,3 +46,8 @@ app.*.map.json
 
 # Allow build/web for Vercel
 !build/web/
+
+# Signing
+android/key.properties
+android/app/koala-release.jks
+*.jks
