@@ -14,6 +14,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
   final PageController _pc = PageController();
   int _idx = 0;
   late final AnimationController _entry;
+  final GlobalKey<_Page2State> _page2Key = GlobalKey<_Page2State>();
 
   final List<_PD> _pages = [
     _PD(
@@ -137,9 +138,16 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                 child: PageView.builder(
                   controller: _pc,
                   itemCount: _pages.length,
-                  onPageChanged: (i) => setState(() => _idx = i),
+                  allowImplicitScrolling: true,
+                  onPageChanged: (i) {
+                    setState(() => _idx = i);
+                    // 2. sayfaya her gelişte gif baştan başlasın
+                    if (i == 1) {
+                      _page2Key.currentState?.restartAnimation();
+                    }
+                  },
                   itemBuilder: (_, i) =>
-                      i == 0 ? const _Page1() : const _Page2(),
+                      i == 0 ? const _Page1() : _Page2(key: _page2Key),
                 ),
               ),
               Padding(
@@ -379,13 +387,23 @@ class _FeatureChip extends StatelessWidget {
 // ═══════════════════════════════════════════════════
 
 class _Page2 extends StatefulWidget {
-  const _Page2();
+  const _Page2({super.key});
   @override
   State<_Page2> createState() => _Page2State();
 }
 
-class _Page2State extends State<_Page2> with SingleTickerProviderStateMixin {
+class _Page2State extends State<_Page2>
+    with SingleTickerProviderStateMixin, AutomaticKeepAliveClientMixin {
   late final AnimationController _anim;
+
+  @override
+  bool get wantKeepAlive => true;
+
+  /// Dışarıdan çağrılır — animasyonu baştan başlatır
+  void restartAnimation() {
+    _anim.reset();
+    _anim.repeat();
+  }
 
   @override
   void initState() {
@@ -404,6 +422,7 @@ class _Page2State extends State<_Page2> with SingleTickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context); // AutomaticKeepAliveClientMixin gerektirir
     return Padding(
       padding: const EdgeInsets.fromLTRB(24, 0, 24, 0),
       child: Column(
@@ -432,17 +451,21 @@ class _MiniAppDemo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Ekran yüksekliğinin %55'inden fazla yer kaplamasın
+    final maxH = MediaQuery.of(context).size.height * 0.52;
     return Container(
       width: double.infinity,
-      constraints: const BoxConstraints(maxWidth: 340),
+      constraints: BoxConstraints(maxWidth: 340, maxHeight: maxH),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(24),
         color: const Color(0xFF0C1425),
         border: Border.all(color: const Color(0x30FFFFFF)),
       ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
+      child: SingleChildScrollView(
+        physics: const NeverScrollableScrollPhysics(),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
           // Mini app bar
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
@@ -482,6 +505,7 @@ class _MiniAppDemo extends StatelessWidget {
             child: _buildContent(),
           ),
         ],
+      ),
       ),
     );
   }
@@ -548,7 +572,7 @@ class _CameraPhase extends StatelessWidget {
       children: [
         // Kamera çerçevesi
         Container(
-          height: 185,
+          height: 150,
           width: double.infinity,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(14),
@@ -579,7 +603,7 @@ class _CameraPhase extends StatelessWidget {
                 Positioned(
                   left: 8,
                   right: 8,
-                  top: 12 + (155 * ((nt - 0.3) / 0.55)).clamp(0.0, 155.0),
+                  top: 10 + (125 * ((nt - 0.3) / 0.55)).clamp(0.0, 125.0),
                   child: Container(
                     height: 2,
                     decoration: BoxDecoration(
