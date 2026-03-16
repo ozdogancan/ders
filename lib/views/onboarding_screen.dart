@@ -33,22 +33,35 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     ),
   ];
 
+  bool _imageReady = false;
+
   @override
   void initState() {
     super.initState();
     _entry = AnimationController(
-        vsync: this, duration: const Duration(milliseconds: 400))
-      ..forward();
+        vsync: this, duration: const Duration(milliseconds: 400));
+    // Animasyonu hemen başlatma — resim yüklenince başlat
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // Fotoğrafı ekran açılmadan belleğe al — ilk frame'de hazır olsun
-    precacheImage(
-      const AssetImage('assets/tutors/Matematik Man.png'),
-      context,
-    );
+    if (!_imageReady) {
+      // Resmi yükle, bitince animasyonu başlat
+      precacheImage(
+        const AssetImage('assets/tutors/Matematik Man.png'),
+        context,
+      ).then((_) {
+        if (!mounted) return;
+        setState(() => _imageReady = true);
+        _entry.forward();
+      }).catchError((_) {
+        // Resim yüklenemese bile devam et
+        if (!mounted) return;
+        setState(() => _imageReady = true);
+        _entry.forward();
+      });
+    }
   }
 
   @override
@@ -91,7 +104,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     return Scaffold(
       extendBodyBehindAppBar: true,
       body: Stack(fit: StackFit.expand, children: [
-        // 600ms → 400ms: gradient geçişi
+        // Gradient arka plan — her zaman göster (resim yüklenirken de)
         AnimatedContainer(
           duration: const Duration(milliseconds: 400),
           curve: Curves.easeOutCubic,
