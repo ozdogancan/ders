@@ -279,15 +279,15 @@ class _Page1 extends StatelessWidget {
                       offset: Offset(0, 10))
                 ],
               ),
-              child: ClipOval(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
                 child: Image.asset(
-                  'assets/tutors/Matematik Man.png',
-                  fit: BoxFit.cover,
-                  alignment: Alignment.topCenter,
+                  'assets/images/koala_logo.png',
+                  fit: BoxFit.contain,
                   errorBuilder: (_, __, ___) => Container(
                     color: const Color(0xFF6366F1),
                     child:
-                        const Icon(Icons.person, color: Colors.white, size: 60),
+                        const Icon(Icons.auto_awesome, color: Colors.white, size: 60),
                   ),
                 ),
               ),
