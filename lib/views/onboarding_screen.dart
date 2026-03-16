@@ -36,8 +36,18 @@ class _OnboardingScreenState extends State<OnboardingScreen>
   void initState() {
     super.initState();
     _entry = AnimationController(
-        vsync: this, duration: const Duration(milliseconds: 700))
+        vsync: this, duration: const Duration(milliseconds: 400))
       ..forward();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Fotoğrafı ekran açılmadan belleğe al — ilk frame'de hazır olsun
+    precacheImage(
+      const AssetImage('assets/tutors/Matematik Man.png'),
+      context,
+    );
   }
 
   @override
@@ -52,8 +62,9 @@ class _OnboardingScreenState extends State<OnboardingScreen>
       _goSignup();
       return;
     }
+    // 450ms → 300ms: daha çevik geçiş
     _pc.nextPage(
-        duration: const Duration(milliseconds: 450),
+        duration: const Duration(milliseconds: 300),
         curve: Curves.easeOutCubic);
   }
 
@@ -68,7 +79,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
         transitionsBuilder: (_, a, __, c) => FadeTransition(
             opacity: CurvedAnimation(parent: a, curve: Curves.easeOut),
             child: c),
-        transitionDuration: const Duration(milliseconds: 400),
+        transitionDuration: const Duration(milliseconds: 300),
       ),
     );
   }
@@ -79,8 +90,9 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     return Scaffold(
       extendBodyBehindAppBar: true,
       body: Stack(fit: StackFit.expand, children: [
+        // 600ms → 400ms: gradient geçişi
         AnimatedContainer(
-          duration: const Duration(milliseconds: 600),
+          duration: const Duration(milliseconds: 400),
           curve: Curves.easeOutCubic,
           decoration: BoxDecoration(
             gradient: LinearGradient(
@@ -101,9 +113,10 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                     padding:
                         const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
                     decoration: BoxDecoration(
-                      color: Colors.white12,
+                      // withAlpha(n) → const Color hex ile alpha
+                      color: const Color(0x1FFFFFFF),
                       borderRadius: BorderRadius.circular(999),
-                      border: Border.all(color: Colors.white10),
+                      border: Border.all(color: const Color(0x1AFFFFFF)),
                     ),
                     child: const Row(
                         mainAxisSize: MainAxisSize.min,
@@ -118,24 +131,6 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                                   fontSize: 13)),
                         ]),
                   ),
-                  const Spacer(),
-                  // Skip button
-                  GestureDetector(
-                    onTap: _goSignup,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 14, vertical: 7),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withAlpha(15),
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                      child: const Text('Atla',
-                          style: TextStyle(
-                              color: Colors.white70,
-                              fontWeight: FontWeight.w600,
-                              fontSize: 13)),
-                    ),
-                  ),
                 ]),
               ),
               Expanded(
@@ -149,27 +144,36 @@ class _OnboardingScreenState extends State<OnboardingScreen>
               ),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 32),
-                child: Column(children: [
-                  Text(pg.title,
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                          fontSize: 28,
-                          fontWeight: FontWeight.w900,
-                          color: Colors.white,
-                          height: 1.2,
-                          letterSpacing: -0.5)),
-                  const SizedBox(height: 10),
-                  Opacity(
-                    opacity: 0.72,
-                    child: Text(pg.body,
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w500,
-                            color: Colors.white,
-                            height: 1.5)),
+                // AnimatedSwitcher: başlık geçişine crossfade
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 250),
+                  switchInCurve: Curves.easeOut,
+                  switchOutCurve: Curves.easeIn,
+                  child: Column(
+                    key: ValueKey(_idx),
+                    children: [
+                      Text(pg.title,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                              fontSize: 28,
+                              fontWeight: FontWeight.w900,
+                              color: Colors.white,
+                              height: 1.2,
+                              letterSpacing: -0.5)),
+                      const SizedBox(height: 10),
+                      Opacity(
+                        opacity: 0.72,
+                        child: Text(pg.body,
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w500,
+                                color: Colors.white,
+                                height: 1.5)),
+                      ),
+                    ],
                   ),
-                ]),
+                ),
               ),
               const SizedBox(height: 20),
               Row(
@@ -177,13 +181,14 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                 children: List.generate(_pages.length, (i) {
                   final bool on = i == _idx;
                   return AnimatedContainer(
-                    duration: const Duration(milliseconds: 300),
+                    duration: const Duration(milliseconds: 250),
                     margin: const EdgeInsets.symmetric(horizontal: 4),
                     width: on ? 32 : 10,
                     height: 10,
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(99),
-                      color: on ? Colors.white : Colors.white24,
+                      // Colors.white24 → const Color
+                      color: on ? Colors.white : const Color(0x3DFFFFFF),
                     ),
                   );
                 }),
@@ -218,41 +223,45 @@ class _OnboardingScreenState extends State<OnboardingScreen>
   }
 }
 
-// ═══════════════════════════════════════════
-// PAGE 1 — KOALA HERO
-// ═══════════════════════════════════════════
+// ═══════════════════════════════════════════════════
+// PAGE 1 — KOALA HERO (değişiklik yok, const'lar düzeltildi)
+// ═══════════════════════════════════════════════════
 
 class _Page1 extends StatelessWidget {
   const _Page1();
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: TweenAnimationBuilder<double>(
-        tween: Tween(begin: 0.0, end: 1.0),
-        duration: const Duration(milliseconds: 700),
-        curve: Curves.easeOutBack,
-        builder: (_, v, child) => Transform.scale(
-            scale: 0.7 + 0.3 * v,
-            child: Opacity(opacity: v.clamp(0.0, 1.0), child: child)),
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
+    // Center yerine Column + Spacer: avatar alt kısma yakın otursun
+    // böylece başlıkla arasındaki boşluk kapansın
+    return Column(
+      children: [
+        const Spacer(flex: 3),
+        TweenAnimationBuilder<double>(
+          tween: Tween(begin: 0.0, end: 1.0),
+          duration: const Duration(milliseconds: 500),
+          curve: Curves.easeOutBack,
+          builder: (_, v, child) => Transform.scale(
+              scale: 0.8 + 0.2 * v,
+              child: Opacity(opacity: v.clamp(0.0, 1.0), child: child)),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
           Stack(alignment: Alignment.center, children: [
             Container(
               width: 200,
               height: 200,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                border: Border.all(color: Colors.white10, width: 1),
+                border: Border.all(color: const Color(0x1AFFFFFF), width: 1),
               ),
             ),
             Container(
               width: 170,
               height: 170,
-              decoration: BoxDecoration(
+              decoration: const BoxDecoration(
                 shape: BoxShape.circle,
                 boxShadow: [
                   BoxShadow(
-                      color: const Color(0xFF6366F1).withAlpha(80),
+                      color: Color(0x506366F1),
                       blurRadius: 50,
                       spreadRadius: 15),
                 ],
@@ -263,12 +272,12 @@ class _Page1 extends StatelessWidget {
               height: 150,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                border: Border.all(color: Colors.white38, width: 3),
-                boxShadow: [
+                border: Border.all(color: const Color(0x61FFFFFF), width: 3),
+                boxShadow: const [
                   BoxShadow(
-                      color: Colors.black.withAlpha(50),
+                      color: Color(0x32000000),
                       blurRadius: 24,
-                      offset: const Offset(0, 10))
+                      offset: Offset(0, 10))
                 ],
               ),
               child: ClipOval(
@@ -293,11 +302,11 @@ class _Page1 extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(99),
-                  boxShadow: [
+                  boxShadow: const [
                     BoxShadow(
-                        color: Colors.black.withAlpha(40),
+                        color: Color(0x28000000),
                         blurRadius: 10,
-                        offset: const Offset(0, 4))
+                        offset: Offset(0, 4))
                   ],
                 ),
                 child: const Row(
@@ -315,12 +324,12 @@ class _Page1 extends StatelessWidget {
               ),
             ),
           ]),
-          const SizedBox(height: 28),
-          Wrap(
+          const SizedBox(height: 20),
+          const Wrap(
             spacing: 10,
             runSpacing: 10,
             alignment: WrapAlignment.center,
-            children: const [
+            children: [
               _FeatureChip(Icons.camera_alt_rounded, 'Foto ile soru çöz'),
               _FeatureChip(Icons.route_rounded, 'Adım adım çözüm'),
               _FeatureChip(Icons.school_rounded, '9 branş'),
@@ -328,6 +337,8 @@ class _Page1 extends StatelessWidget {
           ),
         ]),
       ),
+        const Spacer(flex: 1),
+      ],
     );
   }
 }
@@ -341,16 +352,16 @@ class _FeatureChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
       decoration: BoxDecoration(
-        color: Colors.white.withAlpha(20),
+        color: const Color(0x33FFFFFF),
         borderRadius: BorderRadius.circular(99),
-        border: Border.all(color: Colors.white.withAlpha(15)),
+        border: Border.all(color: const Color(0x26FFFFFF)),
       ),
       child: Row(mainAxisSize: MainAxisSize.min, children: [
-        Icon(icon, size: 14, color: Colors.white70),
+        Icon(icon, size: 14, color: const Color(0xB3FFFFFF)),
         const SizedBox(width: 6),
         Text(label,
             style: const TextStyle(
-                color: Colors.white70,
+                color: Color(0xB3FFFFFF),
                 fontSize: 12,
                 fontWeight: FontWeight.w600)),
       ]),
@@ -358,9 +369,14 @@ class _FeatureChip extends StatelessWidget {
   }
 }
 
-// ═══════════════════════════════════════════
-// PAGE 2 — SOLVING DEMO (same as before)
-// ═══════════════════════════════════════════
+// ═══════════════════════════════════════════════════
+// PAGE 2 — GERÇEKÇI KAMERA DEMO
+// Faz 1 (0.0-0.20): Defter kağıdı üzerinde soru görseli + kamera çerçevesi
+// Faz 2 (0.20-0.35): Tarama animasyonu + "Analiz ediliyor"
+// Faz 3 (0.35-0.75): Adım adım çözüm kartları beliriyor
+// Faz 4 (0.75-0.90): Yeşil sonuç
+// Faz 5 (0.90-1.0): Kısa bekleme, sonra loop
+// ═══════════════════════════════════════════════════
 
 class _Page2 extends StatefulWidget {
   const _Page2();
@@ -375,8 +391,9 @@ class _Page2State extends State<_Page2> with SingleTickerProviderStateMixin {
   void initState() {
     super.initState();
     _anim = AnimationController(
-        vsync: this, duration: const Duration(milliseconds: 6000))
-      ..repeat();
+      vsync: this,
+      duration: const Duration(milliseconds: 14000),
+    )..repeat();
   }
 
   @override
@@ -388,183 +405,599 @@ class _Page2State extends State<_Page2> with SingleTickerProviderStateMixin {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 0, 20, 0),
-      child: Center(
-        child: AnimatedBuilder(
-          animation: _anim,
-          builder: (context, _) {
-            final double t = _anim.value;
-            return Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(24),
-                color: const Color(0xFF0F172A).withAlpha(200),
-                border: Border.all(color: Colors.white.withAlpha(15)),
-              ),
-              child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(16),
-                        color: Colors.white.withAlpha(10),
-                        border: Border.all(color: Colors.white.withAlpha(12)),
-                      ),
-                      child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(children: [
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 8, vertical: 3),
-                                decoration: BoxDecoration(
-                                    color: Colors.white.withAlpha(15),
-                                    borderRadius: BorderRadius.circular(8)),
-                                child: const Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(Icons.camera_alt_rounded,
-                                          size: 11, color: Colors.white54),
-                                      SizedBox(width: 4),
-                                      Text('Soru',
-                                          style: TextStyle(
-                                              color: Colors.white54,
-                                              fontSize: 10,
-                                              fontWeight: FontWeight.w700)),
-                                    ]),
-                              ),
-                              const Spacer(),
-                              if (t > 0.2) _Badge(analyzing: t < 0.4),
-                            ]),
-                            const SizedBox(height: 10),
-                            const Text('2x + 5 = 11',
-                                style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 24,
-                                    fontWeight: FontWeight.w900,
-                                    letterSpacing: 1)),
-                            const SizedBox(height: 2),
-                            const Opacity(
-                                opacity: 0.45,
-                                child: Text('x değerini bulunuz.',
-                                    style: TextStyle(
-                                        color: Colors.white, fontSize: 12))),
-                          ]),
-                    ),
-                    const SizedBox(height: 12),
-                    if (t >= 0.2 && t < 0.4)
-                      Row(children: [
-                        SizedBox(
-                            width: 14,
-                            height: 14,
-                            child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Colors.white70,
-                                value: ((t - 0.2) / 0.2).clamp(0.0, 1.0))),
-                        const SizedBox(width: 8),
-                        const Opacity(
-                            opacity: 0.6,
-                            child: Text('Koala çözüyor...',
-                                style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w600))),
-                      ]),
-                    if (t >= 0.4)
-                      _Step(
-                          num: '1',
-                          text: '2x + 5 = 11\nHer iki taraftan 5 çıkar'),
-                    if (t >= 0.55)
-                      _Step(
-                          num: '2',
-                          text: '2x = 6\nHer iki tarafı 2\'ye böl'),
-                    if (t >= 0.7)
-                      _Step(num: '✔', text: 'x = 3', isFinal: true),
-                    if (t >= 0.85)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 10),
-                        child: Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 10),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF22C55E).withAlpha(30),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                                color: const Color(0xFF22C55E).withAlpha(50)),
-                          ),
-                          child: const Row(children: [
-                            Icon(Icons.lightbulb_rounded,
-                                color: Color(0xFF22C55E), size: 18),
-                            SizedBox(width: 8),
-                            Text('Cevap: x = 3',
-                                style: TextStyle(
-                                    color: Color(0xFF22C55E),
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.w900)),
-                          ]),
-                        ),
-                      ),
-                  ],
-                ),
-            );
-          },
-        ),
+      padding: const EdgeInsets.fromLTRB(24, 0, 24, 0),
+      child: Column(
+        children: [
+          const Spacer(flex: 2),
+          RepaintBoundary(
+            child: AnimatedBuilder(
+              animation: _anim,
+              builder: (context, _) {
+                final double t = _anim.value;
+                return _MiniAppDemo(t: t);
+              },
+            ),
+          ),
+          const Spacer(flex: 1),
+        ],
       ),
     );
   }
 }
 
-class _Badge extends StatelessWidget {
-  const _Badge({required this.analyzing});
-  final bool analyzing;
+/// Mini uygulama demo — telefon içinde telefon hissi
+class _MiniAppDemo extends StatelessWidget {
+  const _MiniAppDemo({required this.t});
+  final double t;
+
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      width: double.infinity,
+      constraints: const BoxConstraints(maxWidth: 340),
       decoration: BoxDecoration(
-        color: analyzing
-            ? const Color(0xFFFBBF24).withAlpha(30)
-            : const Color(0xFF22C55E).withAlpha(30),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-            color: analyzing
-                ? const Color(0xFFFBBF24).withAlpha(60)
-                : const Color(0xFF22C55E).withAlpha(60)),
+        borderRadius: BorderRadius.circular(24),
+        color: const Color(0xFF0C1425),
+        border: Border.all(color: const Color(0x30FFFFFF)),
       ),
-      child: Row(mainAxisSize: MainAxisSize.min, children: [
-        if (analyzing)
-          const SizedBox(
-              width: 10,
-              height: 10,
-              child: CircularProgressIndicator(
-                  strokeWidth: 1.5, color: Color(0xFFFBBF24)))
-        else
-          const Icon(Icons.check_circle_rounded,
-              size: 12, color: Color(0xFF22C55E)),
-        const SizedBox(width: 4),
-        Text(
-          analyzing ? 'Analiz ediliyor...' : 'Çözüldü',
-          style: TextStyle(
-              color: analyzing
-                  ? const Color(0xFFFBBF24)
-                  : const Color(0xFF22C55E),
-              fontSize: 10,
-              fontWeight: FontWeight.w700),
-        ),
-      ]),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Mini app bar
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            decoration: const BoxDecoration(
+              border: Border(
+                bottom: BorderSide(color: Color(0x10FFFFFF)),
+              ),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 6,
+                  height: 6,
+                  decoration: const BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Color(0xFF6366F1),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                const Text(
+                  'Koala Tutor',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0x60FFFFFF),
+                  ),
+                ),
+                const Spacer(),
+                // Faz göstergesi
+                _PhaseIndicator(t: t),
+              ],
+            ),
+          ),
+          // İçerik
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: _buildContent(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildContent() {
+    // FAZ 1: Kamera çerçevesi + soru görseli (0.0 - 0.20)
+    if (t < 0.20) {
+      return _CameraPhase(t: t);
+    }
+    // FAZ 2: Analiz (0.20 - 0.35)
+    if (t < 0.35) {
+      return _AnalyzePhase(t: t);
+    }
+    // FAZ 3-4-5: Çözüm adımları + sonuç (0.35 - 1.0)
+    return _SolvePhase(t: t);
+  }
+}
+
+/// Faz göstergesi — 3 nokta, aktif olan beyaz
+class _PhaseIndicator extends StatelessWidget {
+  const _PhaseIndicator({required this.t});
+  final double t;
+
+  @override
+  Widget build(BuildContext context) {
+    final int phase = t < 0.20 ? 0 : (t < 0.35 ? 1 : 2);
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: List.generate(3, (i) {
+        final bool done = i < phase;
+        final bool current = i == phase;
+        return Container(
+          margin: const EdgeInsets.only(left: 3),
+          width: current ? 16 : 6,
+          height: 3,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(2),
+            color: done
+                ? const Color(0xFF22C55E)
+                : current
+                    ? Colors.white
+                    : const Color(0x20FFFFFF),
+          ),
+        );
+      }),
     );
   }
 }
 
-class _Step extends StatelessWidget {
-  const _Step({required this.num, required this.text, this.isFinal = false});
+/// FAZ 1: Kamera çerçevesi + defter kağıdı üstünde soru
+class _CameraPhase extends StatelessWidget {
+  const _CameraPhase({required this.t});
+  final double t;
+
+  @override
+  Widget build(BuildContext context) {
+    // t: 0.0 - 0.20 → normalize 0-1
+    final double nt = (t / 0.20).clamp(0.0, 1.0);
+    // Shutter flash efekti t=0.15 civarında
+    final bool flash = t > 0.16 && t < 0.19;
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // Kamera çerçevesi
+        Container(
+          height: 185,
+          width: double.infinity,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: flash ? Colors.white : const Color(0x15FFFFFF),
+              width: flash ? 2 : 1.5,
+            ),
+            color: const Color(0x08FFFFFF),
+          ),
+          child: Stack(
+            children: [
+              // Defter kağıdı + soru (CustomPaint)
+              Positioned.fill(
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: Opacity(
+                    opacity: (nt * 2).clamp(0.0, 1.0),
+                    child: const CustomPaint(
+                      painter: _NotebookPainter(),
+                    ),
+                  ),
+                ),
+              ),
+              // Kamera köşe işaretleri
+              ..._buildCornerMarks(),
+              // Tarama çizgisi (scan line)
+              if (nt > 0.3 && nt < 0.85)
+                Positioned(
+                  left: 8,
+                  right: 8,
+                  top: 12 + (155 * ((nt - 0.3) / 0.55)).clamp(0.0, 155.0),
+                  child: Container(
+                    height: 2,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(1),
+                      gradient: const LinearGradient(
+                        colors: [
+                          Color(0x0006B6D4),
+                          Color(0xAA06B6D4),
+                          Color(0x0006B6D4),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              // Flash efekti
+              if (flash)
+                Positioned.fill(
+                  child: Container(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(12),
+                      color: const Color(0x40FFFFFF),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 8),
+        // Alt bilgi
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              flash ? Icons.check_circle_rounded : Icons.camera_alt_rounded,
+              size: 14,
+              color: flash
+                  ? const Color(0xFF22C55E)
+                  : const Color(0x50FFFFFF),
+            ),
+            const SizedBox(width: 5),
+            Text(
+              flash ? 'Soru algılandı!' : 'Soruyu çerçeveye al...',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: flash
+                    ? const Color(0xFF22C55E)
+                    : const Color(0x50FFFFFF),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  List<Widget> _buildCornerMarks() {
+    const color = Color(0xFF06B6D4);
+    const len = 18.0;
+    const w = 2.0;
+    return [
+      // Sol üst
+      Positioned(left: 6, top: 6, child: Container(width: len, height: w, color: color)),
+      Positioned(left: 6, top: 6, child: Container(width: w, height: len, color: color)),
+      // Sağ üst
+      Positioned(right: 6, top: 6, child: Container(width: len, height: w, color: color)),
+      Positioned(right: 6, top: 6, child: Container(width: w, height: len, color: color)),
+      // Sol alt
+      Positioned(left: 6, bottom: 6, child: Container(width: len, height: w, color: color)),
+      Positioned(left: 6, bottom: 6, child: Container(width: w, height: len, color: color)),
+      // Sağ alt
+      Positioned(right: 6, bottom: 6, child: Container(width: len, height: w, color: color)),
+      Positioned(right: 6, bottom: 6, child: Container(width: w, height: len, color: color)),
+    ];
+  }
+}
+
+/// Defter kağıdı üzerinde matematik sorusu çizen painter
+class _NotebookPainter extends CustomPainter {
+  const _NotebookPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    // Kağıt arka plan
+    canvas.drawRect(
+      Rect.fromLTWH(0, 0, size.width, size.height),
+      Paint()..color = const Color(0xFFF8F6F0),
+    );
+
+    // Çizgiler
+    final linePaint = Paint()
+      ..color = const Color(0x1A94A3B8)
+      ..strokeWidth = 0.8;
+    for (double y = 28; y < size.height; y += 22) {
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), linePaint);
+    }
+
+    // Sol kenar kırmızı çizgi
+    canvas.drawLine(
+      Offset(36, 0),
+      Offset(36, size.height),
+      Paint()
+        ..color = const Color(0x30EF4444)
+        ..strokeWidth = 1,
+    );
+
+    // "Soru 5)" yazısı
+    final titlePainter = TextPainter(
+      text: const TextSpan(
+        text: 'Soru 5)',
+        style: TextStyle(
+          fontSize: 15,
+          fontWeight: FontWeight.w600,
+          color: Color(0xFF475569),
+          fontFamily: 'serif',
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    );
+    titlePainter.layout();
+    titlePainter.paint(canvas, const Offset(44, 32));
+
+    // Denklem
+    final eqPainter = TextPainter(
+      text: const TextSpan(
+        text: '2x + 5 = 11',
+        style: TextStyle(
+          fontSize: 26,
+          fontWeight: FontWeight.w800,
+          color: Color(0xFF1E293B),
+          letterSpacing: 1.5,
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    );
+    eqPainter.layout();
+    eqPainter.paint(canvas, Offset(44, 58));
+
+    // Alt not
+    final notePainter = TextPainter(
+      text: const TextSpan(
+        text: 'x = ?',
+        style: TextStyle(
+          fontSize: 16,
+          fontWeight: FontWeight.w500,
+          color: Color(0xFF6366F1),
+          fontStyle: FontStyle.italic,
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    );
+    notePainter.layout();
+    notePainter.paint(canvas, const Offset(44, 92));
+
+    // Altını çiz
+    canvas.drawLine(
+      const Offset(44, 110),
+      const Offset(80, 110),
+      Paint()
+        ..color = const Color(0xFF6366F1)
+        ..strokeWidth = 1.5,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+/// FAZ 2: Analiz ediliyor
+class _AnalyzePhase extends StatelessWidget {
+  const _AnalyzePhase({required this.t});
+  final double t;
+
+  @override
+  Widget build(BuildContext context) {
+    // t: 0.20 - 0.35 → normalize 0-1
+    final double nt = ((t - 0.20) / 0.15).clamp(0.0, 1.0);
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // Algılanan soru kartı
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            color: const Color(0x156366F1),
+            border: Border.all(color: const Color(0x306366F1)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Row(
+                children: [
+                  Icon(Icons.auto_awesome, size: 13, color: Color(0xFF818CF8)),
+                  SizedBox(width: 4),
+                  Text(
+                    'Algılanan soru',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF818CF8),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              const Text(
+                '2x + 5 = 11',
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w900,
+                  color: Colors.white,
+                  letterSpacing: 0.5,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        // Progress bar
+        Row(
+          children: [
+            SizedBox(
+              width: 12,
+              height: 12,
+              child: CircularProgressIndicator(
+                strokeWidth: 1.5,
+                color: const Color(0xFF06B6D4),
+                value: nt,
+              ),
+            ),
+            const SizedBox(width: 8),
+            const Text(
+              'Koala analiz ediyor...',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: Color(0x60FFFFFF),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        // Progress bar
+        Container(
+          height: 3,
+          width: double.infinity,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(2),
+            color: const Color(0x15FFFFFF),
+          ),
+          child: FractionallySizedBox(
+            alignment: Alignment.centerLeft,
+            widthFactor: nt,
+            child: Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(2),
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF06B6D4), Color(0xFF6366F1)],
+                ),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
+        // Branş tespiti
+        if (nt > 0.5)
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(6),
+                  color: const Color(0x206366F1),
+                ),
+                child: const Text(
+                  'Matematik',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF818CF8),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(6),
+                  color: const Color(0x2006B6D4),
+                ),
+                child: const Text(
+                  '1. Derece Denklem',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF06B6D4),
+                  ),
+                ),
+              ),
+            ],
+          ),
+      ],
+    );
+  }
+}
+
+/// FAZ 3-4-5: Adım adım çözüm + sonuç
+class _SolvePhase extends StatelessWidget {
+  const _SolvePhase({required this.t});
+  final double t;
+
+  @override
+  Widget build(BuildContext context) {
+    // t: 0.35 - 1.0
+    final double nt = ((t - 0.35) / 0.65).clamp(0.0, 1.0);
+    final bool showStep1 = nt > 0.0;
+    final bool showStep2 = nt > 0.25;
+    final bool showFinal = nt > 0.50;
+    final bool showResult = nt > 0.65;
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // Soru özeti (küçük)
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(10),
+            color: const Color(0x15FFFFFF),
+            border: Border.all(color: const Color(0x12FFFFFF)),
+          ),
+          child: const Row(
+            children: [
+              Text(
+                '2x + 5 = 11',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xB0FFFFFF),
+                ),
+              ),
+              Spacer(),
+              Icon(Icons.check_circle_rounded, size: 16, color: Color(0xFF4ADE80)),
+            ],
+          ),
+        ),
+        const SizedBox(height: 8),
+        // Çözüm adımları
+        if (showStep1) _SolveStep(
+          num: '1',
+          title: 'Her iki taraftan 5 çıkar',
+          math: '2x + 5 - 5 = 11 - 5',
+          result: '2x = 6',
+        ),
+        if (showStep2) _SolveStep(
+          num: '2',
+          title: 'Her iki tarafı 2\'ye böl',
+          math: '2x / 2 = 6 / 2',
+          result: 'x = 3',
+        ),
+        if (showFinal) _SolveStep(
+          num: '✓',
+          title: 'Doğrulama',
+          math: '2(3) + 5 = 6 + 5 = 11 ✓',
+          result: '',
+          isFinal: true,
+        ),
+        if (showResult) ...[
+          const SizedBox(height: 8),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(14),
+              color: const Color(0x3322C55E),
+              border: Border.all(color: const Color(0x6022C55E)),
+            ),
+            child: const Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.lightbulb_rounded, size: 20, color: Color(0xFF4ADE80)),
+                SizedBox(width: 8),
+                Text(
+                  'Cevap: x = 3',
+                  style: TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w900,
+                    color: Color(0xFF4ADE80),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+/// Tek bir çözüm adımı kartı
+class _SolveStep extends StatelessWidget {
+  const _SolveStep({
+    required this.num,
+    required this.title,
+    required this.math,
+    required this.result,
+    this.isFinal = false,
+  });
   final String num;
-  final String text;
+  final String title;
+  final String math;
+  final String result;
   final bool isFinal;
+
   @override
   Widget build(BuildContext context) {
     return TweenAnimationBuilder<double>(
@@ -572,62 +1005,104 @@ class _Step extends StatelessWidget {
       duration: const Duration(milliseconds: 300),
       curve: Curves.easeOut,
       builder: (_, v, child) => Opacity(
-          opacity: v.clamp(0.0, 1.0),
-          child:
-              Transform.translate(offset: Offset(0, 6 * (1 - v)), child: child)),
+        opacity: v.clamp(0.0, 1.0),
+        child: Transform.translate(
+          offset: Offset(0, 8 * (1 - v)),
+          child: child,
+        ),
+      ),
       child: Padding(
-        padding: const EdgeInsets.only(top: 8),
+        padding: const EdgeInsets.only(top: 6),
         child: Container(
-          padding: const EdgeInsets.all(10),
+          width: double.infinity,
+          padding: const EdgeInsets.all(11),
           decoration: BoxDecoration(
-            color: isFinal
-                ? const Color(0xFF22C55E).withAlpha(15)
-                : Colors.white.withAlpha(8),
             borderRadius: BorderRadius.circular(12),
+            color: isFinal
+                ? const Color(0x2222C55E)
+                : const Color(0x18FFFFFF),
             border: Border.all(
-                color: isFinal
-                    ? const Color(0xFF22C55E).withAlpha(30)
-                    : Colors.white.withAlpha(8)),
+              color: isFinal
+                  ? const Color(0x4022C55E)
+                  : const Color(0x18FFFFFF),
+            ),
           ),
-          child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Container(
-              width: 22,
-              height: 22,
-              decoration: BoxDecoration(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 24,
+                height: 24,
+                decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   color: isFinal
-                      ? const Color(0xFF22C55E).withAlpha(40)
-                      : Colors.white.withAlpha(15)),
-              child: Center(
-                  child: Text(num,
-                      style: TextStyle(
-                          color: isFinal
-                              ? const Color(0xFF22C55E)
-                              : Colors.white70,
-                          fontSize: isFinal ? 13 : 10,
-                          fontWeight: FontWeight.w800))),
-            ),
-            const SizedBox(width: 10),
-            Flexible(
-                child: Text(text,
+                      ? const Color(0x4022C55E)
+                      : const Color(0x15FFFFFF),
+                ),
+                child: Center(
+                  child: Text(
+                    num,
                     style: TextStyle(
-                        color: isFinal
-                            ? const Color(0xFF22C55E)
-                            : Colors.white70,
+                      fontSize: isFinal ? 13 : 11,
+                      fontWeight: FontWeight.w800,
+                      color: isFinal
+                          ? const Color(0xFF22C55E)
+                          : const Color(0x80FFFFFF),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Flexible(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: TextStyle(
                         fontSize: 12,
-                        fontWeight:
-                            isFinal ? FontWeight.w700 : FontWeight.w500,
-                        height: 1.4))),
-          ]),
+                        fontWeight: FontWeight.w700,
+                        color: isFinal
+                            ? const Color(0xFF4ADE80)
+                            : const Color(0xAAFFFFFF),
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      math,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: isFinal
+                            ? const Color(0xBB4ADE80)
+                            : const Color(0x70FFFFFF),
+                      ),
+                    ),
+                    if (result.isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        result,
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w900,
+                          color: Color(0xFF22D3EE),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 }
 
-// ═══════════════════════════════════════════
+// ═══════════════════════════════════════════════════
 // DATA
-// ═══════════════════════════════════════════
+// ═══════════════════════════════════════════════════
 
 class _PD {
   _PD(this.title, this.body, this.c1, this.c2, this.t);
@@ -637,7 +1112,3 @@ class _PD {
   final Color c2;
   final int t;
 }
-
-
-
-
