@@ -1,1 +1,11 @@
-{"buildCommand":"","outputDirectory":"build/web","framework":null}
+{
+  "buildCommand": "",
+  "outputDirectory": "build/web",
+  "framework": null,
+  "rewrites": [
+    {
+      "source": "/privacy",
+      "destination": "/privacy.html"
+    }
+  ]
+}
