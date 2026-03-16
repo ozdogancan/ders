@@ -501,7 +501,7 @@ class _MiniAppDemo extends StatelessWidget {
           ),
           // İçerik
           Padding(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.all(10),
             child: _buildContent(),
           ),
         ],
@@ -923,17 +923,16 @@ class _SolvePhase extends StatelessWidget {
     // t: 0.35 - 1.0
     final double nt = ((t - 0.35) / 0.65).clamp(0.0, 1.0);
     final bool showStep1 = nt > 0.0;
-    final bool showStep2 = nt > 0.25;
-    final bool showFinal = nt > 0.50;
-    final bool showResult = nt > 0.65;
+    final bool showStep2 = nt > 0.30;
+    final bool showResult = nt > 0.55;
 
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        // Soru özeti (küçük)
+        // Soru özeti
         Container(
           width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(10),
             color: const Color(0x15FFFFFF),
@@ -954,8 +953,7 @@ class _SolvePhase extends StatelessWidget {
             ],
           ),
         ),
-        const SizedBox(height: 8),
-        // Çözüm adımları
+        const SizedBox(height: 6),
         if (showStep1) _SolveStep(
           num: '1',
           title: 'Her iki taraftan 5 çıkar',
@@ -968,32 +966,25 @@ class _SolvePhase extends StatelessWidget {
           math: '2x / 2 = 6 / 2',
           result: 'x = 3',
         ),
-        if (showFinal) _SolveStep(
-          num: '✓',
-          title: 'Doğrulama',
-          math: '2(3) + 5 = 6 + 5 = 11 ✓',
-          result: '',
-          isFinal: true,
-        ),
         if (showResult) ...[
-          const SizedBox(height: 8),
+          const SizedBox(height: 6),
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(12),
               color: const Color(0x3322C55E),
               border: Border.all(color: const Color(0x6022C55E)),
             ),
             child: const Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.lightbulb_rounded, size: 20, color: Color(0xFF4ADE80)),
+                Icon(Icons.check_circle_rounded, size: 18, color: Color(0xFF4ADE80)),
                 SizedBox(width: 8),
                 Text(
                   'Cevap: x = 3',
                   style: TextStyle(
-                    fontSize: 17,
+                    fontSize: 16,
                     fontWeight: FontWeight.w900,
                     color: Color(0xFF4ADE80),
                   ),
@@ -1036,10 +1027,10 @@ class _SolveStep extends StatelessWidget {
         ),
       ),
       child: Padding(
-        padding: const EdgeInsets.only(top: 6),
+        padding: const EdgeInsets.only(top: 5),
         child: Container(
           width: double.infinity,
-          padding: const EdgeInsets.all(11),
+          padding: const EdgeInsets.all(9),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(12),
             color: isFinal
