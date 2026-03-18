@@ -27,7 +27,7 @@ class _AuthGateState extends State<AuthGate> {
     // Onboarding'de kullanılan resmi şimdiden yükle
     // AuthGate spinner dönerken decode tamamlanır
     precacheImage(
-      const AssetImage('assets/images/koala_logo.png'),
+      const AssetImage('assets/images/koala_hero.png'),
       context,
     );
   }

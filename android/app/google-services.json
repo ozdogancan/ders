@@ -12,7 +12,20 @@
           "package_name": "com.egitim_ai_tutor.app"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "54104143654-ni025eelvdu1d2pjettorj1682krebaq.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.egitim_ai_tutor.app",
+            "certificate_hash": "42789cf444cdd1478ec42a5f3a15762884593c6c"
+          }
+        },
+        {
+          "client_id": "54104143654-25l75mtad694vgh0o6nq56lhtddv2bc1.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyD4yEi1zZY1bTJ0ZvaNsccPU5kGyqkR0Xs"
@@ -20,7 +33,12 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "54104143654-25l75mtad694vgh0o6nq56lhtddv2bc1.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
         }
       }
     }
