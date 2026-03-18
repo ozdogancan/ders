@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui';
 import 'dart:convert';
 import 'dart:math';
@@ -282,6 +283,8 @@ class AuthCoordinator {
   }
 
   static bool isCancellation(Object error) {
+    if (error is TimeoutException) return false;
+    
     if (error is GoogleSignInException) {
       return error.code == GoogleSignInExceptionCode.canceled ||
           error.code == GoogleSignInExceptionCode.interrupted;

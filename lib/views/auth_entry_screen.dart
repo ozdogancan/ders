@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
@@ -66,7 +68,10 @@ class _AuthEntryScreenState extends State<AuthEntryScreen>
     });
 
     try {
-      final UserCredential result = await runner();
+      final UserCredential result = await runner().timeout(
+        const Duration(seconds: 120),
+        onTimeout: () => throw TimeoutException('İşlem zaman aşımına uğradı. Tekrar dene.'),
+      );
       final User? user = result.user;
       if (user == null) {
         throw StateError('Giriş tamamlanamadı. Lütfen tekrar dene.');
