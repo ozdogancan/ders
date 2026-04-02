@@ -1,0 +1,24 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//c/Users/canoz/Downloads/**)",
+      "Bash(python -m pip install Pillow -q)",
+      "Bash(python -c \"from PIL import Image; img = Image.open\\(''c:/Users/canoz/Egitim-clean/koala/assets/images/koalas.png''\\); print\\(f''Size: {img.size}''\\); bbox = img.getbbox\\(\\); print\\(f''Content bbox: {bbox}''\\); print\\(f''Top: {bbox[1]}px, Bottom: {img.size[1]-bbox[3]}px, Left: {bbox[0]}px, Right: {img.size[0]-bbox[2]}px''\\)\")",
+      "Bash(find /c/Users/canoz/Egitim-clean/koala/lib -name *chat* -o -name *message* -o -name *card*)",
+      "Bash(grep -l \"KoalaAI\\\\|koala_ai\\\\|chat_detail\\\\|ChatDetailScreen\" /c/Users/canoz/Egitim-clean/koala/lib/views/*.dart)",
+      "Bash(python3 -c \":*)",
+      "Bash(powershell.exe -Command \"./run.ps1\")",
+      "Bash(xargs grep:*)",
+      "Bash(grep -r \"notif\\\\|message\\\\|push\\\\|fcm\\\\|cloud_messaging\" /c/Users/canoz/Egitim-clean/koala/lib --include=*.dart)",
+      "Bash(grep -r \"class.*Provider\\\\|riverpod\\\\|watch\\\\|notifier\" /c/Users/canoz/Egitim-clean/koala/lib --include=*.dart)",
+      "Bash(ls -lh /c/Users/canoz/Egitim-clean/koala/*.py)",
+      "Bash(curl -L -o \"c:/Users/canoz/Egitim-clean/koala/assets/images/room_demo.jpg\" \"https://images.unsplash.com/photo-1616486338812-3dadae4b4ace?w=800&q=80\")",
+      "Bash(xxd \"c:/Users/canoz/Egitim-clean/koala/lib/views/onboarding_screen.dart\")",
+      "Bash(xxd c:/Users/canoz/Egitim-clean/koala/lib/views/home_screen.dart)",
+      "Bash(perl -0777 -pe 's/\\\\x00+$/\\\\n/' c:/Users/canoz/Egitim-clean/koala/lib/views/home_screen.dart)",
+      "Bash(cp /tmp/home_screen_fixed.dart c:/Users/canoz/Egitim-clean/koala/lib/views/home_screen.dart)",
+      "Bash(flutter build:*)",
+      "Bash(grep -n \"case ''product_grid'':\\\\|case ''designer_card'':\\\\|case ''style_analysis'':\" /c/Users/canoz/Egitim-clean/koala/lib/views/chat_detail_screen.dart)"
+    ]
+  }
+}

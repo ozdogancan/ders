@@ -1,0 +1,139 @@
+{
+  "name": "WF2 Daily Scheduler",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": { "interval": [{ "field": "cronExpression", "expression": "0 3 * * *" }] }
+      },
+      "id": "cron-trigger",
+      "name": "Her Gun 03:00",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [220, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT fn_daily_cleanup() as result"
+      },
+      "id": "cleanup",
+      "name": "Daily Cleanup",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [440, 300],
+      "credentials": { "supabaseApi": { "id": "SUPABASE_CRED_ID", "name": "Koala Supabase" } },
+      "continueOnFail": true
+    },
+    {
+      "parameters": { "amount": 5, "unit": "seconds" },
+      "id": "wait1",
+      "name": "5sn Bekle",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [660, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT fn_compute_popular() as result"
+      },
+      "id": "popular",
+      "name": "Compute Popular",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [880, 300],
+      "credentials": { "supabaseApi": { "id": "SUPABASE_CRED_ID", "name": "Koala Supabase" } },
+      "continueOnFail": true
+    },
+    {
+      "parameters": { "amount": 5, "unit": "seconds" },
+      "id": "wait2",
+      "name": "5sn Bekle 2",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [1100, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT fn_engagement_push() as result"
+      },
+      "id": "engagement",
+      "name": "Engagement Push",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [1320, 300],
+      "credentials": { "supabaseApi": { "id": "SUPABASE_CRED_ID", "name": "Koala Supabase" } },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [{ "value1": "={{ new Date().getDay() === 1 }}", "value2": true }]
+        }
+      },
+      "id": "is-monday",
+      "name": "Pazartesi mi?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1540, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT fn_weekly_digest() as result"
+      },
+      "id": "digest",
+      "name": "Weekly Digest",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [1760, 200],
+      "credentials": { "supabaseApi": { "id": "SUPABASE_CRED_ID", "name": "Koala Supabase" } },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT fn_health_report() as result"
+      },
+      "id": "health",
+      "name": "Health Report",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [1980, 300],
+      "credentials": { "supabaseApi": { "id": "SUPABASE_CRED_ID", "name": "Koala Supabase" } },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "tableId": "analytics_events",
+        "fieldsUi": {
+          "fieldValues": [
+            { "fieldName": "event_name", "fieldValue": "daily_scheduler" },
+            { "fieldName": "event_data", "fieldValue": "={{ JSON.stringify({ cleanup: $('Daily Cleanup').json, popular: $('Compute Popular').json, engagement: $('Engagement Push').json, health: $('Health Report').json }) }}" }
+          ]
+        }
+      },
+      "id": "log",
+      "name": "Analytics Log",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [2200, 300],
+      "credentials": { "supabaseApi": { "id": "SUPABASE_CRED_ID", "name": "Koala Supabase" } }
+    }
+  ],
+  "connections": {
+    "Her Gun 03:00": { "main": [[{ "node": "Daily Cleanup", "type": "main", "index": 0 }]] },
+    "Daily Cleanup": { "main": [[{ "node": "5sn Bekle", "type": "main", "index": 0 }]] },
+    "5sn Bekle": { "main": [[{ "node": "Compute Popular", "type": "main", "index": 0 }]] },
+    "Compute Popular": { "main": [[{ "node": "5sn Bekle 2", "type": "main", "index": 0 }]] },
+    "5sn Bekle 2": { "main": [[{ "node": "Engagement Push", "type": "main", "index": 0 }]] },
+    "Engagement Push": { "main": [[{ "node": "Pazartesi mi?", "type": "main", "index": 0 }]] },
+    "Pazartesi mi?": { "main": [[{ "node": "Weekly Digest", "type": "main", "index": 0 }], [{ "node": "Health Report", "type": "main", "index": 0 }]] },
+    "Weekly Digest": { "main": [[{ "node": "Health Report", "type": "main", "index": 0 }]] },
+    "Health Report": { "main": [[{ "node": "Analytics Log", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" },
+  "tags": [{ "name": "koala" }]
+}

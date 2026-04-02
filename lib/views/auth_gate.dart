@@ -2,9 +2,10 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'auth_common.dart';
+import 'auth_entry_screen.dart';
 import 'main_shell.dart';
 import 'onboarding_screen.dart';
-import 'login_screen.dart';
 
 class AuthGate extends StatefulWidget {
   const AuthGate({super.key});
@@ -26,10 +27,7 @@ class _AuthGateState extends State<AuthGate> {
     super.didChangeDependencies();
     // Onboarding'de kullanılan resmi şimdiden yükle
     // AuthGate spinner dönerken decode tamamlanır
-    precacheImage(
-      const AssetImage('assets/images/koala_hero.png'),
-      context,
-    );
+    precacheImage(const AssetImage('assets/images/koala_hero.png'), context);
   }
 
   Future<Widget> _decideRoute() async {
@@ -42,7 +40,7 @@ class _AuthGateState extends State<AuthGate> {
     }
 
     if (user == null) {
-      return const LoginScreen();
+      return const AuthEntryScreen(mode: AuthFlowMode.signup);
     }
 
     return const MainShell();

@@ -1,0 +1,128 @@
+{
+  "name": "WF-03: Haftalık Özet E-postası",
+  "description": "Her Pazartesi 10:00 — aktif kullanıcılara haftalık aktivite özeti gönder",
+  "trigger": "Schedule: Pazartesi 10:00",
+  "ram_limit": "1GB",
+  "batch_size": 100,
+  "inter_batch_delay": "2s",
+  "nodes": [
+    {
+      "step": 1,
+      "type": "Schedule Trigger",
+      "name": "Her Pazartesi 10:00",
+      "config": {
+        "cron": "0 10 * * 1"
+      }
+    },
+    {
+      "step": 2,
+      "type": "Supabase",
+      "name": "Get Active Users (batch)",
+      "config": {
+        "operation": "select",
+        "table": "users",
+        "filter": "last_login_at=gte.{{7_days_ago}}",
+        "fields": "id, email, display_name",
+        "limit": 100,
+        "offset": "{{batch_offset}}",
+        "note": "100'er batch, birden fazla iterasyon"
+      }
+    },
+    {
+      "step": 3,
+      "type": "Loop",
+      "name": "For Each User",
+      "config": {
+        "max_iterations": 5,
+        "note": "Her batch 100 kullanıcı, max 500 kullanıcı"
+      }
+    },
+    {
+      "step": "3a",
+      "type": "Supabase",
+      "name": "Get User Stats",
+      "config": {
+        "queries": [
+          {
+            "name": "new_messages",
+            "table": "koala_direct_messages",
+            "operation": "count",
+            "filter": "sender_id=neq.{{user_id}}&created_at=gte.{{7_days_ago}}&conversation_id=in.(select id from koala_conversations where user_id={{user_id}} or designer_id={{user_id}})"
+          },
+          {
+            "name": "new_saves",
+            "table": "saved_items",
+            "operation": "count",
+            "filter": "user_id=eq.{{user_id}}&created_at=gte.{{7_days_ago}}"
+          }
+        ]
+      }
+    },
+    {
+      "step": "3b",
+      "type": "IF",
+      "name": "Has Activity?",
+      "config": {
+        "condition": "new_messages > 0 || new_saves > 0",
+        "true_branch": "Send summary email",
+        "false_branch": "Check inactivity"
+      }
+    },
+    {
+      "step": "3b-true",
+      "type": "Send Email",
+      "name": "Weekly Summary",
+      "config": {
+        "to": "{{email}}",
+        "subject": "Haftalık Koala Özet 🐨",
+        "body_template": "Merhaba {{display_name}}, bu hafta: {{new_messages}} yeni mesaj, {{new_saves}} kayıt."
+      }
+    },
+    {
+      "step": "3b-false",
+      "type": "IF",
+      "name": "7 Gün Inaktif?",
+      "config": {
+        "condition": "last_login_at < 7_days_ago AND last_login_at >= 14_days_ago",
+        "note": "7 gün giriş yapmamış ama 14 günden yeni — win-back email"
+      }
+    },
+    {
+      "step": "3b-false-true",
+      "type": "Send Email",
+      "name": "Win-back Email",
+      "config": {
+        "to": "{{email}}",
+        "subject": "Seni özledik! 🐨",
+        "body_template": "Merhaba {{display_name}}, Koala'da seni bekleyen yeni tasarımlar var!"
+      }
+    },
+    {
+      "step": 4,
+      "type": "Wait",
+      "name": "Inter-batch Delay",
+      "config": {
+        "amount": 2,
+        "unit": "seconds",
+        "note": "RAM taşırma önlemi"
+      }
+    },
+    {
+      "step": 5,
+      "type": "Supabase",
+      "name": "Log Analytics",
+      "config": {
+        "operation": "insert",
+        "table": "analytics_events",
+        "data": {
+          "event_name": "weekly_summary_sent",
+          "event_data": {
+            "batch_count": "{{processed_count}}",
+            "summary_sent": "{{summary_count}}",
+            "winback_sent": "{{winback_count}}"
+          }
+        }
+      }
+    }
+  ]
+}

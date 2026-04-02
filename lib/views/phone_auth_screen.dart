@@ -53,8 +53,12 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
     _resendTimer?.cancel();
     _recaptchaVerifier?.clear();
     _phoneController.dispose();
-    for (final c in _otpControllers) c.dispose();
-    for (final n in _otpFocusNodes) n.dispose();
+    for (final c in _otpControllers) {
+      c.dispose();
+    }
+    for (final n in _otpFocusNodes) {
+      n.dispose();
+    }
     super.dispose();
   }
 
@@ -197,7 +201,9 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
     await AuthCoordinator.goToHome(context);
   }
 
-  void _clearOtpFields() { for (final c in _otpControllers) c.clear(); }
+  void _clearOtpFields() { for (final c in _otpControllers) {
+    c.clear();
+  } }
 
   void _onPhoneChanged(String value) { if (_error != null) _safeSetState(() { _error = null; }); }
 
@@ -227,8 +233,11 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
       _otpControllers[idx].selection = const TextSelection.collapsed(offset: 1);
       idx++;
     }
-    if (idx < _otpFocusNodes.length) _otpFocusNodes[idx].requestFocus();
-    else FocusScope.of(context).unfocus();
+    if (idx < _otpFocusNodes.length) {
+      _otpFocusNodes[idx].requestFocus();
+    } else {
+      FocusScope.of(context).unfocus();
+    }
     if (_otpCode.length == 6) Future<void>.microtask(_verifyOtp);
   }
 

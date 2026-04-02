@@ -1,0 +1,84 @@
+{
+  "name": "WF-02: Hoşgeldin E-postası",
+  "description": "Yeni kullanıcı kaydolunca 5dk sonra hoşgeldin e-postası gönder",
+  "trigger": "Supabase Webhook → users INSERT",
+  "ram_limit": "1GB",
+  "timeout": "10s",
+  "nodes": [
+    {
+      "step": 1,
+      "type": "Webhook",
+      "name": "Supabase Trigger",
+      "config": {
+        "method": "POST",
+        "path": "/webhook/new-user",
+        "note": "Supabase Database Webhook → users → INSERT"
+      }
+    },
+    {
+      "step": 2,
+      "type": "Wait",
+      "name": "5 Dakika Bekle",
+      "config": {
+        "amount": 5,
+        "unit": "minutes"
+      }
+    },
+    {
+      "step": 3,
+      "type": "Supabase",
+      "name": "Get User Details",
+      "config": {
+        "operation": "select",
+        "table": "users",
+        "filter": "id=eq.{{$json.record.id}}",
+        "fields": "id, email, display_name"
+      }
+    },
+    {
+      "step": 4,
+      "type": "IF",
+      "name": "Has Email?",
+      "config": {
+        "condition": "email != null && email != ''"
+      }
+    },
+    {
+      "step": 5,
+      "type": "Send Email",
+      "name": "Welcome Email",
+      "config": {
+        "provider": "SMTP or Resend API",
+        "to": "{{email}}",
+        "from": "Koala by evlumba <noreply@evlumba.com>",
+        "subject": "Koala'ya hoş geldin! 🐨",
+        "html_template": "welcome_email_inline_css",
+        "template_vars": {
+          "user_name": "{{display_name || 'Merhaba'}}",
+          "cta_url": "https://koala.evlumba.com"
+        },
+        "note": "Basit HTML, inline CSS, resim yok (1GB RAM limiti)"
+      }
+    },
+    {
+      "step": 6,
+      "type": "Supabase",
+      "name": "Log Analytics Event",
+      "config": {
+        "operation": "insert",
+        "table": "analytics_events",
+        "data": {
+          "user_id": "{{user_id}}",
+          "event_name": "welcome_email_sent",
+          "event_data": {
+            "email": "{{email}}"
+          }
+        }
+      }
+    }
+  ],
+  "email_template": {
+    "note": "Aşağıdaki HTML şablonu inline CSS ile. Resim yok, hafif.",
+    "html": "<!DOCTYPE html><html><body style='font-family:system-ui,-apple-system,sans-serif;max-width:600px;margin:0 auto;padding:32px 24px;background:#F6F1EB'><div style='background:white;border-radius:16px;padding:32px;text-align:center'><h1 style='color:#1A1D2A;font-size:28px;margin:0'>🐨 Koala'ya Hoş Geldin!</h1><p style='color:#8E8E93;font-size:15px;line-height:1.6;margin:16px 0'>Merhaba {{user_name}},<br><br>Evini akıllıca tasarlamaya hazır mısın? Koala ile yapabileceklerin:</p><ul style='text-align:left;color:#1A1D2A;font-size:14px;line-height:2'><li><b>AI Stil Analizi</b> — Mekanının fotoğrafını çek, stilini keşfet</li><li><b>Ürün Önerileri</b> — Bütçene uygun dekorasyon fikirleri</li><li><b>Uzman Eşleştirme</b> — Sana uygun iç mimarlarla tanış</li><li><b>Renk Paleti</b> — Odana özel renk kombinasyonları</li></ul><a href='{{cta_url}}' style='display:inline-block;background:#7C6EF2;color:white;padding:14px 32px;border-radius:12px;text-decoration:none;font-weight:600;font-size:15px;margin-top:16px'>Keşfetmeye Başla</a><p style='color:#AEB2B8;font-size:12px;margin-top:24px'>evlumba.com · İstanbul</p></div></body></html>"
+  }
+}

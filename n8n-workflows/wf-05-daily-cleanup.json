@@ -1,0 +1,100 @@
+{
+  "name": "WF-05: Günlük DB Temizlik",
+  "description": "Her gün 04:00 — eski analytics, okunmuş bildirimler, expired token'ları temizle",
+  "trigger": "Schedule: Her gün 04:00",
+  "ram_limit": "1GB",
+  "nodes": [
+    {
+      "step": 1,
+      "type": "Schedule Trigger",
+      "name": "Her Gün 04:00",
+      "config": {
+        "cron": "0 4 * * *",
+        "note": "Düşük trafik saati"
+      }
+    },
+    {
+      "step": 2,
+      "type": "Loop",
+      "name": "Analytics Cleanup Loop",
+      "config": {
+        "max_iterations": 5,
+        "note": "Her iterasyon 1000 satır siler, max 5000 satır"
+      }
+    },
+    {
+      "step": "2a",
+      "type": "Supabase RPC",
+      "name": "cleanup_old_analytics",
+      "config": {
+        "function": "cleanup_old_analytics",
+        "params": { "batch_limit": 1000 },
+        "note": "Return deleted_count — 0 ise loop'u kır"
+      }
+    },
+    {
+      "step": "2b",
+      "type": "IF",
+      "name": "More to delete?",
+      "config": {
+        "condition": "deleted_count > 0",
+        "true": "Continue loop",
+        "false": "Break loop"
+      }
+    },
+    {
+      "step": 3,
+      "type": "Loop",
+      "name": "Notifications Cleanup Loop",
+      "config": {
+        "max_iterations": 5
+      }
+    },
+    {
+      "step": "3a",
+      "type": "Supabase RPC",
+      "name": "cleanup_read_notifications",
+      "config": {
+        "function": "cleanup_read_notifications",
+        "params": { "batch_limit": 1000 }
+      }
+    },
+    {
+      "step": "3b",
+      "type": "IF",
+      "name": "More to delete?",
+      "config": {
+        "condition": "deleted_count > 0",
+        "true": "Continue loop",
+        "false": "Break loop"
+      }
+    },
+    {
+      "step": 4,
+      "type": "Supabase RPC",
+      "name": "cleanup_expired_tokens",
+      "config": {
+        "function": "cleanup_expired_tokens",
+        "params": { "days_inactive": 90 },
+        "note": "Tek batch yeterli — token sayısı düşük"
+      }
+    },
+    {
+      "step": 5,
+      "type": "Supabase",
+      "name": "Log Analytics Event",
+      "config": {
+        "operation": "insert",
+        "table": "analytics_events",
+        "data": {
+          "event_name": "db_cleanup",
+          "event_data": {
+            "analytics_deleted": "{{total_analytics_deleted}}",
+            "notifications_deleted": "{{total_notifications_deleted}}",
+            "tokens_deactivated": "{{tokens_deactivated}}"
+          }
+        }
+      }
+    }
+  ]
+}

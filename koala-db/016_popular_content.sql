@@ -1,0 +1,6 @@
+-- ═══════════════════════════════════════════════════════════
+-- 016_popular_content.sql — SUPERSEDED by 022_popular_content.sql
+-- Bu dosya artık kullanılmıyor. Kanonik tanım 022'de.
+-- Migration sırasında bu dosyayı ATLA, doğrudan 022'yi çalıştır.
+-- ═══════════════════════════════════════════════════════════
+-- (Boş — geriye uyumluluk için dosya korundu)

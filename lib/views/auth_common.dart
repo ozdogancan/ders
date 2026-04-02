@@ -8,14 +8,17 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_sign_in/google_sign_in.dart';
-import 'package:sign_in_with_apple/sign_in_with_apple.dart';
+// sign_in_with_apple kaldırıldı — Apple sign-in devre dışı
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' hide AuthState, User;
 
-import '../core/config/env.dart';
-import 'main_shell.dart';
+import 'package:go_router/go_router.dart';
 
-const String _kTermsUrl = 'https://www.koalatutor.com/terms';
-const String _kPrivacyUrl = 'https://www.koalatutor.com/privacy';
+import '../core/config/env.dart';
+import '../core/router/app_router.dart';
+
+const String _kTermsUrl = 'https://www.evlumba.com/terms';
+const String _kPrivacyUrl = 'https://www.evlumba.com/privacy';
 const Color _kBrandPrimary = Color(0xFF6C63FF);
 const Color _kTextSecondary = Color(0xFF94A3B8);
 const Color _kBackground = Color(0xFFFAFBFD);
@@ -25,7 +28,8 @@ const Color _kBackground = Color(0xFFFAFBFD);
 // ═══════════════════════════════════════════════════
 
 enum AuthFlowMode { signup, login }
-enum AuthActionType { google, phone, apple }
+
+enum AuthActionType { google, phone }
 
 // ═══════════════════════════════════════════════════
 // AUTH COORDINATOR (business logic — unchanged)
@@ -41,7 +45,9 @@ class AuthCoordinator {
   static Future<void> _ensureGoogleInitialized() {
     return _googleInitFuture ??= _googleSignIn.initialize(
       clientId: Env.googleClientId.isEmpty ? null : Env.googleClientId,
-      serverClientId: Env.googleServerClientId.isEmpty ? null : Env.googleServerClientId,
+      serverClientId: Env.googleServerClientId.isEmpty
+          ? null
+          : Env.googleServerClientId,
     );
   }
 
@@ -75,60 +81,13 @@ class AuthCoordinator {
     return _auth.signInWithCredential(credential);
   }
 
-  static Future<UserCredential> signInWithApple() async {
-    final AppleAuthProvider provider = AppleAuthProvider()
-      ..addScope('email')
-      ..addScope('name');
+  // signInWithApple kaldırıldı — Apple sign-in devre dışı
 
-    if (kIsWeb) {
-      return _auth.signInWithPopup(provider);
-    }
-
-    final TargetPlatform platform = defaultTargetPlatform;
-    if (platform == TargetPlatform.iOS || platform == TargetPlatform.macOS) {
-      final String rawNonce = _generateNonce();
-      final String hashedNonce = _sha256ofString(rawNonce);
-      final AuthorizationCredentialAppleID appleCredential =
-          await SignInWithApple.getAppleIDCredential(
-        scopes: const <AppleIDAuthorizationScopes>[
-          AppleIDAuthorizationScopes.email,
-          AppleIDAuthorizationScopes.fullName,
-        ],
-        nonce: hashedNonce,
-      );
-
-      final String? identityToken = appleCredential.identityToken;
-      if (identityToken == null || identityToken.isEmpty) {
-        throw StateError('Apple kimliği doğrulanamadı.');
-      }
-
-      final OAuthCredential credential = AppleAuthProvider.credentialWithIDToken(
-        identityToken,
-        rawNonce,
-        AppleFullPersonName(
-          givenName: appleCredential.givenName,
-          familyName: appleCredential.familyName,
-        ),
-      );
-
-      final UserCredential result = await _auth.signInWithCredential(credential);
-      final String fullName = _buildAppleFullName(appleCredential);
-      if (fullName.isNotEmpty &&
-          (result.user?.displayName == null || result.user!.displayName!.trim().isEmpty)) {
-        await result.user?.updateDisplayName(fullName);
-        await result.user?.reload();
-      }
-      return result;
-    }
-
-    if (platform == TargetPlatform.android) {
-      return _auth.signInWithProvider(provider);
-    }
-
-    throw UnsupportedError('Apple ile giriş bu cihazda desteklenmiyor.');
-  }
-
-  static Future<void> syncSignup(User user, {required String provider, String? phoneOverride}) async {
+  static Future<void> syncSignup(
+    User user, {
+    required String provider,
+    String? phoneOverride,
+  }) async {
     if (!Env.hasSupabaseConfig) return;
 
     final SupabaseClient supabase = Supabase.instance.client;
@@ -136,7 +95,11 @@ class AuthCoordinator {
     Map<String, dynamic>? existing;
 
     try {
-      existing = await supabase.from('users').select('credits, created_at').eq('id', user.uid).maybeSingle();
+      existing = await supabase
+          .from('users')
+          .select('credits, created_at')
+          .eq('id', user.uid)
+          .maybeSingle();
     } catch (_) {
       existing = null;
     }
@@ -158,35 +121,30 @@ class AuthCoordinator {
   static Future<void> touchLogin(User user) async {
     if (!Env.hasSupabaseConfig) return;
     final SupabaseClient supabase = Supabase.instance.client;
-    await supabase.from('users').update(<String, dynamic>{
-      'last_active_at': DateTime.now().toIso8601String(),
-    }).eq('id', user.uid);
+    await supabase
+        .from('users')
+        .update(<String, dynamic>{
+          'last_active_at': DateTime.now().toIso8601String(),
+        })
+        .eq('id', user.uid);
   }
 
   static Future<void> goToHome(BuildContext context) async {
     if (!context.mounted) return;
-    Navigator.of(context).pushAndRemoveUntil(
-      PageRouteBuilder<void>(
-        pageBuilder: (_, __, ___) => const MainShell(),
-        transitionDuration: const Duration(milliseconds: 420),
-        reverseTransitionDuration: const Duration(milliseconds: 280),
-        transitionsBuilder: (_, Animation<double> animation, __, Widget child) {
-          return FadeTransition(
-            opacity: CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
-            child: child,
-          );
-        },
-      ),
-      (_) => false,
-    );
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('onboarding_done', true);
+    if (!context.mounted) return;
+    onboardingComplete = true;
+    // GoRouter üzerinden ana sayfaya git — stack tamamen sıfırlanır
+    GoRouter.of(context).go('/');
   }
 
   static Future<void> openLegalUrl(BuildContext context, String rawUrl) async {
     if (!context.mounted) return;
-    
+
     final bool isTerms = rawUrl.contains('terms');
     final String title = isTerms ? 'Kullanım Koşulları' : 'Gizlilik Politikası';
-    
+
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -230,7 +188,9 @@ class AuthCoordinator {
                                 borderRadius: BorderRadius.circular(10),
                               ),
                               child: Icon(
-                                isTerms ? Icons.description_outlined : Icons.shield_outlined,
+                                isTerms
+                                    ? Icons.description_outlined
+                                    : Icons.shield_outlined,
                                 color: const Color(0xFF6C63FF),
                                 size: 18,
                               ),
@@ -284,19 +244,25 @@ class AuthCoordinator {
 
   static bool isCancellation(Object error) {
     if (error is TimeoutException) return false;
-    
+
     if (error is GoogleSignInException) {
       return error.code == GoogleSignInExceptionCode.canceled ||
           error.code == GoogleSignInExceptionCode.interrupted;
     }
     if (error is FirebaseAuthException) {
-      return error.code == 'popup-closed-by-user' || error.code == 'cancelled-popup-request';
+      return error.code == 'popup-closed-by-user' ||
+          error.code == 'cancelled-popup-request';
     }
     final String message = error.toString().toLowerCase();
-    return message.contains('popup-closed') || message.contains('cancelled') || message.contains('canceled');
+    return message.contains('popup-closed') ||
+        message.contains('cancelled') ||
+        message.contains('canceled');
   }
 
-  static String mapError(Object error, {String fallback = 'Bir şey ters gitti. Lütfen tekrar dene.'}) {
+  static String mapError(
+    Object error, {
+    String fallback = 'Bir şey ters gitti. Lütfen tekrar dene.',
+  }) {
     if (error is UnsupportedError) return error.message?.toString() ?? fallback;
 
     if (error is GoogleSignInException) {
@@ -344,7 +310,8 @@ class AuthCoordinator {
           return 'Bu giriş yöntemi şu anda aktif değil. Lütfen farklı bir yöntem dene.';
         default:
           final msg = error.message?.trim() ?? '';
-          if (msg.contains('provider is disabled') || msg.contains('not-allowed')) {
+          if (msg.contains('provider is disabled') ||
+              msg.contains('not-allowed')) {
             return 'Bu giriş yöntemi şu anda aktif değil. Lütfen farklı bir yöntem dene.';
           }
           if (msg.contains('network')) {
@@ -362,36 +329,44 @@ class AuthCoordinator {
   }
 
   static String _generateNonce([int length = 32]) {
-    const String charset = '0123456789ABCDEFGHIJKLMNOPQRSTUVXYZabcdefghijklmnopqrstuvwxyz-._';
+    const String charset =
+        '0123456789ABCDEFGHIJKLMNOPQRSTUVXYZabcdefghijklmnopqrstuvwxyz-._';
     final Random random = Random.secure();
-    return List<String>.generate(length, (_) => charset[random.nextInt(charset.length)]).join();
+    return List<String>.generate(
+      length,
+      (_) => charset[random.nextInt(charset.length)],
+    ).join();
   }
 
-  static String _sha256ofString(String input) => sha256.convert(utf8.encode(input)).toString();
-
-  static String _buildAppleFullName(AuthorizationCredentialAppleID credential) {
-    final List<String> parts = <String>[
-      credential.givenName ?? '',
-      credential.familyName ?? '',
-    ].where((String v) => v.trim().isNotEmpty).toList();
-    return parts.join(' ').trim();
-  }
+  static String _sha256ofString(String input) =>
+      sha256.convert(utf8.encode(input)).toString();
 }
 
 // ═══════════════════════════════════════════════════
 // ROUTE HELPER
 // ═══════════════════════════════════════════════════
 
-PageRouteBuilder<T> buildAuthRoute<T>(Widget child, {Offset begin = const Offset(0.08, 0)}) {
+PageRouteBuilder<T> buildAuthRoute<T>(
+  Widget child, {
+  Offset begin = const Offset(0.08, 0),
+}) {
   return PageRouteBuilder<T>(
-    pageBuilder: (_, __, ___) => child,
+    pageBuilder: (_, _, _) => child,
     transitionDuration: const Duration(milliseconds: 420),
     reverseTransitionDuration: const Duration(milliseconds: 280),
-    transitionsBuilder: (_, Animation<double> animation, __, Widget page) {
-      final Animation<double> fade = CurvedAnimation(parent: animation, curve: Curves.easeOutCubic);
-      final Animation<Offset> slide = Tween<Offset>(begin: begin, end: Offset.zero)
-          .animate(CurvedAnimation(parent: animation, curve: Curves.easeOutCubic));
-      return FadeTransition(opacity: fade, child: SlideTransition(position: slide, child: page));
+    transitionsBuilder: (_, Animation<double> animation, _, Widget page) {
+      final Animation<double> fade = CurvedAnimation(
+        parent: animation,
+        curve: Curves.easeOutCubic,
+      );
+      final Animation<Offset> slide = Tween<Offset>(
+        begin: begin,
+        end: Offset.zero,
+      ).animate(CurvedAnimation(parent: animation, curve: Curves.easeOutCubic));
+      return FadeTransition(
+        opacity: fade,
+        child: SlideTransition(position: slide, child: page),
+      );
     },
   );
 }
@@ -415,17 +390,26 @@ class AuthScene extends StatelessWidget {
           Positioned(
             top: -80,
             left: -40,
-            child: _SubtleGlow(size: 240, color: _kBrandPrimary.withValues(alpha: 0.06)),
+            child: _SubtleGlow(
+              size: 240,
+              color: _kBrandPrimary.withValues(alpha: 0.06),
+            ),
           ),
           Positioned(
             top: 60,
             right: -100,
-            child: _SubtleGlow(size: 280, color: const Color(0xFFE0D4FF).withValues(alpha: 0.12)),
+            child: _SubtleGlow(
+              size: 280,
+              color: const Color(0xFFE0D4FF).withValues(alpha: 0.12),
+            ),
           ),
           Positioned(
             bottom: -100,
             left: 40,
-            child: _SubtleGlow(size: 220, color: const Color(0xFFD4EAFF).withValues(alpha: 0.10)),
+            child: _SubtleGlow(
+              size: 220,
+              color: const Color(0xFFD4EAFF).withValues(alpha: 0.10),
+            ),
           ),
           SafeArea(child: child),
         ],
@@ -445,10 +429,7 @@ class _SubtleGlow extends StatelessWidget {
       child: Container(
         width: size,
         height: size,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: color,
-        ),
+        decoration: BoxDecoration(shape: BoxShape.circle, color: color),
         child: BackdropFilter(
           filter: ImageFilter.blur(sigmaX: 40, sigmaY: 40),
           child: const SizedBox.expand(),
@@ -460,7 +441,11 @@ class _SubtleGlow extends StatelessWidget {
 
 /// Koala logosu — mor gradient rounded square + sparkle icon
 class KoalaHeroLogo extends StatelessWidget {
-  const KoalaHeroLogo({super.key, this.size = 80, this.heroTag = 'koala-auth-logo'});
+  const KoalaHeroLogo({
+    super.key,
+    this.size = 80,
+    this.heroTag = 'koala-auth-logo',
+  });
   final double size;
   final String heroTag;
 
@@ -486,7 +471,11 @@ class KoalaHeroLogo extends StatelessWidget {
             ),
           ],
         ),
-        child: Icon(Icons.auto_awesome_rounded, color: Colors.white, size: size * 0.42),
+        child: Icon(
+          Icons.auto_awesome_rounded,
+          color: Colors.white,
+          size: size * 0.42,
+        ),
       ),
     );
   }
@@ -536,21 +525,42 @@ class AuthActionButton extends StatelessWidget {
           height: 58,
           decoration: BoxDecoration(
             color: hasGradient ? null : (backgroundColor ?? Colors.white),
-            gradient: hasGradient ? LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: gradient!) : null,
+            gradient: hasGradient
+                ? LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: gradient!,
+                  )
+                : null,
             borderRadius: br,
-            border: hasGradient ? null : Border.all(color: borderColor ?? const Color(0xFFE2E8F0), width: 1.2),
+            border: hasGradient
+                ? null
+                : Border.all(
+                    color: borderColor ?? const Color(0xFFE2E8F0),
+                    width: 1.2,
+                  ),
             boxShadow: <BoxShadow>[
               if (shadowColor != null)
-                BoxShadow(color: shadowColor!.withValues(alpha: 0.22), blurRadius: 22, offset: const Offset(0, 14))
+                BoxShadow(
+                  color: shadowColor!.withValues(alpha: 0.22),
+                  blurRadius: 22,
+                  offset: const Offset(0, 14),
+                )
               else
-                BoxShadow(color: const Color(0xFF0F172A).withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, 2)),
+                BoxShadow(
+                  color: const Color(0xFF0F172A).withValues(alpha: 0.04),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
             ],
           ),
           child: InkWell(
             borderRadius: br,
             onTap: enabled ? onPressed : null,
-            splashColor: (hasGradient ? Colors.white : _kBrandPrimary).withValues(alpha: 0.06),
-            highlightColor: (hasGradient ? Colors.white : _kBrandPrimary).withValues(alpha: 0.03),
+            splashColor: (hasGradient ? Colors.white : _kBrandPrimary)
+                .withValues(alpha: 0.06),
+            highlightColor: (hasGradient ? Colors.white : _kBrandPrimary)
+                .withValues(alpha: 0.03),
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
               child: Stack(
@@ -564,12 +574,27 @@ class AuthActionButton extends StatelessWidget {
                       children: <Widget>[
                         SizedBox(width: 24, child: Center(child: leading)),
                         const SizedBox(width: 12),
-                        Text(label, style: TextStyle(color: fg, fontSize: 16, fontWeight: FontWeight.w700, letterSpacing: -0.2)),
+                        Text(
+                          label,
+                          style: TextStyle(
+                            color: fg,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: -0.2,
+                          ),
+                        ),
                       ],
                     ),
                   ),
                   if (loading)
-                    SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2.5, color: sp)),
+                    SizedBox(
+                      width: 22,
+                      height: 22,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2.5,
+                        color: sp,
+                      ),
+                    ),
                 ],
               ),
             ),
@@ -597,12 +622,21 @@ class AuthErrorBanner extends StatelessWidget {
       ),
       child: Row(
         children: <Widget>[
-          const Icon(Icons.error_outline_rounded, color: Color(0xFFEF4444), size: 18),
+          const Icon(
+            Icons.error_outline_rounded,
+            color: Color(0xFFEF4444),
+            size: 18,
+          ),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
               message,
-              style: const TextStyle(color: Color(0xFFDC2626), fontSize: 13, fontWeight: FontWeight.w600, height: 1.35),
+              style: const TextStyle(
+                color: Color(0xFFDC2626),
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                height: 1.35,
+              ),
             ),
           ),
         ],
@@ -620,11 +654,11 @@ class AuthFeatureStrip extends StatelessWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: const <Widget>[
-        _FeatureDot(label: '10 ücretsiz kredi'),
+        _FeatureDot(label: 'Ücretsiz mekan analizi'),
         SizedBox(width: 16),
-        _FeatureDot(label: '9 branş'),
+        _FeatureDot(label: 'Stil tespiti'),
         SizedBox(width: 16),
-        _FeatureDot(label: 'AI çözüm'),
+        _FeatureDot(label: 'Tasarımcı eşleştir'),
       ],
     );
   }
@@ -684,7 +718,14 @@ class AuthLegalText extends StatelessWidget {
             baseline: TextBaseline.alphabetic,
             child: GestureDetector(
               onTap: () => AuthCoordinator.openLegalUrl(context, _kTermsUrl),
-              child: Text('Kullanım Koşulları', style: baseStyle.copyWith(color: _kBrandPrimary, fontWeight: FontWeight.w600, decoration: TextDecoration.underline)),
+              child: Text(
+                'Kullanım Koşulları',
+                style: baseStyle.copyWith(
+                  color: _kBrandPrimary,
+                  fontWeight: FontWeight.w600,
+                  decoration: TextDecoration.underline,
+                ),
+              ),
             ),
           ),
           const TextSpan(text: ' ve '),
@@ -693,7 +734,14 @@ class AuthLegalText extends StatelessWidget {
             baseline: TextBaseline.alphabetic,
             child: GestureDetector(
               onTap: () => AuthCoordinator.openLegalUrl(context, _kPrivacyUrl),
-              child: Text('Gizlilik Politikası', style: baseStyle.copyWith(color: _kBrandPrimary, fontWeight: FontWeight.w600, decoration: TextDecoration.underline)),
+              child: Text(
+                'Gizlilik Politikası',
+                style: baseStyle.copyWith(
+                  color: _kBrandPrimary,
+                  fontWeight: FontWeight.w600,
+                  decoration: TextDecoration.underline,
+                ),
+              ),
             ),
           ),
           const TextSpan(text: "'nı kabul etmiş olursunuz."),
@@ -706,16 +754,26 @@ class AuthLegalText extends StatelessWidget {
 
 /// Fade + slide animasyon wrapper
 class FadeSlideIn extends StatelessWidget {
-  const FadeSlideIn({super.key, required this.animation, required this.child, this.beginOffset = const Offset(0, 0.08)});
+  const FadeSlideIn({
+    super.key,
+    required this.animation,
+    required this.child,
+    this.beginOffset = const Offset(0, 0.08),
+  });
   final Animation<double> animation;
   final Widget child;
   final Offset beginOffset;
 
   @override
   Widget build(BuildContext context) {
-    final Animation<Offset> slide = Tween<Offset>(begin: beginOffset, end: Offset.zero)
-        .animate(CurvedAnimation(parent: animation, curve: Curves.easeOutCubic));
-    return FadeTransition(opacity: animation, child: SlideTransition(position: slide, child: child));
+    final Animation<Offset> slide = Tween<Offset>(
+      begin: beginOffset,
+      end: Offset.zero,
+    ).animate(CurvedAnimation(parent: animation, curve: Curves.easeOutCubic));
+    return FadeTransition(
+      opacity: animation,
+      child: SlideTransition(position: slide, child: child),
+    );
   }
 }
 
@@ -735,9 +793,16 @@ class AuthPanel extends StatelessWidget {
           decoration: BoxDecoration(
             color: Colors.white.withValues(alpha: 0.92),
             borderRadius: BorderRadius.circular(28),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.6), width: 1.2),
+            border: Border.all(
+              color: Colors.white.withValues(alpha: 0.6),
+              width: 1.2,
+            ),
             boxShadow: <BoxShadow>[
-              BoxShadow(color: const Color(0xFF111827).withValues(alpha: 0.06), blurRadius: 36, offset: const Offset(0, 18)),
+              BoxShadow(
+                color: const Color(0xFF111827).withValues(alpha: 0.06),
+                blurRadius: 36,
+                offset: const Offset(0, 18),
+              ),
             ],
           ),
           child: Padding(
@@ -761,7 +826,15 @@ class _SectionTitle extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.only(top: 24, bottom: 8),
-      child: Text(text, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: Color(0xFF0F172A), letterSpacing: -0.3)),
+      child: Text(
+        text,
+        style: const TextStyle(
+          fontSize: 17,
+          fontWeight: FontWeight.w800,
+          color: Color(0xFF0F172A),
+          letterSpacing: -0.3,
+        ),
+      ),
     );
   }
 }
@@ -773,7 +846,15 @@ class _Para extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
-      child: Text(text, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w400, color: Color(0xFF475569), height: 1.65)),
+      child: Text(
+        text,
+        style: const TextStyle(
+          fontSize: 14,
+          fontWeight: FontWeight.w400,
+          color: Color(0xFF475569),
+          height: 1.65,
+        ),
+      ),
     );
   }
 }
@@ -793,7 +874,16 @@ class _Bullet extends StatelessWidget {
             child: Icon(Icons.circle, size: 5, color: Color(0xFF94A3B8)),
           ),
           const SizedBox(width: 10),
-          Expanded(child: Text(text, style: const TextStyle(fontSize: 14, color: Color(0xFF475569), height: 1.6))),
+          Expanded(
+            child: Text(
+              text,
+              style: const TextStyle(
+                fontSize: 14,
+                color: Color(0xFF475569),
+                height: 1.6,
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -807,25 +897,41 @@ class _PrivacyContent extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: const <Widget>[
-        _Para('Koala ("biz", "uygulama"), Evlumba Software tarafından geliştirilen yapay zeka destekli bir eğitim uygulamasıdır. Kullanıcılarımızın gizliliğine saygı duyuyor ve kişisel verilerin korunmasını önemsiyoruz.'),
+        _Para(
+          'Koala ("biz", "uygulama"), Evlumba Software tarafından geliştirilen yapay zeka destekli bir mekan analiz uygulamasıdır. Kullanıcılarımızın gizliliğine saygı duyuyor ve kişisel verilerin korunmasını önemsiyoruz.',
+        ),
         _Para('Son güncelleme: 16 Mart 2026'),
 
         _SectionTitle('Toplanan Veriler'),
-        _Bullet('Hesap bilgileri: Google hesabı ile giriş yapıldığında ad, e-posta adresi ve profil fotoğrafı'),
+        _Bullet(
+          'Hesap bilgileri: Google hesabı ile giriş yapıldığında ad, e-posta adresi ve profil fotoğrafı',
+        ),
         _Bullet('Telefon numarası: Telefon ile giriş yapıldığında'),
-        _Bullet('Soru fotoğrafları: Çözüm için gönderdiğiniz soru fotoğrafları'),
-        _Bullet('Sohbet mesajları: AI öğretmen ile yaptığınız yazışmalar'),
-        _Bullet('Kullanım verileri: Uygulama kullanım istatistikleri ve tercihler'),
+        _Bullet(
+          'Mekan fotoğrafları: Analiz için gönderdiğiniz mekan fotoğrafları',
+        ),
+        _Bullet('Sohbet mesajları: AI danışman ile yaptığınız yazışmalar'),
+        _Bullet(
+          'Kullanım verileri: Uygulama kullanım istatistikleri ve tercihler',
+        ),
 
         _SectionTitle('Verilerin Kullanımı'),
-        _Bullet('Soru çözüm hizmeti sunmak ve AI destekli öğretim sağlamak'),
-        _Bullet('Kullanıcı hesabınızı yönetmek ve kişiselleştirilmiş deneyim sunmak'),
+        _Bullet(
+          'Mekan analiz hizmeti sunmak ve AI destekli tasarım önerileri sağlamak',
+        ),
+        _Bullet(
+          'Kullanıcı hesabınızı yönetmek ve kişiselleştirilmiş deneyim sunmak',
+        ),
         _Bullet('Uygulama performansını izlemek ve iyileştirmek'),
         _Bullet('Kredi sistemi ve satın alma işlemlerini yönetmek'),
-        _Para('Verilerinizi hiçbir koşulda üçüncü taraf reklam ağlarıyla paylaşmıyoruz.'),
+        _Para(
+          'Verilerinizi hiçbir koşulda üçüncü taraf reklam ağlarıyla paylaşmıyoruz.',
+        ),
 
         _SectionTitle('Kamera Kullanımı'),
-        _Para('Uygulamamız, soru fotoğrafı çekmeniz için cihazınızın kamerasına erişim izni ister. Kamera yalnızca siz aktif olarak fotoğraf çektiğinizde kullanılır. Kamera izni olmadan da galeriden fotoğraf seçerek soru gönderebilirsiniz.'),
+        _Para(
+          'Uygulamamız, mekan fotoğrafı çekmeniz için cihazınızın kamerasına erişim izni ister. Kamera yalnızca siz aktif olarak fotoğraf çektiğinizde kullanılır. Kamera izni olmadan da galeriden fotoğraf seçerek mekan analizi yapabilirsiniz.',
+        ),
 
         _SectionTitle('Veri Güvenliği'),
         _Bullet('Tüm veri iletişimi SSL/TLS şifreleme ile korunur'),
@@ -835,20 +941,28 @@ class _PrivacyContent extends StatelessWidget {
         _SectionTitle('Üçüncü Taraf Hizmetler'),
         _Bullet('Google Firebase: Kimlik doğrulama ve analitik'),
         _Bullet('Supabase: Veritabanı ve dosya depolama'),
-        _Bullet('Google Gemini AI: Yapay zeka destekli soru çözüm motoru'),
+        _Bullet('Google Gemini AI: Yapay zeka destekli mekan analiz motoru'),
 
         _SectionTitle('Kullanıcı Hakları'),
         _Bullet('Erişim: Hakkınızda sakladığımız verileri talep edebilirsiniz'),
         _Bullet('Düzeltme: Yanlış verilerin düzeltilmesini isteyebilirsiniz'),
-        _Bullet('Silme: Hesabınızın ve tüm verilerinizin silinmesini talep edebilirsiniz'),
-        _Para('Bu haklarınızı kullanmak için info@koalatutor.com adresine e-posta gönderebilirsiniz.'),
+        _Bullet(
+          'Silme: Hesabınızın ve tüm verilerinizin silinmesini talep edebilirsiniz',
+        ),
+        _Para(
+          'Bu haklarınızı kullanmak için info@evlumba.com adresine e-posta gönderebilirsiniz.',
+        ),
 
         _SectionTitle('Çocukların Gizliliği'),
-        _Para('Uygulamamız 13 yaş ve üzeri kullanıcılar için tasarlanmıştır. 13 yaşın altındaki çocuklardan bilerek kişisel veri toplamıyoruz.'),
+        _Para(
+          'Uygulamamız 13 yaş ve üzeri kullanıcılar için tasarlanmıştır. 13 yaşın altındaki çocuklardan bilerek kişisel veri toplamıyoruz.',
+        ),
 
         _SectionTitle('İletişim'),
-        _Para('Gizlilik politikamızla ilgili sorularınız için:\nE-posta: info@koalatutor.com\nWeb: koalatutor.com\nGeliştirici: Evlumba Software'),
-        _Para('© 2026 Koala - AI Öğretmen. Tüm hakları saklıdır.'),
+        _Para(
+          'Gizlilik politikamızla ilgili sorularınız için:\nE-posta: info@evlumba.com\nWeb: evlumba.com\nGeliştirici: Evlumba Software',
+        ),
+        _Para('© 2026 Koala by evlumba. Tüm hakları saklıdır.'),
       ],
     );
   }
@@ -861,42 +975,62 @@ class _TermsContent extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: const <Widget>[
-        _Para('Bu kullanım koşulları, Koala - AI Öğretmen uygulamasını ("Uygulama") kullanımınızı düzenler. Uygulamayı kullanarak bu koşulları kabul etmiş sayılırsınız.'),
+        _Para(
+          'Bu kullanım koşulları, Koala by evlumba uygulamasını ("Uygulama") kullanımınızı düzenler. Uygulamayı kullanarak bu koşulları kabul etmiş sayılırsınız.',
+        ),
         _Para('Son güncelleme: 18 Mart 2026'),
 
         _SectionTitle('Hizmet Tanımı'),
-        _Para('Koala, yapay zeka destekli bir eğitim uygulamasıdır. Kullanıcılar soru fotoğrafı çekerek adım adım çözüm alabilir. Uygulama 9 farklı branşta AI destekli öğretim hizmeti sunar.'),
+        _Para(
+          'Koala, yapay zeka destekli bir mekan analiz uygulamasıdır. Kullanıcılar soru fotoğrafı çekerek adım adım çözüm alabilir. Uygulama 9 farklı branşta AI destekli öğretim hizmeti sunar.',
+        ),
 
         _SectionTitle('Hesap ve Kayıt'),
-        _Bullet('Uygulamayı kullanmak için Google, Apple veya telefon numarası ile hesap oluşturmanız gerekir'),
-        _Bullet('Hesap bilgilerinizin doğru ve güncel olmasından siz sorumlusunuz'),
+        _Bullet(
+          'Uygulamayı kullanmak için Google veya telefon numarası ile hesap oluşturmanız gerekir',
+        ),
+        _Bullet(
+          'Hesap bilgilerinizin doğru ve güncel olmasından siz sorumlusunuz',
+        ),
         _Bullet('Hesabınızın güvenliğinden siz sorumlusunuz'),
 
         _SectionTitle('Kredi Sistemi'),
         _Bullet('Her yeni kullanıcıya 10 ücretsiz kredi verilir'),
-        _Bullet('Her soru çözümü 1 kredi harcar'),
+        _Bullet('Her mekan analizi 1 kredi harcar'),
         _Bullet('Ek kredi uygulama içi satın alma ile edinilebilir'),
         _Bullet('Satın alınan krediler iade edilemez'),
 
         _SectionTitle('Kabul Edilebilir Kullanım'),
-        _Para('Uygulamayı yalnızca eğitim amaçlı kullanabilirsiniz. Aşağıdaki davranışlar yasaktır:'),
-        _Bullet('Uygulamayı kötüye kullanmak veya başkalarının kullanımını engellemek'),
+        _Para(
+          'Uygulamayı yalnızca kişisel mekan analizi amaçlı kullanabilirsiniz. Aşağıdaki davranışlar yasaktır:',
+        ),
+        _Bullet(
+          'Uygulamayı kötüye kullanmak veya başkalarının kullanımını engellemek',
+        ),
         _Bullet('Otomatik botlar veya scraper kullanmak'),
         _Bullet('Uygulamayı sınav sırasında kopya çekmek için kullanmak'),
         _Bullet('Yasalara aykırı içerik göndermek'),
 
         _SectionTitle('Fikri Mülkiyet'),
-        _Para('Uygulama ve içeriği Evlumba Software\'a aittir. AI tarafından üretilen çözümler eğitim amaçlıdır ve doğruluğu garanti edilmez.'),
+        _Para(
+          'Uygulama ve içeriği Evlumba Software\'a aittir. AI tarafından üretilen çözümler eğitim amaçlıdır ve doğruluğu garanti edilmez.',
+        ),
 
         _SectionTitle('Sorumluluk Sınırlaması'),
-        _Para('Koala bir eğitim yardımcısıdır, profesyonel öğretmenin yerini almaz. AI çözümlerinin doğruluğu garanti edilmez. Uygulama "olduğu gibi" sunulur.'),
+        _Para(
+          'Koala bir mekan analiz asistanıdır, profesyonel iç mimarın yerini almaz. AI önerilerinin doğruluğu garanti edilmez. Uygulama "olduğu gibi" sunulur.',
+        ),
 
         _SectionTitle('Değişiklikler'),
-        _Para('Bu koşulları zaman zaman güncelleyebiliriz. Önemli değişikliklerde uygulama içi bildirim yapacağız.'),
+        _Para(
+          'Bu koşulları zaman zaman güncelleyebiliriz. Önemli değişikliklerde uygulama içi bildirim yapacağız.',
+        ),
 
         _SectionTitle('İletişim'),
-        _Para('Kullanım koşullarıyla ilgili sorularınız için:\nE-posta: info@koalatutor.com\nWeb: koalatutor.com\nGeliştirici: Evlumba Software'),
-        _Para('© 2026 Koala - AI Öğretmen. Tüm hakları saklıdır.'),
+        _Para(
+          'Kullanım koşullarıyla ilgili sorularınız için:\nE-posta: info@evlumba.com\nWeb: evlumba.com\nGeliştirici: Evlumba Software',
+        ),
+        _Para('© 2026 Koala by evlumba. Tüm hakları saklıdır.'),
       ],
     );
   }

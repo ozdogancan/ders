@@ -1,0 +1,120 @@
+{
+  "name": "WF1 Email Sender",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{ "field": "minutes", "minutesInterval": 5 }]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Her 5 Dakika",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [220, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT id, user_id, title, body, payload FROM outbound_queue WHERE status = 'pending' AND channel = 'email' AND send_after <= now() ORDER BY created_at ASC LIMIT 3"
+      },
+      "id": "fetch-emails",
+      "name": "Kuyruktan Email Cek",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [440, 300],
+      "credentials": { "supabaseApi": { "id": "SUPABASE_CRED_ID", "name": "Koala Supabase" } }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [{ "value1": "={{ $json.length > 0 }}", "value2": true }]
+        }
+      },
+      "id": "if-has-emails",
+      "name": "Bos mu?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [660, 300]
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "id": "split-batches",
+      "name": "Teker Teker",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [880, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.resend.com/emails",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "Bearer {{$credentials.httpHeaderAuth.value}}" }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            { "name": "from", "value": "Koala <noreply@evlumba.com>" },
+            { "name": "to", "value": "={{ $json.payload.email }}" },
+            { "name": "subject", "value": "={{ $json.title }}" },
+            { "name": "html", "value": "<html><body><h1>{{ $json.title }}</h1><p>{{ $json.body }}</p></body></html>" }
+          ]
+        },
+        "options": { "timeout": 5000 }
+      },
+      "id": "send-email",
+      "name": "Resend API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1100, 200],
+      "credentials": { "httpHeaderAuth": { "id": "RESEND_CRED_ID", "name": "Resend API Key" } }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "outbound_queue",
+        "filters": { "conditions": [{ "keyName": "id", "keyValue": "={{ $json.id }}" }] },
+        "fieldsUi": {
+          "fieldValues": [
+            { "fieldName": "status", "fieldValue": "sent" },
+            { "fieldName": "processed_at", "fieldValue": "={{ new Date().toISOString() }}" }
+          ]
+        }
+      },
+      "id": "mark-sent",
+      "name": "Sent Isaretle",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [1320, 200],
+      "credentials": { "supabaseApi": { "id": "SUPABASE_CRED_ID", "name": "Koala Supabase" } }
+    },
+    {
+      "parameters": { "amount": 1, "unit": "seconds" },
+      "id": "wait-rate-limit",
+      "name": "1sn Bekle",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [1540, 200]
+    }
+  ],
+  "connections": {
+    "Her 5 Dakika": { "main": [[{ "node": "Kuyruktan Email Cek", "type": "main", "index": 0 }]] },
+    "Kuyruktan Email Cek": { "main": [[{ "node": "Bos mu?", "type": "main", "index": 0 }]] },
+    "Bos mu?": { "main": [[{ "node": "Teker Teker", "type": "main", "index": 0 }], []] },
+    "Teker Teker": { "main": [[{ "node": "Resend API", "type": "main", "index": 0 }], []] },
+    "Resend API": { "main": [[{ "node": "Sent Isaretle", "type": "main", "index": 0 }]] },
+    "Sent Isaretle": { "main": [[{ "node": "1sn Bekle", "type": "main", "index": 0 }]] },
+    "1sn Bekle": { "main": [[{ "node": "Teker Teker", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" },
+  "tags": [{ "name": "koala" }]
+}

@@ -1,0 +1,16 @@
+﻿.dart_tool
+.idea
+android
+ios
+linux
+macos
+windows
+lib
+test
+build/app
+build/cache
+build/.last_build_id
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+pubspec.lock

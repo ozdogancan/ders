@@ -1,9 +1,12 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/foundation.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' hide User;
 
 import '../core/config/env.dart';
-import '../models/question.dart';
+import 'push_token_service.dart';
 
 class FirebaseService {
   FirebaseService({
@@ -75,50 +78,18 @@ class FirebaseService {
   }
 
   Future<void> signOut() async {
+    // FCM token sil
+    try {
+      final token = await FirebaseMessaging.instance.getToken();
+      if (token != null) {
+        await PushTokenService.removeToken(token);
+      }
+    } catch (_) {}
+
     await _auth.signOut();
     if (_googleInitFuture != null) {
       await _googleSignIn.signOut();
     }
-  }
-
-  Future<void> saveQuestion(Question question) async {
-    await _firestore
-        .collection('questions')
-        .doc(question.id)
-        .set(question.toMap());
-  }
-
-  Stream<List<Question>> watchQuestionsForUser(String userId) {
-    return _firestore
-        .collection('questions')
-        .where('userId', isEqualTo: userId)
-        .orderBy('timestamp', descending: true)
-        .snapshots()
-        .map((snapshot) {
-          return snapshot.docs
-              .map((doc) => Question.fromMap(doc.data(), doc.id))
-              .toList();
-        });
-  }
-
-  Stream<Question?> watchQuestionById(String questionId) {
-    return _firestore.collection('questions').doc(questionId).snapshots().map((
-      snapshot,
-    ) {
-      if (!snapshot.exists || snapshot.data() == null) {
-        return null;
-      }
-      return Question.fromMap(snapshot.data()!, snapshot.id);
-    });
-  }
-
-  Future<void> setQuestionFeedback({
-    required String questionId,
-    required bool helpful,
-  }) async {
-    await _firestore.collection('questions').doc(questionId).update(
-      <String, dynamic>{'helpful': helpful},
-    );
   }
 
   Future<void> _syncUserProfile(User? user) async {
@@ -126,6 +97,7 @@ class FirebaseService {
       return;
     }
 
+    // Firestore sync (mevcut)
     await _firestore.collection('users').doc(user.uid).set(<String, dynamic>{
       'uid': user.uid,
       'email': user.email,
@@ -134,5 +106,77 @@ class FirebaseService {
       'lastLoginAt': FieldValue.serverTimestamp(),
       'createdAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
+
+    // Supabase users tablosuna upsert
+    await _syncToSupabase(user);
+
+    // Supabase client'a x-user-id header ekle (RLS için)
+    if (Env.hasSupabaseConfig) {
+      Supabase.instance.client.rest.headers['x-user-id'] = user.uid;
+    }
+
+    // FCM token kaydet
+    await _registerFcmToken();
+  }
+
+  /// FCM token al ve Supabase'e kaydet
+  Future<void> _registerFcmToken() async {
+    try {
+      final messaging = FirebaseMessaging.instance;
+
+      // İzin iste (iOS/web)
+      final settings = await messaging.requestPermission(
+        alert: true,
+        badge: true,
+        sound: true,
+      );
+
+      if (settings.authorizationStatus == AuthorizationStatus.authorized ||
+          settings.authorizationStatus == AuthorizationStatus.provisional) {
+        final token = await messaging.getToken();
+        if (token != null) {
+          final platform = defaultTargetPlatform == TargetPlatform.iOS
+              ? TokenPlatform.ios
+              : defaultTargetPlatform == TargetPlatform.android
+                  ? TokenPlatform.android
+                  : TokenPlatform.web;
+
+          await PushTokenService.registerToken(
+            deviceToken: token,
+            platform: platform,
+          );
+        }
+
+        // Token yenilenince de kaydet
+        messaging.onTokenRefresh.listen((newToken) {
+          final platform = defaultTargetPlatform == TargetPlatform.iOS
+              ? TokenPlatform.ios
+              : defaultTargetPlatform == TargetPlatform.android
+                  ? TokenPlatform.android
+                  : TokenPlatform.web;
+          PushTokenService.registerToken(
+            deviceToken: newToken,
+            platform: platform,
+          );
+        });
+      }
+    } catch (e) {
+      debugPrint('FCM token registration error: $e');
+    }
+  }
+
+  Future<void> _syncToSupabase(User user) async {
+    if (!Env.hasSupabaseConfig) return;
+    try {
+      await Supabase.instance.client.from('users').upsert({
+        'id': user.uid,
+        'email': user.email,
+        'display_name': user.displayName,
+        'photo_url': user.photoURL,
+        'last_login_at': DateTime.now().toUtc().toIso8601String(),
+      }, onConflict: 'id');
+    } catch (e) {
+      debugPrint('Supabase user sync error: $e');
+    }
   }
 }

@@ -1,0 +1,93 @@
+{
+  "name": "WF-04B: Tasarımcı Match Push",
+  "description": "Kullanıcı stil tercihini güncellediğinde uygun tasarımcıları eşleştir ve bildir",
+  "trigger": "Supabase Webhook → koala_user_prefs UPDATE (favorite_styles changed)",
+  "ram_limit": "1GB",
+  "timeout": "10s",
+  "nodes": [
+    {
+      "step": 1,
+      "type": "Webhook",
+      "name": "Supabase Trigger",
+      "config": {
+        "method": "POST",
+        "path": "/webhook/style-update",
+        "note": "Supabase Webhook → koala_user_prefs → UPDATE → filter: favorite_styles changed"
+      }
+    },
+    {
+      "step": 2,
+      "type": "Code",
+      "name": "Extract Styles",
+      "config": {
+        "code": "const styles = $json.record.favorite_styles || []; return { user_id: $json.record.user_id, styles };"
+      }
+    },
+    {
+      "step": 3,
+      "type": "Supabase (Evlumba DB)",
+      "name": "Find Matching Designers",
+      "config": {
+        "operation": "select",
+        "table": "profiles",
+        "filter": "role=eq.designer&specialty=ov.{{{styles_csv}}}",
+        "fields": "id, full_name, avatar_url, specialty, city",
+        "limit": 3,
+        "order": "created_at.desc",
+        "note": "Evlumba DB'den ov (overlap) operatörü ile stil eşleşmesi"
+      }
+    },
+    {
+      "step": 4,
+      "type": "IF",
+      "name": "Found Designers?",
+      "config": {
+        "condition": "designers.length > 0"
+      }
+    },
+    {
+      "step": 5,
+      "type": "Supabase",
+      "name": "Insert In-App Notification",
+      "config": {
+        "operation": "insert",
+        "table": "koala_notifications",
+        "data": {
+          "user_id": "{{user_id}}",
+          "type": "designer_match",
+          "title": "Stiline uygun {{designers.length}} tasarımcı bulduk! 🎨",
+          "body": "{{designers[0].full_name}} ve diğerleri senin tarzına uygun",
+          "image_url": "{{designers[0].avatar_url}}",
+          "action_type": "open_url",
+          "action_data": {
+            "url": "/designers"
+          }
+        }
+      }
+    },
+    {
+      "step": 6,
+      "type": "Supabase",
+      "name": "Get Push Tokens",
+      "config": {
+        "table": "koala_push_tokens",
+        "filter": "user_id=eq.{{user_id}}&is_active=eq.true"
+      }
+    },
+    {
+      "step": 7,
+      "type": "HTTP Request",
+      "name": "Send FCM Push",
+      "config": {
+        "condition": "tokens.length > 0",
+        "notification": {
+          "title": "Stiline uygun tasarımcılar bulduk! 🎨",
+          "body": "{{designers[0].full_name}} ve {{designers.length - 1}} tasarımcı daha"
+        },
+        "data": {
+          "type": "designer_match"
+        }
+      }
+    }
+  ]
+}

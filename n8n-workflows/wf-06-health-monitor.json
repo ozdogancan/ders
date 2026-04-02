@@ -1,0 +1,107 @@
+{
+  "name": "WF-06: Sağlık Monitörü",
+  "description": "Her 6 saatte bir — Supabase ping, tablo boyutları, alert",
+  "trigger": "Schedule: Her 6 saatte",
+  "ram_limit": "1GB",
+  "nodes": [
+    {
+      "step": 1,
+      "type": "Schedule Trigger",
+      "name": "Her 6 Saatte",
+      "config": {
+        "cron": "0 */6 * * *"
+      }
+    },
+    {
+      "step": 2,
+      "type": "Supabase",
+      "name": "Health Check Ping",
+      "config": {
+        "operation": "select",
+        "table": "users",
+        "fields": "id",
+        "limit": 1,
+        "timeout": "5s",
+        "on_error": "Go to step 6 (alert)"
+      }
+    },
+    {
+      "step": 3,
+      "type": "Supabase",
+      "name": "Table Row Counts",
+      "config": {
+        "queries": [
+          { "table": "users", "operation": "count" },
+          { "table": "koala_conversations", "operation": "count" },
+          { "table": "koala_direct_messages", "operation": "count" },
+          { "table": "koala_notifications", "operation": "count" },
+          { "table": "koala_push_tokens", "operation": "count" },
+          { "table": "saved_items", "operation": "count" },
+          { "table": "collections", "operation": "count" },
+          { "table": "analytics_events", "operation": "count" },
+          { "table": "koala_admin_logs", "operation": "count" }
+        ],
+        "note": "Sadece count, veri çekmiyoruz — 1GB RAM güvenli"
+      }
+    },
+    {
+      "step": 4,
+      "type": "Code",
+      "name": "Check Thresholds",
+      "config": {
+        "code": "const alerts = []; for (const [table, count] of Object.entries(counts)) { if (count > 100000) alerts.push(`${table}: ${count} satır`); } return { alerts, has_alerts: alerts.length > 0, counts };",
+        "note": "100K+ satırlı tablolar alert oluşturur"
+      }
+    },
+    {
+      "step": 5,
+      "type": "IF",
+      "name": "Has Alerts?",
+      "config": {
+        "condition": "has_alerts == true"
+      }
+    },
+    {
+      "step": "5a",
+      "type": "Supabase",
+      "name": "Send Admin Notification",
+      "config": {
+        "operation": "insert",
+        "table": "koala_notifications",
+        "data": {
+          "user_id": "{{ADMIN_USER_ID}}",
+          "type": "system",
+          "title": "⚠️ DB Boyut Uyarısı",
+          "body": "Şu tablolar 100K satırı aştı: {{alerts.join(', ')}}"
+        }
+      }
+    },
+    {
+      "step": 6,
+      "type": "Supabase",
+      "name": "Alert: Supabase Unreachable",
+      "config": {
+        "note": "Step 2 hata verirse buraya gelir",
+        "action": "Send email to admin: 'Supabase bağlantısı kesildi!'",
+        "provider": "SMTP or Resend API"
+      }
+    },
+    {
+      "step": 7,
+      "type": "Supabase",
+      "name": "Log Analytics Event",
+      "config": {
+        "operation": "insert",
+        "table": "analytics_events",
+        "data": {
+          "event_name": "health_check",
+          "event_data": {
+            "supabase_ok": true,
+            "table_counts": "{{counts}}",
+            "alerts": "{{alerts}}"
+          }
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,114 @@
+{
+  "name": "WF-01: Yeni Mesaj Push Notification",
+  "description": "Mesaj tablosuna INSERT olunca alıcıya push notification gönder + in-app bildirim oluştur",
+  "trigger": "Supabase Webhook → koala_direct_messages INSERT",
+  "ram_limit": "1GB",
+  "timeout": "10s",
+  "nodes": [
+    {
+      "step": 1,
+      "type": "Webhook",
+      "name": "Supabase Trigger",
+      "config": {
+        "method": "POST",
+        "path": "/webhook/new-message",
+        "note": "Supabase Database Webhook → koala_direct_messages → INSERT → POST to this URL"
+      }
+    },
+    {
+      "step": 2,
+      "type": "Supabase",
+      "name": "Get Conversation",
+      "config": {
+        "operation": "select",
+        "table": "koala_conversations",
+        "filter": "id=eq.{{$json.record.conversation_id}}",
+        "fields": "user_id, designer_id, title"
+      }
+    },
+    {
+      "step": 3,
+      "type": "IF",
+      "name": "Determine Recipient",
+      "config": {
+        "condition": "sender_id == conversation.user_id",
+        "true_branch": "recipient = conversation.designer_id",
+        "false_branch": "recipient = conversation.user_id"
+      }
+    },
+    {
+      "step": 4,
+      "type": "Supabase",
+      "name": "Get Sender Name",
+      "config": {
+        "operation": "select",
+        "table": "users",
+        "filter": "id=eq.{{sender_id}}",
+        "fields": "display_name"
+      }
+    },
+    {
+      "step": 5,
+      "type": "Supabase",
+      "name": "Get Recipient Push Tokens",
+      "config": {
+        "operation": "select",
+        "table": "koala_push_tokens",
+        "filter": "user_id=eq.{{recipient_id}}&is_active=eq.true",
+        "fields": "device_token, platform"
+      }
+    },
+    {
+      "step": 6,
+      "type": "IF",
+      "name": "Has Tokens?",
+      "config": {
+        "condition": "tokens.length > 0"
+      }
+    },
+    {
+      "step": "6a",
+      "type": "HTTP Request",
+      "name": "FCM Push (per token)",
+      "config": {
+        "method": "POST",
+        "url": "https://fcm.googleapis.com/v1/projects/YOUR_PROJECT_ID/messages:send",
+        "auth": "Service Account OAuth2",
+        "body": {
+          "message": {
+            "token": "{{device_token}}",
+            "notification": {
+              "title": "{{sender_name}}",
+              "body": "{{message_content | truncate(50)}}"
+            },
+            "data": {
+              "conversation_id": "{{conversation_id}}",
+              "sender_name": "{{sender_name}}",
+              "type": "new_message"
+            }
+          }
+        }
+      }
+    },
+    {
+      "step": 7,
+      "type": "Supabase",
+      "name": "Insert In-App Notification",
+      "config": {
+        "operation": "insert",
+        "table": "koala_notifications",
+        "data": {
+          "user_id": "{{recipient_id}}",
+          "type": "new_message",
+          "title": "{{sender_name}} mesaj gönderdi",
+          "body": "{{message_content | truncate(80)}}",
+          "action_type": "open_conversation",
+          "action_data": {
+            "conversation_id": "{{conversation_id}}",
+            "designer_name": "{{sender_name}}"
+          }
+        }
+      }
+    }
+  ]
+}

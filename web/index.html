@@ -1,40 +1,90 @@
 <!DOCTYPE html>
-<html>
+<html lang="tr">
 <head>
-  <!--
-    If you are serving your web app in a path other than the root, change the
-    href value below to reflect the base path you are serving from.
-
-    The path provided below has to start and end with a slash "/" in order for
-    it to work correctly.
-
-    For more details:
-    * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base
-
-    This is a placeholder for base href that will be replaced by the value of
-    the `--base-href` argument provided to `flutter build`.
-  -->
   <base href="$FLUTTER_BASE_HREF">
 
   <meta charset="UTF-8">
+  <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
+  <meta name="description" content="Koala ile yapay zeka destekli iç mimari tasarım. Evlumba tasarımcılarıyla tanış, ilham al, ürün keşfet. Salon, yatak odası, mutfak tasarımlarını AI ile keşfet.">
+  <meta name="keywords" content="iç mimari, dekorasyon, tasarım, yapay zeka, AI interior design, evlumba, salon tasarımı, mutfak dekorasyon, mobilya">
+  <meta name="author" content="evlumba.com">
+  <meta name="robots" content="index, follow">
+  <meta name="theme-color" content="#6366F1">
+  <meta name="application-name" content="Koala">
+  <meta name="msapplication-TileColor" content="#6366F1">
+  <meta name="format-detection" content="telephone=no">
+
+  <!-- Open Graph -->
+  <meta property="og:title" content="Koala - AI İç Mimari Asistanı">
+  <meta property="og:description" content="Yapay zeka ile iç mimari tasarım keşfet. Tasarımcılarla tanış, ürün bul.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://koala.evlumba.com">
+  <meta property="og:image" content="https://koala.evlumba.com/icons/Icon-512.png">
+  <meta property="og:locale" content="tr_TR">
+
+  <!-- Twitter -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Koala - AI İç Mimari Asistanı">
+  <meta name="twitter:description" content="Yapay zeka ile iç mimari tasarım keşfet.">
+
+  <!-- Canonical -->
+  <link rel="canonical" href="https://koala.evlumba.com">
+
+  <!-- Preconnect -->
   <link rel="preconnect" href="https://xgefjepaqnghaotqybpi.supabase.co">
   <link rel="preconnect" href="https://generativelanguage.googleapis.com">
   <link rel="dns-prefetch" href="https://xgefjepaqnghaotqybpi.supabase.co">
-  <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="A new Flutter project.">
-  <meta name="theme-color" content="#6366F1">
+
+  <!-- Preload -->
+  <link rel="preload" href="flutter_bootstrap.js" as="script">
 
   <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="ai_tutor_app">
+  <meta name="apple-mobile-web-app-title" content="Koala">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
+  <link rel="apple-touch-startup-image" href="icons/Icon-512.png">
 
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="favicon.png"/>
 
-  <title>ai_tutor_app</title>
+  <title>Koala - AI İç Mimari Asistanı | evlumba.com</title>
   <link rel="manifest" href="manifest.json">
+
+  <!-- Schema.org JSON-LD -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "Koala - AI İç Mimari Asistanı",
+    "description": "Yapay zeka destekli iç mimari tasarım asistanı. Tasarımcılarla tanış, ilham al, ürün keşfet.",
+    "url": "https://koala.evlumba.com",
+    "applicationCategory": "LifestyleApplication",
+    "operatingSystem": "Android, Web",
+    "offers": {
+      "@type": "Offer",
+      "price": "0",
+      "priceCurrency": "TRY"
+    },
+    "author": {
+      "@type": "Organization",
+      "name": "evlumba.com",
+      "url": "https://evlumba.com"
+    }
+  }
+  </script>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    "name": "evlumba",
+    "url": "https://evlumba.com",
+    "logo": "https://koala.evlumba.com/icons/Icon-512.png"
+  }
+  </script>
+
   <style>
     input:-webkit-autofill,
     input:-webkit-autofill:hover,
@@ -51,15 +101,6 @@
   </style>
 </head>
 <body>
-  <!--
-    You can customize the "flutter_bootstrap.js" script.
-    This is useful to provide a custom configuration to the Flutter loader
-    or to give the user feedback during the initialization process.
-
-    For more details:
-    * https://docs.flutter.dev/platform-integration/web/initialization
-  -->
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>
-

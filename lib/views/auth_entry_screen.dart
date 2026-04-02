@@ -49,13 +49,7 @@ class _AuthEntryScreenState extends State<AuthEntryScreen>
     );
   }
 
-  Future<void> _handleApple() async {
-    await _runAuthAction(
-      action: AuthActionType.apple,
-      provider: 'apple',
-      runner: AuthCoordinator.signInWithApple,
-    );
-  }
+  // _handleApple kaldırıldı — Apple sign-in devre dışı
 
   Future<void> _runAuthAction({
     required AuthActionType action,
@@ -118,19 +112,6 @@ class _AuthEntryScreenState extends State<AuthEntryScreen>
     );
   }
 
-  void _switchMode() {
-    if (!mounted) return;
-
-    Navigator.of(context).pushReplacement<void, void>(
-      buildAuthRoute<void>(
-        AuthEntryScreen(
-          mode: widget.mode == AuthFlowMode.signup
-              ? AuthFlowMode.login
-              : AuthFlowMode.signup,
-        ),
-      ),
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -151,10 +132,6 @@ class _AuthEntryScreenState extends State<AuthEntryScreen>
     final Animation<double> featureAnim = CurvedAnimation(
       parent: _staggerController,
       curve: const Interval(0.58, 0.86, curve: Curves.easeOutCubic),
-    );
-    final Animation<double> footerAnim = CurvedAnimation(
-      parent: _staggerController,
-      curve: const Interval(0.72, 1, curve: Curves.easeOutCubic),
     );
 
     return AuthScene(
@@ -204,8 +181,8 @@ class _AuthEntryScreenState extends State<AuthEntryScreen>
                               const SizedBox(height: 12),
                               Text(
                                 signupMode
-                                    ? 'Sorunun fotoğrafını çek, Koala adım adım çözsün.'
-                                    : 'Kaldığın yerden devam et.',
+                                    ? 'Mekanını tara, stilini keşfet, doğru tasarımcıyla eşleş.'
+                                    : 'Mekan analizine kaldığın yerden devam et.',
                                 textAlign: TextAlign.center,
                                 style: const TextStyle(
                                   color: Color(0xFF94A3B8),
@@ -219,6 +196,13 @@ class _AuthEntryScreenState extends State<AuthEntryScreen>
                         ),
                         const SizedBox(height: 32),
 
+                        // Feature dots — butonlardan önce value prop
+                        FadeSlideIn(
+                          animation: featureAnim,
+                          child: const AuthFeatureStrip(),
+                        ),
+                        const SizedBox(height: 24),
+
                         // Error banner
                         AnimatedSwitcher(
                           duration: const Duration(milliseconds: 220),
@@ -231,7 +215,7 @@ class _AuthEntryScreenState extends State<AuthEntryScreen>
                                 ),
                         ),
 
-                        // Auth butonları — hepsi aynı stil
+                        // Auth butonları
                         FadeSlideIn(
                           animation: buttonsAnim,
                           child: Column(
@@ -271,44 +255,23 @@ class _AuthEntryScreenState extends State<AuthEntryScreen>
                           animation: buttonsAnim,
                           child: const AuthLegalText(),
                         ),
+                        const SizedBox(height: 12),
 
-                        const Spacer(),
-
-                        // Feature dots
+                        // Test modu — login olmadan devam et
                         FadeSlideIn(
-                          animation: featureAnim,
-                          child: const AuthFeatureStrip(),
-                        ),
-                        const SizedBox(height: 18),
-
-                        // Switch mode
-                        FadeSlideIn(
-                          animation: footerAnim,
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: <Widget>[
-                              Text(
-                                signupMode
-                                    ? 'Zaten hesabın var mı?'
-                                    : 'Hesabın yok mu?',
-                                style: const TextStyle(
-                                  color: Color(0xFF94A3B8),
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w500,
-                                ),
+                          animation: buttonsAnim,
+                          child: TextButton(
+                            onPressed: _loadingAction == null
+                                ? () => AuthCoordinator.goToHome(context)
+                                : null,
+                            style: TextButton.styleFrom(
+                              foregroundColor: const Color(0xFF94A3B8),
+                              textStyle: const TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
                               ),
-                              TextButton(
-                                onPressed: _loadingAction == null ? _switchMode : null,
-                                style: TextButton.styleFrom(
-                                  foregroundColor: const Color(0xFF6C63FF),
-                                  textStyle: const TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w800,
-                                  ),
-                                ),
-                                child: Text(signupMode ? 'Giriş yap' : 'Kayıt ol'),
-                              ),
-                            ],
+                            ),
+                            child: const Text('Giriş yapmadan devam et (Test Modu)'),
                           ),
                         ),
                       ],

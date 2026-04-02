@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'package:google_fonts/google_fonts.dart';
+
 import '../../widgets/experience_ui.dart';
 
 class AppTheme {
@@ -15,6 +17,7 @@ class AppTheme {
 
     return ThemeData(
       useMaterial3: true,
+      textTheme: GoogleFonts.plusJakartaSansTextTheme(),
       colorScheme: colorScheme,
       scaffoldBackgroundColor: AppColors.white,
       appBarTheme: const AppBarTheme(
