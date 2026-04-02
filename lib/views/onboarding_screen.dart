@@ -388,8 +388,6 @@ class _Page1State extends State<_Page1> with SingleTickerProviderStateMixin {
             _FeatureChip(Icons.auto_awesome_rounded, 'Stil önerileri'),
           ],
         ),
-        const SizedBox(height: 10),
-        const _FeatureChip(Icons.chair_alt_rounded, 'Ürün keşfi'),
         const Spacer(flex: 2),
       ],
     );
