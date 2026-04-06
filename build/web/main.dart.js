@@ -105701,7 +105701,7 @@ break
 case 17:A.aeF()
 s=19
 return A.f(A.aZF(),$async$qB)
-case 19:try{$.k_=A.b9C("https://vgtgcjnrsladdharzkwn.supabase.co","eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZndGdjam5yc2xhZGRoYXJ6a3duIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDI4MjI5ODYsImV4cCI6MjA1ODM5ODk4Nn0.LTz_CXHIV1J28suMtS97VHEfczmMpOULDJjsTh_IXgk",null,B.IK,null,null,B.ro,B.rr,B.ru)
+case 19:try{$.k_=A.b9C("https://vgtgcjnrsladdharzkwn.supabase.co","eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZndGdjam5yc2xhZGRoYXJ6a3duIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM0MjU1NzEsImV4cCI6MjA4OTAwMTU3MX0.7P5QagZdPntMliL1m5Zte7DSDR0CYkgwoHR7js4wqPg",null,B.IK,null,null,B.ro,B.rr,B.ru)
 A.b8().$1("EvlumbaLive: initialized \u2192 https://vgtgcjnrsladdharzkwn.supabase.co")
 A.b8().$1("Evlumba DB connected")}catch(d){k=A.W(d)
 A.b8().$1("Evlumba init skipped: "+A.i(k))}return A.m(null,r)
