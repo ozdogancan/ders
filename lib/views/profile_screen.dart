@@ -132,11 +132,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
       ]));
     if (confirm != true) return;
     await FirebaseAuth.instance.signOut();
-    if (mounted) context.go('/auth');
+    if (!mounted) return;
+    // GoRouter referansını profil pop olmadan önce al
+    final router = GoRouter.of(context);
+    // Navigator.push stack'ını temizle (ProfileScreen dahil)
+    Navigator.of(context).popUntil((route) => route.isFirst);
+    // GoRouter ile /auth'a git (login mode) — router referansı hâlâ geçerli
+    router.go('/auth', extra: {'mode': 'login'});
   }
 
   void _goToLogin() {
-    context.push('/auth');
+    final router = GoRouter.of(context);
+    Navigator.of(context).popUntil((route) => route.isFirst);
+    router.go('/auth', extra: {'mode': 'login'});
   }
 
   @override

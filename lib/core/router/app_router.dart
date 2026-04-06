@@ -52,7 +52,11 @@ final GoRouter appRouter = GoRouter(
     // ─── Auth (giriş ekranı) ───
     GoRoute(
       path: '/auth',
-      builder: (context, state) => const AuthEntryScreen(mode: AuthFlowMode.signup),
+      builder: (context, state) {
+        final extra = state.extra as Map<String, dynamic>?;
+        final mode = extra?['mode'] == 'login' ? AuthFlowMode.login : AuthFlowMode.signup;
+        return AuthEntryScreen(mode: mode);
+      },
     ),
 
     // ─── Ana sekmeler (push ile açılır, geri butonu ile dönülür) ───
