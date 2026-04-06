@@ -349,12 +349,7 @@ class _HomeScreenState extends State<HomeScreen>
                     ),
                     const SizedBox(width: 10),
                     _Pressable(
-                      onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const ProfileScreen(),
-                        ),
-                      ),
+                      onTap: () => context.push('/profile'),
                       child: Container(
                         width: 36,
                         height: 36,
