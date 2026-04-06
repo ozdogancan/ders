@@ -12,6 +12,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:go_router/go_router.dart';
 import '../core/theme/koala_tokens.dart';
 import '../services/chat_persistence.dart';
+import '../services/analytics_service.dart';
 import '../services/koala_ai_service.dart';
 import '../services/messaging_service.dart';
 import '../services/notifications_service.dart';
@@ -43,6 +44,7 @@ class _HomeScreenState extends State<HomeScreen>
   @override
   void initState() {
     super.initState();
+    Analytics.screenViewed('home');
     WidgetsBinding.instance.addObserver(this);
     _staggerCtrl = AnimationController(
       vsync: this,
@@ -136,10 +138,12 @@ class _HomeScreenState extends State<HomeScreen>
     KoalaIntent? intent,
     Map<String, String>? params,
     String? text,
+    bool checkDiscovery = false,
   }) async {
-    // First chat interaction triggers style discovery once
-    final intercepted = await _showStyleDiscoveryIfNeeded();
-    if (intercepted || !mounted) return;
+    if (checkDiscovery) {
+      final intercepted = await _showStyleDiscoveryIfNeeded();
+      if (intercepted || !mounted) return;
+    }
     final fromDiscovery = _justCompletedDiscovery;
     _justCompletedDiscovery = false;
     Navigator.of(context).push(
@@ -250,6 +254,11 @@ class _HomeScreenState extends State<HomeScreen>
         bottom: false,
         child: Column(
           children: [
+            // ─── Scrollable content ───
+            Expanded(
+              child: SingleChildScrollView(
+                child: Column(
+                  children: [
             // ─── Top bar ───
             _staggered(
               0,
@@ -376,7 +385,7 @@ class _HomeScreenState extends State<HomeScreen>
             ),
 
             // ─── Center brand ───
-            const Spacer(),
+            const SizedBox(height: 24),
             _staggered(
               1,
               Column(
@@ -421,7 +430,7 @@ class _HomeScreenState extends State<HomeScreen>
                 ],
               ),
             ),
-            const Spacer(),
+            const SizedBox(height: 20),
 
             // ─── Action cards section ───
             Padding(
@@ -591,9 +600,13 @@ class _HomeScreenState extends State<HomeScreen>
             // ─── Aktif Mesajların ───
             _staggered(5, _ActiveConversationsRow()),
 
-            const SizedBox(height: 12),
+            const SizedBox(height: 16),
+                  ],
+                ),
+              ),
+            ),
 
-            // ─── Input bar ───
+            // ─── Input bar (sabit, scroll dışında) ───
             _staggered(
               6,
               _TypewriterInput(
@@ -983,12 +996,12 @@ class _SavedPreviewRowState extends State<_SavedPreviewRow> {
   }
 
   Future<void> _load() async {
-    final data = await SavedItemsService.getAll(limit: 5);
-    if (mounted)
-      setState(() {
-        _items = data;
-        _loaded = true;
-      });
+    try {
+      final data = await SavedItemsService.getAll(limit: 5);
+      if (mounted) setState(() { _items = data; _loaded = true; });
+    } catch (_) {
+      if (mounted) setState(() => _loaded = true);
+    }
   }
 
   @override
@@ -1093,12 +1106,12 @@ class _ActiveConversationsRowState extends State<_ActiveConversationsRow> {
   }
 
   Future<void> _load() async {
-    final data = await MessagingService.getConversations(limit: 3);
-    if (mounted)
-      setState(() {
-        _convs = data;
-        _loaded = true;
-      });
+    try {
+      final data = await MessagingService.getConversations(limit: 3);
+      if (mounted) setState(() { _convs = data; _loaded = true; });
+    } catch (_) {
+      if (mounted) setState(() => _loaded = true);
+    }
   }
 
   @override

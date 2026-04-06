@@ -274,16 +274,12 @@ class KoalaAIService {
   Future<KoalaResponse> askWithPhoto(Uint8List photo, {String? text, List<Map<String, String>>? history}) =>
     askWithIntent(intent: KoalaIntent.photoAnalysis, freeText: text, photo: photo, history: history);
 
-  // ── Gemini API ──
+  // ── Gemini API (via proxy) ──
+
+  /// Proxy URL for Koala API backend
+  Uri get _proxyUri => Uri.parse('${Env.koalaApiUrl}/api/chat');
 
   Future<KoalaResponse> _callGemini({required String prompt, List<Map<String, String>>? history}) async {
-    if (Env.geminiApiKey.isEmpty) throw StateError('GEMINI_API_KEY missing');
-
-    final uri = Uri.parse(
-      'https://generativelanguage.googleapis.com/v1beta/models/'
-      '${Uri.encodeComponent(Env.geminiModel)}:generateContent?key=${Env.geminiApiKey}',
-    );
-
     final contents = <Map<String, dynamic>>[];
 
     // Conversation history (last 10 messages for context)
@@ -310,8 +306,8 @@ class KoalaAIService {
       },
     };
 
-    debugPrint('KoalaAI: Sending request (${contents.length} messages)...');
-    final response = await _client.post(uri, headers: {'Content-Type': 'application/json'}, body: jsonEncode(payload));
+    debugPrint('KoalaAI: Sending request via proxy (${contents.length} messages)...');
+    final response = await _client.post(_proxyUri, headers: {'Content-Type': 'application/json'}, body: jsonEncode(payload));
 
     if (response.statusCode >= 300) {
       debugPrint('KoalaAI ERROR ${response.statusCode}: ${response.body.substring(0, 300.clamp(0, response.body.length))}');
@@ -322,13 +318,6 @@ class KoalaAIService {
   }
 
   Future<KoalaResponse> _callGeminiWithImage({required String prompt, required Uint8List imageBytes}) async {
-    if (Env.geminiApiKey.isEmpty) throw StateError('GEMINI_API_KEY missing');
-
-    final uri = Uri.parse(
-      'https://generativelanguage.googleapis.com/v1beta/models/'
-      '${Uri.encodeComponent(Env.geminiModel)}:generateContent?key=${Env.geminiApiKey}',
-    );
-
     final payload = {
       'contents': [
         {
@@ -344,7 +333,7 @@ class KoalaAIService {
       },
     };
 
-    final response = await _client.post(uri, headers: {'Content-Type': 'application/json'}, body: jsonEncode(payload));
+    final response = await _client.post(_proxyUri, headers: {'Content-Type': 'application/json'}, body: jsonEncode(payload));
 
     if (response.statusCode >= 300) {
       throw Exception('Gemini image failed: ${response.statusCode}');
@@ -371,12 +360,6 @@ class KoalaAIService {
     required String prompt,
     List<Map<String, String>>? history,
   }) async {
-    if (Env.geminiApiKey.isEmpty) throw StateError('GEMINI_API_KEY missing');
-
-    final uri = Uri.parse(
-      'https://generativelanguage.googleapis.com/v1beta/models/'
-      '${Uri.encodeComponent(Env.geminiModel)}:generateContent?key=${Env.geminiApiKey}',
-    );
 
     // Mesaj geçmişi hazırla
     final contents = <Map<String, dynamic>>[];
@@ -406,7 +389,7 @@ class KoalaAIService {
 
       debugPrint('KoalaAI: Tools request turn=$turn (${contents.length} messages)...');
       final response = await _client.post(
-        uri,
+        _proxyUri,
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode(payload),
       );
@@ -555,13 +538,6 @@ class KoalaAIService {
     required String prompt,
     List<Map<String, String>>? history,
   }) async* {
-    if (Env.geminiApiKey.isEmpty) throw StateError('GEMINI_API_KEY missing');
-
-    final uri = Uri.parse(
-      'https://generativelanguage.googleapis.com/v1beta/models/'
-      '${Uri.encodeComponent(Env.geminiModel)}:streamGenerateContent?key=${Env.geminiApiKey}&alt=sse',
-    );
-
     final contents = <Map<String, dynamic>>[];
     if (history != null) {
       final recent = history.length > 20 ? history.sublist(history.length - 20) : history;
@@ -576,13 +552,14 @@ class KoalaAIService {
 
     final payload = jsonEncode({
       'contents': contents,
+      'stream': true,
       'generationConfig': {
         'temperature': 0.7,
         'responseMimeType': 'application/json',
       },
     });
 
-    final request = http.Request('POST', uri)
+    final request = http.Request('POST', _proxyUri)
       ..headers['Content-Type'] = 'application/json'
       ..body = payload;
 

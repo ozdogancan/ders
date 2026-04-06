@@ -71,6 +71,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
   @override
   void initState() {
     super.initState();
+    Analytics.screenViewed('chat_detail');
     _chatId = widget.chatId ?? 'chat_${DateTime.now().millisecondsSinceEpoch}';
     _loadUserPreferences();
     _scroll.addListener(_onScrollChanged);
@@ -343,7 +344,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     } catch (e) {
       debugPrint('AI bridge error: $e');
       setState(() {
-        _msgs.add(_Msg(role: 'koala', text: null, isError: true, errorMsg: e.toString()));
+        _msgs.add(_Msg(role: 'koala', text: null, isError: true, errorMsg: _friendlyError(e)));
         _loading = false;
       });
     }
@@ -354,8 +355,11 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
   // ── AI ──
   Future<void> _sendToAI({String? text, Uint8List? photo}) async {
     if (text == null && photo == null) return;
-    if (_msgs.isEmpty && text != null && text.length > 3) {
-      _chatTitle = text.length > 30 ? '${text.substring(0, 30)}...' : text;
+    if (_msgs.isEmpty) {
+      Analytics.aiChatStarted(photo != null ? 'photo' : 'text');
+      if (text != null && text.length > 3) {
+        _chatTitle = text.length > 30 ? '${text.substring(0, 30)}...' : text;
+      }
     }
 
     setState(() {
@@ -391,13 +395,14 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
       }
     } catch (e) {
       debugPrint('AI error: $e');
+      Analytics.aiErrorOccurred(e.toString().substring(0, 200.clamp(0, e.toString().length)));
       setState(() {
         _msgs.add(
           _Msg(
             role: 'koala',
             text: null,
             isError: true,
-            errorMsg: e.toString(),
+            errorMsg: _friendlyError(e),
           ),
         );
         _loading = false;
@@ -405,6 +410,27 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     }
     _scrollDown();
     _persist();
+  }
+
+  /// Hata mesajını kullanıcı dostu Türkçe'ye çevir
+  static String _friendlyError(Object e) {
+    final s = e.toString().toLowerCase();
+    if (s.contains('timeout') || s.contains('timed out')) {
+      return 'Yanıt almak biraz uzun sürdü. Tekrar dener misin?';
+    }
+    if (s.contains('socket') || s.contains('connection') || s.contains('network')) {
+      return 'İnternet bağlantın kopmuş olabilir. Bağlantını kontrol edip tekrar dene.';
+    }
+    if (s.contains('429') || s.contains('rate limit')) {
+      return 'Çok fazla istek gönderildi. Birkaç saniye bekleyip tekrar dene.';
+    }
+    if (s.contains('500') || s.contains('server') || s.contains('internal')) {
+      return 'Sunucuda geçici bir sorun var. Biraz sonra tekrar dene.';
+    }
+    if (s.contains('format') || s.contains('parse') || s.contains('json')) {
+      return 'Yanıt beklenmeyen formatta geldi. Tekrar dener misin?';
+    }
+    return 'Bir sorun oluştu. Tekrar denemek için butona dokun.';
   }
 
   Future<void> _sendToAIWithIntent({
@@ -432,7 +458,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
             role: 'koala',
             text: null,
             isError: true,
-            errorMsg: e.toString(),
+            errorMsg: _friendlyError(e),
             intent: intent,
             intentParams: params,
           ),
@@ -1465,6 +1491,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
   );
 
   Widget _renderCard(KoalaCard card) {
+    Analytics.aiCardDisplayed(card.type);
     switch (card.type) {
       case 'question_chips':
         return _QuestionChips(card.data, onTap: _onChipTap);

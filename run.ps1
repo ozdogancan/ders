@@ -1,7 +1,8 @@
-﻿flutter run -d chrome `
+flutter run -d chrome `
   --dart-define=AI_PROVIDER=gemini `
-  --dart-define=GEMINI_API_KEY=AIzaSyCho-bd1MxrpokiEovfIJnbYeC6m4QNwlQ `
-  --dart-define=GEMINI_MODEL=gemini-2.5-flash `
+  --dart-define=KOALA_API_URL=https://koala-api-olive.vercel.app `
   --dart-define=SUPABASE_URL=https://xgefjepaqnghaotqybpi.supabase.co `
   --dart-define=SUPABASE_ANON_KEY=sb_publishable_ogP9BmI1n7xxUCTz3xDijA_xeIDyl7k `
+  --dart-define=EVLUMBA_SUPABASE_URL=https://vgtgcjnrsladdharzkwn.supabase.co `
+  --dart-define=EVLUMBA_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZndGdjam5yc2xhZGRoYXJ6a3duIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM0MjU1NzEsImV4cCI6MjA4OTAwMTU3MX0.7P5QagZdPntMliL1m5Zte7DSDR0CYkgwoHR7js4wqPg `
   --dart-define=REQUIRE_LOGIN=false

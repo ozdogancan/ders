@@ -32,14 +32,18 @@ class Env {
     defaultValue: 'question-images',
   );
 
-  // Evlumba DB (source of truth)
+  // Evlumba DB (source of truth) — keys must be passed via --dart-define
   static const String evlumbaUrl = String.fromEnvironment(
     'EVLUMBA_SUPABASE_URL',
-    defaultValue: 'https://vgtgcjnrsladdharzkwn.supabase.co',
   );
   static const String evlumbaAnonKey = String.fromEnvironment(
     'EVLUMBA_SUPABASE_ANON_KEY',
-    defaultValue: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZndGdjam5yc2xhZGRoYXJ6a3duIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM0MjU1NzEsImV4cCI6MjA4OTAwMTU3MX0.7P5QagZdPntMliL1m5Zte7DSDR0CYkgwoHR7js4wqPg',
+  );
+
+  // Koala API proxy (Next.js backend)
+  static const String koalaApiUrl = String.fromEnvironment(
+    'KOALA_API_URL',
+    defaultValue: 'https://koala-api-olive.vercel.app',
   );
 
   static const bool requireLogin = bool.fromEnvironment(

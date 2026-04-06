@@ -134,23 +134,51 @@ class _SavedListState extends State<_SavedList>
   Future<void> _loadMore() async {
     if (_loadingMore || !_hasMore) return;
     setState(() => _loadingMore = true);
-    final data = await SavedItemsService.getByType(widget.type, limit: _pageSize, offset: _items.length);
-    if (mounted) {
-      setState(() {
-        _items.addAll(data);
-        _loadingMore = false;
-        _hasMore = data.length >= _pageSize;
-      });
+    try {
+      final data = await SavedItemsService.getByType(widget.type, limit: _pageSize, offset: _items.length);
+      if (mounted) {
+        setState(() {
+          _items.addAll(data);
+          _loadingMore = false;
+          _hasMore = data.length >= _pageSize;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _loadingMore = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Daha fazla yüklenemedi, tekrar dene'),
+            behavior: SnackBarBehavior.floating,
+            action: SnackBarAction(label: 'Tekrar', onPressed: _loadMore),
+          ),
+        );
+      }
     }
   }
 
   Future<void> _removeItem(int index) async {
     final item = _items[index];
     final id = item['item_id'] as String? ?? '';
-    final success = await SavedItemsService.removeItem(
-      type: widget.type,
-      itemId: id,
-    );
+    bool success;
+    try {
+      success = await SavedItemsService.removeItem(
+        type: widget.type,
+        itemId: id,
+      );
+    } catch (_) {
+      success = false;
+    }
+    if (!mounted) return;
+    if (!success) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Silme işlemi başarısız oldu'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
     if (success && mounted) {
       final removed = _items[index];
       setState(() => _items.removeAt(index));

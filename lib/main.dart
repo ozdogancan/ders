@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -19,6 +20,17 @@ void main() {
   WidgetsFlutterBinding.ensureInitialized();
   PaintingBinding.instance.imageCache.maximumSizeBytes = 100 * 1024 * 1024;
   PaintingBinding.instance.imageCache.maximumSize = 200;
+
+  // Global error handler — unhandled exceptions don't crash the app
+  FlutterError.onError = (details) {
+    FlutterError.presentError(details);
+    debugPrint('FlutterError: ${details.exceptionAsString()}');
+  };
+  PlatformDispatcher.instance.onError = (error, stack) {
+    debugPrint('Unhandled: $error\n$stack');
+    return true; // prevents crash
+  };
+
   runApp(const _BootstrapApp());
 }
 

@@ -6,13 +6,14 @@ import 'package:http/http.dart' as http;
 
 import '../core/config/env.dart';
 
-/// Generates interior design images using Gemini 2.5 Flash Image (Nano Banana)
+/// Generates interior design images using Gemini image generation via Koala API proxy
 /// Free tier: 500 images/day
 class KoalaImageService {
   KoalaImageService({http.Client? client}) : _client = client ?? http.Client();
   final http.Client _client;
 
-  static const _model = 'gemini-2.5-flash-preview-image-generation';
+  /// Proxy URL for image generation
+  Uri get _proxyUri => Uri.parse('${Env.koalaApiUrl}/api/image');
 
   /// Generate a room redesign image based on style + room type
   Future<Uint8List?> generateRoomDesign({
@@ -52,13 +53,6 @@ layout on a white background. Professional, clean, magazine-quality layout.
     required String style,
     required String changes,
   }) async {
-    if (Env.geminiApiKey.isEmpty) return null;
-
-    final uri = Uri.parse(
-      'https://generativelanguage.googleapis.com/v1beta/models/'
-      '$_model:generateContent?key=${Env.geminiApiKey}',
-    );
-
     final payload = {
       'contents': [
         {
@@ -86,7 +80,7 @@ Make it photorealistic, professional interior photography quality.
 
     try {
       final response = await _client.post(
-        uri,
+        _proxyUri,
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode(payload),
       );
@@ -103,15 +97,8 @@ Make it photorealistic, professional interior photography quality.
     }
   }
 
-  /// Core image generation call
+  /// Core image generation call (via proxy)
   Future<Uint8List?> _generateImage(String prompt) async {
-    if (Env.geminiApiKey.isEmpty) return null;
-
-    final uri = Uri.parse(
-      'https://generativelanguage.googleapis.com/v1beta/models/'
-      '$_model:generateContent?key=${Env.geminiApiKey}',
-    );
-
     final payload = {
       'contents': [
         {
@@ -126,9 +113,9 @@ Make it photorealistic, professional interior photography quality.
     };
 
     try {
-      debugPrint('KoalaImage: Generating image...');
+      debugPrint('KoalaImage: Generating image via proxy...');
       final response = await _client.post(
-        uri,
+        _proxyUri,
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode(payload),
       );

@@ -104,7 +104,7 @@ class SavedItemsService {
       return List<Map<String, dynamic>>.from(res);
     } catch (e) {
       debugPrint('SavedItemsService.getByType error: $e');
-      return [];
+      rethrow;
     }
   }
 
@@ -124,7 +124,7 @@ class SavedItemsService {
       return List<Map<String, dynamic>>.from(res);
     } catch (e) {
       debugPrint('SavedItemsService.getAll error: $e');
-      return [];
+      rethrow;
     }
   }
 

@@ -111,7 +111,7 @@ class MessagingService {
       return List<Map<String, dynamic>>.from(res);
     } catch (e) {
       debugPrint('MessagingService.getConversations error: $e');
-      return [];
+      rethrow;
     }
   }
 

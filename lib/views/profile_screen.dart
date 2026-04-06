@@ -5,6 +5,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' hide AuthState, User;
 
 import '../core/theme/koala_tokens.dart';
+import '../services/analytics_service.dart';
 import '../services/collections_service.dart';
 import '../services/saved_items_service.dart';
 import 'admin/admin_shell.dart';
@@ -31,6 +32,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   void initState() {
     super.initState();
+    Analytics.screenViewed('profile');
     _displayName = _user?.displayName ?? '';
     _email = _user?.email ?? '';
     _photoUrl = _user?.photoURL;
@@ -57,24 +59,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
       if (image == null) return;
       final bytes = await image.readAsBytes();
       final fileName = 'profile_${_user!.uid}_${DateTime.now().millisecondsSinceEpoch}.jpg';
-      try {
-        final supabase = Supabase.instance.client;
-        await supabase.storage.from('avatars').uploadBinary(fileName, bytes,
-          fileOptions: const FileOptions(contentType: 'image/jpeg', upsert: true));
-        final publicUrl = supabase.storage.from('avatars').getPublicUrl(fileName);
-        await _user.updatePhotoURL(publicUrl);
+      final supabase = Supabase.instance.client;
+      await supabase.storage.from('avatars').uploadBinary(fileName, bytes,
+        fileOptions: const FileOptions(contentType: 'image/jpeg', upsert: true));
+      final publicUrl = supabase.storage.from('avatars').getPublicUrl(fileName);
+      await _user.updatePhotoURL(publicUrl);
+      if (mounted) {
         setState(() => _photoUrl = publicUrl);
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           behavior: SnackBarBehavior.floating, backgroundColor: const Color(0xFF22C55E),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
           content: const Text('Profil fotoğrafı güncellendi', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600))));
-        }
-      } catch (e) {
-        debugPrint('Photo upload error: $e');
       }
     } catch (e) {
-      debugPrint('Image picker error: $e');
+      debugPrint('Photo error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          behavior: SnackBarBehavior.floating, backgroundColor: const Color(0xFFEF4444),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          content: const Text('Fotoğraf yüklenemedi, tekrar dene', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600))));
+      }
     }
   }
 
@@ -94,10 +98,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
         FilledButton(
           onPressed: () async {
             final name = ctrl.text.trim();
-            if (name.isEmpty) return;
+            if (name.isEmpty || name.length > 50) return;
             Navigator.pop(ctx);
-            await _user?.updateDisplayName(name);
-            setState(() => _displayName = name);
+            try {
+              await _user?.updateDisplayName(name);
+              if (mounted) setState(() => _displayName = name);
+            } catch (e) {
+              debugPrint('Name update error: $e');
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                  content: Text('İsim güncellenemedi'),
+                  behavior: SnackBarBehavior.floating));
+              }
+            }
           },
           style: FilledButton.styleFrom(backgroundColor: KoalaColors.accent),
           child: const Text('Kaydet')),

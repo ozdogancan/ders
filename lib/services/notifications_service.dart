@@ -57,7 +57,7 @@ class NotificationsService {
       return List<Map<String, dynamic>>.from(res);
     } catch (e) {
       debugPrint('NotificationsService.getAll error: $e');
-      return [];
+      rethrow;
     }
   }
 
@@ -77,7 +77,7 @@ class NotificationsService {
       return List<Map<String, dynamic>>.from(res);
     } catch (e) {
       debugPrint('NotificationsService.getUnread error: $e');
-      return [];
+      rethrow;
     }
   }
 

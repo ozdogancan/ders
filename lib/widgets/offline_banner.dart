@@ -28,7 +28,7 @@ class OfflineBanner extends StatelessWidget {
               const SizedBox(width: 10),
               const Expanded(
                 child: Text(
-                  'Bağlantı yok — çevrimdışı moddasın',
+                  'Bağlantı yok — çevrimdışı moddayız',
                   style: TextStyle(fontSize: 12, color: Color(0xFF9A3412), fontWeight: FontWeight.w500),
                 ),
               ),
