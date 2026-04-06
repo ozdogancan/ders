@@ -1,9 +1,11 @@
+import 'dart:math';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../core/theme/koala_tokens.dart';
@@ -78,18 +80,29 @@ class ProductEntryScreen extends StatefulWidget {
 }
 
 class _ProductEntryScreenState extends State<ProductEntryScreen> {
-  static const _chips = <_ChipOption>[
-    _ChipOption('🛋️', 'Salon'),
-    _ChipOption('🛏️', 'Yatak Odası'),
-    _ChipOption('🍳', 'Mutfak'),
-    _ChipOption('📸', 'Fotoğraf çekeyim'),
-  ];
+  // Chip'ler dinamik oluşturulacak (DB'deki gerçek oda tiplerine göre)
+  List<_ChipOption> _chips = <_ChipOption>[];
+
+  static const _roomEmojis = <String, String>{
+    'Oturma Odası': '🛋️',
+    'Salon': '🛋️',
+    'Yatak Odası': '🛏️',
+    'Mutfak': '🍳',
+    'Banyo': '🛁',
+    'Antre': '🚪',
+  };
 
   final TextEditingController _input = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final List<_DiscoveryCard> _allCards = <_DiscoveryCard>[];
   final List<_DiscoveryCard> _cards = <_DiscoveryCard>[];
   final List<_ConversationTurn> _turns = <_ConversationTurn>[];
+
+  // Kullanıcının stil profili (style discovery'den)
+  String? _userStyle;
+  String? _userRoom;
+  String? _userBudget;
+  List<String> _userColors = [];
 
   bool _loading = true;
   final bool _fetchingReply = false;
@@ -122,7 +135,16 @@ class _ProductEntryScreenState extends State<ProductEntryScreen> {
   @override
   void initState() {
     super.initState();
+    _loadUserPreferences();
     _loadProjects();
+  }
+
+  Future<void> _loadUserPreferences() async {
+    final prefs = await SharedPreferences.getInstance();
+    _userStyle = prefs.getString('onb_style');
+    _userRoom = prefs.getString('onb_room');
+    _userBudget = prefs.getString('onb_budget');
+    _userColors = prefs.getStringList('onb_colors') ?? [];
   }
 
   @override
@@ -143,9 +165,14 @@ class _ProductEntryScreenState extends State<ProductEntryScreen> {
     }
 
     try {
-      final projects = await EvlumbaLiveService.getProjects(limit: 12);
+      // Daha geniş havuz — her alan için yeterli proje olsun
+      final projects = await EvlumbaLiveService.getProjects(limit: 60);
+
+      // Her designer'ı sadece bir kez çek
+      final designerCache = <String, Map<String, dynamic>?>{};
+
       final cards = await Future.wait(
-        projects.take(8).map((project) async {
+        projects.map((project) async {
           final next = Map<String, dynamic>.from(project);
           final designerId = (project['designer_id'] ?? '').toString();
           final projectId = (project['id'] ?? '').toString();
@@ -154,10 +181,15 @@ class _ProductEntryScreenState extends State<ProductEntryScreen> {
           List<Map<String, dynamic>> products = <Map<String, dynamic>>[];
 
           if (designerId.isNotEmpty) {
-            try {
-              designer = await EvlumbaLiveService.getDesigner(designerId);
-              if (designer != null) next['profiles'] = designer;
-            } catch (_) {}
+            if (designerCache.containsKey(designerId)) {
+              designer = designerCache[designerId];
+            } else {
+              try {
+                designer = await EvlumbaLiveService.getDesigner(designerId);
+                designerCache[designerId] = designer;
+              } catch (_) {}
+            }
+            if (designer != null) next['profiles'] = designer;
           }
 
           if (projectId.isNotEmpty) {
@@ -182,10 +214,51 @@ class _ProductEntryScreenState extends State<ProductEntryScreen> {
       );
 
       if (!mounted) return;
+
+      // DB'deki gerçek oda tiplerine göre dinamik chip oluştur
+      final roomCounts = <String, int>{};
+      for (final project in projects) {
+        final pt = (project['project_type'] ?? '').toString().trim();
+        if (pt.isNotEmpty) {
+          roomCounts[pt] = (roomCounts[pt] ?? 0) + 1;
+        }
+      }
+
+      final dynamicChips = <_ChipOption>[];
+      // Kullanıcının tercih ettiği odayı önce koy
+      final roomKeyToType = <String, String>{
+        'salon': 'Oturma Odası',
+        'yatak_odasi': 'Yatak Odası',
+        'banyo': 'Banyo',
+        'mutfak': 'Mutfak',
+        'antre': 'Antre',
+      };
+      String? userPreferredType;
+      if (_userRoom != null && roomKeyToType.containsKey(_userRoom)) {
+        userPreferredType = roomKeyToType[_userRoom];
+      }
+
+      final sortedRooms = roomCounts.entries.toList()
+        ..sort((a, b) {
+          // Kullanıcının tercih ettiği oda en üste
+          if (a.key == userPreferredType) return -1;
+          if (b.key == userPreferredType) return 1;
+          return b.value.compareTo(a.value);
+        });
+
+      for (final entry in sortedRooms) {
+        if (entry.value >= 3) {
+          final label = entry.key == 'Oturma Odası' ? 'Salon' : entry.key;
+          final emoji = _roomEmojis[entry.key] ?? _roomEmojis[label] ?? '🏠';
+          dynamicChips.add(_ChipOption(emoji, label));
+        }
+      }
+
       setState(() {
         _allCards
           ..clear()
           ..addAll(cards);
+        _chips = dynamicChips;
         _loading = false;
       });
     } catch (e) {
@@ -220,9 +293,19 @@ class _ProductEntryScreenState extends State<ProductEntryScreen> {
   static String _guessArea(Map<String, dynamic> project) {
     final type = _normalize((project['project_type'] ?? '').toString());
     final title = _normalize((project['title'] ?? '').toString());
+    final desc = _normalize((project['description'] ?? '').toString());
+    final combined = '$type $title $desc';
 
-    if (type.contains('yatak') || title.contains('yatak')) return 'Yatak Odası';
-    if (type.contains('mutfak') || title.contains('mutfak')) return 'Mutfak';
+    if (combined.contains('yatak')) return 'Yatak Odası';
+    if (combined.contains('mutfak')) return 'Mutfak';
+    if (combined.contains('banyo')) return 'Banyo';
+    if (combined.contains('antre') || combined.contains('giris')) return 'Antre';
+    if (combined.contains('oturma') || combined.contains('salon')) return 'Salon';
+    // project_type alanı doğrudan kontrol
+    final rawType = (project['project_type'] ?? '').toString().trim();
+    if (rawType == 'Oturma Odası') return 'Salon';
+    if (rawType == 'Banyo') return 'Banyo';
+    if (rawType == 'Antre') return 'Antre';
     return 'Salon';
   }
 
@@ -236,6 +319,9 @@ class _ProductEntryScreenState extends State<ProductEntryScreen> {
     }
     if (area == 'Mutfak') {
       return 'Net yüzeyler ve kontrollü yerleşim, mutfakta ferahlık ve kullanım kolaylığını birlikte taşıyor.';
+    }
+    if (area == 'Banyo') {
+      return 'Temiz çizgiler ve fonksiyonel yerleşim, banyoda ferahlık ve düzen hissini güçlendiriyor.';
     }
     if (productCount > 0) {
       return 'Bu yön, uygulanabilir ürün diliyle daha güçlü; istersen ürünleri tek tek de çıkarabilirim.';
@@ -265,7 +351,7 @@ class _ProductEntryScreenState extends State<ProductEntryScreen> {
     return (images.first['image_url'] ?? '').toString();
   }
 
-  void _pickArea(String label, String userMessage) {
+  void _pickArea(String label, String userMessage, {bool excludePrev = false}) {
     HapticFeedback.lightImpact();
     final turn = _ConversationTurn(
       area: label,
@@ -282,14 +368,14 @@ class _ProductEntryScreenState extends State<ProductEntryScreen> {
       _turns.add(turn);
     });
     _scrollToBottom();
-    _loadReplyFor(turn);
+    _loadReplyFor(turn, excludePrev: excludePrev);
   }
 
-  Future<void> _loadReplyFor(_ConversationTurn turn) async {
+  Future<void> _loadReplyFor(_ConversationTurn turn, {bool excludePrev = false}) async {
     await Future<void>.delayed(const Duration(milliseconds: 850));
     if (!mounted) return;
 
-    final matches = _filterCards(turn.area);
+    final matches = _filterCards(turn.area, excludePrev: excludePrev);
     setState(() {
       turn.cards
         ..clear()
@@ -303,33 +389,108 @@ class _ProductEntryScreenState extends State<ProductEntryScreen> {
     });
   }
 
-  List<_DiscoveryCard> _filterCards(String area) {
+  List<_DiscoveryCard> _filterCards(String area, {bool excludePrev = false}) {
     final normalized = _normalize(area);
+    final rng = Random();
+
+    // Alanla eşleşen projeleri bul
     final filtered = _allCards.where((card) {
       final guessed = _normalize(_guessArea(card.project));
       if (normalized.contains('yatak')) return guessed.contains('yatak');
       if (normalized.contains('mutfak')) return guessed.contains('mutfak');
-      if (normalized.contains('salon')) return guessed.contains('salon');
+      if (normalized.contains('salon') || normalized.contains('oturma')) {
+        return guessed.contains('salon');
+      }
+      if (normalized.contains('banyo')) return guessed.contains('banyo');
+      if (normalized.contains('antre')) return guessed.contains('antre');
       return true;
-    }).take(5).toList();
+    }).toList();
 
-    final base = filtered.isEmpty ? _allCards.take(5).toList() : filtered;
-    return base
-        .map(
-          (card) => _DiscoveryCard(
-            project: card.project,
-            designer: card.designer,
-            productCount: card.productCount,
-            badge: area == 'Salon' ? 'Salon' : _badgeForProject(card.project, card.designer),
-            reason: _reasonForArea(
-              area: area,
-              designer: card.designer,
-              productCount: card.productCount,
-            ),
-            rating: card.rating,
-          ),
-        )
-        .toList();
+    var candidates = filtered.isEmpty ? List<_DiscoveryCard>.from(_allCards) : filtered;
+
+    // Önceki turnlarda gösterilen projeleri hariç tut
+    if (excludePrev && _turns.isNotEmpty) {
+      final prevIds = <String>{};
+      for (final turn in _turns.reversed.take(3)) {
+        for (final card in turn.cards) {
+          final id = (card.project['id'] ?? '').toString();
+          if (id.isNotEmpty) prevIds.add(id);
+        }
+      }
+      final fresh = candidates
+          .where((c) => !prevIds.contains((c.project['id'] ?? '').toString()))
+          .toList();
+      if (fresh.length >= 2) candidates = fresh;
+    }
+
+    // Stil profili ile skorlama
+    final scored = candidates.map((card) {
+      var score = 0.0;
+
+      // Ürünü olan projelere bonus
+      score += card.productCount * 3;
+
+      // Rating bonusu
+      score += card.rating;
+
+      // Kullanıcının tercih ettiği oda ile eşleşme bonusu
+      if (_userRoom != null && _userRoom!.isNotEmpty) {
+        final cardArea = _normalize(_guessArea(card.project));
+        final roomMap = {
+          'salon': 'salon', 'yatak_odasi': 'yatak',
+          'banyo': 'banyo', 'mutfak': 'mutfak', 'antre': 'antre',
+        };
+        final userRoomNorm = roomMap[_userRoom] ?? _userRoom!;
+        if (cardArea.contains(userRoomNorm)) score += 4;
+      }
+
+      // Proje açıklamasında stil anahtar kelimeleri eşleştir
+      if (_userStyle != null && _userStyle!.isNotEmpty) {
+        final desc = _normalize(
+          '${card.project['description'] ?? ''} ${card.project['title'] ?? ''}',
+        );
+        final styleKeywords = <String, List<String>>{
+          'modern': ['modern', 'minimal', 'cagdas', 'contemporary'],
+          'minimalist': ['minimal', 'sade', 'temiz', 'pure'],
+          'scandinavian': ['iskandinav', 'skandinav', 'nordic', 'beyaz'],
+          'bohemian': ['bohem', 'bohemian', 'eklektik', 'renkli'],
+          'industrial': ['endustriyel', 'industrial', 'loft', 'metal'],
+          'japandi': ['japandi', 'japon', 'zen', 'dogal'],
+          'classic': ['klasik', 'classic', 'geleneksel', 'elegans'],
+          'luxury': ['luks', 'premium', 'luxury', 'marmer'],
+        };
+        final keywords = styleKeywords[_userStyle] ?? [_userStyle!];
+        for (final kw in keywords) {
+          if (desc.contains(kw)) {
+            score += 5;
+            break;
+          }
+        }
+      }
+
+      // Küçük rastgelelik (aynı skor grubunda çeşitlilik)
+      score += rng.nextDouble() * 2;
+
+      return MapEntry(card, score);
+    }).toList();
+
+    scored.sort((a, b) => b.value.compareTo(a.value));
+
+    return scored.take(5).map((entry) {
+      final card = entry.key;
+      return _DiscoveryCard(
+        project: card.project,
+        designer: card.designer,
+        productCount: card.productCount,
+        badge: _badgeForProject(card.project, card.designer),
+        reason: _reasonForArea(
+          area: area,
+          designer: card.designer,
+          productCount: card.productCount,
+        ),
+        rating: card.rating,
+      );
+    }).toList();
   }
 
   String _assistantIntroText([String? area]) {
@@ -368,19 +529,29 @@ class _ProductEntryScreenState extends State<ProductEntryScreen> {
         : '';
     final strongProductSet = matches.where((card) => card.productCount > 0).length;
 
+    // Stil profili varsa kişiselleştirilmiş not ekle
+    final styleNote = _userStyle != null && _userStyle!.isNotEmpty
+        ? ' Senin stil profiline göre en uyumlu olanları öne aldım.'
+        : '';
+
     if (_normalize(area).contains('mutfak')) {
       return secondTitle.isNotEmpty
-          ? 'Mutfak için biri daha ferah, diğeri daha karakterli duran iki ana yön seçtim: $firstTitle ve $secondTitle. Ürün dili daha uygulanabilir olanları öne aldım.'
-          : 'Mutfak için ilk bakmanı istediğim yön $firstTitle. Kullanım rahatlığı ve ferahlık burada daha dengeli duruyor.';
+          ? 'Mutfak için biri daha ferah, diğeri daha karakterli duran iki ana yön seçtim: $firstTitle ve $secondTitle.$styleNote'
+          : 'Mutfak için ilk bakmanı istediğim yön $firstTitle.$styleNote';
     }
     if (_normalize(area).contains('yatak')) {
       return secondTitle.isNotEmpty
-          ? 'Yatak odasında sakinlik hissi en iyi çalışan iki yön öne çıktı: $firstTitle ve $secondTitle. Ton ve doku dengesi daha güvenli duranları seçtim.'
-          : 'Yatak odası için en sakin ve güvenli his veren yön $firstTitle oldu.';
+          ? 'Yatak odasında sakinlik hissi en iyi çalışan iki yön öne çıktı: $firstTitle ve $secondTitle.$styleNote'
+          : 'Yatak odası için en sakin ve güvenli his veren yön $firstTitle oldu.$styleNote';
+    }
+    if (_normalize(area).contains('banyo')) {
+      return secondTitle.isNotEmpty
+          ? 'Banyo için temiz çizgileri ve fonksiyonel yerleşimi güçlü duran iki yön: $firstTitle ve $secondTitle.$styleNote'
+          : 'Banyo için ilk bakmanı istediğim yön $firstTitle.$styleNote';
     }
     return strongProductSet > 0
-        ? 'Alanın için ürün dili güçlü duran ${matches.length} öneri süzdüm. İlk bakmanı istediğim yön $firstTitle.'
-        : 'Alanın için dengeli duran ${matches.length} öneri süzdüm. İlk bakmanı istediğim yön $firstTitle.';
+        ? 'Alanın için ürün dili güçlü duran ${matches.length} öneri süzdüm. İlk bakmanı istediğim yön $firstTitle.$styleNote'
+        : 'Alanın için dengeli duran ${matches.length} öneri süzdüm. İlk bakmanı istediğim yön $firstTitle.$styleNote';
   }
 
   void _submit() {
@@ -388,14 +559,24 @@ class _ProductEntryScreenState extends State<ProductEntryScreen> {
     if (text.isEmpty) return;
     _input.clear();
 
+    final normalizedText = _normalize(text);
     final resolvedArea = _resolveArea(text) ?? _selectedArea ?? 'Salon';
-    _pickArea(resolvedArea, text);
+
+    // "Başka" / "farklı" gibi kelimeler varsa önceki sonuçları hariç tut
+    final wantsDifferent = normalizedText.contains('baska') ||
+        normalizedText.contains('farkli') ||
+        normalizedText.contains('daha') ||
+        normalizedText.contains('yeni');
+
+    _pickArea(resolvedArea, text, excludePrev: wantsDifferent);
   }
 
   String? _resolveArea(String text) {
     final normalized = _normalize(text);
     if (normalized.contains('yatak')) return 'Yatak Odası';
     if (normalized.contains('mutfak')) return 'Mutfak';
+    if (normalized.contains('banyo')) return 'Banyo';
+    if (normalized.contains('antre') || normalized.contains('giris')) return 'Antre';
     if (normalized.contains('salon') || normalized.contains('oturma')) return 'Salon';
     if (normalized.contains('foto') || normalized.contains('fotograf')) {
       return 'Fotoğraf çekeyim';
@@ -404,15 +585,45 @@ class _ProductEntryScreenState extends State<ProductEntryScreen> {
   }
 
   void _onPromptTap(String prompt) {
-    if (prompt.contains('başka bir alan')) {
-      HapticFeedback.selectionClick();
-      setState(() {
-        _selectedArea = null;
-      });
+    final normalizedPrompt = _normalize(prompt);
+    final area = _selectedArea ?? 'Salon';
+
+    // "Başka alan seçmek istiyorum" → inline chip'leri göster
+    if (normalizedPrompt.contains('baska bir alan')) {
+      HapticFeedback.lightImpact();
+      final turn = _ConversationTurn(
+        area: 'reset',
+        userMessage: prompt,
+        assistantText: 'Tabii, hangi alana bakmak istersin?',
+        cards: <_DiscoveryCard>[],
+        prompts: <String>[],
+        isLoading: false,
+        isComplete: true,
+        replyKey: _replyKey++,
+      );
+      setState(() => _turns.add(turn));
+      _scrollToBottom();
       return;
     }
 
-    final area = _selectedArea ?? 'Salon';
+    // "X önerileri göster" → oda değiştir
+    if (normalizedPrompt.contains('onerileri goster')) {
+      final resolvedArea = _resolveArea(prompt);
+      if (resolvedArea != null) {
+        _pickArea(resolvedArea, prompt);
+        return;
+      }
+    }
+
+    // "Başka projeler göster" / "farklı" / "daha" → önceki sonuçları hariç tut
+    if (normalizedPrompt.contains('baska') ||
+        normalizedPrompt.contains('farkli') ||
+        normalizedPrompt.contains('daha')) {
+      _pickArea(area, prompt, excludePrev: true);
+      return;
+    }
+
+    // Ürün çıkar vb → aynı alan
     _pickArea(area, prompt);
   }
 
@@ -658,19 +869,37 @@ class _ProductEntryScreenState extends State<ProductEntryScreen> {
               _AssistantBubble(text: turn.assistantText),
             if (turn.isComplete) ...[
               const SizedBox(height: 24),
-              _EntranceItem(
-                index: 0,
-                child: _projectDeck(turn.cards),
-              ),
-              const SizedBox(height: 18),
-              if (isLastTurn)
-                _EntranceItem(
-                  index: 1,
-                  child: _PromptWrap(
-                    prompts: turn.prompts,
-                    onTap: _onPromptTap,
+              // Alan seçim chip'leri (inline, chat içinde)
+              if (turn.area == 'reset' && isLastTurn)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Wrap(
+                    spacing: 10,
+                    runSpacing: 10,
+                    children: _chips.map((chip) {
+                      return _AreaChip(
+                        emoji: chip.emoji,
+                        label: chip.label,
+                        onTap: () => _pickArea(chip.label, '${chip.emoji} ${chip.label}'),
+                      );
+                    }).toList(),
                   ),
                 ),
+              if (turn.area != 'reset') ...[
+                _EntranceItem(
+                  index: 0,
+                  child: _projectDeck(turn.cards),
+                ),
+                const SizedBox(height: 18),
+                if (isLastTurn)
+                  _EntranceItem(
+                    index: 1,
+                    child: _PromptWrap(
+                      prompts: turn.prompts,
+                      onTap: _onPromptTap,
+                    ),
+                  ),
+              ],
               if (!isLastTurn) const SizedBox(height: 24),
             ],
             if (turn.isLoading || !turn.isComplete) const SizedBox(height: 24),
@@ -706,39 +935,39 @@ class _ProductEntryScreenState extends State<ProductEntryScreen> {
   }
 
   List<String> _smartPrompts(String area, bool hasProducts) {
+    final prompts = <String>[];
+
+    // Her zaman "başka proje göster" olsun
+    prompts.add('Başka projeler göster');
+
+    if (hasProducts) prompts.add('Ürünleri ayrı çıkar');
+
+    // Alana ve stile göre bağlamsal öneriler
     if (area == 'Mutfak') {
-      return [
-        'Bana en uygun olan hangisi?',
-        if (hasProducts) 'Ürünleri ayrı çıkar',
-        'Daha sıcak mutfak göster',
-        'Bu mutfak için hangi ürün kritik?',
-        'Evimin başka bir alanını seçmek istiyorum',
-      ];
+      prompts.add('Daha sıcak tarz mutfak göster');
+    } else if (area == 'Yatak Odası') {
+      prompts.add('Daha sade yatak odası bul');
+    } else if (area == 'Banyo') {
+      prompts.add('Daha modern banyo göster');
+    } else {
+      prompts.add('Daha farklı tarz göster');
     }
-    if (area == 'Yatak Odası') {
-      return [
-        'Daha premium göster',
-        if (hasProducts) 'Ürünleri tek tek aç',
-        'Daha sade olanı bul',
-        'Bu odada en doğru ton hangisi?',
-        'Evimin başka bir alanını seçmek istiyorum',
-      ];
+
+    // Kullanıcının keşfetmediği odaları öner
+    if (_userRoom != null) {
+      final roomLabels = {'salon': 'Salon', 'yatak_odasi': 'Yatak Odası', 'banyo': 'Banyo', 'mutfak': 'Mutfak'};
+      final currentNorm = _normalize(area);
+      for (final entry in roomLabels.entries) {
+        if (!currentNorm.contains(_normalize(entry.value)) && entry.key != _userRoom) {
+          prompts.add('${entry.value} önerileri göster');
+          break; // Sadece 1 tane farklı oda öner
+        }
+      }
     }
-    if (area == 'Fotoğraf çekeyim') {
-      return [
-        'Önce hangi açıdan çekmeliyim?',
-        'Alanı daha iyi okumak için ne lazım?',
-        'Örnek salon göster',
-        'Evimin başka bir alanını seçmek istiyorum',
-      ];
-    }
-    return [
-      'Bana en uygun olan hangisi?',
-      if (hasProducts) 'Ürünleri ayrı çıkar',
-      'Daha sıcak tonlu göster',
-      'Bu alanı daha premium yap',
-      'Evimin başka bir alanını seçmek istiyorum',
-    ];
+
+    prompts.add('Evimin başka bir alanını seçmek istiyorum');
+
+    return prompts;
   }
 
   Widget _bottomComposer() {

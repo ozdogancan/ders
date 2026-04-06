@@ -317,12 +317,76 @@ class KoalaAIService {
     return _parseResponse(_extractText(response.body));
   }
 
+  /// Moondream ön-analiz endpoint'i
+  Uri get _moondreamUri => Uri.parse('${Env.koalaApiUrl}/api/analyze-room');
+
+  /// Moondream ile oda fotoğrafını ön-analiz et
+  Future<Map<String, dynamic>?> _moondreamPreAnalyze(Uint8List imageBytes) async {
+    try {
+      final b64 = base64Encode(imageBytes);
+      final response = await _client
+          .post(
+            _moondreamUri,
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({'image': b64}),
+          )
+          .timeout(const Duration(seconds: 15));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        debugPrint('Moondream: room_type=${data['room_type']}, style=${data['style']}');
+        return data;
+      }
+      debugPrint('Moondream: ${response.statusCode} — falling back to Gemini only');
+      return null;
+    } catch (e) {
+      debugPrint('Moondream: $e — falling back to Gemini only');
+      return null;
+    }
+  }
+
   Future<KoalaResponse> _callGeminiWithImage({required String prompt, required Uint8List imageBytes}) async {
+    // Moondream ön-analiz (paralel değil, önce çalışsın — context zenginleştirme)
+    final preAnalysis = await _moondreamPreAnalyze(imageBytes);
+
+    // Moondream sonuçlarını prompt'a ekle
+    String enrichedPrompt = prompt;
+    if (preAnalysis != null) {
+      final context = StringBuffer('\n\n--- Oda Ön-Analizi (Vision AI) ---\n');
+      if (preAnalysis['room_type'] != null) {
+        context.write('Oda tipi: ${preAnalysis['room_type']}\n');
+      }
+      if (preAnalysis['style'] != null) {
+        context.write('Tespit edilen stil: ${preAnalysis['style']}\n');
+      }
+      if (preAnalysis['colors'] != null) {
+        context.write('Dominant renkler: ${preAnalysis['colors']}\n');
+      }
+      if (preAnalysis['mood'] != null) {
+        context.write('Atmosfer: ${preAnalysis['mood']}\n');
+      }
+      if (preAnalysis['caption'] != null) {
+        context.write('Genel açıklama: ${preAnalysis['caption']}\n');
+      }
+      final furniture = preAnalysis['furniture'] as List<dynamic>? ?? [];
+      if (furniture.isNotEmpty) {
+        final labels = furniture
+            .map((f) => (f as Map<String, dynamic>)['label'] ?? '')
+            .where((l) => l.toString().isNotEmpty)
+            .toSet()
+            .join(', ');
+        context.write('Tespit edilen mobilyalar: $labels\n');
+      }
+      context.write('--- Ön-Analiz Sonu ---\n');
+      context.write('Yukarıdaki ön-analiz verisini dikkate alarak yanıt ver.\n');
+      enrichedPrompt = '$prompt${context.toString()}';
+    }
+
     final payload = {
       'contents': [
         {
           'parts': [
-            {'text': prompt},
+            {'text': enrichedPrompt},
             {'inline_data': {'mime_type': 'image/jpeg', 'data': base64Encode(imageBytes)}},
           ]
         }

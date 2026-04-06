@@ -975,57 +975,27 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
   // ── Loading ──
   Widget _buildLoading() => Padding(
     padding: const EdgeInsets.only(top: 16, left: 4),
-    child: Column(
+    child: Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Typing indicator
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _koalaAvatar(),
-            const SizedBox(width: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(18),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _TypingDots(),
-                  const SizedBox(width: 10),
-                  Text(
-                    'düşünüyor...',
-                    style: TextStyle(fontSize: 13, color: Colors.grey.shade500),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-        // Skeleton cards — realistic card shapes
-        const SizedBox(height: 12),
-        Padding(
-          padding: const EdgeInsets.only(left: 40),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+        _koalaAvatar(),
+        const SizedBox(width: 8),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(18),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              // Text skeleton
-              _ShimmerBlock(width: 240, height: 16),
-              const SizedBox(height: 6),
-              _ShimmerBlock(width: 180, height: 16),
-              const SizedBox(height: 12),
-              // Card skeleton
-              _ShimmerBlock(width: double.infinity, height: 100, radius: 16),
-              const SizedBox(height: 8),
-              // Chips skeleton
-              Row(
-                children: [
-                  _ShimmerBlock(width: 80, height: 32, radius: 99),
-                  const SizedBox(width: 8),
-                  _ShimmerBlock(width: 100, height: 32, radius: 99),
-                ],
+              _TypingDots(),
+              const SizedBox(width: 10),
+              Text(
+                widget.intent == KoalaIntent.photoAnalysis && _msgs.length <= 1
+                    ? 'fotoğrafı analiz ediyorum...'
+                    : 'düşünüyor...',
+                style: TextStyle(fontSize: 13, color: Colors.grey.shade500),
               ),
             ],
           ),
@@ -1067,10 +1037,12 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
               padding: const EdgeInsets.only(left: 40, bottom: 8),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(16),
-                child: Image.memory(
-                  msg.photo!,
-                  width: double.infinity,
-                  fit: BoxFit.cover,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxHeight: 280, maxWidth: 320),
+                  child: Image.memory(
+                    msg.photo!,
+                    fit: BoxFit.cover,
+                  ),
                 ),
               ),
             ),

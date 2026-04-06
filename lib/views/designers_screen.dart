@@ -1,9 +1,11 @@
 import 'dart:async';
+import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/theme/koala_tokens.dart';
 import '../services/evlumba_live_service.dart';
@@ -53,6 +55,7 @@ class _ExpertTurn {
   String assistantText;
   bool isLoading;
   bool isComplete;
+  bool showCategoryChips;
   final int replyKey;
 
   _ExpertTurn({
@@ -63,6 +66,7 @@ class _ExpertTurn {
     required this.assistantText,
     required this.isLoading,
     required this.isComplete,
+    this.showCategoryChips = false,
     required this.replyKey,
   });
 }
@@ -75,17 +79,19 @@ class DesignersScreen extends StatefulWidget {
 }
 
 class _DesignersScreenState extends State<DesignersScreen> {
-  static const _chips = <_ExpertChip>[
-    _ExpertChip('İç Mimarlar', 'ic mimar'),
-    _ExpertChip('Dekorasyon Uzmanları', 'dekorasyon'),
-    _ExpertChip('Renk Danışmanları', 'renk'),
-    _ExpertChip('Mobilya Tasarımcıları', 'mobilya'),
-  ];
+  // Chips are built dynamically from DB in _loadExperts
+  List<_ExpertChip> _chips = <_ExpertChip>[];
 
   final TextEditingController _input = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final List<_ExpertPreview> _allExperts = <_ExpertPreview>[];
   final List<_ExpertTurn> _turns = <_ExpertTurn>[];
+
+  // User's style preferences from style discovery
+  String? _userStyle;
+  String? _userRoom;
+  String? _userBudget;
+  List<String> _userColors = [];
 
   bool _loading = true;
   String? _error;
@@ -179,7 +185,16 @@ class _DesignersScreenState extends State<DesignersScreen> {
   @override
   void initState() {
     super.initState();
+    _loadUserPreferences();
     _loadExperts();
+  }
+
+  Future<void> _loadUserPreferences() async {
+    final prefs = await SharedPreferences.getInstance();
+    _userStyle = prefs.getString('onb_style');
+    _userRoom = prefs.getString('onb_room');
+    _userBudget = prefs.getString('onb_budget');
+    _userColors = prefs.getStringList('onb_colors') ?? [];
   }
 
   @override
@@ -199,7 +214,8 @@ class _DesignersScreenState extends State<DesignersScreen> {
     }
 
     try {
-      final publishedProjects = await EvlumbaLiveService.getProjects(limit: 80);
+      // Daha fazla proje çek — tüm uzmanları görmek için
+      final publishedProjects = await EvlumbaLiveService.getProjects(limit: 100);
       final projectsByDesigner = <String, List<Map<String, dynamic>>>{};
       for (final project in publishedProjects) {
         final designerId = (project['designer_id'] ?? '').toString().trim();
@@ -207,8 +223,9 @@ class _DesignersScreenState extends State<DesignersScreen> {
         projectsByDesigner.putIfAbsent(designerId, () => <Map<String, dynamic>>[]).add(project);
       }
 
+      // Tüm tasarımcıları yükle (12 ile sınırlama)
       final previews = await Future.wait(
-        projectsByDesigner.entries.take(12).map((entry) async {
+        projectsByDesigner.entries.map((entry) async {
           final designerId = entry.key;
           final designer = await EvlumbaLiveService.getDesigner(designerId);
           if (designer == null) return null;
@@ -231,10 +248,59 @@ class _DesignersScreenState extends State<DesignersScreen> {
       );
 
       if (!mounted) return;
+
+      final experts = previews.whereType<_ExpertPreview>().toList();
+
+      // DB'deki gerçek specialty'lere göre chip oluştur
+      final specialtyCounts = <String, int>{};
+      for (final expert in experts) {
+        final raw = (expert.designer['specialty'] ?? '').toString().trim();
+        if (raw.isNotEmpty) {
+          specialtyCounts[raw] = (specialtyCounts[raw] ?? 0) + 1;
+        }
+      }
+
+      // DB'deki gerçek oda tiplerini say
+      final roomCounts = <String, int>{};
+      for (final project in publishedProjects) {
+        final pt = (project['project_type'] ?? '').toString().trim();
+        if (pt.isNotEmpty) {
+          roomCounts[pt] = (roomCounts[pt] ?? 0) + 1;
+        }
+      }
+
+      // Sadece gerçekten var olan specialty'leri chip yap (en az 3 uzman)
+      final dynamicChips = <_ExpertChip>[];
+      final sortedSpecialties = specialtyCounts.entries.toList()
+        ..sort((a, b) => b.value.compareTo(a.value));
+      for (final entry in sortedSpecialties) {
+        if (entry.value >= 3) {
+          dynamicChips.add(_ExpertChip(entry.key, 'specialty:${entry.key}'));
+        }
+      }
+
+      // Oda tipi chipsleri ekle (en az 5 proje olan)
+      final roomLabels = <String, String>{
+        'Yatak Odası': 'Yatak Odası',
+        'Banyo': 'Banyo',
+        'Oturma Odası': 'Salon',
+        'Mutfak': 'Mutfak',
+        'Antre': 'Antre',
+      };
+      final sortedRooms = roomCounts.entries.toList()
+        ..sort((a, b) => b.value.compareTo(a.value));
+      for (final entry in sortedRooms) {
+        if (entry.value >= 5) {
+          final label = roomLabels[entry.key] ?? entry.key;
+          dynamicChips.add(_ExpertChip(label, 'room:${entry.key}'));
+        }
+      }
+
       setState(() {
         _allExperts
           ..clear()
-          ..addAll(previews.whereType<_ExpertPreview>());
+          ..addAll(experts);
+        _chips = dynamicChips;
         _loading = false;
       });
     } catch (e) {
@@ -287,8 +353,10 @@ class _DesignersScreenState extends State<DesignersScreen> {
       replyKey: _replyKey++,
     );
 
+    // activeIntent'i modifier'sız sakla
+    final baseIntent = intent.split('|').first;
     setState(() {
-      _activeIntent = intent;
+      _activeIntent = baseIntent;
       _turns.add(turn);
     });
 
@@ -312,37 +380,112 @@ class _DesignersScreenState extends State<DesignersScreen> {
   }
 
   List<_ExpertPreview> _matchExperts(String intent) {
-    final normalized = _normalize(intent);
+    final rng = Random();
 
-    // Keyword → genişletilmiş arama terimleri (specialty alanında sadece "İç Mimar" yazıyor)
-    final expandedTerms = <String>[normalized];
-    if (normalized.contains('renk')) {
-      expandedTerms.addAll(['mimar', 'dekorasyon', 'tasarim']);
-    } else if (normalized.contains('mobilya')) {
-      expandedTerms.addAll(['mimar', 'tasarim', 'uretim']);
-    } else if (normalized.contains('dekorasyon')) {
-      expandedTerms.addAll(['mimar', 'dekor', 'tasarim']);
+    // Modifier parse: "specialty:İç Mimar|exclude_prev" gibi
+    final parts = intent.split('|');
+    final baseIntent = parts.first;
+    final excludePrev = parts.contains('exclude_prev');
+    final topPortfolio = parts.contains('top_portfolio');
+
+    // Intent türünü belirle: specialty: veya room: prefix'i
+    final isSpecialtyFilter = baseIntent.startsWith('specialty:');
+    final isRoomFilter = baseIntent.startsWith('room:');
+    final filterValue = baseIntent.contains(':') ? baseIntent.split(':').last : baseIntent;
+
+    // Oda adını style discovery key'ine çevir
+    final roomMap = <String, String>{
+      'Yatak Odası': 'yatak_odasi',
+      'Banyo': 'banyo',
+      'Oturma Odası': 'salon',
+      'Mutfak': 'mutfak',
+      'Antre': 'antre',
+      'Salon': 'salon',
+    };
+
+    // 1) Filtreleme: chip'e göre aday havuzunu daralt
+    List<_ExpertPreview> candidates;
+    if (isSpecialtyFilter) {
+      candidates = _allExperts.where((e) {
+        final spec = (e.designer['specialty'] ?? '').toString().trim();
+        return spec == filterValue;
+      }).toList();
+    } else if (isRoomFilter) {
+      candidates = _allExperts.where((e) {
+        return e.projects.any((p) =>
+            (p['project_type'] ?? '').toString().trim() == filterValue);
+      }).toList();
+    } else {
+      // Serbest metin araması
+      final normalized = _normalize(intent);
+      candidates = _allExperts.where((e) {
+        final searchText = _normalize(
+          '${e.designer['specialty'] ?? ''} ${e.designer['about'] ?? ''} '
+          '${e.designer['city'] ?? ''} ${e.designer['full_name'] ?? ''}',
+        );
+        return searchText.contains(normalized);
+      }).toList();
+      if (candidates.isEmpty) candidates = List.from(_allExperts);
     }
 
-    final filtered = _allExperts.where((expert) {
-      final specialty = _normalize(
-        (expert.designer['specialty'] ?? expert.summary).toString(),
-      );
-      final about = _normalize((expert.designer['about'] ?? '').toString());
-      final city = _normalize((expert.designer['city'] ?? '').toString());
-      final searchText = '$specialty $about $city';
-      return expandedTerms.any((term) => searchText.contains(term));
+    if (candidates.isEmpty) candidates = List.from(_allExperts);
+
+    // "Başka uzmanlar göster" → önceki turn'daki uzmanları hariç tut
+    if (excludePrev && _turns.length >= 2) {
+      final prevTurn = _turns[_turns.length - 2];
+      final prevIds = prevTurn.experts
+          .map((e) => (e.designer['id'] ?? '').toString())
+          .toSet();
+      final filtered = candidates
+          .where((e) => !prevIds.contains((e.designer['id'] ?? '').toString()))
+          .toList();
+      if (filtered.length >= 2) candidates = filtered;
+    }
+
+    // 2) Skorlama: kullanıcının zevkine göre sırala
+    final scored = candidates.map((expert) {
+      var score = 0.0;
+
+      // Proje sayısı bonusu (daha fazla proje = daha güvenilir)
+      score += expert.projects.length * 0.5;
+
+      // Rating bonusu
+      score += expert.rating * 2;
+
+      // Kullanıcının tercih ettiği oda tipiyle eşleşme
+      if (_userRoom != null && _userRoom!.isNotEmpty) {
+        final userRoomKey = _userRoom!;
+        final matchingRoomProjects = expert.projects.where((p) {
+          final pt = (p['project_type'] ?? '').toString().trim();
+          final ptKey = roomMap[pt] ?? pt.toLowerCase();
+          return ptKey == userRoomKey || pt == userRoomKey;
+        }).length;
+        score += matchingRoomProjects * 3;
+      }
+
+      // Oda filtresi seçilmişse, o odada proje sayısına göre ekstra bonus
+      if (isRoomFilter) {
+        final roomProjects = expert.projects.where((p) =>
+            (p['project_type'] ?? '').toString().trim() == filterValue).length;
+        score += roomProjects * 2;
+      }
+
+      // "Portfolyosu en güçlü" → proje sayısı ağırlığını artır, rastgeleliği azalt
+      if (topPortfolio) {
+        score += expert.projects.length * 5;
+        score += rng.nextDouble() * 0.5;
+      } else {
+        // Normal mod: küçük rastgelelik
+        score += rng.nextDouble() * 2;
+      }
+
+      return MapEntry(expert, score);
     }).toList();
 
-    // Her chip seçiminde farklı uzmanlar görmek için karıştır
-    filtered.shuffle();
+    // Skora göre azalan sırala
+    scored.sort((a, b) => b.value.compareTo(a.value));
 
-    if (filtered.isEmpty) {
-      final fallback = List<_ExpertPreview>.from(_allExperts)..shuffle();
-      return fallback.take(4).toList();
-    }
-
-    return filtered.take(4).toList();
+    return scored.take(4).map((e) => e.key).toList();
   }
 
   String _assistantReply(String intent, List<_ExpertPreview> experts) {
@@ -350,50 +493,109 @@ class _DesignersScreenState extends State<DesignersScreen> {
       return 'Sana uygun uzmanları henüz netleştiremedim. Biraz daha stil, bütçe ya da oda tipi söylersen daha iyi süzerim.';
     }
 
+    final parts = intent.split('|');
+    final baseIntent = parts.first;
+    final excludePrev = parts.contains('exclude_prev');
+    final topPortfolio = parts.contains('top_portfolio');
+
     final first = (experts.first.designer['full_name'] ?? 'ilk uzman').toString();
     final second = experts.length > 1
         ? (experts[1].designer['full_name'] ?? '').toString()
         : '';
 
-    if (_normalize(intent).contains('renk')) {
-      return second.isNotEmpty
-          ? 'Renk ve atmosfer tarafında gözü güçlü iki isim öne çıktı: $first ve $second. Portfolyosu daha okunur olanları seçtim.'
-          : 'Renk tarafında ilk bakmanı istediğim uzman $first.';
+    final isRoom = baseIntent.startsWith('room:');
+    final isSpecialty = baseIntent.startsWith('specialty:');
+    final filterValue = baseIntent.contains(':') ? baseIntent.split(':').last : baseIntent;
+
+    // Kullanıcının stil profili varsa kişiselleştirilmiş mesaj
+    final styleNote = _userStyle != null && _userStyle!.isNotEmpty
+        ? ' Senin stil profiline göre en uyumlu olanları öne aldım.'
+        : '';
+
+    // Modifier'a göre özel cevaplar
+    if (excludePrev) {
+      return 'Farklı isimler getirdim: $first${second.isNotEmpty ? ' ve $second' : ''} bu sefer dikkatini çekebilir.$styleNote';
     }
-    if (_normalize(intent).contains('mobilya')) {
+    if (topPortfolio) {
+      final topCount = experts.first.projects.length;
+      return '$first $topCount projeyle en güçlü portfolyoya sahip.${second.isNotEmpty ? ' $second da yakın takipte.' : ''}$styleNote';
+    }
+
+    if (isRoom) {
       return second.isNotEmpty
-          ? 'Mobilya ve yerleşim kararlarında güçlü duran isimleri seçtim: $first ve $second. Ürün dili daha karakterli olanları öne aldım.'
-          : 'Mobilya tarafında ilk bakmanı istediğim uzman $first.';
+          ? '$filterValue projeleriyle öne çıkan iki isim: $first ve $second.$styleNote'
+          : '$filterValue tarafında ilk bakmanı istediğim uzman $first.$styleNote';
+    }
+    if (isSpecialty) {
+      return second.isNotEmpty
+          ? '$filterValue alanında güçlü iki isim: $first ve $second. Proje yoğunluğu ve portfolyo kalitesine göre seçtim.$styleNote'
+          : '$filterValue alanında ilk bakmanı istediğim uzman $first.$styleNote';
     }
     return second.isNotEmpty
-        ? 'Senin ihtiyacına göre önce $first ve $second dikkat çekiyor. Portfolyo dili ve proje yoğunluğu daha güçlü olanları öne aldım.'
-        : 'Senin ihtiyacına göre ilk bakmanı istediğim uzman $first.';
+        ? 'Senin ihtiyacına göre önce $first ve $second dikkat çekiyor. Portfolyo dili ve proje yoğunluğu daha güçlü olanları öne aldım.$styleNote'
+        : 'Senin ihtiyacına göre ilk bakmanı istediğim uzman $first.$styleNote';
   }
 
   List<String> _smartPrompts(String intent, List<_ExpertPreview> experts) {
-    final hasProjects = experts.any((expert) => expert.projects.isNotEmpty);
-    if (_normalize(intent).contains('renk')) {
-      return [
-        'Daha premium uzman göster',
-        'Bütçeme yakın olanı bul',
-        if (hasProjects) 'Portfolyosu en güçlü olanı çıkar',
-        'Başka uzman tipi seçmek istiyorum',
-      ];
+    final parts = intent.split('|');
+    final baseIntent = parts.first;
+    final isRoom = baseIntent.startsWith('room:');
+    final filterValue = baseIntent.contains(':') ? baseIntent.split(':').last : baseIntent;
+    final hasProjects = experts.any((e) => e.projects.isNotEmpty);
+    final alreadyExcluded = parts.contains('exclude_prev');
+    final alreadyPortfolio = parts.contains('top_portfolio');
+
+    final prompts = <String>[];
+
+    // Her zaman "başka uzmanlar" sun (zaten farklıları hariç tutacak)
+    if (!alreadyExcluded) {
+      prompts.add('Başka uzmanlar göster');
+    } else {
+      prompts.add('Daha fazla uzman göster');
     }
-    return [
-      'Bana en uygun olan hangisi?',
-      'Daha sıcak tarz çalışan uzman göster',
-      if (hasProjects) 'Portfolyosu güçlü olanı öne çıkar',
-      'Başka uzman tipi seçmek istiyorum',
-    ];
+
+    // Portfolyo önerisi — henüz seçilmediyse
+    if (hasProjects && !alreadyPortfolio) {
+      prompts.add('Portfolyosu en güçlü olanı çıkar');
+    }
+
+    // Oda bazlı öneriler: mevcut filtre oda değilse, ilgili odaları öner
+    if (!isRoom && _chips.any((c) => c.keyword.startsWith('room:'))) {
+      // Kullanıcının tercih ettiği oda varsa onu öner
+      final roomLabels = {'salon': 'Salon', 'yatak_odasi': 'Yatak Odası', 'banyo': 'Banyo', 'mutfak': 'Mutfak'};
+      if (_userRoom != null && roomLabels.containsKey(_userRoom)) {
+        prompts.add('${roomLabels[_userRoom]} projeleri olan uzmanlar');
+      }
+    }
+
+    // Oda filtresi seçiliyse specialty öner
+    if (isRoom) {
+      prompts.add('Bu alanda en deneyimli mimarlar');
+    }
+
+    // Her zaman kategori değiştirme seçeneği
+    prompts.add('Başka kategori seçmek istiyorum');
+
+    return prompts;
   }
 
   String? _resolveIntent(String text) {
     final normalized = _normalize(text);
-    if (normalized.contains('renk')) return 'renk';
-    if (normalized.contains('mobilya')) return 'mobilya';
-    if (normalized.contains('dekor')) return 'dekorasyon';
-    if (normalized.contains('ic mim') || normalized.contains('uzman')) return 'ic mimar';
+    // Chip keyword'leri: specialty: veya room: prefix'li
+    for (final chip in _chips) {
+      final chipNorm = _normalize(chip.label);
+      if (normalized.contains(chipNorm)) return chip.keyword;
+    }
+    // Genel arama terimleri
+    if (normalized.contains('ic mim') || normalized.contains('mimar')) {
+      return 'specialty:İç Mimar';
+    }
+    if (normalized.contains('banyo')) return 'room:Banyo';
+    if (normalized.contains('mutfak')) return 'room:Mutfak';
+    if (normalized.contains('salon') || normalized.contains('oturma')) {
+      return 'room:Oturma Odası';
+    }
+    if (normalized.contains('yatak')) return 'room:Yatak Odası';
     return null;
   }
 
@@ -401,16 +603,52 @@ class _DesignersScreenState extends State<DesignersScreen> {
     final text = _input.text.trim();
     if (text.isEmpty) return;
     _input.clear();
-    _startTurn(_resolveIntent(text) ?? _activeIntent ?? 'ic mimar', text);
+    _startTurn(_resolveIntent(text) ?? _activeIntent ?? 'specialty:İç Mimar', text);
   }
 
   void _handlePrompt(String prompt) {
-    if (prompt.contains('Başka uzman tipi')) {
-      setState(() => _activeIntent = null);
+    if (prompt.contains('Başka kategori')) {
+      HapticFeedback.lightImpact();
+      final turn = _ExpertTurn(
+        userMessage: prompt,
+        intent: 'reset',
+        experts: <_ExpertPreview>[],
+        prompts: <String>[],
+        assistantText: 'Tabii, hangi kategoriye bakmak istersin?',
+        isLoading: false,
+        isComplete: true,
+        showCategoryChips: true,
+        replyKey: _replyKey++,
+      );
+      setState(() {
+        // _activeIntent'i null yapmıyoruz — üstteki chip'ler açılmasın
+        _turns.add(turn);
+      });
       _scrollToBottom();
       return;
     }
-    _startTurn(_activeIntent ?? 'ic mimar', prompt);
+
+    // Özel komutları intent'e göm
+    final intent = _activeIntent ?? 'specialty:İç Mimar';
+    if (prompt.contains('Başka uzmanlar') || prompt.contains('Daha fazla uzman')) {
+      _startTurn('$intent|exclude_prev', prompt);
+    } else if (prompt.contains('Portfolyosu')) {
+      _startTurn('$intent|top_portfolio', prompt);
+    } else if (prompt.contains('projeleri olan uzmanlar')) {
+      // "Salon projeleri olan uzmanlar" → oda filtresi
+      final roomMap = {'Salon': 'Oturma Odası', 'Yatak Odası': 'Yatak Odası', 'Banyo': 'Banyo', 'Mutfak': 'Mutfak'};
+      for (final entry in roomMap.entries) {
+        if (prompt.contains(entry.key)) {
+          _startTurn('room:${entry.value}', prompt);
+          return;
+        }
+      }
+      _startTurn(intent, prompt);
+    } else if (prompt.contains('en deneyimli mimarlar')) {
+      _startTurn('specialty:İç Mimar|top_portfolio', prompt);
+    } else {
+      _startTurn(intent, prompt);
+    }
   }
 
   void _scrollToBottom() {
@@ -564,6 +802,21 @@ class _DesignersScreenState extends State<DesignersScreen> {
               _ExpertAssistantBubble(text: turn.assistantText),
             if (turn.isComplete) ...[
               const SizedBox(height: 22),
+              // Kategori seçim chip'leri (inline, chat içinde)
+              if (turn.showCategoryChips && isLast)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Wrap(
+                    spacing: 10,
+                    runSpacing: 10,
+                    children: _chips.map((chip) {
+                      return _ExpertQuickChip(
+                        label: chip.label,
+                        onTap: () => _startTurn(chip.keyword, chip.label),
+                      );
+                    }).toList(),
+                  ),
+                ),
               ...turn.experts.asMap().entries.map(
                     (expertEntry) => Padding(
                       padding: const EdgeInsets.only(bottom: 18),
@@ -574,7 +827,7 @@ class _DesignersScreenState extends State<DesignersScreen> {
                       ),
                     ),
                   ),
-              if (isLast)
+              if (isLast && !turn.showCategoryChips)
                 _ExpertPromptWrap(
                   prompts: turn.prompts,
                   onTap: _handlePrompt,
