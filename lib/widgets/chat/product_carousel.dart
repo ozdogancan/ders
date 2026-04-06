@@ -87,11 +87,24 @@ class _ProductCarouselState extends State<ProductCarousel> {
   @override
   Widget build(BuildContext context) {
     if (widget.products.isEmpty) {
-      return const Padding(
-        padding: EdgeInsets.symmetric(vertical: 8),
-        child: Text(
-          'Bu kriterlere uygun ürün bulunamadı.',
-          style: TextStyle(color: Color(0xFF8E8E93), fontSize: 13),
+      return Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(14),
+          color: const Color(0xFFF8F7FF),
+          border: Border.all(color: const Color(0xFFE8E5F0)),
+        ),
+        child: const Row(
+          children: [
+            Icon(Icons.shopping_bag_outlined, size: 20, color: Color(0xFF6C5CE7)),
+            SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'Bu alan için ürün kataloğu hazırlanıyor. Çok yakında burada gerçek ürün önerileri göreceksin!',
+                style: TextStyle(color: Color(0xFF6B7280), fontSize: 13, height: 1.4),
+              ),
+            ),
+          ],
         ),
       );
     }

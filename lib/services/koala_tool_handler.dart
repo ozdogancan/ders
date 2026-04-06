@@ -55,7 +55,10 @@ class KoalaToolHandler {
           (projects as List).map((p) => p['id'] as String).toList();
 
       if (projectIds.isEmpty) {
-        return {'products': [], 'message': 'Bu kriterlerde proje bulunamadı'};
+        return {
+          'products': [],
+          'message': 'Bu alan için ürün kataloğu henüz hazırlanıyor. Kullanıcıya ürün önerisi yerine tasarım ipuçları veya tasarımcı önerisi sun.',
+        };
       }
 
       // 2) Bu projelerdeki ürünleri ara
@@ -108,6 +111,13 @@ class KoalaToolHandler {
         };
       }).toList();
 
+      if (result.isEmpty) {
+        return {
+          'products': [],
+          'count': 0,
+          'message': 'Ürün kataloğu henüz hazırlanıyor. Kullanıcıya ürün önerisi yerine tasarım ipuçları, renk önerileri veya uzman önerisi sun.',
+        };
+      }
       return {'products': result, 'count': result.length};
     } catch (e) {
       debugPrint('KoalaToolHandler _searchProducts error: $e');

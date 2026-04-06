@@ -295,17 +295,33 @@ Kullanıcı bir fotoğraf gönderdi.${userText != null ? ' Mesajı: "$userText"'
 
 FOTOĞRAFI ANALİZ ET VE ŞU KARTLARI ÜRET:
 
+KRİTİK STİL TESPİT KURALLARI:
+- Stili MUTLAKA fotoğraftaki somut görsel ipuçlarından tespit et (mobilya, malzeme, renk, doku, çizgi).
+- ASLA varsayılan bir stil atama. "japandi" veya başka bir stil varsayılan DEĞİLDİR.
+- Eğer Ön-Analiz verisi varsa (aşağıda "Tespit edilen stil" satırı), onu birincil referans al.
+- Belirsizse confidence düşük ver ve "eklektik" veya "karma" de.
+- Stil tespitini şu ipuçlarıyla yap:
+  * Modern: düz çizgiler, metal/cam, nötr renkler, minimal detay
+  * Minimalist: çok az eşya, boş alan, monokrom
+  * Skandinav: açık ahşap, beyaz/bej, tekstil, sıcak aydınlatma
+  * Japandi: japon+iskandinav, koyu/açık ahşap kontrast, wabi-sabi, organik formlar
+  * Endüstriyel: tuğla, metal, beton, koyu tonlar, ham yüzeyler
+  * Klasik: süslü profiller, simetri, kadife, koyu ahşap
+  * Bohem: renkli tekstil, kilim, bitki, karışık desen
+  * Rustik: doğal taş, kütük ahşap, toprak tonları
+
 Eğer ODA fotoğrafıysa:
-1. "style_analysis" — Mevcut stilini tespit et (style_name, confidence, description, color_palette 4 renk, mood, tags)
+1. "style_analysis" — Mevcut stilini tespit et (style_name, confidence 0-100, description, color_palette 4 renk, mood, tags)
 2. "color_palette" — İyileştirme için önerilen renk paleti (4 renk + kullanım). title: "Önerilen renk paleti"
-3. "product_grid" — 3 ürün önerisi bu odaya uygun
-4. "quick_tips" — 3 iyileştirme ipucu
-5. "question_chips" — "Ne yapmak istersin?" seçenekleri: ["Bu odayı yeniden tasarla", "Renk değiştir", "Mobilya öner", "Tasarımcı bul"]
+3. "quick_tips" — 3 iyileştirme ipucu
+4. "question_chips" — "Ne yapmak istersin?" seçenekleri: ["Bu odayı yeniden tasarla", "Renk paletini değiştir", "Bu oda için uzman öner", "Farklı bir stil dene"]
 
 Eğer MOBİLYA/OBJE fotoğrafıysa:
-1. "product_grid" — Buna uyumlu 4 ürün önerisi
-2. "style_analysis" — Bu objenin stili
-3. "question_chips" — Seçenekler: ["Benzer ürün bul", "Bu objeye ne yakışır?", "Hangi odaya uyar?"]
+1. "style_analysis" — Bu objenin stili
+2. "quick_tips" — Kombinasyon önerileri
+3. "question_chips" — Seçenekler: ["Bu objeye ne yakışır?", "Hangi odaya uyar?", "Bu stilde uzman öner"]
+
+NOT: product_grid kartı ÜRETME — ürün önerisi için kullanıcı ayrıca istek yapmalı.
 
 message: Kısa ve samimi yorum (max 2 cümle)
 

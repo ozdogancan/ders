@@ -397,7 +397,9 @@ class KoalaAIService {
       },
     };
 
-    final response = await _client.post(_proxyUri, headers: {'Content-Type': 'application/json'}, body: jsonEncode(payload));
+    final response = await _client
+        .post(_proxyUri, headers: {'Content-Type': 'application/json'}, body: jsonEncode(payload))
+        .timeout(const Duration(seconds: 30));
 
     if (response.statusCode >= 300) {
       throw Exception('Gemini image failed: ${response.statusCode}');

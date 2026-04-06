@@ -68,6 +68,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
   late String _chatId;
   String _chatTitle = 'Yeni Sohbet';
 
+  /// Fotoğraf analizi sonrası bağlam — follow-up chip'lerde kullanılır
+  Map<String, String>? _photoAnalysisContext;
+
   @override
   void initState() {
     super.initState();
@@ -355,6 +358,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
   // ── AI ──
   Future<void> _sendToAI({String? text, Uint8List? photo}) async {
     if (text == null && photo == null) return;
+    if (_loading) return; // Önceki istek bitmeden yeni istek gönderme
     if (_msgs.isEmpty) {
       Analytics.aiChatStarted(photo != null ? 'photo' : 'text');
       if (text != null && text.length > 3) {
@@ -374,16 +378,28 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
         // Fotoğraf analizi → non-stream (image payload)
         final resp = await _ai.askWithPhoto(photo, text: text, history: _history);
         _history.add({'role': 'model', 'content': resp.message});
+        // Fotoğraf analiz bağlamını sakla — follow-up chip'ler için
+        _extractPhotoContext(resp);
         if (!mounted) return;
         setState(() {
           _msgs.add(_Msg(role: 'koala', text: resp.message, cards: resp.cards));
           _loading = false;
         });
       } else {
+        // Follow-up: fotoğraf analiz bağlamı varsa prompt'a ekle
+        String? enrichedText = text;
+        if (text != null && _photoAnalysisContext != null) {
+          final ctx = _photoAnalysisContext!;
+          enrichedText = '[Önceki fotoğraf analizi bağlamı — '
+              'Oda: ${ctx['room'] ?? 'bilinmiyor'}, '
+              'Stil: ${ctx['style'] ?? 'bilinmiyor'}, '
+              'Renkler: ${ctx['colors'] ?? 'bilinmiyor'}] '
+              'Kullanıcı isteği: $text';
+        }
         // Function-calling destekli istek — gerçek ürün/tasarımcı/proje verisi getirebilir
         final resp = await _ai.askWithIntent(
           intent: KoalaIntent.freeChat,
-          freeText: text,
+          freeText: enrichedText,
           history: _history,
         );
         _history.add({'role': 'model', 'content': resp.message});
@@ -499,6 +515,34 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
       _msgs.removeLast(); // Remove user msg (will be re-added)
       _sendToAI(text: lastUser.text, photo: lastUser.photo);
     }
+  }
+
+  /// Fotoğraf analiz yanıtından oda/stil/renk bağlamını çıkar
+  void _extractPhotoContext(KoalaResponse resp) {
+    final cards = resp.cards;
+    if (cards == null || cards.isEmpty) return;
+    final ctx = <String, String>{};
+    for (final card in cards) {
+      if (card.type == 'style_analysis') {
+        final styleName = card.data['style_name'] ?? card.data['style'] ?? '';
+        if (styleName.toString().isNotEmpty) ctx['style'] = styleName.toString();
+        final palette = card.data['color_palette'];
+        if (palette is List && palette.isNotEmpty) {
+          ctx['colors'] = palette.take(4).map((c) {
+            if (c is Map) return c['name'] ?? c['color'] ?? c.toString();
+            return c.toString();
+          }).join(', ');
+        }
+        final mood = card.data['mood']?.toString();
+        if (mood != null && mood.isNotEmpty) ctx['mood'] = mood;
+      }
+    }
+    // Oda tipi: message'dan veya history'den
+    final msg = resp.message.toLowerCase();
+    for (final room in ['salon', 'yatak odası', 'mutfak', 'banyo', 'ofis', 'çocuk odası', 'balkon', 'antre']) {
+      if (msg.contains(room)) { ctx['room'] = room; break; }
+    }
+    if (ctx.isNotEmpty) _photoAnalysisContext = ctx;
   }
 
   static const _knownStyles = {
