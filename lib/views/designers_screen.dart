@@ -215,7 +215,7 @@ class _DesignersScreenState extends State<DesignersScreen> {
           final projects = List<Map<String, dynamic>>.from(entry.value);
 
           final rating = (designer['rating'] as num?)?.toDouble() ?? 0;
-          final specialty = (designer['specialty'] ?? designer['bio'] ?? '')
+          final specialty = (designer['specialty'] ?? designer['about'] ?? '')
               .toString()
               .trim();
 
@@ -313,21 +313,32 @@ class _DesignersScreenState extends State<DesignersScreen> {
 
   List<_ExpertPreview> _matchExperts(String intent) {
     final normalized = _normalize(intent);
+
+    // Keyword → genişletilmiş arama terimleri (specialty alanında sadece "İç Mimar" yazıyor)
+    final expandedTerms = <String>[normalized];
+    if (normalized.contains('renk')) {
+      expandedTerms.addAll(['mimar', 'dekorasyon', 'tasarim']);
+    } else if (normalized.contains('mobilya')) {
+      expandedTerms.addAll(['mimar', 'tasarim', 'uretim']);
+    } else if (normalized.contains('dekorasyon')) {
+      expandedTerms.addAll(['mimar', 'dekor', 'tasarim']);
+    }
+
     final filtered = _allExperts.where((expert) {
       final specialty = _normalize(
         (expert.designer['specialty'] ?? expert.summary).toString(),
       );
-      final bio = _normalize((expert.designer['bio'] ?? '').toString());
+      final about = _normalize((expert.designer['about'] ?? '').toString());
       final city = _normalize((expert.designer['city'] ?? '').toString());
-      return specialty.contains(normalized) ||
-          bio.contains(normalized) ||
-          city.contains(normalized);
-    }).toList()
-      ..sort((a, b) => b.projects.length.compareTo(a.projects.length));
+      final searchText = '$specialty $about $city';
+      return expandedTerms.any((term) => searchText.contains(term));
+    }).toList();
+
+    // Her chip seçiminde farklı uzmanlar görmek için karıştır
+    filtered.shuffle();
 
     if (filtered.isEmpty) {
-      final fallback = List<_ExpertPreview>.from(_allExperts)
-        ..sort((a, b) => b.projects.length.compareTo(a.projects.length));
+      final fallback = List<_ExpertPreview>.from(_allExperts)..shuffle();
       return fallback.take(4).toList();
     }
 
