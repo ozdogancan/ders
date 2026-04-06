@@ -9,6 +9,8 @@ import '../services/analytics_service.dart';
 import '../services/collections_service.dart';
 import '../services/saved_items_service.dart';
 import 'admin/admin_shell.dart';
+import 'auth_common.dart';
+import 'auth_entry_screen.dart';
 import 'collections_screen.dart';
 import 'notifications_screen.dart';
 import 'saved_screen.dart';
@@ -132,22 +134,23 @@ class _ProfileScreenState extends State<ProfileScreen> {
       ]));
     if (confirm != true) return;
 
-    // Router referansını ÖNCE al — signOut sonrası context geçersiz olabilir
-    final router = GoRouter.of(context);
-
     try {
       await FirebaseAuth.instance.signOut();
-    } catch (e) {
-      debugPrint('SignOut error (devam ediliyor): $e');
-    }
+    } catch (_) {}
 
-    // mounted kontrolü yapmadan doğrudan router üzerinden git
-    // çünkü signOut sonrası widget tree rebuild olabilir ve mounted=false olabilir
-    router.go('/auth');
+    if (!mounted) return;
+
+    // GoRouter bypass — doğrudan Navigator ile tüm stack'ı temizleyip auth ekranını göster
+    Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const AuthEntryScreen(mode: AuthFlowMode.login)),
+      (route) => false,
+    );
   }
 
   void _goToLogin() {
-    GoRouter.of(context).go('/auth');
+    Navigator.of(context, rootNavigator: true).push(
+      MaterialPageRoute(builder: (_) => const AuthEntryScreen(mode: AuthFlowMode.login)),
+    );
   }
 
   @override
