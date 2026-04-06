@@ -117,6 +117,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
       ]));
   }
 
+  bool get _isAnonymous => _user == null || _user!.isAnonymous;
+
   Future<void> _logout() async {
     final confirm = await showDialog<bool>(context: context, builder: (ctx) => AlertDialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
@@ -130,7 +132,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
       ]));
     if (confirm != true) return;
     await FirebaseAuth.instance.signOut();
-    if (mounted) Navigator.of(context).popUntil((route) => route.isFirst);
+    if (mounted) context.go('/auth');
+  }
+
+  void _goToLogin() {
+    context.push('/auth');
   }
 
   @override
@@ -181,10 +187,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       child: const Icon(Icons.camera_alt_rounded, size: 14, color: KoalaColors.accent))),
                 ])),
               const SizedBox(height: 16),
-              Text(_displayName.isNotEmpty ? _displayName : 'Koala Kullanıcı',
+              Text(_isAnonymous ? 'Misafir Kullanıcı' : (_displayName.isNotEmpty ? _displayName : 'Koala Kullanıcı'),
                 style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: KoalaColors.text)),
               const SizedBox(height: 4),
-              Text(_email, style: TextStyle(fontSize: 14, color: Colors.grey.shade500)),
+              Text(_isAnonymous ? 'Giriş yap ve tüm özellikleri kullan' : _email,
+                style: TextStyle(fontSize: 14, color: _isAnonymous ? KoalaColors.accent : Colors.grey.shade500)),
               const SizedBox(height: 20),
               // Stats row
               Row(
@@ -217,15 +224,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ])))),
 
           // Settings
-          SliverToBoxAdapter(child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('AYARLAR', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Colors.grey.shade400, letterSpacing: 1)),
-              const SizedBox(height: 12),
-              _SettingTile(icon: Icons.person_rounded, label: 'İsim',
-                value: _displayName.isNotEmpty ? _displayName : 'Belirtilmemiş', onTap: _editName),
-              _SettingTile(icon: Icons.email_rounded, label: 'E-posta', value: _email, editable: false),
-            ]))),
+          if (!_isAnonymous)
+            SliverToBoxAdapter(child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text('AYARLAR', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Colors.grey.shade400, letterSpacing: 1)),
+                const SizedBox(height: 12),
+                _SettingTile(icon: Icons.person_rounded, label: 'İsim',
+                  value: _displayName.isNotEmpty ? _displayName : 'Belirtilmemiş', onTap: _editName),
+                _SettingTile(icon: Icons.email_rounded, label: 'E-posta', value: _email, editable: false),
+              ]))),
 
           // Account
           SliverToBoxAdapter(child: Padding(
@@ -233,8 +241,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text('HESAP', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Colors.grey.shade400, letterSpacing: 1)),
               const SizedBox(height: 12),
-              _SettingTile(icon: Icons.logout_rounded, label: 'Çıkış Yap', value: '',
-                color: KoalaColors.warning, onTap: _logout),
+              if (_isAnonymous)
+                _SettingTile(icon: Icons.login_rounded, label: 'Giriş Yap', value: 'Google veya telefon ile',
+                  color: KoalaColors.accent, onTap: _goToLogin)
+              else
+                _SettingTile(icon: Icons.logout_rounded, label: 'Çıkış Yap', value: '',
+                  color: KoalaColors.warning, onTap: _logout),
             ]))),
 
           // Version
