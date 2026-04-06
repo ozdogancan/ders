@@ -367,9 +367,6 @@ class _StyleDiscoveryScreenState extends State<StyleDiscoveryScreen>
     await _syncProfile(profile);
 
     if (!mounted) return;
-    setState(() {}); // show completion state
-    await Future.delayed(const Duration(milliseconds: 1800));
-    if (!mounted) return;
     Navigator.of(context).pop('completed');
   }
 
@@ -406,71 +403,6 @@ class _StyleDiscoveryScreenState extends State<StyleDiscoveryScreen>
               _dragDx
         : _dragDx;
     final swipeRatio = (animatedDx / (width * 0.35)).clamp(-1.0, 1.0);
-
-    // ── Completion screen ──
-    if (_leaving && _index >= _deck.length) {
-      final topStyle = _sortedPositiveKeys(_styleScores).isNotEmpty
-          ? _sortedPositiveKeys(_styleScores).first
-          : '';
-      return AnnotatedRegion<SystemUiOverlayStyle>(
-        value: SystemUiOverlayStyle.dark,
-        child: Scaffold(
-          backgroundColor: const Color(0xFFF8F5F0),
-          body: Center(
-            child: Padding(
-              padding: const EdgeInsets.all(32),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    width: 72,
-                    height: 72,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      gradient: const LinearGradient(
-                        colors: [Color(0xFF7C6EF2), Color(0xFF6C5CE7)],
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: const Color(0xFF6C5CE7).withValues(alpha: 0.3),
-                          blurRadius: 20,
-                          offset: const Offset(0, 8),
-                        ),
-                      ],
-                    ),
-                    child: const Icon(Icons.check_rounded, color: Colors.white, size: 36),
-                  ),
-                  const SizedBox(height: 20),
-                  const Text(
-                    'Tarzın kaydedildi!',
-                    style: TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.w700,
-                      color: Color(0xFF1A1D2A),
-                    ),
-                  ),
-                  if (topStyle.isNotEmpty) ...[
-                    const SizedBox(height: 8),
-                    Text(
-                      'Sana en yakın stil: $topStyle',
-                      style: const TextStyle(
-                        fontSize: 15,
-                        color: Color(0xFF8E8A96),
-                      ),
-                    ),
-                  ],
-                  const SizedBox(height: 12),
-                  const Text(
-                    'Şimdi sana özel öneriler hazırlıyoruz...',
-                    style: TextStyle(fontSize: 14, color: Color(0xFFAEA8B8)),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      );
-    }
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.dark,
