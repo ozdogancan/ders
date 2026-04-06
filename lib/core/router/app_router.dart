@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -33,8 +34,10 @@ Future<void> initRouterState() async {
 /// Home ekranı hub, diğer ekranlar push ile açılır.
 final GoRouter appRouter = GoRouter(
   initialLocation: '/',
+  debugLogDiagnostics: true,
   redirect: (context, state) {
     final loc = state.matchedLocation;
+    debugPrint('[GoRouter] redirect: loc=$loc, onboardingComplete=$onboardingComplete');
     // Auth ve onboarding sayfalarına her zaman izin ver
     if (loc == '/auth' || loc == '/onboarding') return null;
     // Onboarding tamamlanmadıysa ve ana sayfa/alt sayfalardaysa → / 'a (OnboardingScreen)
@@ -52,11 +55,7 @@ final GoRouter appRouter = GoRouter(
     // ─── Auth (giriş ekranı) ───
     GoRoute(
       path: '/auth',
-      builder: (context, state) {
-        final extra = state.extra as Map<String, dynamic>?;
-        final mode = extra?['mode'] == 'login' ? AuthFlowMode.login : AuthFlowMode.signup;
-        return AuthEntryScreen(mode: mode);
-      },
+      builder: (context, state) => const AuthEntryScreen(mode: AuthFlowMode.login),
     ),
 
     // ─── Ana sekmeler (push ile açılır, geri butonu ile dönülür) ───

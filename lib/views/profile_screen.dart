@@ -131,14 +131,23 @@ class _ProfileScreenState extends State<ProfileScreen> {
           child: const Text('Çıkış Yap')),
       ]));
     if (confirm != true) return;
-    await FirebaseAuth.instance.signOut();
-    if (!mounted) return;
-    // GoRouter stack'ı tamamen değişir — ProfileScreen dahil tüm sayfalar gider
-    context.go('/auth', extra: {'mode': 'login'});
+
+    // Router referansını ÖNCE al — signOut sonrası context geçersiz olabilir
+    final router = GoRouter.of(context);
+
+    try {
+      await FirebaseAuth.instance.signOut();
+    } catch (e) {
+      debugPrint('SignOut error (devam ediliyor): $e');
+    }
+
+    // mounted kontrolü yapmadan doğrudan router üzerinden git
+    // çünkü signOut sonrası widget tree rebuild olabilir ve mounted=false olabilir
+    router.go('/auth');
   }
 
   void _goToLogin() {
-    context.go('/auth', extra: {'mode': 'login'});
+    GoRouter.of(context).go('/auth');
   }
 
   @override
