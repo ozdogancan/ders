@@ -1256,10 +1256,10 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
             children: [
               const Icon(Icons.sentiment_neutral_rounded, size: 20, color: Color(0xFFEA580C)),
               const SizedBox(width: 8),
-              const Expanded(
+              Expanded(
                 child: Text(
-                  'Şu an bu konuda yardımcı olamıyorum, ama şunları deneyebilirsin:',
-                  style: TextStyle(fontSize: 13, color: Color(0xFF9A3412), height: 1.4),
+                  msg.errorMsg ?? 'Şu an bu konuda yardımcı olamıyorum, ama şunları deneyebilirsin:',
+                  style: const TextStyle(fontSize: 13, color: Color(0xFF9A3412), height: 1.4),
                 ),
               ),
             ],
