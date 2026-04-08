@@ -65,6 +65,8 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
   Uint8List? _pendingPhoto;
   bool _loading = false;
   bool _showScrollToBottom = false;
+  /// Tasarımcı arama akışında şehir bekleniyor mu?
+  bool _awaitingDesignerCity = false;
   late String _chatId;
   String _chatTitle = 'Yeni Sohbet';
 
@@ -537,10 +539,21 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
         if (mood != null && mood.isNotEmpty) ctx['mood'] = mood;
       }
     }
-    // Oda tipi: message'dan veya history'den
-    final msg = resp.message.toLowerCase();
-    for (final room in ['salon', 'yatak odası', 'mutfak', 'banyo', 'ofis', 'çocuk odası', 'balkon', 'antre']) {
-      if (msg.contains(room)) { ctx['room'] = room; break; }
+    // Oda tipi: önce kartlardan, sonra message'dan
+    for (final card in cards) {
+      if (card.type == 'style_analysis') {
+        final roomType = card.data['room_type']?.toString();
+        if (roomType != null && roomType.isNotEmpty) {
+          ctx['room'] = roomType;
+          break;
+        }
+      }
+    }
+    if (!ctx.containsKey('room')) {
+      final msg = resp.message.toLowerCase();
+      for (final room in ['salon', 'yatak odası', 'mutfak', 'banyo', 'ofis', 'çocuk odası', 'balkon', 'antre']) {
+        if (msg.contains(room)) { ctx['room'] = room; break; }
+      }
     }
     if (ctx.isNotEmpty) _photoAnalysisContext = ctx;
   }
@@ -560,8 +573,31 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
         break;
       }
     }
-    // Chip seçimini function-calling destekli intent olarak gönder
-    // böylece gerçek veri (ürün/tasarımcı/proje) getirebilsin
+
+    // "Uzman öner" akışını tespit et
+    if (lower.contains('uzman öner') || lower.contains('uzman bul') || lower.contains('tasarımcı öner')) {
+      _awaitingDesignerCity = true;
+      _sendToAI(text: chipText);
+      return;
+    }
+
+    // Tasarımcı şehir seçimi bekliyorsa → direkt designerMatch intent'ine yönlendir
+    if (_awaitingDesignerCity) {
+      _awaitingDesignerCity = false;
+      final style = _photoAnalysisContext?['style'] ?? 'modern';
+      // Kullanıcı mesajını ekrana ekle
+      setState(() {
+        _msgs.add(_Msg(role: 'user', text: chipText));
+      });
+      _history.add({'role': 'user', 'content': chipText});
+      _sendToAIWithIntent(
+        intent: KoalaIntent.designerMatch,
+        params: {'style': style, 'budget': chipText},
+      );
+      return;
+    }
+
+    // Normal chip — function-calling destekli intent olarak gönder
     _sendToAI(text: chipText);
   }
 
@@ -1066,11 +1102,21 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                 alignment: Alignment.centerRight,
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(16),
-                  child: Image.memory(
-                    msg.photo!,
+                  child: Image(
+                    image: msg.cachedImage!,
                     width: 200,
                     height: 150,
                     fit: BoxFit.cover,
+                    gaplessPlayback: true,
+                    errorBuilder: (_, __, ___) => Container(
+                      width: 200,
+                      height: 150,
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade200,
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: const Icon(Icons.broken_image, color: Colors.grey),
+                    ),
                   ),
                 ),
               ),
@@ -1083,9 +1129,10 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                 borderRadius: BorderRadius.circular(16),
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxHeight: 280, maxWidth: 320),
-                  child: Image.memory(
-                    msg.photo!,
+                  child: Image(
+                    image: msg.cachedImage!,
                     fit: BoxFit.cover,
+                    gaplessPlayback: true,
                   ),
                 ),
               ),
@@ -1568,6 +1615,13 @@ class _Msg {
   final String role;
   final String? text;
   final Uint8List? photo;
+  /// Fotoğraf için cache'lenmiş MemoryImage — her rebuild'de decode önler
+  MemoryImage? _cachedImage;
+  MemoryImage? get cachedImage {
+    if (_cachedImage != null) return _cachedImage;
+    if (photo != null) _cachedImage = MemoryImage(photo!);
+    return _cachedImage;
+  }
   final List<KoalaCard>? cards;
   final bool isError;
   final String? errorMsg;

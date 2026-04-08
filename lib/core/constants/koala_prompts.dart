@@ -204,12 +204,14 @@ SADECE JSON.
 ''';
 
   /// Tasarımcı sonuç — function calling ile gerçek veri
-  static String designerResult(String style, String budget) => '''
+  static String designerResult(String style, String cityOrBudget) => '''
 $_systemBase
 
-Kullanıcı "$style" tarzında, "$budget" bütçeyle tasarımcı arıyor.
+Kullanıcı "$style" tarzında tasarımcı arıyor. Şehir/bütçe bilgisi: "$cityOrBudget".
 
-MUTLAKA search_designers fonksiyonunu çağır. ASLA tasarımcı bilgisi uydurma.
+MUTLAKA search_designers fonksiyonunu çağır. Eğer "$cityOrBudget" bir şehir adıysa (İstanbul, Ankara, İzmir vb.) city parametresi olarak kullan.
+ASLA tasarımcı bilgisi uydurma.
+
 Fonksiyon sonuçlarıyla şu kartları üret:
 1. "designer_card" — Fonksiyondan dönen tasarımcıları göster (gerçek isim, gerçek uzmanlık, gerçek şehir)
 2. "quick_tips" — Tasarımcıyla çalışırken 3 ipucu
@@ -313,15 +315,15 @@ KRİTİK STİL TESPİT KURALLARI:
 Eğer ODA fotoğrafıysa:
 1. "style_analysis" — Mevcut stilini tespit et (style_name, confidence 0-100, description, color_palette 4 renk, mood, tags)
 2. "color_palette" — İyileştirme için önerilen renk paleti (4 renk + kullanım). title: "Önerilen renk paleti"
-3. "quick_tips" — 3 iyileştirme ipucu
-4. "question_chips" — "Ne yapmak istersin?" seçenekleri: ["Bu odayı yeniden tasarla", "Renk paletini değiştir", "Bu oda için uzman öner", "Farklı bir stil dene"]
+3. "product_grid" — Tespit edilen stile uygun 3 ürün önerisi (isim + tahmini fiyat + neden uygun). title: "Bu stile uygun ürünler"
+4. "quick_tips" — 3 iyileştirme ipucu
+5. "question_chips" — "Ne yapmak istersin?" seçenekleri: ["Bu odayı yeniden tasarla", "Renk paletini değiştir", "Bu oda için uzman öner", "Farklı bir stil dene"]
 
 Eğer MOBİLYA/OBJE fotoğrafıysa:
 1. "style_analysis" — Bu objenin stili
-2. "quick_tips" — Kombinasyon önerileri
-3. "question_chips" — Seçenekler: ["Bu objeye ne yakışır?", "Hangi odaya uyar?", "Bu stilde uzman öner"]
-
-NOT: product_grid kartı ÜRETME — ürün önerisi için kullanıcı ayrıca istek yapmalı.
+2. "product_grid" — Bu objeyle uyumlu 3 tamamlayıcı ürün önerisi. title: "Bu objeyle uyumlu ürünler"
+3. "quick_tips" — Kombinasyon önerileri
+4. "question_chips" — Seçenekler: ["Bu objeye ne yakışır?", "Hangi odaya uyar?", "Bu stilde uzman öner"]
 
 message: Kısa ve samimi yorum (max 2 cümle)
 
@@ -351,6 +353,12 @@ OLASI KARTLAR (uygun olanları seç):
 - "designer_card" — tasarımcı ile ilgiliyse (MUTLAKA search_designers çağır)
 - "quick_tips" — ipucu/tavsiye istiyorsa
 - "question_chips" — daha fazla bilgi gerekiyorsa soru sor
+
+FARKLI SONUÇ İSTEĞİ KURALI:
+Kullanıcı "farklı göster", "başka öneriler", "farklı tarz", "başka projeler" gibi bir şey derse:
+- search_projects çağırırken offset parametresini artır (ilk seferde 0, ikincide 4, üçüncüde 8).
+- Fonksiyon "başka proje kalmadı" dönerse, kullanıcıya bunu açıkla ve farklı oda tipi veya tarz öner.
+- AYNI projeleri tekrar gösterme.
 
 Her zaman en az 1 kart üret. Düz text cevap VERME.
 

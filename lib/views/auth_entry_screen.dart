@@ -255,25 +255,6 @@ class _AuthEntryScreenState extends State<AuthEntryScreen>
                           animation: buttonsAnim,
                           child: const AuthLegalText(),
                         ),
-                        const SizedBox(height: 12),
-
-                        // Test modu — login olmadan devam et
-                        FadeSlideIn(
-                          animation: buttonsAnim,
-                          child: TextButton(
-                            onPressed: _loadingAction == null
-                                ? () => AuthCoordinator.goToHome(context)
-                                : null,
-                            style: TextButton.styleFrom(
-                              foregroundColor: const Color(0xFF94A3B8),
-                              textStyle: const TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            child: const Text('Giriş yapmadan devam et (Test Modu)'),
-                          ),
-                        ),
                       ],
                     ),
                   ),

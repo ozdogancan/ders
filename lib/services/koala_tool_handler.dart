@@ -6,6 +6,24 @@ import 'evlumba_live_service.dart';
 class KoalaToolHandler {
   const KoalaToolHandler._();
 
+  /// AI enum (snake_case) → DB'deki Türkçe project_type eşleme
+  /// Evlumba DB'de project_type Türkçe saklanıyor, case-insensitive .ilike kullanıyoruz
+  static String? _mapRoomType(String? roomType) {
+    if (roomType == null || roomType.isEmpty) return null;
+    const mapping = {
+      'salon': 'Oturma Odası',
+      'yatak_odasi': 'Yatak Odası',
+      'mutfak': 'Mutfak',
+      'banyo': 'Banyo',
+      'ofis': 'Ofis',
+      'cocuk_odasi': 'Çocuk Odası',
+      'antre': 'Antre',
+      'balkon': 'Balkon',
+      'ev_ofisi': 'Ev Ofisi',
+    };
+    return mapping[roomType.toLowerCase()] ?? roomType;
+  }
+
   /// Gemini'den gelen function call'ı çalıştır, gerçek veri döndür
   static Future<Map<String, dynamic>> handle(
     String functionName,
@@ -36,7 +54,7 @@ class KoalaToolHandler {
   ) async {
     try {
       final query = (args['query'] as String?) ?? '';
-      final roomType = args['room_type'] as String?;
+      final roomType = _mapRoomType(args['room_type'] as String?);
       final maxPrice = args['max_price'] as num?;
       final limit = (args['limit'] as num?)?.toInt().clamp(1, 8) ?? 6;
 
@@ -47,7 +65,7 @@ class KoalaToolHandler {
           .eq('is_published', true);
 
       if (roomType != null && roomType.isNotEmpty) {
-        projectQuery = projectQuery.eq('project_type', roomType);
+        projectQuery = projectQuery.ilike('project_type', roomType);
       }
 
       final projects = await projectQuery.limit(50);
@@ -132,11 +150,13 @@ class KoalaToolHandler {
     Map<String, dynamic> args,
   ) async {
     try {
-      final roomType = args['room_type'] as String?;
+      final roomType = _mapRoomType(args['room_type'] as String?);
       final limit = (args['limit'] as num?)?.toInt().clamp(1, 6) ?? 4;
+      final offset = (args['offset'] as num?)?.toInt().clamp(0, 50) ?? 0;
 
       final projects = await EvlumbaLiveService.getProjects(
         limit: limit,
+        offset: offset,
         projectType: roomType,
       );
 
@@ -156,6 +176,13 @@ class KoalaToolHandler {
         };
       }).toList();
 
+      if (result.isEmpty && offset > 0) {
+        return {
+          'projects': [],
+          'count': 0,
+          'message': 'Bu oda tipi için gösterilecek başka proje kalmadı. Kullanıcıya farklı bir oda tipi veya tarz öner.',
+        };
+      }
       return {'projects': result, 'count': result.length};
     } catch (e) {
       debugPrint('KoalaToolHandler _searchProjects error: $e');

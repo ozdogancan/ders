@@ -95,7 +95,7 @@ class EvlumbaLiveService {
     }
 
     if (projectType != null && projectType.isNotEmpty) {
-      q = q.eq('project_type', projectType);
+      q = q.ilike('project_type', projectType);
     }
 
     if (query != null && query.isNotEmpty) {

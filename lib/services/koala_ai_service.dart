@@ -79,7 +79,8 @@ class KoalaAIService {
         {
           'name': 'search_projects',
           'description': 'Evlumba tasarım projelerini ara. Kullanıcıya ilham vermek, '
-              'örnek tasarımlar göstermek veya belirli bir oda tipi için tasarım örnekleri sunmak istediğinde çağır.',
+              'örnek tasarımlar göstermek veya belirli bir oda tipi için tasarım örnekleri sunmak istediğinde çağır. '
+              'Kullanıcı "farklı projeler göster" veya "başka öneriler" derse offset parametresini artır.',
           'parameters': {
             'type': 'object',
             'properties': {
@@ -91,6 +92,10 @@ class KoalaAIService {
               'limit': {
                 'type': 'integer',
                 'description': 'Kaç proje dönsün (varsayılan 4, max 6)',
+              },
+              'offset': {
+                'type': 'integer',
+                'description': 'Kaç proje atlansın. İlk çağrıda 0, "farklı göster" denirse 4, sonraki için 8 vb.',
               },
             },
           },
@@ -284,7 +289,7 @@ class KoalaAIService {
 
     // Conversation history (last 10 messages for context)
     if (history != null) {
-      final recent = history.length > 20 ? history.sublist(history.length - 20) : history;
+      final recent = history.length > 10 ? history.sublist(history.length - 10) : history;
       for (final msg in recent) {
         contents.add({
           'role': msg['role'] == 'user' ? 'user' : 'model',
@@ -430,7 +435,7 @@ class KoalaAIService {
     // Mesaj geçmişi hazırla
     final contents = <Map<String, dynamic>>[];
     if (history != null) {
-      final recent = history.length > 20 ? history.sublist(history.length - 20) : history;
+      final recent = history.length > 10 ? history.sublist(history.length - 10) : history;
       for (final msg in recent) {
         contents.add({
           'role': msg['role'] == 'user' ? 'user' : 'model',
@@ -458,7 +463,7 @@ class KoalaAIService {
         _proxyUri,
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode(payload),
-      );
+      ).timeout(const Duration(seconds: 45));
 
       if (response.statusCode >= 300) {
         debugPrint('KoalaAI ERROR ${response.statusCode}: ${response.body.substring(0, 300.clamp(0, response.body.length))}');
@@ -538,15 +543,7 @@ class KoalaAIService {
 
   KoalaResponse _parseResponse(String raw) {
     try {
-      // Bazen Gemini JSON'u markdown code fence içine sarıyor
-      var cleaned = raw.trim();
-      if (cleaned.startsWith('```')) {
-        cleaned = cleaned.replaceFirst(RegExp(r'^```\w*\n?'), '').trimRight();
-        if (cleaned.endsWith('```')) {
-          cleaned = cleaned.substring(0, cleaned.length - 3).trimRight();
-        }
-      }
-
+      final cleaned = _extractJsonString(raw);
       final data = jsonDecode(cleaned) as Map<String, dynamic>;
       final message = _sanitizeMessage(data['message'] as String? ?? '');
       final cardsRaw = data['cards'] as List<dynamic>? ?? [];
@@ -556,22 +553,57 @@ class KoalaAIService {
           .toList();
       return KoalaResponse(message: message, cards: cards);
     } catch (e) {
-      debugPrint('KoalaAI parse error: $e\nRaw: ${raw.substring(0, 200.clamp(0, raw.length))}');
-      // Ham JSON/kod göstermek yerine kullanıcı dostu fallback
+      debugPrint('KoalaAI parse error: $e\nRaw: ${raw.substring(0, 300.clamp(0, raw.length))}');
+      // İkinci deneme: JSON bloğunu regex ile bul
+      try {
+        final jsonMatch = RegExp(r'\{[\s\S]*"message"[\s\S]*"cards"[\s\S]*\}').firstMatch(raw);
+        if (jsonMatch != null) {
+          final data = jsonDecode(jsonMatch.group(0)!) as Map<String, dynamic>;
+          final message = _sanitizeMessage(data['message'] as String? ?? '');
+          final cardsRaw = data['cards'] as List<dynamic>? ?? [];
+          final cards = cardsRaw
+              .where((c) => c is Map<String, dynamic>)
+              .map((c) => KoalaCard.fromJson(c as Map<String, dynamic>))
+              .toList();
+          debugPrint('KoalaAI: Recovered ${cards.length} cards via regex fallback');
+          return KoalaResponse(message: message, cards: cards);
+        }
+      } catch (_) {}
+      // Son çare: sadece mesajı göster
       final friendly = _extractFriendlyText(raw);
       return KoalaResponse(message: friendly, cards: []);
     }
   }
 
-  /// AI mesajından kod kalıntılarını, JSON parçalarını ve markdown artefaktlarını temizle
+  /// Ham yanıttan JSON string'i temizle (code fence, BOM, trailing text)
+  String _extractJsonString(String raw) {
+    var cleaned = raw.trim();
+    // BOM kaldır
+    if (cleaned.startsWith('\uFEFF')) cleaned = cleaned.substring(1);
+    // Markdown code fence kaldır
+    if (cleaned.startsWith('```')) {
+      cleaned = cleaned.replaceFirst(RegExp(r'^```\w*\n?'), '').trimRight();
+      if (cleaned.endsWith('```')) {
+        cleaned = cleaned.substring(0, cleaned.length - 3).trimRight();
+      }
+    }
+    // Bazen Gemini JSON'dan sonra açıklama ekliyor — ilk {...} bloğunu al
+    final firstBrace = cleaned.indexOf('{');
+    if (firstBrace > 0) cleaned = cleaned.substring(firstBrace);
+    final lastBrace = cleaned.lastIndexOf('}');
+    if (lastBrace >= 0 && lastBrace < cleaned.length - 1) {
+      cleaned = cleaned.substring(0, lastBrace + 1);
+    }
+    return cleaned;
+  }
+
+  /// AI mesajından kod kalıntılarını ve markdown artefaktlarını temizle
   String _sanitizeMessage(String msg) {
     var clean = msg.trim();
     // Markdown code fence kaldır
     clean = clean.replaceAll(RegExp(r'```\w*\n?'), '').replaceAll('```', '');
     // Escaped unicode kaldır
     clean = clean.replaceAll(RegExp(r'\\u[0-9a-fA-F]{4}'), '');
-    // JSON artefaktlarını kaldır
-    clean = clean.replaceAll(RegExp(r'[\{\}\[\]]'), '').trim();
     // Birden fazla boşluk/newline temizle
     clean = clean.replaceAll(RegExp(r'\s{3,}'), '  ');
     return clean.isEmpty ? 'İşte önerilerim!' : clean;
@@ -606,7 +638,7 @@ class KoalaAIService {
   }) async* {
     final contents = <Map<String, dynamic>>[];
     if (history != null) {
-      final recent = history.length > 20 ? history.sublist(history.length - 20) : history;
+      final recent = history.length > 10 ? history.sublist(history.length - 10) : history;
       for (final msg in recent) {
         contents.add({
           'role': msg['role'] == 'user' ? 'user' : 'model',
