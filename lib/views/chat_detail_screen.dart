@@ -2056,8 +2056,23 @@ class _DesignerCards extends StatelessWidget {
   final Map<String, dynamic> d;
   @override
   Widget build(BuildContext context) {
-    final designers =
-        (d['designers'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+    // Gemini bazen designers dizisi yerine flat data gönderir — her iki formatı da handle et
+    List<Map<String, dynamic>> designers;
+    final rawDesigners = d['designers'];
+    if (rawDesigners is List && rawDesigners.isNotEmpty) {
+      designers = rawDesigners.cast<Map<String, dynamic>>();
+    } else if (d['name'] != null) {
+      // Flat format — kart kendisi tek bir tasarımcı
+      designers = [d];
+    } else {
+      designers = [];
+    }
+    if (designers.isEmpty) {
+      return const Padding(
+        padding: EdgeInsets.all(12),
+        child: Text('Tasarımcı bilgisi yüklenemedi.', style: TextStyle(color: Colors.grey)),
+      );
+    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [

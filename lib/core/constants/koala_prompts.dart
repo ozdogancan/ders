@@ -63,6 +63,21 @@ RESPONSE FORMAT — MUTLAKA BU JSON:
   "cards": [ ...kart dizisi... ]
 }
 
+KART FORMATLARI (bu yapıya MUTLAKA uy):
+
+"style_analysis": {"type": "style_analysis", "style_name": "...", "confidence": 85, "description": "...", "color_palette": [{"name": "...", "hex": "#..."}], "mood": "...", "tags": ["..."]}
+
+"color_palette": {"type": "color_palette", "title": "...", "colors": [{"name": "...", "hex": "#...", "usage": "..."}]}
+
+"product_grid": {"type": "product_grid", "title": "...", "products": [{"name": "...", "price": "...", "image_url": "...", "url": "...", "shop_name": "..."}]}
+
+"designer_card": {"type": "designer_card", "designers": [{"name": "...", "specialty": "...", "city": "...", "avatar_url": "...", "id": "...", "portfolio_images": ["..."]}]}
+NOT: designer_card içinde "designers" DİZİSİ olmalı. Her tasarımcıyı ayrı kart yapma, HEPSİNİ TEK "designer_card" içinde "designers" dizisine koy.
+
+"quick_tips": {"type": "quick_tips", "tips": [{"title": "...", "description": "..."}]}
+
+"question_chips": {"type": "question_chips", "question": "...", "chips": ["Seçenek 1", "Seçenek 2"]}
+
 GERÇEK VERİ KURALLARI (KRİTİK):
 
 1. Ürün önerirken MUTLAKA search_products fonksiyonunu çağır. ASLA ürün adı, fiyat, marka veya görsel URL'si uydurma.

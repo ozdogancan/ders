@@ -530,15 +530,21 @@ class KoalaAIService {
         }
       }
 
-      // JSON parse dene, başarısızsa raw text döndür
-      return _parseResponse(text);
+      // JSON parse dene
+      final parsed = _parseResponse(text);
+      // Eğer parse başarılı ve kartlar varsa → döndür
+      if (parsed.cards.isNotEmpty) return parsed;
+      // Kartlar boşsa ama mesaj varsa → mesajla birlikte döndür (Gemini JSON vermemiş olabilir)
+      if (parsed.message.isNotEmpty && parsed.message != 'İşte önerilerim!') return parsed;
+
+      // Gemini JSON döndürmedi → responseMimeType ile tekrar dene (tools olmadan)
+      debugPrint('KoalaAI: Tools response was not JSON, retrying with _callGemini...');
+      return _callGemini(prompt: prompt, history: history);
     }
 
-    // 3 tur dolduysa fallback
-    return const KoalaResponse(
-      message: 'Arama tamamlandı ama sonuçları düzenleyemedim. Tekrar dener misin?',
-      cards: [],
-    );
+    // 3 tur dolduysa fallback — son çare olarak tools olmadan dene
+    debugPrint('KoalaAI: 3 turns exhausted, falling back to _callGemini...');
+    return _callGemini(prompt: prompt, history: history);
   }
 
   KoalaResponse _parseResponse(String raw) {
