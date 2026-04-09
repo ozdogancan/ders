@@ -404,11 +404,20 @@ class KoalaAIService {
       },
     };
 
+    final jsonBody = jsonEncode(payload);
+    final payloadSizeKB = (jsonBody.length / 1024).round();
+    debugPrint('KoalaAI: Image payload size: ${payloadSizeKB}KB');
+
+    if (payloadSizeKB > 4000) {
+      debugPrint('KoalaAI: WARNING — payload > 4MB, Vercel may reject');
+    }
+
     final response = await _client
-        .post(_proxyUri, headers: {'Content-Type': 'application/json'}, body: jsonEncode(payload))
+        .post(_proxyUri, headers: {'Content-Type': 'application/json'}, body: jsonBody)
         .timeout(const Duration(seconds: 45));
 
     if (response.statusCode >= 300) {
+      debugPrint('KoalaAI: Image request failed: ${response.statusCode} — ${response.body.substring(0, 300.clamp(0, response.body.length))}');
       throw Exception('Gemini image failed: ${response.statusCode}');
     }
 

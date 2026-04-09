@@ -723,8 +723,8 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
   Future<void> _doPick(ImageSource src) async {
     final f = await _picker.pickImage(
       source: src,
-      maxWidth: 1920,
-      imageQuality: 85,
+      maxWidth: 1024,
+      imageQuality: 55,
     );
     if (f == null) return;
     Analytics.aiPhotoUploaded(src == ImageSource.camera ? 'camera' : 'gallery');
