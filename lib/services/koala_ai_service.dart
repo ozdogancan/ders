@@ -661,7 +661,7 @@ class KoalaAIService {
       'stream': true,
       'generationConfig': {
         'temperature': 0.7,
-        'responseMimeType': 'application/json',
+        // NOT: responseMimeType kaldırıldı — Gemini 2.5 Flash 503 döndürüyor.
       },
     });
 
