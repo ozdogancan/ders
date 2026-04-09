@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/router/app_router.dart';
+import '../core/theme/koala_tokens.dart';
 
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
@@ -22,15 +23,15 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     _PD(
       'Evini akıllıca\ntasarla',
       'Fotoğrafını yükle, stilini analiz edeyim, ürün ve tasarım önerileri çıkarayım.',
-      const Color(0xFF7C6EF2),
-      const Color(0xFF4F46E5),
+      KoalaColors.accent,
+      KoalaColors.accentDarker,
       0,
     ),
     _PD(
       'Fotoğrafını yükle,\nKoala yönünü çıkarsın',
       'Mekanını analiz eder, stilini tahmin eder ve uygulanabilir ürün önerileri hazırlar.',
-      const Color(0xFF6C5CE7),
-      const Color(0xFF4338CA),
+      KoalaColors.accentDeep,
+      KoalaColors.accentDeepDark,
       1,
     ),
   ];
@@ -358,13 +359,13 @@ class _Page1State extends State<_Page1> with SingleTickerProviderStateMixin {
                             Icon(
                               Icons.auto_awesome,
                               size: 16,
-                              color: Color(0xFF7C6EF2),
+                              color: KoalaColors.accent,
                             ),
                             SizedBox(width: 6),
                             Text(
                               'Koala AI',
                               style: TextStyle(
-                                color: Color(0xFF7C6EF2),
+                                color: KoalaColors.accent,
                                 fontWeight: FontWeight.bold,
                                 fontSize: 14,
                               ),
@@ -555,12 +556,8 @@ class _Page2State extends State<_Page2>
                                     gradient: LinearGradient(
                                       colors: [
                                         Colors.transparent,
-                                        const Color(
-                                          0xFF7C6EF2,
-                                        ).withValues(alpha: 0.25),
-                                        const Color(
-                                          0xFFA78BFA,
-                                        ).withValues(alpha: 0.25),
+                                        KoalaColors.accent.withValues(alpha: 0.25),
+                                        KoalaColors.accentMuted.withValues(alpha: 0.25),
                                         Colors.transparent,
                                       ],
                                     ),
@@ -572,16 +569,14 @@ class _Page2State extends State<_Page2>
                                     gradient: LinearGradient(
                                       colors: [
                                         Colors.transparent,
-                                        const Color(0xFF7C6EF2),
-                                        const Color(0xFFA78BFA),
+                                        KoalaColors.accent,
+                                        KoalaColors.accentMuted,
                                         Colors.transparent,
                                       ],
                                     ),
                                     boxShadow: [
                                       BoxShadow(
-                                        color: const Color(
-                                          0xFF7C6EF2,
-                                        ).withValues(alpha: 0.6),
+                                        color: KoalaColors.accent.withValues(alpha: 0.6),
                                         blurRadius: 12,
                                         spreadRadius: 2,
                                       ),
@@ -594,12 +589,8 @@ class _Page2State extends State<_Page2>
                                     gradient: LinearGradient(
                                       colors: [
                                         Colors.transparent,
-                                        const Color(
-                                          0xFFA78BFA,
-                                        ).withValues(alpha: 0.25),
-                                        const Color(
-                                          0xFF7C6EF2,
-                                        ).withValues(alpha: 0.25),
+                                        KoalaColors.accentMuted.withValues(alpha: 0.25),
+                                        KoalaColors.accent.withValues(alpha: 0.25),
                                         Colors.transparent,
                                       ],
                                     ),
@@ -679,7 +670,7 @@ class _Page2State extends State<_Page2>
                                         Icon(
                                           Icons.auto_awesome,
                                           size: 14,
-                                          color: Color(0xFF7C6EF2),
+                                          color: KoalaColors.accent,
                                         ),
                                         SizedBox(width: 4),
                                         Text(
@@ -687,7 +678,7 @@ class _Page2State extends State<_Page2>
                                           style: TextStyle(
                                             fontSize: 10,
                                             fontWeight: FontWeight.w600,
-                                            color: Color(0xFF7C6EF2),
+                                            color: KoalaColors.accent,
                                           ),
                                         ),
                                       ],
@@ -698,7 +689,7 @@ class _Page2State extends State<_Page2>
                                       style: TextStyle(
                                         fontSize: 14,
                                         fontWeight: FontWeight.w800,
-                                        color: Color(0xFF1A1D2A),
+                                        color: KoalaColors.ink,
                                       ),
                                     ),
                                     const SizedBox(height: 8),
@@ -750,7 +741,7 @@ class _Page2State extends State<_Page2>
                                               Icon(
                                                 Icons.shopping_bag_rounded,
                                                 size: 14,
-                                                color: Color(0xFF8B5CF6),
+                                                color: KoalaColors.accentMuted,
                                               ),
                                               SizedBox(width: 4),
                                               Text(
@@ -758,7 +749,7 @@ class _Page2State extends State<_Page2>
                                                 style: TextStyle(
                                                   fontSize: 11,
                                                   fontWeight: FontWeight.w600,
-                                                  color: Color(0xFF8B5CF6),
+                                                  color: KoalaColors.accentMuted,
                                                 ),
                                               ),
                                             ],
@@ -769,25 +760,23 @@ class _Page2State extends State<_Page2>
                                             style: TextStyle(
                                               fontSize: 13,
                                               fontWeight: FontWeight.w700,
-                                              color: Color(0xFF1A1D2A),
+                                              color: KoalaColors.ink,
                                             ),
                                           ),
                                         ],
                                       ),
                                     ),
-                                    ...const [
-                                      (0xFF7C6EF2, Icons.weekend_rounded),
-                                      (0xFF8B5CF6, Icons.light_rounded),
-                                      (0xFFA78BFA, Icons.table_bar_rounded),
+                                    ...[
+                                      (KoalaColors.accent, Icons.weekend_rounded),
+                                      (KoalaColors.accentMuted, Icons.light_rounded),
+                                      (KoalaColors.accentMuted, Icons.table_bar_rounded),
                                     ].map(
                                       (e) => Container(
                                         width: 32,
                                         height: 32,
                                         margin: const EdgeInsets.only(left: 6),
                                         decoration: BoxDecoration(
-                                          color: Color(
-                                            e.$1,
-                                          ).withValues(alpha: 0.15),
+                                          color: e.$1.withValues(alpha: 0.15),
                                           borderRadius: BorderRadius.circular(
                                             8,
                                           ),
@@ -795,7 +784,7 @@ class _Page2State extends State<_Page2>
                                         child: Icon(
                                           e.$2,
                                           size: 16,
-                                          color: Color(e.$1),
+                                          color: e.$1,
                                         ),
                                       ),
                                     ),

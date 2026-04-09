@@ -127,7 +127,7 @@ class _DesignersScreenState extends State<DesignersScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           behavior: SnackBarBehavior.floating,
-          backgroundColor: const Color(0xFF6C5CE7),
+          backgroundColor: KoalaColors.accentDeep,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           duration: const Duration(seconds: 3),
           content: const Row(
@@ -167,7 +167,7 @@ class _DesignersScreenState extends State<DesignersScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           behavior: SnackBarBehavior.floating,
-          backgroundColor: const Color(0xFFEF4444),
+          backgroundColor: KoalaColors.errorBright,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           duration: const Duration(seconds: 3),
           content: const Row(
@@ -887,7 +887,7 @@ class _DesignersScreenState extends State<DesignersScreen> {
                     hintText: _activeIntent == null ? 'uzman keşfet...' : "Koala'ya sor...",
                     hintStyle: GoogleFonts.manrope(
                       fontSize: 14,
-                      color: const Color(0xFF787585).withValues(alpha: 0.72),
+                      color: KoalaColors.textSec.withValues(alpha: 0.72),
                     ),
                     border: InputBorder.none,
                     contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
@@ -907,7 +907,7 @@ class _DesignersScreenState extends State<DesignersScreen> {
                       color: hasText ? null : Colors.black.withValues(alpha: 0.04),
                       gradient: hasText
                           ? const LinearGradient(
-                              colors: [Color(0xFF7C6EF2), Color(0xFF5A4DBF)],
+                              colors: [KoalaColors.accent, KoalaColors.accentDark],
                             )
                           : null,
                     ),
@@ -1140,7 +1140,7 @@ class _ExpertUserBubble extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          colors: [Color(0xFF5646CA), Color(0xFF6F61E5)],
+          colors: [KoalaColors.accentDark, KoalaColors.accentDeep],
         ),
         borderRadius: const BorderRadius.only(
           topLeft: Radius.circular(24),
@@ -1215,7 +1215,7 @@ class _ExpertCard extends StatelessWidget {
                     Row(
                       children: [
                         if (expert.rating > 0) ...[
-                          const Icon(Icons.star_rounded, size: 16, color: Color(0xFFF59E0B)),
+                          const Icon(Icons.star_rounded, size: 16, color: KoalaColors.star),
                           const SizedBox(width: 4),
                           Text(
                             expert.rating.toStringAsFixed(1),
@@ -1533,7 +1533,7 @@ class _ExpertDetailSheetState extends State<_ExpertDetailSheet> {
                               Row(
                                 children: [
                                   if (expert.rating > 0) ...[
-                                    const Icon(Icons.star_rounded, size: 16, color: Color(0xFFF59E0B)),
+                                    const Icon(Icons.star_rounded, size: 16, color: KoalaColors.star),
                                     const SizedBox(width: 4),
                                     Text(
                                       expert.rating.toStringAsFixed(1),
@@ -1565,7 +1565,7 @@ class _ExpertDetailSheetState extends State<_ExpertDetailSheet> {
                     Container(
                       padding: const EdgeInsets.all(18),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFF3F0FF),
+                        color: KoalaColors.accentSoft,
                         borderRadius: BorderRadius.circular(24),
                       ),
                       child: Text(
@@ -1685,7 +1685,7 @@ class _DetailComposer extends StatelessWidget {
                   hintText: '$designerName için mesaj yaz...',
                   hintStyle: GoogleFonts.manrope(
                     fontSize: 14,
-                    color: const Color(0xFF787585).withValues(alpha: 0.72),
+                    color: KoalaColors.textSec.withValues(alpha: 0.72),
                   ),
                   border: InputBorder.none,
                 ),
@@ -1705,7 +1705,7 @@ class _DetailComposer extends StatelessWidget {
                 decoration: const BoxDecoration(
                   shape: BoxShape.circle,
                   gradient: LinearGradient(
-                    colors: [Color(0xFF7C6EF2), Color(0xFF5A4DBF)],
+                    colors: [KoalaColors.accent, KoalaColors.accentDark],
                   ),
                 ),
                 child: const Icon(LucideIcons.arrowUp, size: 18, color: Colors.white),

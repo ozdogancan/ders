@@ -14,11 +14,64 @@
       },
       "oauth_client": [
         {
+          "client_id": "54104143654-6258k9ahkspac6de6n2sicahu2b8gaji.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.egitim_ai_tutor.app",
+            "certificate_hash": "c987ce49a1527a4c41c32b21875de76432c33872"
+          }
+        },
+        {
           "client_id": "54104143654-ni025eelvdu1d2pjettorj1682krebaq.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
             "package_name": "com.egitim_ai_tutor.app",
             "certificate_hash": "42789cf444cdd1478ec42a5f3a15762884593c6c"
+          }
+        },
+        {
+          "client_id": "54104143654-25l75mtad694vgh0o6nq56lhtddv2bc1.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD4yEi1zZY1bTJ0ZvaNsccPU5kGyqkR0Xs"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "54104143654-25l75mtad694vgh0o6nq56lhtddv2bc1.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:54104143654:android:7382c238cea838967173e7",
+        "android_client_info": {
+          "package_name": "com.evlumba.koala"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "54104143654-3eu1dea69sfkhl2i5jd3mifo2lnl64s7.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.evlumba.koala",
+            "certificate_hash": "42789cf444cdd1478ec42a5f3a15762884593c6c"
+          }
+        },
+        {
+          "client_id": "54104143654-f354lqskmd8o300heo01ogkqrfl63rhf.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.evlumba.koala",
+            "certificate_hash": "c987ce49a1527a4c41c32b21875de76432c33872"
           }
         },
         {

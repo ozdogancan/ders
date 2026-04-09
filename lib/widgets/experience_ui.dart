@@ -1,35 +1,6 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
-
-class AppColors {
-  const AppColors._();
-  static const Color primaryBlue = Color(0xFF2196F3);
-  static const Color white = Color(0xFFFFFFFF);
-  static const Color grey100 = Color(0xFFF5F7FA);
-  static const Color grey300 = Color(0xFFD7DEE8);
-  static const Color grey700 = Color(0xFF4A5565);
-  static const Color successGreen = Color(0xFF2E7D32);
-  static const Color errorRed = Color(0xFFC62828);
-  static const Color brand = Color(0xFF6366F1);
-  static const Color brandLight = Color(0xFFEEF2FF);
-  static const Color ink = Color(0xFF0F172A);
-  static const Color inkSoft = Color(0xFF1E293B);
-  static const Color textPrimary = Color(0xFF1E293B);
-  static const Color textSecondary = Color(0xFF64748B);
-  static const Color surface = Color(0xFFF8FAFC);
-  static const Color border = Color(0xFFE2E8F0);
-  static const Color accent = Color(0xFF8B5CF6);
-  static const Color accentLight = Color(0xFFFEF2F2);
-  static const Color teal = Color(0xFF14B8A6);
-  static const Color cyan = Color(0xFF06B6D4);
-  static const Color rose = Color(0xFFF43F5E);
-  static const Color sun = Color(0xFFFBBF24);
-  static const Color warning = Color(0xFFF59E0B);
-  static const Color success = Color(0xFF22C55E);
-  static const Color successLight = Color(0xFFDCFCE7);
-  static const Color subjectMat = Color(0xFF6366F1);
-  static const Color subjectFizik = Color(0xFFEC4899);
-}
+import '../core/theme/koala_tokens.dart';
 
 class AppBackdrop extends StatelessWidget {
   const AppBackdrop({super.key, required this.child, this.primaryGlow, this.secondaryGlow, this.showGrid = true});
@@ -40,14 +11,19 @@ class AppBackdrop extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Color p = primaryGlow ?? AppColors.brand;
-    final Color s = secondaryGlow ?? AppColors.cyan;
+    final Color p = primaryGlow ?? KoalaColors.accent;
+    final Color s = secondaryGlow ?? KoalaColors.blue;
     return DecoratedBox(
       decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: <Color>[AppColors.surface, p.withValues(alpha: 0.04), s.withValues(alpha: 0.03), AppColors.surface],
+          colors: <Color>[
+            KoalaColors.surfaceCool,
+            p.withValues(alpha: 0.04),
+            s.withValues(alpha: 0.03),
+            KoalaColors.surfaceCool,
+          ],
         ),
       ),
       child: child,
@@ -72,10 +48,18 @@ class FrostedCard extends StatelessWidget {
         filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
         child: DecoratedBox(
           decoration: BoxDecoration(
-            color: color ?? AppColors.white.withValues(alpha: 0.82),
+            color: color ?? KoalaColors.surface.withValues(alpha: 0.82),
             borderRadius: BorderRadius.circular(radius),
-            border: Border.all(color: borderColor ?? AppColors.white.withValues(alpha: 0.5)),
-            boxShadow: <BoxShadow>[BoxShadow(color: AppColors.ink.withValues(alpha: 0.04), blurRadius: 24, offset: const Offset(0, 8))],
+            border: Border.all(
+              color: borderColor ?? KoalaColors.surface.withValues(alpha: 0.5),
+            ),
+            boxShadow: <BoxShadow>[
+              BoxShadow(
+                color: KoalaColors.inkDeep.withValues(alpha: 0.04),
+                blurRadius: 24,
+                offset: const Offset(0, 8),
+              ),
+            ],
           ),
           child: Padding(padding: padding, child: child),
         ),
@@ -98,13 +82,13 @@ class SectionHeading extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
         if (eyebrow != null) ...<Widget>[
-          Text(eyebrow!, style: Theme.of(context).textTheme.labelSmall?.copyWith(color: AppColors.brand, fontWeight: FontWeight.w700, letterSpacing: 1.4)),
+          Text(eyebrow!, style: Theme.of(context).textTheme.labelSmall?.copyWith(color: KoalaColors.accent, fontWeight: FontWeight.w700, letterSpacing: 1.4)),
           const SizedBox(height: 6),
         ],
-        Text(title, style: Theme.of(context).textTheme.titleLarge?.copyWith(color: AppColors.textPrimary, fontWeight: FontWeight.w800)),
+        Text(title, style: Theme.of(context).textTheme.titleLarge?.copyWith(color: KoalaColors.inkSoft, fontWeight: FontWeight.w800)),
         if (subtitle != null) ...<Widget>[
           const SizedBox(height: 6),
-          Text(subtitle!, style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppColors.textSecondary)),
+          Text(subtitle!, style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: KoalaColors.textMed)),
         ],
       ],
     );
@@ -120,8 +104,8 @@ class InfoPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Color bg = backgroundColor ?? AppColors.white.withValues(alpha: 0.14);
-    final Color fg = foregroundColor ?? AppColors.white;
+    final Color bg = backgroundColor ?? KoalaColors.surface.withValues(alpha: 0.14);
+    final Color fg = foregroundColor ?? KoalaColors.surface;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(999)),
@@ -144,8 +128,8 @@ class HighlightMetric extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Color valueColor = light ? AppColors.white : AppColors.textPrimary;
-    final Color labelColor = light ? AppColors.white.withValues(alpha: 0.7) : AppColors.textSecondary;
+    final Color valueColor = light ? KoalaColors.surface : KoalaColors.inkSoft;
+    final Color labelColor = light ? KoalaColors.surface.withValues(alpha: 0.7) : KoalaColors.textMed;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[

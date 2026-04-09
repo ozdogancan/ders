@@ -69,7 +69,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       if (mounted) {
         setState(() => _photoUrl = publicUrl);
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          behavior: SnackBarBehavior.floating, backgroundColor: const Color(0xFF22C55E),
+          behavior: SnackBarBehavior.floating, backgroundColor: KoalaColors.greenBright,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
           content: const Text('Profil fotoğrafı güncellendi', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600))));
       }
@@ -77,7 +77,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       debugPrint('Photo error: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          behavior: SnackBarBehavior.floating, backgroundColor: const Color(0xFFEF4444),
+          behavior: SnackBarBehavior.floating, backgroundColor: KoalaColors.errorBright,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
           content: const Text('Fotoğraf yüklenemedi, tekrar dene', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600))));
       }
@@ -119,7 +119,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       ]));
   }
 
-  bool get _isAnonymous => _user == null || _user!.isAnonymous;
+  bool get _isAnonymous => _user?.isAnonymous ?? true;
 
   Future<void> _logout() async {
     final confirm = await showDialog<bool>(context: context, builder: (ctx) => AlertDialog(
@@ -129,7 +129,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       actions: [
         TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Vazgeç')),
         FilledButton(onPressed: () => Navigator.pop(ctx, true),
-          style: FilledButton.styleFrom(backgroundColor: const Color(0xFFEF4444)),
+          style: FilledButton.styleFrom(backgroundColor: KoalaColors.errorBright),
           child: const Text('Çıkış Yap')),
       ]));
     if (confirm != true) return;
@@ -156,118 +156,322 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFFAFAFA),
+      backgroundColor: KoalaColors.surfaceMuted,
       body: SafeArea(
-        child: CustomScrollView(slivers: [
-          // Header
-          SliverToBoxAdapter(child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-            child: Row(children: [
-              GestureDetector(onTap: _goBackHome,
-                child: Container(width: 36, height: 36,
-                  decoration: BoxDecoration(borderRadius: BorderRadius.circular(12), color: const Color(0xFFF1F5F9)),
-                  child: const Icon(Icons.arrow_back_rounded, size: 18, color: Color(0xFF475569)))),
-              const SizedBox(width: 14),
-              GestureDetector(
-                onTap: () {
-                  _adminTapCount++;
-                  if (_adminTapCount >= 5) {
-                    _adminTapCount = 0;
-                    Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminShell()));
-                  }
-                },
-                child: const Text('Profil', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: KoalaColors.text)),
+        child: CustomScrollView(
+          slivers: [
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                child: Row(
+                  children: [
+                    GestureDetector(
+                      onTap: _goBackHome,
+                      child: Container(
+                        width: 36,
+                        height: 36,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(12),
+                          color: KoalaColors.surfaceCool,
+                        ),
+                        child: const Icon(
+                          Icons.arrow_back_rounded,
+                          size: 18,
+                          color: KoalaColors.textMed,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                    GestureDetector(
+                      onTap: () {
+                        _adminTapCount++;
+                        if (_adminTapCount >= 5) {
+                          _adminTapCount = 0;
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const AdminShell(),
+                            ),
+                          );
+                        }
+                      },
+                      child: const Text(
+                        'Profil',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w800,
+                          color: KoalaColors.text,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ]))),
-
-          // Avatar + Name
-          SliverToBoxAdapter(child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 28, 20, 0),
-            child: Column(children: [
-              GestureDetector(onTap: _pickProfilePhoto,
-                child: Stack(children: [
-                  Container(width: 96, height: 96,
-                    decoration: BoxDecoration(shape: BoxShape.circle,
-                      gradient: const LinearGradient(colors: [KoalaColors.accent, KoalaColors.accent]),
-                      boxShadow: [BoxShadow(color: KoalaColors.accent.withValues(alpha: 0.15), blurRadius: 24)]),
-                    child: _photoUrl != null
-                      ? ClipOval(child: Image.network(_photoUrl!, fit: BoxFit.cover, width: 96, height: 96,
-                          errorBuilder: (_, _, _) => const Icon(Icons.person_rounded, color: Colors.white, size: 44)))
-                      : const Icon(Icons.person_rounded, color: Colors.white, size: 44)),
-                  Positioned(bottom: 0, right: 0,
-                    child: Container(width: 30, height: 30,
-                      decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.white,
-                        border: Border.all(color: const Color(0xFFFAFAFA), width: 3)),
-                      child: const Icon(Icons.camera_alt_rounded, size: 14, color: KoalaColors.accent))),
-                ])),
-              const SizedBox(height: 16),
-              Text(_isAnonymous ? 'Misafir Kullanıcı' : (_displayName.isNotEmpty ? _displayName : 'Koala Kullanıcı'),
-                style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: KoalaColors.text)),
-              const SizedBox(height: 4),
-              Text(_isAnonymous ? 'Giriş yap ve tüm özellikleri kullan' : _email,
-                style: TextStyle(fontSize: 14, color: _isAnonymous ? KoalaColors.accent : Colors.grey.shade500)),
-              const SizedBox(height: 20),
-              // Stats row
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  _StatBadge('${_savedCounts.values.fold(0, (a, b) => a + b)}', 'Kayıt'),
-                  Container(width: 1, height: 28, margin: const EdgeInsets.symmetric(horizontal: 20), color: const Color(0xFFE2E8F0)),
-                  _StatBadge('$_collectionCount', 'Koleksiyon'),
-                ],
+            ),
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 28, 20, 0),
+                child: Column(
+                  children: [
+                    GestureDetector(
+                      onTap: _pickProfilePhoto,
+                      child: Stack(
+                        children: [
+                          Container(
+                            width: 96,
+                            height: 96,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              gradient: const LinearGradient(
+                                colors: [KoalaColors.accent, KoalaColors.accent],
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: KoalaColors.accent.withValues(alpha: 0.15),
+                                  blurRadius: 24,
+                                ),
+                              ],
+                            ),
+                            child: _photoUrl != null
+                                ? ClipOval(
+                                    child: Image.network(
+                                      _photoUrl!,
+                                      fit: BoxFit.cover,
+                                      width: 96,
+                                      height: 96,
+                                      errorBuilder: (_, _, _) => const Icon(
+                                        Icons.person_rounded,
+                                        color: Colors.white,
+                                        size: 44,
+                                      ),
+                                    ),
+                                  )
+                                : const Icon(
+                                    Icons.person_rounded,
+                                    color: Colors.white,
+                                    size: 44,
+                                  ),
+                          ),
+                          Positioned(
+                            bottom: 0,
+                            right: 0,
+                            child: Container(
+                              width: 30,
+                              height: 30,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: Colors.white,
+                                border: Border.all(
+                                  color: KoalaColors.surfaceMuted,
+                                  width: 3,
+                                ),
+                              ),
+                              child: const Icon(
+                                Icons.camera_alt_rounded,
+                                size: 14,
+                                color: KoalaColors.accent,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      _isAnonymous
+                          ? 'Misafir Kullanıcı'
+                          : (_displayName.isNotEmpty
+                                ? _displayName
+                                : 'Koala Kullanıcı'),
+                      style: const TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w800,
+                        color: KoalaColors.text,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      _isAnonymous
+                          ? 'Giriş yap ve tüm özellikleri kullan'
+                          : _email,
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: _isAnonymous
+                            ? KoalaColors.accent
+                            : Colors.grey.shade500,
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        _StatBadge(
+                          '${_savedCounts.values.fold(0, (a, b) => a + b)}',
+                          'Kayıt',
+                        ),
+                        Container(
+                          width: 1,
+                          height: 28,
+                          margin: const EdgeInsets.symmetric(horizontal: 20),
+                          color: KoalaColors.borderSolid,
+                        ),
+                        _StatBadge('$_collectionCount', 'Koleksiyon'),
+                      ],
+                    ),
+                  ],
+                ),
               ),
-            ]))),
-
-          // Quick actions
-          SliverToBoxAdapter(child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
-            child: Container(padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(borderRadius: BorderRadius.circular(20), color: Colors.white),
-              child: Column(children: [
-                _ActionTile(icon: Icons.bookmark_rounded, label: 'Kaydedilenlerim', color: KoalaColors.accent,
-                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SavedScreen()))),
-                const Divider(height: 1),
-                _ActionTile(icon: Icons.collections_bookmark_rounded, label: 'Koleksiyonlarım', color: const Color(0xFFEC4899),
-                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CollectionsScreen()))),
-                const Divider(height: 1),
-                _ActionTile(icon: Icons.notifications_rounded, label: 'Bildirimler', color: KoalaColors.warning,
-                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationsScreen()))),
-                const Divider(height: 1),
-                _ActionTile(icon: Icons.palette_rounded, label: 'Stil Profilim', color: KoalaColors.accent,
-                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const StyleProfileScreen()))),
-              ])))),
-
-          // Settings
-          if (!_isAnonymous)
-            SliverToBoxAdapter(child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text('AYARLAR', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Colors.grey.shade400, letterSpacing: 1)),
-                const SizedBox(height: 12),
-                _SettingTile(icon: Icons.person_rounded, label: 'İsim',
-                  value: _displayName.isNotEmpty ? _displayName : 'Belirtilmemiş', onTap: _editName),
-                _SettingTile(icon: Icons.email_rounded, label: 'E-posta', value: _email, editable: false),
-              ]))),
-
-          // Account
-          SliverToBoxAdapter(child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('HESAP', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Colors.grey.shade400, letterSpacing: 1)),
-              const SizedBox(height: 12),
-              if (_isAnonymous)
-                _SettingTile(icon: Icons.login_rounded, label: 'Giriş Yap', value: 'Google veya telefon ile',
-                  color: KoalaColors.accent, onTap: _goToLogin)
-              else
-                _SettingTile(icon: Icons.logout_rounded, label: 'Çıkış Yap', value: '',
-                  color: KoalaColors.warning, onTap: _logout),
-            ]))),
-
-          // Version
-          SliverToBoxAdapter(child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 36, 20, 40),
-            child: Center(child: Text('Koala v1.0.0', style: TextStyle(fontSize: 12, color: Colors.grey.shade400))))),
-        ])));
+            ),
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(20),
+                    color: Colors.white,
+                  ),
+                  child: Column(
+                    children: [
+                      _ActionTile(
+                        icon: Icons.bookmark_rounded,
+                        label: 'Kaydedilenlerim',
+                        color: KoalaColors.accent,
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const SavedScreen()),
+                        ),
+                      ),
+                      const Divider(height: 1),
+                      _ActionTile(
+                        icon: Icons.collections_bookmark_rounded,
+                        label: 'Koleksiyonlarım',
+                        color: KoalaColors.pink,
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const CollectionsScreen(),
+                          ),
+                        ),
+                      ),
+                      const Divider(height: 1),
+                      _ActionTile(
+                        icon: Icons.notifications_rounded,
+                        label: 'Bildirimler',
+                        color: KoalaColors.warning,
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const NotificationsScreen(),
+                          ),
+                        ),
+                      ),
+                      const Divider(height: 1),
+                      _ActionTile(
+                        icon: Icons.palette_rounded,
+                        label: 'Stil Profilim',
+                        color: KoalaColors.accent,
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const StyleProfileScreen(),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            if (!_isAnonymous)
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'AYARLAR',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.grey.shade400,
+                          letterSpacing: 1,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      _SettingTile(
+                        icon: Icons.person_rounded,
+                        label: 'İsim',
+                        value: _displayName.isNotEmpty
+                            ? _displayName
+                            : 'Belirtilmemiş',
+                        onTap: _editName,
+                      ),
+                      _SettingTile(
+                        icon: Icons.email_rounded,
+                        label: 'E-posta',
+                        value: _email,
+                        editable: false,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'HESAP',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.grey.shade400,
+                        letterSpacing: 1,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    if (_isAnonymous)
+                      _SettingTile(
+                        icon: Icons.login_rounded,
+                        label: 'Giriş Yap',
+                        value: 'Google veya telefon ile',
+                        color: KoalaColors.accent,
+                        onTap: _goToLogin,
+                      )
+                    else
+                      _SettingTile(
+                        icon: Icons.logout_rounded,
+                        label: 'Çıkış Yap',
+                        value: '',
+                        color: KoalaColors.warning,
+                        onTap: _logout,
+                      ),
+                  ],
+                ),
+              ),
+            ),
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 36, 20, 40),
+                child: Center(
+                  child: Text(
+                    'Koala v1.0.0',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey.shade400,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   void _goBackHome() {

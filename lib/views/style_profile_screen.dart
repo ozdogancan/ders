@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' hide User;
 
 import '../core/config/env.dart';
+import '../core/theme/koala_tokens.dart';
 
 class StyleProfileScreen extends StatefulWidget {
   const StyleProfileScreen({super.key});
@@ -22,12 +23,12 @@ class _StyleProfileScreenState extends State<StyleProfileScreen> {
   bool _saved = false;
 
   static const _styles = [
-    {'name': 'Minimalist', 'emoji': '⬜', 'color': Color(0xFFF1F5F9)},
-    {'name': 'Modern', 'emoji': '🔲', 'color': Color(0xFFEDE9FE)},
+    {'name': 'Minimalist', 'emoji': '⬜', 'color': KoalaColors.surfaceCool},
+    {'name': 'Modern', 'emoji': '🔲', 'color': KoalaColors.accentLight},
     {'name': 'Japandi', 'emoji': '🎋', 'color': Color(0xFFF0FDF4)},
     {'name': 'Bohem', 'emoji': '🌿', 'color': Color(0xFFFEF3C7)},
     {'name': 'Skandinav', 'emoji': '❄️', 'color': Color(0xFFEFF6FF)},
-    {'name': 'Endüstriyel', 'emoji': '⚙️', 'color': Color(0xFFF1F5F9)},
+    {'name': 'Endüstriyel', 'emoji': '⚙️', 'color': KoalaColors.surfaceCool},
   ];
 
   static const _colors = [
@@ -78,9 +79,9 @@ class _StyleProfileScreenState extends State<StyleProfileScreen> {
       backgroundColor: Colors.white,
       appBar: AppBar(
         backgroundColor: Colors.white, elevation: 0,
-        leading: IconButton(icon: const Icon(Icons.close_rounded, color: Color(0xFF1A1D2A)),
+        leading: IconButton(icon: const Icon(Icons.close_rounded, color: KoalaColors.ink),
           onPressed: () => Navigator.pop(context)),
-        title: const Text('Stil Profilim', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Color(0xFF1A1D2A))),
+        title: const Text('Stil Profilim', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: KoalaColors.ink)),
       ),
       body: Column(children: [
         // Progress
@@ -88,7 +89,7 @@ class _StyleProfileScreenState extends State<StyleProfileScreen> {
           child: Row(children: List.generate(4, (i) => Expanded(
             child: Container(height: 3, margin: const EdgeInsets.symmetric(horizontal: 2),
               decoration: BoxDecoration(borderRadius: BorderRadius.circular(2),
-                color: i <= _step ? const Color(0xFF6C5CE7) : const Color(0xFFE5E7EB))))))),
+                color: i <= _step ? KoalaColors.accentDeep : KoalaColors.borderMed)))))),
         
         Expanded(child: Padding(padding: const EdgeInsets.all(24),
           child: _buildStep())),
@@ -102,10 +103,10 @@ class _StyleProfileScreenState extends State<StyleProfileScreen> {
                   child: OutlinedButton(
                     onPressed: () { HapticFeedback.lightImpact(); setState(() => _step--); },
                     style: OutlinedButton.styleFrom(
-                      side: const BorderSide(color: Color(0xFFE5E7EB)),
+                      side: const BorderSide(color: KoalaColors.borderMed),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                       padding: EdgeInsets.zero),
-                    child: const Icon(Icons.arrow_back_rounded, color: Color(0xFF6C5CE7))))),
+                    child: const Icon(Icons.arrow_back_rounded, color: KoalaColors.accentDeep)))),
             Expanded(child: SizedBox(height: 52,
               child: ElevatedButton(
                 onPressed: _canProceed() ? () {
@@ -114,8 +115,8 @@ class _StyleProfileScreenState extends State<StyleProfileScreen> {
                   else { _save(); }
                 } : null,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF6C5CE7), foregroundColor: Colors.white,
-                  disabledBackgroundColor: const Color(0xFFE5E7EB),
+                  backgroundColor: KoalaColors.accentDeep, foregroundColor: Colors.white,
+                  disabledBackgroundColor: KoalaColors.borderMed,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                   elevation: 0),
                 child: Text(_step < 3 ? 'Devam' : (_saved ? 'Kaydedildi!' : 'Kaydet'),
@@ -145,7 +146,7 @@ class _StyleProfileScreenState extends State<StyleProfileScreen> {
   }
 
   Widget _stepStyle() => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-    const Text('Hangi tarz seni yansıtıyor?', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: Color(0xFF1A1D2A))),
+    const Text('Hangi tarz seni yansıtıyor?', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: KoalaColors.ink)),
     const SizedBox(height: 6),
     Text('Birini seç', style: TextStyle(fontSize: 14, color: Colors.grey.shade500)),
     const SizedBox(height: 24),
@@ -157,15 +158,15 @@ class _StyleProfileScreenState extends State<StyleProfileScreen> {
           child: AnimatedContainer(duration: const Duration(milliseconds: 200),
             decoration: BoxDecoration(borderRadius: BorderRadius.circular(14),
               color: s['color'] as Color,
-              border: Border.all(color: selected ? const Color(0xFF6C5CE7) : Colors.transparent, width: 2)),
+              border: Border.all(color: selected ? KoalaColors.accentDeep : Colors.transparent, width: 2)),
             child: Center(child: Text('${s['emoji']}  ${s['name']}',
               style: TextStyle(fontSize: 15, fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                color: selected ? const Color(0xFF6C5CE7) : const Color(0xFF4A4458))))));
+                color: selected ? KoalaColors.accentDeep : KoalaColors.textMed)))));
       }).toList())),
   ]);
 
   Widget _stepColors() => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-    const Text('Hangi renkler hoşuna gider?', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: Color(0xFF1A1D2A))),
+    const Text('Hangi renkler hoşuna gider?', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: KoalaColors.ink)),
     const SizedBox(height: 6),
     Text('Birden fazla seçebilirsin', style: TextStyle(fontSize: 14, color: Colors.grey.shade500)),
     const SizedBox(height: 24),
@@ -184,8 +185,8 @@ class _StyleProfileScreenState extends State<StyleProfileScreen> {
             AnimatedContainer(duration: const Duration(milliseconds: 200),
               width: 56, height: 56,
               decoration: BoxDecoration(borderRadius: BorderRadius.circular(16), color: color,
-                border: Border.all(color: selected ? const Color(0xFF6C5CE7) : const Color(0xFFE5E7EB), width: selected ? 3 : 1)),
-              child: selected ? const Icon(Icons.check_rounded, color: Color(0xFF6C5CE7), size: 22) : null),
+                border: Border.all(color: selected ? KoalaColors.accentDeep : KoalaColors.borderMed, width: selected ? 3 : 1)),
+              child: selected ? const Icon(Icons.check_rounded, color: KoalaColors.accentDeep, size: 22) : null),
             const SizedBox(height: 4),
             Text(c['name'] as String, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: Colors.grey.shade600)),
           ]));
@@ -193,7 +194,7 @@ class _StyleProfileScreenState extends State<StyleProfileScreen> {
   ]);
 
   Widget _stepRoom() => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-    const Text('Öncelikli odan hangisi?', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: Color(0xFF1A1D2A))),
+    const Text('Öncelikli odan hangisi?', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: KoalaColors.ink)),
     const SizedBox(height: 6),
     Text('Hangi odanı tasarlamak istiyorsun?', style: TextStyle(fontSize: 14, color: Colors.grey.shade500)),
     const SizedBox(height: 24),
@@ -204,15 +205,15 @@ class _StyleProfileScreenState extends State<StyleProfileScreen> {
         child: AnimatedContainer(duration: const Duration(milliseconds: 200),
           margin: const EdgeInsets.only(bottom: 10), padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(borderRadius: BorderRadius.circular(14),
-            color: selected ? const Color(0xFFF3F0FF) : const Color(0xFFFAFAFA),
-            border: Border.all(color: selected ? const Color(0xFF6C5CE7) : Colors.transparent, width: 2)),
+            color: selected ? KoalaColors.accentSoft : KoalaColors.surfaceMuted,
+            border: Border.all(color: selected ? KoalaColors.accentDeep : Colors.transparent, width: 2)),
           child: Text(r, style: TextStyle(fontSize: 16, fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-            color: selected ? const Color(0xFF6C5CE7) : const Color(0xFF4A4458)))));
+            color: selected ? KoalaColors.accentDeep : KoalaColors.textMed))));
     }).toList())),
   ]);
 
   Widget _stepBudget() => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-    const Text('Bütçen ne kadar?', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: Color(0xFF1A1D2A))),
+    const Text('Bütçen ne kadar?', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: KoalaColors.ink)),
     const SizedBox(height: 6),
     Text('Yaklaşık bir aralık seç', style: TextStyle(fontSize: 14, color: Colors.grey.shade500)),
     const SizedBox(height: 24),
@@ -223,10 +224,10 @@ class _StyleProfileScreenState extends State<StyleProfileScreen> {
         child: AnimatedContainer(duration: const Duration(milliseconds: 200),
           margin: const EdgeInsets.only(bottom: 10), padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(borderRadius: BorderRadius.circular(14),
-            color: selected ? const Color(0xFFF3F0FF) : const Color(0xFFFAFAFA),
-            border: Border.all(color: selected ? const Color(0xFF6C5CE7) : Colors.transparent, width: 2)),
+            color: selected ? KoalaColors.accentSoft : KoalaColors.surfaceMuted,
+            border: Border.all(color: selected ? KoalaColors.accentDeep : Colors.transparent, width: 2)),
           child: Text(b, style: TextStyle(fontSize: 16, fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-            color: selected ? const Color(0xFF6C5CE7) : const Color(0xFF4A4458)))));
+            color: selected ? KoalaColors.accentDeep : KoalaColors.textMed))));
     }).toList())),
   ]);
 }

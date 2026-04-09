@@ -273,7 +273,7 @@ class _HomeScreenState extends State<HomeScreen>
                         style: const TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w700,
-                          color: Color(0xFF1A1D2A),
+                          color: KoalaColors.ink,
                         ),
                       ),
                     ),
@@ -291,12 +291,12 @@ class _HomeScreenState extends State<HomeScreen>
                             height: 36,
                             decoration: const BoxDecoration(
                               shape: BoxShape.circle,
-                              color: Color(0xFFF3F0FF),
+                              color: KoalaColors.accentSoft,
                             ),
                             child: const Icon(
                               LucideIcons.bell,
                               size: 18,
-                              color: Color(0xFF6C5CE7),
+                              color: KoalaColors.accentDeep,
                             ),
                           ),
                           if (_notifCount > 0)
@@ -309,7 +309,7 @@ class _HomeScreenState extends State<HomeScreen>
                                   vertical: 1,
                                 ),
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFFE53935),
+                                  color: KoalaColors.error,
                                   borderRadius: BorderRadius.circular(99),
                                 ),
                                 child: Text(
@@ -338,12 +338,12 @@ class _HomeScreenState extends State<HomeScreen>
                         height: 36,
                         decoration: const BoxDecoration(
                           shape: BoxShape.circle,
-                          color: Color(0xFFF3F0FF),
+                          color: KoalaColors.accentSoft,
                         ),
                         child: const Icon(
                           LucideIcons.messageCircle,
                           size: 18,
-                          color: Color(0xFF6C5CE7),
+                          color: KoalaColors.accentDeep,
                         ),
                       ),
                     ),
@@ -355,7 +355,7 @@ class _HomeScreenState extends State<HomeScreen>
                         height: 36,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          color: const Color(0xFFF3F1FA),
+                          color: KoalaColors.accentSoft,
                           image: currentUser?.photoURL != null
                               ? DecorationImage(
                                   image: CachedNetworkImageProvider(
@@ -369,7 +369,7 @@ class _HomeScreenState extends State<HomeScreen>
                             ? const Icon(
                                 LucideIcons.user,
                                 size: 18,
-                                color: Color(0xFF6C5CE7),
+                                color: KoalaColors.accentDeep,
                               )
                             : null,
                       ),
@@ -396,7 +396,7 @@ class _HomeScreenState extends State<HomeScreen>
                           fontSize: 44,
                           fontWeight: FontWeight.w700,
                           fontFamily: 'Georgia',
-                          color: Color(0xFF1A1D2A),
+                          color: KoalaColors.ink,
                           letterSpacing: -1.9,
                         ),
                       ),
@@ -406,7 +406,7 @@ class _HomeScreenState extends State<HomeScreen>
                         style: TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w700,
-                          color: Color(0xFF6C5CE7),
+                          color: KoalaColors.accentDeep,
                           letterSpacing: 0.1,
                         ),
                       ),
@@ -418,7 +418,7 @@ class _HomeScreenState extends State<HomeScreen>
                     style: TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.w500,
-                      color: Color(0xFFA8A1B6),
+                      color: KoalaColors.textTer,
                       letterSpacing: -0.15,
                     ),
                   ),
@@ -445,20 +445,10 @@ class _HomeScreenState extends State<HomeScreen>
                         ),
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(20),
-                          gradient: const LinearGradient(
-                            colors: [
-                              Color(0xFF8B7DF5),
-                              Color(0xFF6B5DD3),
-                              Color(0xFF5A4DBF),
-                            ],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                          ),
+                          gradient: KoalaColors.accentGradientV,
                           boxShadow: [
                             BoxShadow(
-                              color: const Color(
-                                0xFF6B5DD3,
-                              ).withValues(alpha: 0.25),
+                              color: KoalaColors.accentDark.withValues(alpha: 0.25),
                               blurRadius: 32,
                               offset: const Offset(0, 8),
                             ),
@@ -744,7 +734,7 @@ class _PickBtn extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 20),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(16),
-        color: const Color(0xFFF5F2FF),
+        color: KoalaColors.accentSoft,
       ),
       child: Column(
         children: [
@@ -755,7 +745,7 @@ class _PickBtn extends StatelessWidget {
             style: const TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.w600,
-              color: Color(0xFF4A4458),
+              color: KoalaColors.textMed,
             ),
           ),
         ],
@@ -947,7 +937,7 @@ class _TypewriterInputState extends State<_TypewriterInput> {
                     shape: BoxShape.circle,
                     gradient: _hasText
                         ? const LinearGradient(
-                            colors: [Color(0xFF7C6EF2), Color(0xFF5A4DBF)],
+                            colors: [KoalaColors.accent, KoalaColors.accentDark],
                           )
                         : null,
                     color: _hasText
@@ -1015,7 +1005,7 @@ class _SavedPreviewRowState extends State<_SavedPreviewRow> {
                 style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w700,
-                  color: Color(0xFF1A1D2A),
+                  color: KoalaColors.ink,
                 ),
               ),
               const Spacer(),
@@ -1026,7 +1016,7 @@ class _SavedPreviewRowState extends State<_SavedPreviewRow> {
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
-                    color: Color(0xFF6C5CE7),
+                    color: KoalaColors.accentDeep,
                   ),
                 ),
               ),
@@ -1046,7 +1036,7 @@ class _SavedPreviewRowState extends State<_SavedPreviewRow> {
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(14),
                     color: Colors.white,
-                    border: Border.all(color: const Color(0x0F000000)),
+                    border: Border.all(color: KoalaColors.border),
                   ),
                   clipBehavior: Clip.antiAlias,
                   child: item['image_url'] != null
@@ -1055,7 +1045,7 @@ class _SavedPreviewRowState extends State<_SavedPreviewRow> {
                           fit: BoxFit.cover,
                           errorBuilder: (_, __, ___) => const Icon(
                             Icons.image_rounded,
-                            color: Color(0xFFAEAEB2),
+                            color: KoalaColors.textTer,
                             size: 24,
                           ),
                         )
@@ -1065,7 +1055,7 @@ class _SavedPreviewRowState extends State<_SavedPreviewRow> {
                             style: const TextStyle(
                               fontSize: 20,
                               fontWeight: FontWeight.w700,
-                              color: Color(0xFF6C5CE7),
+                              color: KoalaColors.accentDeep,
                             ),
                           ),
                         ),
@@ -1123,7 +1113,7 @@ class _ActiveConversationsRowState extends State<_ActiveConversationsRow> {
             style: TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.w700,
-              color: Color(0xFF1A1D2A),
+              color: KoalaColors.ink,
             ),
           ),
           const SizedBox(height: 8),
@@ -1150,7 +1140,7 @@ class _ActiveConversationsRowState extends State<_ActiveConversationsRow> {
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: const Color(0x0F000000)),
+                  border: Border.all(color: KoalaColors.border),
                 ),
                 child: Row(
                   children: [
@@ -1160,7 +1150,7 @@ class _ActiveConversationsRowState extends State<_ActiveConversationsRow> {
                       decoration: const BoxDecoration(
                         shape: BoxShape.circle,
                         gradient: LinearGradient(
-                          colors: [Color(0xFF7C6EF2), Color(0xFFA78BFA)],
+                          colors: [KoalaColors.accent, KoalaColors.accentMuted],
                         ),
                       ),
                       child: Center(
@@ -1184,7 +1174,7 @@ class _ActiveConversationsRowState extends State<_ActiveConversationsRow> {
                             style: const TextStyle(
                               fontSize: 13,
                               fontWeight: FontWeight.w600,
-                              color: Color(0xFF1A1D2A),
+                              color: KoalaColors.ink,
                             ),
                           ),
                           if (lastMsg.isNotEmpty)
@@ -1192,7 +1182,7 @@ class _ActiveConversationsRowState extends State<_ActiveConversationsRow> {
                               lastMsg,
                               style: const TextStyle(
                                 fontSize: 11,
-                                color: Color(0xFF8E8E93),
+                                color: KoalaColors.textSec,
                               ),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
@@ -1203,7 +1193,7 @@ class _ActiveConversationsRowState extends State<_ActiveConversationsRow> {
                     const Icon(
                       Icons.chevron_right_rounded,
                       size: 18,
-                      color: Color(0xFFAEAEB2),
+                      color: KoalaColors.textTer,
                     ),
                   ],
                 ),

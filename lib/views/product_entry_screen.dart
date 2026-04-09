@@ -702,7 +702,7 @@ class _ProductEntryScreenState extends State<ProductEntryScreen> {
                 child: const Icon(
                   LucideIcons.arrowLeft,
                   size: 24,
-                  color: Color(0xFF7C6EF2),
+                  color: KoalaColors.accent,
                 ),
               ),
               const SizedBox(width: 16),
@@ -724,7 +724,7 @@ class _ProductEntryScreenState extends State<ProductEntryScreen> {
               fontFamily: 'Georgia',
               fontSize: 18,
               fontWeight: FontWeight.w700,
-              color: Color(0xFF7C6EF2),
+              color: KoalaColors.accent,
             ),
           ),
         ],
@@ -1029,7 +1029,7 @@ class _ProductEntryScreenState extends State<ProductEntryScreen> {
                     hintStyle: GoogleFonts.manrope(
                       fontSize: 14,
                       fontWeight: FontWeight.w400,
-                      color: const Color(0xFF787585).withValues(alpha: 0.72),
+                      color: KoalaColors.textSec.withValues(alpha: 0.72),
                     ),
                     border: InputBorder.none,
                     enabledBorder: InputBorder.none,
@@ -1061,7 +1061,7 @@ class _ProductEntryScreenState extends State<ProductEntryScreen> {
                           ? const LinearGradient(
                               begin: Alignment.topLeft,
                               end: Alignment.bottomRight,
-                              colors: [Color(0xFF7C6EF2), Color(0xFF5A4DBF)],
+                              colors: [KoalaColors.accent, KoalaColors.accentDark],
                             )
                           : null,
                     ),
@@ -1181,7 +1181,7 @@ class _AssistantBubble extends StatelessWidget {
                   ? null
                   : [
                       BoxShadow(
-                        color: const Color(0xFF1D1B18).withValues(alpha: 0.04),
+                        color: KoalaColors.ink.withValues(alpha: 0.04),
                         blurRadius: 18,
                         offset: const Offset(0, 10),
                       ),
@@ -1299,7 +1299,7 @@ class _TypingBubble extends StatelessWidget {
             border: Border.all(color: _K.outlineVariant.withValues(alpha: 0.15)),
             boxShadow: [
               BoxShadow(
-                color: const Color(0xFF1D1B18).withValues(alpha: 0.04),
+                color: KoalaColors.ink.withValues(alpha: 0.04),
                 blurRadius: 18,
                 offset: const Offset(0, 10),
               ),
@@ -1471,7 +1471,7 @@ class _UserBubble extends StatelessWidget {
         gradient: const LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [Color(0xFF5646CA), Color(0xFF6F61E5)],
+          colors: [KoalaColors.accentDark, KoalaColors.accentDeep],
         ),
         borderRadius: const BorderRadius.only(
           topLeft: Radius.circular(24),
@@ -2091,7 +2091,7 @@ class _InsightPanel extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: const Color(0xFFF3F0FF),
+        color: KoalaColors.accentSoft,
         borderRadius: BorderRadius.circular(28),
       ),
       child: Column(
@@ -2167,7 +2167,7 @@ class _DesignerContactCard extends StatelessWidget {
             style: GoogleFonts.manrope(
               fontSize: 12,
               fontWeight: FontWeight.w800,
-              color: const Color(0xFF8E8E93),
+              color: KoalaColors.textSec,
               letterSpacing: 0.8,
             ),
           ),
@@ -2193,7 +2193,7 @@ class _DesignerContactCard extends StatelessWidget {
                       specialty,
                       style: GoogleFonts.manrope(
                         fontSize: 13,
-                        color: const Color(0xFFAEAEB2),
+                        color: KoalaColors.textTer,
                       ),
                     ),
                   ],
@@ -2223,7 +2223,7 @@ class _DesignerContactCard extends StatelessWidget {
                       hintText: '$designerName için mesaj yaz...',
                       hintStyle: GoogleFonts.manrope(
                         fontSize: 14,
-                        color: const Color(0xFF787585).withValues(alpha: 0.74),
+                        color: KoalaColors.textSec.withValues(alpha: 0.74),
                       ),
                       border: InputBorder.none,
                     ),
@@ -2243,7 +2243,7 @@ class _DesignerContactCard extends StatelessWidget {
                     decoration: const BoxDecoration(
                       shape: BoxShape.circle,
                       gradient: LinearGradient(
-                        colors: [Color(0xFF7C6EF2), Color(0xFF5A4DBF)],
+                        colors: [KoalaColors.accent, KoalaColors.accentDark],
                       ),
                     ),
                     alignment: Alignment.center,

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../core/theme/koala_tokens.dart';
 
 /// Wraps content with maxWidth constraint for tablet/desktop.
 /// On mobile (<600px) passes through unchanged.
@@ -26,16 +27,16 @@ class ResponsiveFrame extends StatelessWidget {
 
     // Tablet/Desktop: center with maxWidth
     return Container(
-      color: backgroundColor ?? const Color(0xFFF1F5F9),
+      color: backgroundColor ?? KoalaColors.surfaceCool,
       child: Center(
         child: Container(
           constraints: BoxConstraints(maxWidth: maxWidth),
           decoration: screenWidth > 600
               ? BoxDecoration(
-                  color: const Color(0xFFFAFBFD),
+                  color: KoalaColors.bgCool,
                   border: Border.symmetric(
                     vertical: BorderSide(
-                      color: const Color(0xFFE2E8F0).withAlpha(60),
+                      color: KoalaColors.borderSolid.withAlpha(60),
                     ),
                   ),
                   boxShadow: [
@@ -71,15 +72,15 @@ class ResponsiveWideFrame extends StatelessWidget {
     if (screenWidth < 600) return child;
 
     return Container(
-      color: const Color(0xFFF1F5F9),
+      color: KoalaColors.surfaceCool,
       child: Center(
         child: Container(
           constraints: BoxConstraints(maxWidth: maxWidth),
           decoration: BoxDecoration(
-            color: const Color(0xFFFAFBFD),
+            color: KoalaColors.bgCool,
             border: Border.symmetric(
               vertical: BorderSide(
-                color: const Color(0xFFE2E8F0).withAlpha(60),
+                color: KoalaColors.borderSolid.withAlpha(60),
               ),
             ),
             boxShadow: [

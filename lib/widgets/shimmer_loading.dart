@@ -57,7 +57,7 @@ class _ShimmerCardState extends State<ShimmerCard>
             end: Alignment(_anim.value, 0),
             colors: const [
               KoalaColors.surfaceAlt,
-              Color(0xFFEDE9E3),
+              KoalaColors.surfaceCool,
               KoalaColors.surfaceAlt,
             ],
           ),

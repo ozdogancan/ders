@@ -8,36 +8,64 @@ import 'package:flutter/material.dart';
 
 abstract final class KoalaColors {
   // ─── Backgrounds ───
-  static const bg        = Color(0xFFF6F1EB); // warm cream — ana bg
-  static const surface   = Color(0xFFFFFFFF); // card, sheet, modal
-  static const surfaceAlt = Color(0xFFF0EDE8); // placeholder, skeleton
+  static const bg          = Color(0xFFF6F1EB); // warm cream — ana bg
+  static const bgCool      = Color(0xFFFAFBFD); // cool white (auth bg)
+  static const surface     = Color(0xFFFFFFFF); // card, sheet, modal
+  static const surfaceAlt  = Color(0xFFF0EDE8); // placeholder, skeleton
+  static const surfaceCool = Color(0xFFF1F5F9); // cool gray surface
+  static const surfaceMuted = Color(0xFFFAFAFA); // near-white surface
 
   // ─── Brand: Purple (accent) ───
   static const accent       = Color(0xFF7C6EF2);
+  static const accentDeep   = Color(0xFF6C5CE7); // deeper purple — buttons, CTA
   static const accentDark   = Color(0xFF5A4DBF);
+  static const accentDarker = Color(0xFF4F46E5); // onboarding gradient end
+  static const accentDeepDark = Color(0xFF4338CA); // onboarding page2 gradient end
+  static const accentMuted  = Color(0xFFA78BFA); // soft purple — gradient helper
   static const accentLight  = Color(0xFFEEEDFE); // chip bg, subtle tint
-  static const accentSoft   = Color(0xFFF3F0FF); // icon circles
+  static const accentSoft   = Color(0xFFF3F0FF); // icon circles, selection bg
+  static const brand        = Color(0xFF6C63FF); // auth brand primary
+  static const brandLight   = Color(0xFF9B5CFF); // auth gradient secondary
 
   // ─── Brand: Green (CTA / positive) ───
   static const green       = Color(0xFF1D9E75);
   static const greenDark   = Color(0xFF0F6E56);
   static const greenLight  = Color(0xFFE1F5EE);
+  static const greenBright = Color(0xFF22C55E); // snackbar success
+  static const greenAlt    = Color(0xFF10B981); // emerald variant
 
   // ─── Text ───
   static const text     = Color(0xFF1A1A1A); // headings, body
+  static const ink      = Color(0xFF1A1D2A); // dark ink — chat, cards
+  static const inkDeep  = Color(0xFF0F172A); // deepest text — auth
+  static const inkSoft  = Color(0xFF1E293B); // body dark — auth, profile
   static const textSec  = Color(0xFF8E8E93); // secondary labels
+  static const textMed  = Color(0xFF475569); // medium gray text
+  static const textMuted = Color(0xFF94A3B8); // muted labels — auth hint
   static const textTer  = Color(0xFFAEAEB2); // hints, disabled
   static const textInv  = Color(0xFFFFFFFF); // on-accent, on-dark
 
   // ─── Borders & dividers ───
   static const border      = Color(0x0F000000); // 6% black
   static const borderLight = Color(0x0A000000); // 4% black
+  static const borderSolid = Color(0xFFE2E8F0); // visible border — auth, input
+  static const borderMed   = Color(0xFFE5E7EB); // medium gray border — steps
+  static const hintBorder  = Color(0xFFCBD5E1); // input placeholder border
   static const divider     = Color(0x0D000000); // 5% black
 
   // ─── Semantic ───
-  static const error   = Color(0xFFE53935);
-  static const warning = Color(0xFFF5A623);
-  static const success = Color(0xFF1D9E75); // = green
+  static const error      = Color(0xFFE53935);
+  static const errorBright = Color(0xFFEF4444); // bright red — delete actions
+  static const errorDark  = Color(0xFFDC2626); // dark red — error text
+  static const warning    = Color(0xFFF5A623);
+  static const star       = Color(0xFFF59E0B); // star rating, amber
+  static const success    = Color(0xFF1D9E75); // = green
+  static const pink       = Color(0xFFEC4899); // category accent — notifications
+  static const blue       = Color(0xFF3B82F6); // info blue — product category
+
+  // ─── Interaction (Style Discovery) ───
+  static const like    = Color(0xFF39B97A); // swipe like
+  static const dislike = Color(0xFFE26257); // swipe dislike
 
   // ─── Gradient presets ───
   static const accentGradient = LinearGradient(

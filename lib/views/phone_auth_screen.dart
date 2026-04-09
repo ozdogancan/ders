@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../core/theme/koala_tokens.dart';
 import 'auth_common.dart';
 
 enum _PhoneAuthStage { enterPhone, verifyCode }
@@ -287,7 +288,7 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
                           icon: const Icon(Icons.arrow_back_rounded),
                           style: IconButton.styleFrom(
                             backgroundColor: Colors.white,
-                            foregroundColor: const Color(0xFF1E293B),
+                            foregroundColor: KoalaColors.inkSoft,
                             minimumSize: const Size(48, 48),
                           ),
                         ),
@@ -326,12 +327,12 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
         // Başlık
         const Text(
           'Telefon numaranı gir',
-          style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: Color(0xFF0F172A), letterSpacing: -0.8, height: 1.1),
+          style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: KoalaColors.inkDeep, letterSpacing: -0.8, height: 1.1),
         ),
         const SizedBox(height: 10),
-        const Text(
+        Text(
           'Doğrulama kodu içeren bir SMS göndereceğiz.',
-          style: TextStyle(fontSize: 15, fontWeight: FontWeight.w400, color: Color(0xFF94A3B8), height: 1.5),
+          style: TextStyle(fontSize: 15, fontWeight: FontWeight.w400, color: KoalaColors.textMuted, height: 1.5),
         ),
         const SizedBox(height: 28),
 
@@ -357,14 +358,14 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: const Color(0xFFE2E8F0)),
+                border: Border.all(color: KoalaColors.borderSolid),
               ),
-              child: const Row(
+              child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: <Widget>[
-                  Text('🇹🇷', style: TextStyle(fontSize: 20)),
-                  SizedBox(width: 8),
-                  Text('+90', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Color(0xFF1E293B))),
+                  const Text('🇹🇷', style: TextStyle(fontSize: 20)),
+                  const SizedBox(width: 8),
+                  Text('+90', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: KoalaColors.inkSoft)),
                 ],
               ),
             ),
@@ -379,16 +380,16 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
                 inputFormatters: [_TurkishPhoneFormatter()],
                 onChanged: _onPhoneChanged,
                 onSubmitted: (_) => _submitPhoneNumber(),
-                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Color(0xFF0F172A), letterSpacing: 0.5),
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: KoalaColors.inkDeep, letterSpacing: 0.5),
                 decoration: InputDecoration(
                   hintText: '5XX XXX XX XX',
-                  hintStyle: const TextStyle(color: Color(0xFFCBD5E1), fontSize: 18, fontWeight: FontWeight.w500),
+                  hintStyle: TextStyle(color: KoalaColors.hintBorder, fontSize: 18, fontWeight: FontWeight.w500),
                   filled: true,
                   fillColor: Colors.white,
                   contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 17),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-                  enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-                  focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Color(0xFF6C63FF), width: 1.5)),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: KoalaColors.borderSolid)),
+                  enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: KoalaColors.borderSolid)),
+                  focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: KoalaColors.brand, width: 1.5)),
                 ),
               ),
             ),
@@ -403,9 +404,9 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
           child: ElevatedButton(
             onPressed: _isSendingSms ? null : () => _submitPhoneNumber(),
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF6C63FF),
+              backgroundColor: KoalaColors.brand,
               foregroundColor: Colors.white,
-              disabledBackgroundColor: const Color(0xFF6C63FF).withValues(alpha: 0.6),
+              disabledBackgroundColor: KoalaColors.brand.withValues(alpha: 0.6),
               elevation: 0,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
             ),
@@ -434,12 +435,12 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
         // Başlık
         const Text(
           'Doğrulama kodu',
-          style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: Color(0xFF0F172A), letterSpacing: -0.8, height: 1.1),
+          style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: KoalaColors.inkDeep, letterSpacing: -0.8, height: 1.1),
         ),
         const SizedBox(height: 10),
         Text(
           '${_formattedPhone()} numarasına gönderilen 6 haneli kodu gir.',
-          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w400, color: Color(0xFF94A3B8), height: 1.5),
+          style: TextStyle(fontSize: 15, fontWeight: FontWeight.w400, color: KoalaColors.textMuted, height: 1.5),
         ),
         const SizedBox(height: 28),
 
@@ -473,9 +474,9 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
                   key: ValueKey('verifying'),
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: <Widget>[
-                    SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2.3, color: Color(0xFF6C63FF))),
+                    SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2.3, color: KoalaColors.brand)),
                     SizedBox(width: 10),
-                    Text('Doğrulanıyor...', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 14, fontWeight: FontWeight.w600)),
+                    Text('Doğrulanıyor...', style: TextStyle(color: KoalaColors.textMuted, fontSize: 14, fontWeight: FontWeight.w600)),
                   ],
                 )
               : const SizedBox(key: ValueKey('idle'), height: 18),
@@ -487,8 +488,8 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
           child: TextButton(
             onPressed: _secondsRemaining == 0 && !_isBusy ? _resendCode : null,
             style: TextButton.styleFrom(
-              foregroundColor: const Color(0xFF6C63FF),
-              disabledForegroundColor: const Color(0xFFCBD5E1),
+              foregroundColor: KoalaColors.brand,
+              disabledForegroundColor: KoalaColors.hintBorder,
               textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
             ),
             child: Text(
@@ -515,17 +516,17 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
         height: 60,
         decoration: BoxDecoration(
           color: _isVerifyingCode
-              ? const Color(0xFFF8FAFC)
+              ? KoalaColors.surfaceCool
               : hasValue
-                  ? const Color(0xFFF5F3FF)
+                  ? KoalaColors.accentSoft
                   : Colors.white,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
             color: focused
-                ? const Color(0xFF6C63FF)
+                ? KoalaColors.brand
                 : hasValue
-                    ? const Color(0xFFD4D0FF)
-                    : const Color(0xFFE2E8F0),
+                    ? KoalaColors.accentLight
+                    : KoalaColors.borderSolid,
             width: focused ? 2 : 1.2,
           ),
         ),
@@ -540,7 +541,7 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
           inputFormatters: [FilteringTextInputFormatter.digitsOnly],
           onChanged: (v) => _onOtpChanged(index, v),
           decoration: const InputDecoration(isCollapsed: true, border: InputBorder.none, contentPadding: EdgeInsets.zero),
-          style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: Color(0xFF0F172A), letterSpacing: -0.5),
+          style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: KoalaColors.inkDeep, letterSpacing: -0.5),
         ),
       ),
     );

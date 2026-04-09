@@ -14,20 +14,23 @@ import '../services/saved_plans_service.dart';
 import '../services/saved_items_service.dart';
 import '../services/analytics_service.dart';
 import '../services/profile_feedback_service.dart';
+import '../core/theme/koala_tokens.dart';
 import '../widgets/save_button.dart';
 import '../widgets/chat/product_carousel.dart';
 import '../widgets/offline_banner.dart';
 import 'conversation_detail_screen.dart';
 import 'designers_screen.dart';
 
-const _accent = Color(0xFF6C5CE7);
-const _accentLight = Color(0xFFF3F0FF);
-const _ink = Color(0xFF1A1D2A);
+const _accent = KoalaColors.accentDeep;
+const _accentLight = KoalaColors.accentSoft;
+const _ink = KoalaColors.ink;
 const _R = 18.0;
 
 Color _hex(String h) {
   final clean = h.replaceAll('#', '');
-  return Color(int.tryParse('FF$clean', radix: 16) ?? 0xFF6C5CE7);
+  return Color(
+    int.tryParse('FF$clean', radix: 16) ?? KoalaColors.accentDeep.toARGB32(),
+  );
 }
 
 class ChatDetailScreen extends StatefulWidget {
@@ -522,7 +525,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
   /// Fotoğraf analiz yanıtından oda/stil/renk bağlamını çıkar
   void _extractPhotoContext(KoalaResponse resp) {
     final cards = resp.cards;
-    if (cards == null || cards.isEmpty) return;
+    if (cards.isEmpty) return;
     final ctx = <String, String>{};
     for (final card in cards) {
       if (card.type == 'style_analysis') {
@@ -747,7 +750,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                 style: const TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
-                  color: Color(0xFF4A4458),
+                  color: KoalaColors.ink,
                 ),
               ),
             ],
@@ -762,7 +765,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
   Widget build(BuildContext context) {
     final btm = MediaQuery.of(context).padding.bottom;
     return Scaffold(
-      backgroundColor: const Color(0xFFFAFAFA),
+      backgroundColor: KoalaColors.surfaceMuted,
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
@@ -791,7 +794,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                 decoration: const BoxDecoration(
                   shape: BoxShape.circle,
                   gradient: LinearGradient(
-                    colors: [_accent, Color(0xFF8B5CF6)],
+                    colors: [_accent, KoalaColors.accentMuted],
                   ),
                 ),
                 child: const Icon(
@@ -960,7 +963,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(14),
                   gradient: const LinearGradient(
-                    colors: [Color(0xFF6C5CE7), Color(0xFF8B5CF6)],
+                    colors: [KoalaColors.accentDeep, KoalaColors.accentMuted],
                   ),
                 ),
                 child: const Row(
@@ -996,27 +999,27 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     if (style != null && style.isNotEmpty) {
       final roomLabel = room ?? 'Odamı';
       return [
-        _suggestionChip(Icons.palette_rounded, '$style tarzda $roomLabel yenile', const Color(0xFF6C5CE7),
+        _suggestionChip(Icons.palette_rounded, '$style tarzda $roomLabel yenile', KoalaColors.accentDeep,
           () => _sendToAI(text: '$roomLabel $style tarzda yeniden tasarla')),
-        _suggestionChip(Icons.color_lens_rounded, '$roomLabel için 3 renk öner', const Color(0xFFEC4899),
+        _suggestionChip(Icons.color_lens_rounded, '$roomLabel için 3 renk öner', KoalaColors.pink,
           () => _sendToAI(text: '$roomLabel için $style tarzıma uygun 3 renk öner')),
         if (budget != null && budget.isNotEmpty)
-          _suggestionChip(Icons.account_balance_wallet_rounded, '$budget bütçeyle plan', const Color(0xFF10B981),
+          _suggestionChip(Icons.account_balance_wallet_rounded, '$budget bütçeyle plan', KoalaColors.greenAlt,
             () => _sendToAI(text: '$roomLabel için $budget bütçeyle $style dekorasyon planı çıkar')),
-        _suggestionChip(Icons.person_search_rounded, 'Bana uygun tasarımcı', const Color(0xFF3B82F6),
+        _suggestionChip(Icons.person_search_rounded, 'Bana uygun tasarımcı', KoalaColors.blue,
           () => _sendToAI(text: '$style tarzda çalışan bir iç mimar öner')),
       ];
     }
 
     // Default starters (no profile)
     return [
-      _suggestionChip(Icons.home_rounded, 'Odamı yenile', const Color(0xFF6C5CE7),
+      _suggestionChip(Icons.home_rounded, 'Odamı yenile', KoalaColors.accentDeep,
         () => _sendToAI(text: 'Odamı yeniden tasarla')),
-      _suggestionChip(Icons.color_lens_rounded, 'Renk öner', const Color(0xFFEC4899),
+      _suggestionChip(Icons.color_lens_rounded, 'Renk öner', KoalaColors.pink,
         () => _sendToAI(text: 'Odama renk öner')),
-      _suggestionChip(Icons.account_balance_wallet_rounded, 'Bütçe planla', const Color(0xFF10B981),
+      _suggestionChip(Icons.account_balance_wallet_rounded, 'Bütçe planla', KoalaColors.greenAlt,
         () => _sendToAI(text: 'Bütçeme uygun dekorasyon planı')),
-      _suggestionChip(Icons.person_search_rounded, 'Tasarımcı bul', const Color(0xFF3B82F6),
+      _suggestionChip(Icons.person_search_rounded, 'Tasarımcı bul', KoalaColors.blue,
         () => _sendToAI(text: 'Bana uygun tasarımcı öner')),
     ];
   }
@@ -1156,7 +1159,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
                           behavior: SnackBarBehavior.floating,
-                          backgroundColor: const Color(0xFF6C5CE7),
+                          backgroundColor: KoalaColors.accentDeep,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
                           ),
@@ -1319,7 +1322,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
         height: 32,
         decoration: const BoxDecoration(
           shape: BoxShape.circle,
-          gradient: LinearGradient(colors: [_accent, Color(0xFF8B5CF6)]),
+          gradient: LinearGradient(colors: [_accent, KoalaColors.accentMuted]),
         ),
         child: const Icon(Icons.auto_awesome, size: 14, color: Colors.white),
       ),
@@ -1372,7 +1375,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
         height: 48,
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(99),
-          color: const Color(0xFFF3F1FA),
+          color: KoalaColors.accentSoft,
         ),
         child: Row(
           children: [
@@ -1463,7 +1466,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           behavior: SnackBarBehavior.floating,
-          backgroundColor: const Color(0xFF6C5CE7),
+          backgroundColor: KoalaColors.accentDeep,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
           ),
@@ -1501,7 +1504,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           behavior: SnackBarBehavior.floating,
-          backgroundColor: const Color(0xFF10B981),
+          backgroundColor: KoalaColors.greenAlt,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
           ),
@@ -1529,9 +1532,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
       child: Row(
         mainAxisAlignment: MainAxisAlignment.end,
         children: [
-          _miniAction(Icons.favorite_border_rounded, 'Kaydet', const Color(0xFF6C5CE7), () => _saveCard(card)),
+          _miniAction(Icons.favorite_border_rounded, 'Kaydet', KoalaColors.accentDeep, () => _saveCard(card)),
           const SizedBox(width: 6),
-          _miniAction(Icons.copy_rounded, 'Paylaş', const Color(0xFF10B981), () => _shareCard(card)),
+          _miniAction(Icons.copy_rounded, 'Paylaş', KoalaColors.greenAlt, () => _shareCard(card)),
         ],
       ),
     );
@@ -1692,7 +1695,7 @@ class _TypingDotsState extends State<_TypingDots>
             margin: const EdgeInsets.symmetric(horizontal: 2),
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: Color.lerp(const Color(0xFFD4D0E8), _accent, _c[i].value),
+              color: Color.lerp(KoalaColors.accentLight, _accent, _c[i].value),
             ),
           ),
         ),
@@ -1741,7 +1744,7 @@ class _QuestionChipsState extends State<_QuestionChips> {
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(16),
         color: Colors.white,
-        border: Border.all(color: const Color(0xFFEDEAF5)),
+        border: Border.all(color: KoalaColors.accentLight),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1781,7 +1784,7 @@ class _QuestionChipsState extends State<_QuestionChips> {
                           color: isSelected
                               ? _accent
                               : answered
-                                  ? const Color(0xFFF5F5F5)
+                                  ? KoalaColors.surfaceMuted
                                   : _accentLight,
                           border: Border.all(
                             color: isSelected
@@ -1841,7 +1844,7 @@ class _StyleAnalysis extends StatelessWidget {
             decoration: const BoxDecoration(
               borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
               gradient: LinearGradient(
-                colors: [Color(0xFF6C5CE7), Color(0xFF8B5CF6)],
+                colors: [KoalaColors.accentDeep, KoalaColors.accentMuted],
               ),
             ),
             child: Row(
@@ -2112,7 +2115,7 @@ class _DesignerCards extends StatelessWidget {
                       decoration: const BoxDecoration(
                         shape: BoxShape.circle,
                         gradient: LinearGradient(
-                          colors: [_accent, Color(0xFFA78BFA)],
+                          colors: [_accent, KoalaColors.accentMuted],
                         ),
                       ),
                       child: Center(
@@ -2165,14 +2168,14 @@ class _DesignerCards extends StatelessWidget {
                             const Icon(
                               Icons.star_rounded,
                               size: 14,
-                              color: Color(0xFFF59E0B),
+                              color: KoalaColors.star,
                             ),
                             Text(
                               ' ${ds['rating']}',
                               style: const TextStyle(
                                 fontSize: 12,
                                 fontWeight: FontWeight.w700,
-                                color: Color(0xFFF59E0B),
+                                color: KoalaColors.star,
                               ),
                             ),
                           ],
@@ -2217,7 +2220,7 @@ class _DesignerCards extends StatelessWidget {
                         width: 8, height: 8,
                         decoration: const BoxDecoration(
                           shape: BoxShape.circle,
-                          color: Color(0xFF10B981),
+                          color: KoalaColors.greenAlt,
                         ),
                       ),
                       const SizedBox(width: 6),
@@ -2247,8 +2250,8 @@ class _DesignerCards extends StatelessWidget {
                             fit: BoxFit.cover,
                             errorBuilder: (_, __, ___) => Container(
                               width: 96, height: 72,
-                              color: const Color(0xFFF5F5F5),
-                              child: const Icon(Icons.image_rounded, color: Color(0xFFCCCCCC)),
+                              color: KoalaColors.surfaceMuted,
+                              child: Icon(Icons.image_rounded, color: KoalaColors.textTer),
                             ),
                           ),
                         ),
@@ -2294,7 +2297,7 @@ class _DesignerCards extends StatelessWidget {
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
                           behavior: SnackBarBehavior.floating,
-                          backgroundColor: const Color(0xFFEF4444),
+                          backgroundColor: KoalaColors.errorBright,
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                           duration: const Duration(seconds: 3),
                           content: const Row(
@@ -2313,7 +2316,7 @@ class _DesignerCards extends StatelessWidget {
                     padding: const EdgeInsets.symmetric(vertical: 11),
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(12),
-                      color: const Color(0xFF10B981),
+                      color: KoalaColors.greenAlt,
                     ),
                     child: const Row(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -2389,7 +2392,7 @@ class _BudgetPlan extends StatelessWidget {
         gradient: const LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [Color(0xFF6C5CE7), Color(0xFF8B5CF6)],
+          colors: [KoalaColors.accentDeep, KoalaColors.accentMuted],
         ),
       ),
       child: Column(
@@ -2440,7 +2443,7 @@ class _BudgetPlan extends StatelessWidget {
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       color: i['priority'] == 'high'
-                          ? const Color(0xFF4ADE80)
+                          ? KoalaColors.greenBright
                           : Colors.white.withValues(alpha:0.4),
                     ),
                   ),
@@ -2562,7 +2565,7 @@ class _QuickTips extends StatelessWidget {
                       tip,
                       style: const TextStyle(
                         fontSize: 13,
-                        color: Color(0xFF4A4458),
+                        color: KoalaColors.ink,
                         height: 1.5,
                       ),
                     ),
@@ -2592,7 +2595,7 @@ class _BeforeAfter extends StatelessWidget {
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(_R),
         gradient: const LinearGradient(
-          colors: [Color(0xFFF0ECFF), Color(0xFFE8F5E9)],
+          colors: [KoalaColors.accentSoft, KoalaColors.greenLight],
         ),
       ),
       child: Column(
@@ -2632,7 +2635,7 @@ class _BeforeAfter extends StatelessWidget {
                   const Icon(
                     Icons.check_circle_rounded,
                     size: 16,
-                    color: Color(0xFF059669),
+                    color: KoalaColors.greenDark,
                   ),
                   const SizedBox(width: 8),
                   Expanded(
@@ -2640,7 +2643,7 @@ class _BeforeAfter extends StatelessWidget {
                       c,
                       style: const TextStyle(
                         fontSize: 13,
-                        color: Color(0xFF4A4458),
+                        color: KoalaColors.ink,
                         height: 1.4,
                       ),
                     ),
@@ -2690,7 +2693,7 @@ class _BeforeAfter extends StatelessWidget {
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
                           behavior: SnackBarBehavior.floating,
-                          backgroundColor: const Color(0xFF10B981),
+                          backgroundColor: KoalaColors.greenAlt,
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                           duration: const Duration(seconds: 4),
                           content: const Row(
@@ -2710,7 +2713,7 @@ class _BeforeAfter extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(vertical: 10),
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(12),
-                    color: const Color(0xFF10B981),
+                    color: KoalaColors.greenAlt,
                   ),
                   child: const Row(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -2757,7 +2760,7 @@ class _ImagePrompt extends StatelessWidget {
         gradient: const LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [Color(0xFFF0ECFF), Color(0xFFE8F4FD)],
+          colors: [KoalaColors.accentSoft, const Color(0xFFE8F4FD)],
         ),
       ),
       child: Column(
@@ -2818,7 +2821,7 @@ class _ArchitectCTA extends StatelessWidget {
         gradient: const LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [Color(0xFF6C5CE7), Color(0xFF8B5CF6), Color(0xFFA78BFA)],
+          colors: [KoalaColors.accentDeep, KoalaColors.accentMuted, KoalaColors.accentMuted],
         ),
       ),
       child: Column(
@@ -2870,9 +2873,9 @@ class _ArchitectCTA extends StatelessWidget {
                 height: 28,
                 child: Stack(
                   children: [
-                    _dot(0, const Color(0xFFEC4899)),
-                    _dot(18, const Color(0xFF3B82F6)),
-                    _dot(36, const Color(0xFF10B981)),
+                    _dot(0, KoalaColors.pink),
+                    _dot(18, KoalaColors.blue),
+                    _dot(36, KoalaColors.greenAlt),
                   ],
                 ),
               ),
@@ -2907,7 +2910,7 @@ class _ArchitectCTA extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w700,
-                    color: Color(0xFF6C5CE7),
+                    color: KoalaColors.accentDeep,
                   ),
                 ),
               ),
@@ -2970,9 +2973,9 @@ class _ShimmerBlockState extends State<_ShimmerBlock>
           begin: Alignment(-1.0 + 2.0 * _ctrl.value, 0),
           end: Alignment(-1.0 + 2.0 * _ctrl.value + 1, 0),
           colors: const [
-            Color(0xFFF3F0FF),
-            Color(0xFFEDE9FF),
-            Color(0xFFF3F0FF),
+            KoalaColors.accentSoft,
+            KoalaColors.accentLight,
+            KoalaColors.accentSoft,
           ],
         ),
       ),

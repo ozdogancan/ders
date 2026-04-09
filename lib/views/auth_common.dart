@@ -16,12 +16,10 @@ import 'package:go_router/go_router.dart';
 
 import '../core/config/env.dart';
 import '../core/router/app_router.dart';
+import '../core/theme/koala_tokens.dart';
 
 const String _kTermsUrl = 'https://www.evlumba.com/terms';
 const String _kPrivacyUrl = 'https://www.evlumba.com/privacy';
-const Color _kBrandPrimary = Color(0xFF6C63FF);
-const Color _kTextSecondary = Color(0xFF94A3B8);
-const Color _kBackground = Color(0xFFFAFBFD);
 
 // ═══════════════════════════════════════════════════
 // ENUMS
@@ -172,7 +170,7 @@ class AuthCoordinator {
                             width: 40,
                             height: 4,
                             decoration: BoxDecoration(
-                              color: const Color(0xFFE2E8F0),
+                              color: KoalaColors.borderSolid,
                               borderRadius: BorderRadius.circular(2),
                             ),
                           ),
@@ -184,14 +182,14 @@ class AuthCoordinator {
                               width: 36,
                               height: 36,
                               decoration: BoxDecoration(
-                                color: const Color(0xFFF3F0FF),
+                                color: KoalaColors.accentSoft,
                                 borderRadius: BorderRadius.circular(10),
                               ),
                               child: Icon(
                                 isTerms
                                     ? Icons.description_outlined
                                     : Icons.shield_outlined,
-                                color: const Color(0xFF6C63FF),
+                                color: KoalaColors.brand,
                                 size: 18,
                               ),
                             ),
@@ -202,7 +200,7 @@ class AuthCoordinator {
                                 style: const TextStyle(
                                   fontSize: 20,
                                   fontWeight: FontWeight.w800,
-                                  color: Color(0xFF0F172A),
+                                  color: KoalaColors.inkDeep,
                                   letterSpacing: -0.5,
                                 ),
                               ),
@@ -211,15 +209,15 @@ class AuthCoordinator {
                               onPressed: () => Navigator.of(context).pop(),
                               icon: const Icon(Icons.close_rounded),
                               style: IconButton.styleFrom(
-                                backgroundColor: const Color(0xFFF1F5F9),
-                                foregroundColor: const Color(0xFF64748B),
+                                backgroundColor: KoalaColors.surfaceCool,
+                                foregroundColor: KoalaColors.textMed,
                                 minimumSize: const Size(36, 36),
                               ),
                             ),
                           ],
                         ),
                         const SizedBox(height: 12),
-                        const Divider(color: Color(0xFFF1F5F9), height: 1),
+                        Divider(color: KoalaColors.surfaceCool, height: 1),
                       ],
                     ),
                   ),
@@ -383,7 +381,7 @@ class AuthScene extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _kBackground,
+      backgroundColor: KoalaColors.bgCool,
       body: Stack(
         children: <Widget>[
           // Çok subtle arka plan glow'ları
@@ -392,7 +390,7 @@ class AuthScene extends StatelessWidget {
             left: -40,
             child: _SubtleGlow(
               size: 240,
-              color: _kBrandPrimary.withValues(alpha: 0.06),
+              color: KoalaColors.brand.withValues(alpha: 0.06),
             ),
           ),
           Positioned(
@@ -400,7 +398,7 @@ class AuthScene extends StatelessWidget {
             right: -100,
             child: _SubtleGlow(
               size: 280,
-              color: const Color(0xFFE0D4FF).withValues(alpha: 0.12),
+              color: KoalaColors.accentLight.withValues(alpha: 0.12),
             ),
           ),
           Positioned(
@@ -408,7 +406,7 @@ class AuthScene extends StatelessWidget {
             left: 40,
             child: _SubtleGlow(
               size: 220,
-              color: const Color(0xFFD4EAFF).withValues(alpha: 0.10),
+              color: KoalaColors.accentLight.withValues(alpha: 0.10),
             ),
           ),
           SafeArea(child: child),
@@ -460,12 +458,12 @@ class KoalaHeroLogo extends StatelessWidget {
           gradient: const LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: <Color>[Color(0xFF6C63FF), Color(0xFF9B5CFF)],
+            colors: <Color>[KoalaColors.brand, KoalaColors.brandLight],
           ),
           borderRadius: BorderRadius.circular(size * 0.28),
           boxShadow: <BoxShadow>[
             BoxShadow(
-              color: _kBrandPrimary.withValues(alpha: 0.25),
+              color: KoalaColors.brand.withValues(alpha: 0.25),
               blurRadius: 28,
               offset: const Offset(0, 12),
             ),
@@ -513,8 +511,8 @@ class AuthActionButton extends StatelessWidget {
     final bool enabled = onPressed != null && !loading;
     final BorderRadius br = BorderRadius.circular(16);
     final bool hasGradient = gradient != null;
-    final Color fg = foregroundColor ?? const Color(0xFF1E293B);
-    final Color sp = spinnerColor ?? _kBrandPrimary;
+    final Color fg = foregroundColor ?? KoalaColors.inkSoft;
+    final Color sp = spinnerColor ?? KoalaColors.brand;
 
     return AnimatedOpacity(
       duration: const Duration(milliseconds: 180),
@@ -536,7 +534,7 @@ class AuthActionButton extends StatelessWidget {
             border: hasGradient
                 ? null
                 : Border.all(
-                    color: borderColor ?? const Color(0xFFE2E8F0),
+                    color: borderColor ?? KoalaColors.borderSolid,
                     width: 1.2,
                   ),
             boxShadow: <BoxShadow>[
@@ -548,7 +546,7 @@ class AuthActionButton extends StatelessWidget {
                 )
               else
                 BoxShadow(
-                  color: const Color(0xFF0F172A).withValues(alpha: 0.04),
+                  color: KoalaColors.inkDeep.withValues(alpha: 0.04),
                   blurRadius: 8,
                   offset: const Offset(0, 2),
                 ),
@@ -557,9 +555,9 @@ class AuthActionButton extends StatelessWidget {
           child: InkWell(
             borderRadius: br,
             onTap: enabled ? onPressed : null,
-            splashColor: (hasGradient ? Colors.white : _kBrandPrimary)
+            splashColor: (hasGradient ? Colors.white : KoalaColors.brand)
                 .withValues(alpha: 0.06),
-            highlightColor: (hasGradient ? Colors.white : _kBrandPrimary)
+            highlightColor: (hasGradient ? Colors.white : KoalaColors.brand)
                 .withValues(alpha: 0.03),
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -624,7 +622,7 @@ class AuthErrorBanner extends StatelessWidget {
         children: <Widget>[
           const Icon(
             Icons.error_outline_rounded,
-            color: Color(0xFFEF4444),
+            color: KoalaColors.errorBright,
             size: 18,
           ),
           const SizedBox(width: 10),
@@ -632,7 +630,7 @@ class AuthErrorBanner extends StatelessWidget {
             child: Text(
               message,
               style: const TextStyle(
-                color: Color(0xFFDC2626),
+                color: KoalaColors.errorDark,
                 fontSize: 13,
                 fontWeight: FontWeight.w600,
                 height: 1.35,
@@ -678,14 +676,14 @@ class _FeatureDot extends StatelessWidget {
           height: 6,
           decoration: const BoxDecoration(
             shape: BoxShape.circle,
-            color: _kBrandPrimary,
+            color: KoalaColors.brand,
           ),
         ),
         const SizedBox(width: 6),
         Text(
           label,
           style: const TextStyle(
-            color: _kTextSecondary,
+            color: KoalaColors.textMuted,
             fontSize: 12,
             fontWeight: FontWeight.w600,
           ),
@@ -702,7 +700,7 @@ class AuthLegalText extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final TextStyle baseStyle = TextStyle(
-      color: _kTextSecondary.withValues(alpha: 0.8),
+      color: KoalaColors.textMuted.withValues(alpha: 0.8),
       fontSize: 12,
       fontWeight: FontWeight.w400,
       height: 1.4,
@@ -721,7 +719,7 @@ class AuthLegalText extends StatelessWidget {
               child: Text(
                 'Kullanım Koşulları',
                 style: baseStyle.copyWith(
-                  color: _kBrandPrimary,
+                  color: KoalaColors.brand,
                   fontWeight: FontWeight.w600,
                   decoration: TextDecoration.underline,
                 ),
@@ -737,7 +735,7 @@ class AuthLegalText extends StatelessWidget {
               child: Text(
                 'Gizlilik Politikası',
                 style: baseStyle.copyWith(
-                  color: _kBrandPrimary,
+                  color: KoalaColors.brand,
                   fontWeight: FontWeight.w600,
                   decoration: TextDecoration.underline,
                 ),
@@ -799,7 +797,7 @@ class AuthPanel extends StatelessWidget {
             ),
             boxShadow: <BoxShadow>[
               BoxShadow(
-                color: const Color(0xFF111827).withValues(alpha: 0.06),
+                color: KoalaColors.inkDeep.withValues(alpha: 0.06),
                 blurRadius: 36,
                 offset: const Offset(0, 18),
               ),
@@ -831,7 +829,7 @@ class _SectionTitle extends StatelessWidget {
         style: const TextStyle(
           fontSize: 17,
           fontWeight: FontWeight.w800,
-          color: Color(0xFF0F172A),
+          color: KoalaColors.inkDeep,
           letterSpacing: -0.3,
         ),
       ),
@@ -851,7 +849,7 @@ class _Para extends StatelessWidget {
         style: const TextStyle(
           fontSize: 14,
           fontWeight: FontWeight.w400,
-          color: Color(0xFF475569),
+          color: KoalaColors.textMed,
           height: 1.65,
         ),
       ),
@@ -871,7 +869,7 @@ class _Bullet extends StatelessWidget {
         children: <Widget>[
           const Padding(
             padding: EdgeInsets.only(top: 8),
-            child: Icon(Icons.circle, size: 5, color: Color(0xFF94A3B8)),
+            child: Icon(Icons.circle, size: 5, color: KoalaColors.textMuted),
           ),
           const SizedBox(width: 10),
           Expanded(
@@ -879,7 +877,7 @@ class _Bullet extends StatelessWidget {
               text,
               style: const TextStyle(
                 fontSize: 14,
-                color: Color(0xFF475569),
+                color: KoalaColors.textMed,
                 height: 1.6,
               ),
             ),

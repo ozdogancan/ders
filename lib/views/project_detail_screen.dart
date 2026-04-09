@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../core/theme/koala_tokens.dart';
 import '../services/evlumba_live_service.dart';
 import '../services/messaging_service.dart';
 import '../services/saved_items_service.dart';
@@ -96,14 +97,14 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
     final images = _allImages;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF6F1EB),
+      backgroundColor: KoalaColors.bg,
       body: CustomScrollView(
         slivers: [
           SliverAppBar(
             expandedHeight: 320,
             pinned: true,
-            backgroundColor: const Color(0xFFF6F1EB),
-            surfaceTintColor: const Color(0xFFF6F1EB),
+            backgroundColor: KoalaColors.bg,
+            surfaceTintColor: KoalaColors.bg,
             actions: [
               Container(
                 margin: const EdgeInsets.all(8),
@@ -133,7 +134,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                 child: const Icon(
                   LucideIcons.arrowLeft,
                   size: 20,
-                  color: Color(0xFF1E293B),
+                  color: KoalaColors.inkSoft,
                 ),
               ),
             ),
@@ -141,7 +142,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
               background: _loading
                   ? const Center(
                       child: CircularProgressIndicator(
-                        color: Color(0xFF6C5CE7),
+                        color: KoalaColors.accentDeep,
                         strokeWidth: 2,
                       ),
                     )
@@ -224,7 +225,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                         vertical: 4,
                       ),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFF3F0FF),
+                        color: KoalaColors.accentSoft,
                         borderRadius: BorderRadius.circular(99),
                       ),
                       child: Text(
@@ -232,7 +233,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                         style: const TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
-                          color: Color(0xFF6C5CE7),
+                          color: KoalaColors.accentDeep,
                         ),
                       ),
                     ),
@@ -241,7 +242,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                     style: const TextStyle(
                       fontSize: 22,
                       fontWeight: FontWeight.w700,
-                      color: Color(0xFF1E293B),
+                      color: KoalaColors.inkSoft,
                       height: 1.3,
                     ),
                   ),
@@ -284,7 +285,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                             height: 44,
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
-                              color: const Color(0xFF6C5CE7),
+                              color: KoalaColors.accentDeep,
                               image: designerAvatar.isNotEmpty
                                   ? DecorationImage(
                                       image: NetworkImage(designerAvatar),
@@ -315,7 +316,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                                   style: const TextStyle(
                                     fontSize: 15,
                                     fontWeight: FontWeight.w600,
-                                    color: Color(0xFF1E293B),
+                                    color: KoalaColors.inkSoft,
                                   ),
                                 ),
                                 if (designerCity.isNotEmpty)
@@ -364,7 +365,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                                 vertical: 8,
                               ),
                               decoration: BoxDecoration(
-                                color: const Color(0xFF6C5CE7),
+                                color: KoalaColors.accentDeep,
                                 borderRadius: BorderRadius.circular(12),
                               ),
                               child: const Row(
@@ -416,7 +417,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                                 vertical: 8,
                               ),
                               decoration: BoxDecoration(
-                                border: Border.all(color: const Color(0xFF6C5CE7)),
+                                border: Border.all(color: KoalaColors.accentDeep),
                                 borderRadius: BorderRadius.circular(12),
                               ),
                               child: const Text(
@@ -424,7 +425,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                                 style: TextStyle(
                                   fontSize: 12,
                                   fontWeight: FontWeight.w600,
-                                  color: Color(0xFF6C5CE7),
+                                  color: KoalaColors.accentDeep,
                                 ),
                               ),
                             ),
@@ -440,7 +441,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                         const Icon(
                           LucideIcons.sparkles,
                           size: 16,
-                          color: Color(0xFF6C5CE7),
+                          color: KoalaColors.accentDeep,
                         ),
                         const SizedBox(width: 8),
                         Text(
@@ -448,7 +449,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                           style: const TextStyle(
                             fontSize: 15,
                             fontWeight: FontWeight.w600,
-                            color: Color(0xFF1E293B),
+                            color: KoalaColors.inkSoft,
                           ),
                         ),
                       ],
@@ -488,7 +489,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
 
   Widget _galleryPlaceholder() {
     return Container(
-      color: const Color(0xFFF8F7FC),
+      color: KoalaColors.accentLight,
       child: Center(
         child: Icon(LucideIcons.image, size: 48, color: Colors.grey.shade300),
       ),
@@ -529,7 +530,7 @@ class _ShopLinkCard extends StatelessWidget {
           ),
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFF6C5CE7).withValues(alpha: 0.05),
+              color: KoalaColors.accentDeep.withValues(alpha: 0.05),
               blurRadius: 12,
               offset: const Offset(0, 3),
             ),
@@ -541,7 +542,7 @@ class _ShopLinkCard extends StatelessWidget {
             Expanded(
               child: Container(
                 width: double.infinity,
-                color: const Color(0xFFF8F7FC),
+                color: KoalaColors.accentLight,
                 child: imageUrl.isNotEmpty && !imageUrl.startsWith('data:')
                     ? Image.network(
                         imageUrl,
@@ -563,7 +564,7 @@ class _ShopLinkCard extends StatelessWidget {
                     style: const TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
-                      color: Color(0xFF1E293B),
+                      color: KoalaColors.inkSoft,
                       height: 1.3,
                     ),
                   ),
@@ -574,7 +575,7 @@ class _ShopLinkCard extends StatelessWidget {
                       style: const TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w600,
-                        color: Color(0xFF6C5CE7),
+                        color: KoalaColors.accentDeep,
                       ),
                     ),
                   ],

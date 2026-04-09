@@ -16,3 +16,6 @@
 # Kotlin
 -keep class kotlin.** { *; }
 -dontwarn kotlin.**
+
+# Play Core (deferred components)
+-dontwarn com.google.android.play.core.**

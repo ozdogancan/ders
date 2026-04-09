@@ -2,56 +2,56 @@ import 'package:flutter/material.dart';
 
 import 'package:google_fonts/google_fonts.dart';
 
-import '../../widgets/experience_ui.dart';
+import 'koala_tokens.dart';
 
 class AppTheme {
   const AppTheme._();
 
   static ThemeData get lightTheme {
     final ColorScheme colorScheme = ColorScheme.fromSeed(
-      seedColor: AppColors.primaryBlue,
+      seedColor: KoalaColors.accent,
       brightness: Brightness.light,
-      primary: AppColors.primaryBlue,
-      surface: AppColors.white,
+      primary: KoalaColors.accent,
+      surface: KoalaColors.surface,
     );
 
     return ThemeData(
       useMaterial3: true,
       textTheme: GoogleFonts.plusJakartaSansTextTheme(),
       colorScheme: colorScheme,
-      scaffoldBackgroundColor: AppColors.white,
+      scaffoldBackgroundColor: KoalaColors.surface,
       appBarTheme: const AppBarTheme(
         centerTitle: false,
         elevation: 0,
         scrolledUnderElevation: 0,
-        backgroundColor: AppColors.white,
+        backgroundColor: KoalaColors.surface,
       ),
       cardTheme: CardThemeData(
         elevation: 0,
-        color: AppColors.white,
+        color: KoalaColors.surface,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-          side: const BorderSide(color: AppColors.grey300),
+          borderRadius: BorderRadius.circular(KoalaRadius.md),
+          side: const BorderSide(color: KoalaColors.borderSolid),
         ),
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: false,
         fillColor: Colors.transparent,
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(KoalaRadius.sm),
           borderSide: BorderSide.none,
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(KoalaRadius.sm),
           borderSide: const BorderSide(
-            color: AppColors.primaryBlue,
+            color: KoalaColors.accent,
             width: 1.3,
           ),
         ),
       ),
       floatingActionButtonTheme: const FloatingActionButtonThemeData(
-        backgroundColor: AppColors.primaryBlue,
-        foregroundColor: AppColors.white,
+        backgroundColor: KoalaColors.accent,
+        foregroundColor: KoalaColors.textInv,
       ),
     );
   }

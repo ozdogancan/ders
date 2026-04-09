@@ -2,6 +2,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../core/theme/koala_tokens.dart';
 import 'auth_common.dart';
 import 'auth_entry_screen.dart';
 import 'main_shell.dart';
@@ -53,9 +54,9 @@ class _AuthGateState extends State<AuthGate> {
       builder: (context, snapshot) {
         if (snapshot.connectionState != ConnectionState.done) {
           return const Scaffold(
-            backgroundColor: Color(0xFFFAFBFD),
+            backgroundColor: KoalaColors.bgCool,
             body: Center(
-              child: CircularProgressIndicator(color: Color(0xFF6366F1)),
+              child: CircularProgressIndicator(color: KoalaColors.brand),
             ),
           );
         }

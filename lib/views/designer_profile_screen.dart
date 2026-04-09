@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../core/theme/koala_tokens.dart';
+
 class DesignerProfileScreen extends StatelessWidget {
   final String designerId;
   final String? designerName;
@@ -28,7 +30,7 @@ class DesignerProfileScreen extends StatelessWidget {
             children: [
               const CircleAvatar(
                 radius: 48,
-                backgroundColor: Color(0xFF6C5CE7),
+                backgroundColor: KoalaColors.accentDeep,
                 child: Icon(Icons.person, size: 48, color: Colors.white),
               ),
               const SizedBox(height: 16),

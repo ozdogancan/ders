@@ -635,7 +635,7 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
       body: SafeArea(child: Column(children: [
         _hdr('Ürün', () => setState(() => _detailProduct = null)),
         Expanded(child: ListView(padding: const EdgeInsets.fromLTRB(20, 16, 20, 32), children: [
-          Container(height: 220, clipBehavior: Clip.antiAlias, decoration: BoxDecoration(borderRadius: BorderRadius.circular(22), color: const Color(0xFFF0EDE8)),
+          Container(height: 220, clipBehavior: Clip.antiAlias, decoration: BoxDecoration(borderRadius: BorderRadius.circular(22), color: KoalaColors.surfaceAlt),
             child: Stack(fit: StackFit.expand, children: [_imgW(imgUrl), Positioned(top: 12, right: 12, child: _evBadge())])),
           const SizedBox(height: 16),
           Text(name, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: _K.text)),
@@ -644,7 +644,7 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
             Text(brand, style: const TextStyle(fontSize: 14, color: _K.textSec)),
             if (price.isNotEmpty) Text(price, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: _K.text)),
           ]),
-          if (desc.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 14), child: Text(desc, style: const TextStyle(fontSize: 14, color: Color(0xFF6B6B6B), height: 1.65))),
+          if (desc.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 14), child: Text(desc, style: const TextStyle(fontSize: 14, color: KoalaColors.textSec, height: 1.65))),
           const SizedBox(height: 20),
           GestureDetector(
             onTap: () {
@@ -682,7 +682,7 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
             Text(name, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: _K.text)),
             const SizedBox(height: 4),
             Text('${d['project_count'] ?? dProjects.length} proje · $city', style: const TextStyle(fontSize: 13, color: _K.textSec)),
-            if (bio.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 12), child: Text(bio, textAlign: TextAlign.center, style: const TextStyle(fontSize: 14, color: Color(0xFF6B6B6B), height: 1.6))),
+            if (bio.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 12), child: Text(bio, textAlign: TextAlign.center, style: const TextStyle(fontSize: 14, color: KoalaColors.textSec, height: 1.6))),
           ])),
           const SizedBox(height: 20),
           GestureDetector(
@@ -809,26 +809,26 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
     child: const Text('evlumba', style: TextStyle(fontSize: 8, fontWeight: FontWeight.w700, color: _K.greenDark)));
 
   Widget _av(String name, String url, double sz) => Container(width: sz, height: sz,
-    decoration: BoxDecoration(shape: BoxShape.circle, color: const Color(0xFFE8E0D4),
+    decoration: BoxDecoration(shape: BoxShape.circle, color: KoalaColors.surfaceAlt,
       image: url.isNotEmpty ? DecorationImage(image: NetworkImage(url), fit: BoxFit.cover) : null),
-    child: url.isEmpty ? Center(child: Text(_initials(name), style: TextStyle(fontSize: sz * 0.32, fontWeight: FontWeight.w600, color: const Color(0xFF5c4f47)))) : null);
+    child: url.isEmpty ? Center(child: Text(_initials(name), style: TextStyle(fontSize: sz * 0.32, fontWeight: FontWeight.w600, color: KoalaColors.textMed))) : null);
 
   Widget _miniAv(Map<String, dynamic>? d) {
     final n = (d?['full_name'] ?? '').toString(); final a = (d?['avatar_url'] ?? '').toString();
-    return Container(width: 20, height: 20, decoration: BoxDecoration(shape: BoxShape.circle, color: const Color(0xFFE8E0D4),
+    return Container(width: 20, height: 20, decoration: BoxDecoration(shape: BoxShape.circle, color: KoalaColors.surfaceAlt,
       image: a.isNotEmpty ? DecorationImage(image: NetworkImage(a), fit: BoxFit.cover) : null),
-      child: a.isEmpty ? Center(child: Text(_initials(n), style: const TextStyle(fontSize: 8, fontWeight: FontWeight.w600, color: Color(0xFF5c4f47)))) : null);
+      child: a.isEmpty ? Center(child: Text(_initials(n), style: const TextStyle(fontSize: 8, fontWeight: FontWeight.w600, color: KoalaColors.textMed))) : null);
   }
 
   Widget _thumb(String url, double sz) => Container(width: sz, height: sz, clipBehavior: Clip.antiAlias,
-    decoration: BoxDecoration(borderRadius: BorderRadius.circular(sz * 0.27), color: const Color(0xFFF0EDE8)),
+    decoration: BoxDecoration(borderRadius: BorderRadius.circular(sz * 0.27), color: KoalaColors.surfaceAlt),
     child: url.isNotEmpty ? Image.network(url, fit: BoxFit.cover, errorBuilder: (_, __, ___) => _ph()) : _ph());
 
   Widget _imgW(String url) {
-    if (url.isEmpty) return Container(color: const Color(0xFFF0EDE8), child: _ph());
+    if (url.isEmpty) return Container(color: KoalaColors.surfaceAlt, child: _ph());
     return Image.network(url, fit: BoxFit.cover,
-      loadingBuilder: (_, c, p) => p == null ? c : Container(color: const Color(0xFFF0EDE8)),
-      errorBuilder: (_, __, ___) => Container(color: const Color(0xFFF0EDE8), child: _ph()));
+      loadingBuilder: (_, c, p) => p == null ? c : Container(color: KoalaColors.surfaceAlt),
+      errorBuilder: (_, __, ___) => Container(color: KoalaColors.surfaceAlt, child: _ph()));
   }
 
   Widget _ph() => const Center(child: Icon(LucideIcons.image, size: 32, color: _K.textTer));
@@ -873,5 +873,5 @@ class _TypingDotsState extends State<_TypingDots> with TickerProviderStateMixin 
     children: List.generate(3, (i) => AnimatedBuilder(animation: _c[i],
       builder: (_, __) => Container(width: 6, height: 6, margin: const EdgeInsets.symmetric(horizontal: 2),
         decoration: BoxDecoration(shape: BoxShape.circle,
-          color: Color.lerp(const Color(0xFFD4D0E8), _K.accent, _c[i].value))))));
+          color: Color.lerp(KoalaColors.accentLight, _K.accent, _c[i].value))))));
 }

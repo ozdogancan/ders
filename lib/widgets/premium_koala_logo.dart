@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import '../core/theme/koala_tokens.dart';
 
 class PremiumKoalaLogo extends StatelessWidget {
   const PremiumKoalaLogo({super.key, this.size = 140});
@@ -16,13 +17,13 @@ class PremiumKoalaLogo extends StatelessWidget {
         gradient: const LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [Colors.white, Color(0xFFF0F0F5)],
+          colors: [Colors.white, KoalaColors.surfaceCool],
           stops: [0.2, 1.0],
         ),
         boxShadow: [
           // Soft outer drop shadow mimicking iOS app icon depth
           BoxShadow(
-            color: const Color(0xFF6C5CE7).withValues(alpha:0.08),
+            color: KoalaColors.accentDeep.withValues(alpha:0.08),
             blurRadius: size * 0.35,
             offset: Offset(0, size * 0.1),
           ),

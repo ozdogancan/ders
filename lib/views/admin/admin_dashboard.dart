@@ -87,9 +87,9 @@ class _AdminDashboardState extends State<AdminDashboard> {
                     children: [
                       _MetricCard(label: 'Toplam Kullanıcı', value: _stats['total_users'] ?? 0, icon: Icons.people_rounded, color: KoalaColors.accent),
                       _MetricCard(label: 'Bugün Kayıt', value: _stats['today_signups'] ?? 0, icon: Icons.person_add_rounded, color: KoalaColors.green),
-                      _MetricCard(label: 'Konuşmalar', value: _stats['total_conversations'] ?? 0, icon: Icons.chat_rounded, color: const Color(0xFFF59E0B)),
-                      _MetricCard(label: 'Bugün Mesaj', value: _stats['today_messages'] ?? 0, icon: Icons.message_rounded, color: const Color(0xFFEC4899)),
-                      _MetricCard(label: 'Toplam Kayıt', value: _stats['total_saves'] ?? 0, icon: Icons.bookmark_rounded, color: const Color(0xFF8B5CF6)),
+                      _MetricCard(label: 'Konuşmalar', value: _stats['total_conversations'] ?? 0, icon: Icons.chat_rounded, color: KoalaColors.star),
+                      _MetricCard(label: 'Bugün Mesaj', value: _stats['today_messages'] ?? 0, icon: Icons.message_rounded, color: KoalaColors.pink),
+                      _MetricCard(label: 'Toplam Kayıt', value: _stats['total_saves'] ?? 0, icon: Icons.bookmark_rounded, color: KoalaColors.accentMuted),
                     ],
                   ),
 

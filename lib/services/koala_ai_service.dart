@@ -307,7 +307,9 @@ class KoalaAIService {
       'contents': contents,
       'generationConfig': {
         'temperature': 0.7,
-        'responseMimeType': 'application/json',
+        // NOT: responseMimeType: 'application/json' kaldırıldı —
+        // Gemini 2.5 Flash bu parametreyle 503 döndürüyor.
+        // JSON formatı prompt içinde zorlanıyor (KoalaPrompts.systemPrompt).
       },
     };
 
@@ -398,13 +400,13 @@ class KoalaAIService {
       ],
       'generationConfig': {
         'temperature': 0.7,
-        'responseMimeType': 'application/json',
+        // NOT: responseMimeType kaldırıldı — Gemini 2.5 Flash 503 döndürüyor.
       },
     };
 
     final response = await _client
         .post(_proxyUri, headers: {'Content-Type': 'application/json'}, body: jsonEncode(payload))
-        .timeout(const Duration(seconds: 30));
+        .timeout(const Duration(seconds: 45));
 
     if (response.statusCode >= 300) {
       throw Exception('Gemini image failed: ${response.statusCode}');

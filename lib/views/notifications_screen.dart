@@ -148,13 +148,13 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       case 'new_message':
         return KoalaColors.accent;
       case 'designer_match':
-        return const Color(0xFFF59E0B);
+        return KoalaColors.star;
       case 'product_recommend':
         return KoalaColors.green;
       case 'style_result':
-        return const Color(0xFFEC4899);
+        return KoalaColors.pink;
       case 'promo':
-        return const Color(0xFFEF4444);
+        return KoalaColors.errorBright;
       default:
         return KoalaColors.textSec;
     }

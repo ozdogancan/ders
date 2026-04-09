@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../core/theme/koala_tokens.dart';
 
 class RoomWizardScreen extends StatelessWidget {
   const RoomWizardScreen({super.key});
@@ -22,7 +23,7 @@ class RoomWizardScreen extends StatelessWidget {
               const Icon(
                 Icons.room_preferences_rounded,
                 size: 64,
-                color: Color(0xFF6C5CE7),
+                color: KoalaColors.accentDeep,
               ),
               const SizedBox(height: 16),
               Text(

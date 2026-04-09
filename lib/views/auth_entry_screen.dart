@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
+import '../core/theme/koala_tokens.dart';
 import 'auth_common.dart';
 import 'phone_auth_screen.dart';
 
@@ -173,7 +174,7 @@ class _AuthEntryScreenState extends State<AuthEntryScreen>
                                 style: const TextStyle(
                                   fontSize: 30,
                                   fontWeight: FontWeight.w900,
-                                  color: Color(0xFF0F172A),
+                                  color: KoalaColors.inkDeep,
                                   letterSpacing: -0.8,
                                   height: 1.1,
                                 ),
@@ -185,7 +186,7 @@ class _AuthEntryScreenState extends State<AuthEntryScreen>
                                     : 'Mekan analizine kaldığın yerden devam et.',
                                 textAlign: TextAlign.center,
                                 style: const TextStyle(
-                                  color: Color(0xFF94A3B8),
+                                  color: KoalaColors.textMuted,
                                   fontSize: 15,
                                   fontWeight: FontWeight.w500,
                                   height: 1.5,
@@ -239,7 +240,7 @@ class _AuthEntryScreenState extends State<AuthEntryScreen>
                                 label: 'Telefon ile devam et',
                                 leading: const Icon(
                                   Icons.smartphone_rounded,
-                                  color: Color(0xFF6C63FF),
+                                  color: KoalaColors.brand,
                                   size: 20,
                                 ),
                                 onPressed: _openPhoneAuth,
@@ -291,19 +292,19 @@ class _OrDivider extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: <Widget>[
-        const Expanded(child: Divider(color: Color(0xFFE2E8F0), thickness: 1)),
+        Expanded(child: Divider(color: KoalaColors.borderSolid, thickness: 1)),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: Text(
             'veya',
             style: TextStyle(
-              color: const Color(0xFF94A3B8).withValues(alpha: 0.8),
+              color: KoalaColors.textMuted.withValues(alpha: 0.8),
               fontSize: 13,
               fontWeight: FontWeight.w500,
             ),
           ),
         ),
-        const Expanded(child: Divider(color: Color(0xFFE2E8F0), thickness: 1)),
+        Expanded(child: Divider(color: KoalaColors.borderSolid, thickness: 1)),
       ],
     );
   }

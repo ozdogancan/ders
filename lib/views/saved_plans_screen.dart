@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../core/theme/koala_tokens.dart';
 import '../services/saved_plans_service.dart';
 
 class SavedPlansScreen extends StatefulWidget {
@@ -44,27 +45,27 @@ class _SavedPlansScreenState extends State<SavedPlansScreen> {
 
   Color _typeColor(String type) {
     switch (type) {
-      case 'style_analysis': return const Color(0xFF6C5CE7);
-      case 'color_palette': return const Color(0xFFEC4899);
-      case 'product_grid': return const Color(0xFF3B82F6);
-      case 'budget_plan': return const Color(0xFF10B981);
-      case 'designer_card': return const Color(0xFFF59E0B);
-      default: return const Color(0xFF6C5CE7);
+      case 'style_analysis': return KoalaColors.accentDeep;
+      case 'color_palette': return KoalaColors.pink;
+      case 'product_grid': return KoalaColors.blue;
+      case 'budget_plan': return KoalaColors.greenAlt;
+      case 'designer_card': return KoalaColors.star;
+      default: return KoalaColors.accentDeep;
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFFAFAFA),
+      backgroundColor: KoalaColors.surfaceMuted,
       appBar: AppBar(
         backgroundColor: Colors.white, elevation: 0, scrolledUnderElevation: 0.5,
-        leading: IconButton(icon: const Icon(Icons.arrow_back_rounded, color: Color(0xFF1A1D2A)),
+        leading: IconButton(icon: Icon(Icons.arrow_back_rounded, color: KoalaColors.ink),
           onPressed: () => Navigator.pop(context)),
-        title: const Text('Kaydedilen Planlar', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Color(0xFF1A1D2A))),
+        title: Text('Kaydedilen Planlar', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: KoalaColors.ink)),
       ),
       body: _loading
-        ? const Center(child: CircularProgressIndicator(color: Color(0xFF6C5CE7)))
+        ? Center(child: CircularProgressIndicator(color: KoalaColors.accentDeep))
         : _plans.isEmpty
           ? Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
               Icon(Icons.bookmark_border_rounded, size: 48, color: Colors.grey.shade300),
@@ -104,7 +105,7 @@ class _SavedPlansScreenState extends State<SavedPlansScreen> {
                         child: Icon(_typeIcon(plan.type), size: 20, color: color)),
                       const SizedBox(width: 14),
                       Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        Text(plan.title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Color(0xFF1A1D2A)),
+                        Text(plan.title, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: KoalaColors.ink),
                           maxLines: 1, overflow: TextOverflow.ellipsis),
                         const SizedBox(height: 2),
                         Text(_typeLabel(plan.type), style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
@@ -117,13 +118,13 @@ class _SavedPlansScreenState extends State<SavedPlansScreen> {
                           Clipboard.setData(ClipboardData(text: text));
                           ScaffoldMessenger.of(context).showSnackBar(SnackBar(
                             behavior: SnackBarBehavior.floating,
-                            backgroundColor: const Color(0xFF6C5CE7),
+                            backgroundColor: KoalaColors.accentDeep,
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                             content: const Text('Panoya kopyalandı ✨', style: TextStyle(color: Colors.white))));
                         },
                         child: Container(width: 36, height: 36,
-                          decoration: BoxDecoration(borderRadius: BorderRadius.circular(10), color: const Color(0xFFF3F0FF)),
-                          child: const Icon(Icons.share_rounded, size: 16, color: Color(0xFF6C5CE7)))),
+                          decoration: BoxDecoration(borderRadius: BorderRadius.circular(10), color: KoalaColors.accentSoft),
+                          child: Icon(Icons.share_rounded, size: 16, color: KoalaColors.accentDeep))),
                     ])));
               }),
     );

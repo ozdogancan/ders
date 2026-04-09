@@ -180,7 +180,7 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
               decoration: const BoxDecoration(
                 shape: BoxShape.circle,
                 gradient: LinearGradient(
-                  colors: [KoalaColors.accent, Color(0xFFA78BFA)],
+                  colors: [KoalaColors.accent, KoalaColors.accentMuted],
                 ),
               ),
               child: widget.designerAvatarUrl != null

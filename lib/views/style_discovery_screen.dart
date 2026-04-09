@@ -10,6 +10,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' hide User;
 
 import '../core/config/env.dart';
+import '../core/theme/koala_tokens.dart';
 
 class StyleDiscoveryScreen extends StatefulWidget {
   const StyleDiscoveryScreen({super.key, this.entryPoint = 'first_run'});
@@ -407,7 +408,7 @@ class _StyleDiscoveryScreenState extends State<StyleDiscoveryScreen>
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.dark,
       child: Scaffold(
-        backgroundColor: const Color(0xFFF8F5F0),
+        backgroundColor: KoalaColors.bg,
         body: SafeArea(
           bottom: false,
           child: Column(
@@ -435,7 +436,7 @@ class _StyleDiscoveryScreenState extends State<StyleDiscoveryScreen>
                           height: 40,
                           decoration: BoxDecoration(
                             gradient: const LinearGradient(
-                              colors: [Color(0xFF7C6EF2), Color(0xFF6C5CE7)],
+                              colors: [KoalaColors.accent, KoalaColors.accentDeep],
                             ),
                             borderRadius: BorderRadius.circular(12),
                           ),
@@ -455,7 +456,7 @@ class _StyleDiscoveryScreenState extends State<StyleDiscoveryScreen>
                                 style: TextStyle(
                                   fontSize: 18,
                                   fontWeight: FontWeight.w800,
-                                  color: Color(0xFF1A1D2A),
+                                  color: KoalaColors.ink,
                                   letterSpacing: -0.3,
                                 ),
                               ),
@@ -464,7 +465,7 @@ class _StyleDiscoveryScreenState extends State<StyleDiscoveryScreen>
                                 'Beğendiğin mekanları sağa kaydır',
                                 style: TextStyle(
                                   fontSize: 13,
-                                  color: Color(0xFF8E8A96),
+                                  color: KoalaColors.textSec,
                                   fontWeight: FontWeight.w500,
                                 ),
                               ),
@@ -474,7 +475,7 @@ class _StyleDiscoveryScreenState extends State<StyleDiscoveryScreen>
                         TextButton(
                           onPressed: _handleSkip,
                           style: TextButton.styleFrom(
-                            foregroundColor: const Color(0xFF8E8A96),
+                            foregroundColor: KoalaColors.textSec,
                             padding: const EdgeInsets.symmetric(
                               horizontal: 12,
                               vertical: 8,
@@ -507,7 +508,7 @@ class _StyleDiscoveryScreenState extends State<StyleDiscoveryScreen>
                           child: Stack(
                             children: [
                               Container(
-                                color: const Color(0xFFE8E3DC),
+                                color: KoalaColors.surfaceAlt,
                               ),
                               FractionallySizedBox(
                                 widthFactor:
@@ -517,8 +518,8 @@ class _StyleDiscoveryScreenState extends State<StyleDiscoveryScreen>
                                     borderRadius: BorderRadius.circular(99),
                                     gradient: const LinearGradient(
                                       colors: [
-                                        Color(0xFF7C6EF2),
-                                        Color(0xFF6C5CE7),
+                                        KoalaColors.accent,
+                                        KoalaColors.accentDeep,
                                       ],
                                     ),
                                   ),
@@ -535,7 +536,7 @@ class _StyleDiscoveryScreenState extends State<StyleDiscoveryScreen>
                       style: const TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w700,
-                        color: Color(0xFFAEA8B8),
+                        color: KoalaColors.textTer,
                       ),
                     ),
                   ],
@@ -665,12 +666,12 @@ class _StyleDiscoveryScreenState extends State<StyleDiscoveryScreen>
                                                       _TutorialHint(
                                                         icon: Icons.arrow_back_rounded,
                                                         label: 'PAS',
-                                                        color: const Color(0xFFE26257),
+                                                        color: KoalaColors.dislike,
                                                       ),
                                                       _TutorialHint(
                                                         icon: Icons.arrow_forward_rounded,
                                                         label: 'SEVERiM',
-                                                        color: const Color(0xFF39B97A),
+                                                        color: KoalaColors.like,
                                                       ),
                                                     ],
                                                   ),
@@ -942,7 +943,7 @@ class _SwipeOverlay extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = isLike ? const Color(0xFF39B97A) : const Color(0xFFE26257);
+    final color = isLike ? KoalaColors.like : KoalaColors.dislike;
     return Container(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(24),
@@ -997,7 +998,7 @@ class _GlassPill extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
         color: accent
-            ? const Color(0xFF6C5CE7).withValues(alpha: 0.85)
+            ? KoalaColors.accentDeep.withValues(alpha: 0.85)
             : Colors.black.withValues(alpha: 0.35),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
@@ -1098,7 +1099,7 @@ class _SwipeControls extends StatelessWidget {
         // Pass button
         _CircleActionButton(
           icon: Icons.close_rounded,
-          color: const Color(0xFFE26257),
+          color: KoalaColors.dislike,
           size: 56,
           iconSize: 28,
           onTap: onPass,
@@ -1108,7 +1109,7 @@ class _SwipeControls extends StatelessWidget {
         // Like button
         _CircleActionButton(
           icon: Icons.favorite_rounded,
-          color: const Color(0xFF39B97A),
+          color: KoalaColors.like,
           size: 72,
           iconSize: 32,
           onTap: onLike,
@@ -1122,7 +1123,7 @@ class _SwipeControls extends StatelessWidget {
           duration: const Duration(milliseconds: 200),
           child: _CircleActionButton(
             icon: Icons.undo_rounded,
-            color: const Color(0xFFAEA8B8),
+            color: KoalaColors.textTer,
             size: 56,
             iconSize: 24,
             onTap: onUndo,
@@ -1211,12 +1212,12 @@ class _FinishCta extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: 18),
         decoration: BoxDecoration(
           gradient: const LinearGradient(
-            colors: [Color(0xFF7C6EF2), Color(0xFF6C5CE7)],
+            colors: [KoalaColors.accent, KoalaColors.accentDeep],
           ),
           borderRadius: BorderRadius.circular(20),
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFF6C5CE7).withValues(alpha: 0.3),
+              color: KoalaColors.accentDeep.withValues(alpha: 0.3),
               blurRadius: 24,
               offset: const Offset(0, 10),
             ),
@@ -1271,7 +1272,7 @@ class _DoneState extends StatelessWidget {
             borderRadius: BorderRadius.circular(28),
             boxShadow: [
               BoxShadow(
-                color: const Color(0xFF6C5CE7).withValues(alpha: 0.08),
+                color: KoalaColors.accentDeep.withValues(alpha: 0.08),
                 blurRadius: 40,
                 offset: const Offset(0, 16),
               ),
@@ -1289,15 +1290,15 @@ class _DoneState extends StatelessWidget {
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                     colors: [
-                      const Color(0xFF7C6EF2).withValues(alpha: 0.15),
-                      const Color(0xFF6C5CE7).withValues(alpha: 0.08),
+                      KoalaColors.accent.withValues(alpha: 0.15),
+                      KoalaColors.accentDeep.withValues(alpha: 0.08),
                     ],
                   ),
                 ),
                 child: const Icon(
                   Icons.auto_awesome_rounded,
                   size: 36,
-                  color: Color(0xFF6C5CE7),
+                  color: KoalaColors.accentDeep,
                 ),
               ),
               const SizedBox(height: 20),
@@ -1307,7 +1308,7 @@ class _DoneState extends StatelessWidget {
                 style: const TextStyle(
                   fontSize: 22,
                   fontWeight: FontWeight.w800,
-                  color: Color(0xFF1A1D2A),
+                  color: KoalaColors.ink,
                   letterSpacing: -0.3,
                 ),
               ),
@@ -1318,7 +1319,7 @@ class _DoneState extends StatelessWidget {
                 style: const TextStyle(
                   fontSize: 14,
                   height: 1.55,
-                  color: Color(0xFF8E8A96),
+                  color: KoalaColors.textSec,
                 ),
               ),
               if (likesCount > 0) ...[
@@ -1327,7 +1328,7 @@ class _DoneState extends StatelessWidget {
                   padding:
                       const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF39B97A).withValues(alpha: 0.1),
+                    color: KoalaColors.like.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Row(
@@ -1336,7 +1337,7 @@ class _DoneState extends StatelessWidget {
                       const Icon(
                         Icons.favorite_rounded,
                         size: 16,
-                        color: Color(0xFF39B97A),
+                        color: KoalaColors.like,
                       ),
                       const SizedBox(width: 6),
                       Text(
@@ -1344,7 +1345,7 @@ class _DoneState extends StatelessWidget {
                         style: const TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w600,
-                          color: Color(0xFF39B97A),
+                          color: KoalaColors.like,
                         ),
                       ),
                     ],
@@ -1360,13 +1361,13 @@ class _DoneState extends StatelessWidget {
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     decoration: BoxDecoration(
                       gradient: const LinearGradient(
-                        colors: [Color(0xFF7C6EF2), Color(0xFF6C5CE7)],
+                        colors: [KoalaColors.accent, KoalaColors.accentDeep],
                       ),
                       borderRadius: BorderRadius.circular(16),
                       boxShadow: [
                         BoxShadow(
                           color:
-                              const Color(0xFF6C5CE7).withValues(alpha: 0.25),
+                              KoalaColors.accentDeep.withValues(alpha: 0.25),
                           blurRadius: 16,
                           offset: const Offset(0, 6),
                         ),
@@ -1680,7 +1681,7 @@ class _CardImage extends StatelessWidget {
                   height: 32,
                   child: CircularProgressIndicator(
                     strokeWidth: 2.5,
-                    color: Color(0xFF6C5CE7),
+                    color: KoalaColors.accentDeep,
                   ),
                 ),
               ),
@@ -1688,7 +1689,7 @@ class _CardImage extends StatelessWidget {
                 child: Icon(
                   Icons.image_not_supported_outlined,
                   size: 40,
-                  color: Color(0xFFCBC5D4),
+                  color: KoalaColors.textTer,
                 ),
               ),
             ),

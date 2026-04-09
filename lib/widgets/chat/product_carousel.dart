@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../core/theme/koala_tokens.dart';
 import '../../services/saved_items_service.dart';
 import '../../services/profile_feedback_service.dart';
 
@@ -91,17 +92,17 @@ class _ProductCarouselState extends State<ProductCarousel> {
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(14),
-          color: const Color(0xFFF8F7FF),
-          border: Border.all(color: const Color(0xFFE8E5F0)),
+          color: KoalaColors.accentSoft,
+          border: Border.all(color: KoalaColors.borderMed),
         ),
         child: const Row(
           children: [
-            Icon(Icons.shopping_bag_outlined, size: 20, color: Color(0xFF6C5CE7)),
+            Icon(Icons.shopping_bag_outlined, size: 20, color: KoalaColors.accentDeep),
             SizedBox(width: 10),
             Expanded(
               child: Text(
                 'Bu alan için ürün kataloğu hazırlanıyor. Çok yakında burada gerçek ürün önerileri göreceksin!',
-                style: TextStyle(color: Color(0xFF6B7280), fontSize: 13, height: 1.4),
+                style: TextStyle(color: KoalaColors.textSec, fontSize: 13, height: 1.4),
               ),
             ),
           ],
@@ -120,12 +121,12 @@ class _ProductCarouselState extends State<ProductCarousel> {
               Expanded(
                 child: Text(
                   widget.title.isNotEmpty ? widget.title : 'Önerilen Ürünler',
-                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Color(0xFF1A1D2A)),
+                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: KoalaColors.ink),
                 ),
               ),
               Text(
                 '${_visibleIndex + 1}/${widget.products.length}',
-                style: const TextStyle(fontSize: 12, color: Color(0xFF8E8E93)),
+                style: const TextStyle(fontSize: 12, color: KoalaColors.textSec),
               ),
             ],
           ),
@@ -162,7 +163,7 @@ class _ProductCarouselState extends State<ProductCarousel> {
                   height: 6,
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(3),
-                    color: i == _visibleIndex ? const Color(0xFF7C6EF2) : const Color(0xFFE0E0E0),
+                    color: i == _visibleIndex ? KoalaColors.accent : KoalaColors.borderMed,
                   ),
                 ),
               ),
@@ -237,7 +238,7 @@ class _ProductCardState extends State<_ProductCard> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           behavior: SnackBarBehavior.floating,
-          backgroundColor: const Color(0xFF6C5CE7),
+          backgroundColor: KoalaColors.accentDeep,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           duration: const Duration(seconds: 3),
           content: const Text('Kaydedildi', style: TextStyle(color: Colors.white)),
@@ -286,13 +287,13 @@ class _ProductCardState extends State<_ProductCard> {
             Center(
               child: Container(
                 width: 36, height: 4,
-                decoration: BoxDecoration(color: const Color(0xFFE0E0E0), borderRadius: BorderRadius.circular(2)),
+                decoration: BoxDecoration(color: KoalaColors.borderMed, borderRadius: BorderRadius.circular(2)),
               ),
             ),
             const SizedBox(height: 16),
             Text(
               '${p.name} hakkında sor',
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Color(0xFF1A1D2A)),
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: KoalaColors.ink),
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
             ),
@@ -309,11 +310,11 @@ class _ProductCardState extends State<_ProductCard> {
                   width: double.infinity,
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFF3F0FF),
+                    color: KoalaColors.accentSoft,
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: const Color(0xFF7C6EF2).withValues(alpha:0.15)),
+                    border: Border.all(color: KoalaColors.accent.withValues(alpha:0.15)),
                   ),
-                  child: Text(q, style: const TextStyle(fontSize: 14, color: Color(0xFF7C6EF2), fontWeight: FontWeight.w500)),
+                  child: Text(q, style: const TextStyle(fontSize: 14, color: KoalaColors.accent, fontWeight: FontWeight.w500)),
                 ),
               ),
             )),
@@ -379,7 +380,7 @@ class _ProductCardState extends State<_ProductCard> {
                         child: Icon(
                           _isSaved ? Icons.favorite : Icons.favorite_border,
                           size: 18,
-                          color: _isSaved ? const Color(0xFFE53935) : const Color(0xFF666666),
+                          color: _isSaved ? KoalaColors.error : KoalaColors.textSec,
                         ),
                       ),
                     ),
@@ -398,18 +399,18 @@ class _ProductCardState extends State<_ProductCard> {
                     // Mağaza
                     if (p.shopName.isNotEmpty)
                       Text(p.shopName,
-                        style: const TextStyle(fontSize: 11, color: Color(0xFF8E8E93)),
+                        style: const TextStyle(fontSize: 11, color: KoalaColors.textSec),
                         maxLines: 1, overflow: TextOverflow.ellipsis),
                     const SizedBox(height: 2),
                     // Ürün adı
                     Text(p.name,
-                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF1A1D2A), height: 1.3),
+                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: KoalaColors.ink, height: 1.3),
                       maxLines: 2, overflow: TextOverflow.ellipsis),
                     const Spacer(),
                     // Fiyat
                     if (p.price.isNotEmpty)
                       Text(p.price,
-                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Color(0xFF1D9E75)),
+                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: KoalaColors.green),
                         maxLines: 1, overflow: TextOverflow.ellipsis),
                     const SizedBox(height: 6),
                     // Ürünü İncele + Sor
@@ -421,7 +422,7 @@ class _ProductCardState extends State<_ProductCard> {
                             child: Container(
                               padding: const EdgeInsets.symmetric(vertical: 6),
                               decoration: BoxDecoration(
-                                color: const Color(0xFF1D9E75),
+                                color: KoalaColors.green,
                                 borderRadius: BorderRadius.circular(8),
                               ),
                               child: const Row(
@@ -441,15 +442,15 @@ class _ProductCardState extends State<_ProductCard> {
                           child: Container(
                             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                             decoration: BoxDecoration(
-                              color: const Color(0xFFF3F0FF),
+                              color: KoalaColors.accentSoft,
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: const Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                Icon(Icons.auto_awesome, size: 12, color: Color(0xFF7C6EF2)),
+                                Icon(Icons.auto_awesome, size: 12, color: KoalaColors.accent),
                                 SizedBox(width: 3),
-                                Text('Sor', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF7C6EF2))),
+                                Text('Sor', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: KoalaColors.accent)),
                               ],
                             ),
                           ),
@@ -471,7 +472,7 @@ class _ProductCardState extends State<_ProductCard> {
   Widget _placeholder() {
     return Container(
       width: 180, height: 140,
-      color: const Color(0xFFF5F5F5),
+      color: KoalaColors.surfaceMuted,
       child: const Center(child: Icon(Icons.shopping_bag_outlined, color: Colors.grey, size: 32)),
     );
   }

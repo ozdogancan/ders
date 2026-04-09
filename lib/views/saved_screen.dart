@@ -232,7 +232,7 @@ class _SavedListState extends State<_SavedList>
             Container(
               width: 36, height: 4,
               decoration: BoxDecoration(
-                color: const Color(0xFFE0E0E0),
+                color: KoalaColors.borderMed,
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
@@ -262,7 +262,7 @@ class _SavedListState extends State<_SavedList>
                         const SizedBox(height: 6),
                         Text(subtitle, style: KoalaText.bodySmall.copyWith(
                           color: widget.type == SavedItemType.product
-                              ? const Color(0xFF1D9E75)
+                              ? KoalaColors.green
                               : KoalaColors.textSec,
                           fontWeight: widget.type == SavedItemType.product
                               ? FontWeight.w700
@@ -294,7 +294,7 @@ class _SavedListState extends State<_SavedList>
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(12),
                         color: widget.type == SavedItemType.designer
-                            ? const Color(0xFF10B981)
+                            ? KoalaColors.greenAlt
                             : KoalaColors.accent,
                       ),
                       child: Row(
@@ -327,9 +327,9 @@ class _SavedListState extends State<_SavedList>
                     ),
                     child: const Row(
                       children: [
-                        Icon(Icons.delete_outline_rounded, size: 16, color: Color(0xFFDC2626)),
+                        Icon(Icons.delete_outline_rounded, size: 16, color: KoalaColors.errorDark),
                         SizedBox(width: 4),
-                        Text('Kaldır', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFFDC2626))),
+                        Text('Kaldır', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: KoalaColors.errorDark)),
                       ],
                     ),
                   ),
@@ -409,7 +409,7 @@ class _SavedListState extends State<_SavedList>
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             behavior: SnackBarBehavior.floating,
-            backgroundColor: const Color(0xFF10B981),
+            backgroundColor: KoalaColors.greenAlt,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             duration: const Duration(seconds: 4),
             content: const Row(
