@@ -412,13 +412,29 @@ class KoalaAIService {
       debugPrint('KoalaAI: WARNING — payload > 4MB, Vercel may reject');
     }
 
-    final response = await _client
-        .post(_proxyUri, headers: {'Content-Type': 'application/json'}, body: jsonBody)
-        .timeout(const Duration(seconds: 45));
+    // Retry logic — Gemini 503/429 geçici hatalar için 2 deneme daha
+    http.Response? response;
+    for (int attempt = 1; attempt <= 3; attempt++) {
+      response = await _client
+          .post(_proxyUri, headers: {'Content-Type': 'application/json'}, body: jsonBody)
+          .timeout(const Duration(seconds: 45));
 
-    if (response.statusCode >= 300) {
-      debugPrint('KoalaAI: Image request failed: ${response.statusCode} — ${response.body.substring(0, 300.clamp(0, response.body.length))}');
-      throw Exception('Gemini image failed: ${response.statusCode}');
+      debugPrint('KoalaAI: Image attempt $attempt → ${response.statusCode}');
+
+      if (response.statusCode < 300) break; // başarılı
+      if (response.statusCode == 503 || response.statusCode == 429) {
+        debugPrint('KoalaAI: Retryable error ${response.statusCode}, waiting ${attempt * 2}s...');
+        if (attempt < 3) await Future.delayed(Duration(seconds: attempt * 2));
+        continue;
+      }
+      // Diğer hatalar retry'lanmaz
+      break;
+    }
+
+    if (response!.statusCode >= 300) {
+      final body = response.body.length > 300 ? response.body.substring(0, 300) : response.body;
+      debugPrint('KoalaAI: Image request FINAL fail: ${response.statusCode} — $body');
+      throw Exception('Fotoğraf analizi başarısız (hata: ${response.statusCode}). Lütfen tekrar dene.');
     }
 
     return _parseResponse(_extractText(response.body));

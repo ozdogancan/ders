@@ -445,13 +445,22 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     if (s.contains('429') || s.contains('rate limit')) {
       return 'Çok fazla istek gönderildi. Birkaç saniye bekleyip tekrar dene.';
     }
+    if (s.contains('503') || s.contains('unavailable') || s.contains('high demand')) {
+      return 'AI servisi şu an yoğun. Birkaç saniye bekleyip tekrar dene.';
+    }
     if (s.contains('500') || s.contains('server') || s.contains('internal')) {
       return 'Sunucuda geçici bir sorun var. Biraz sonra tekrar dene.';
+    }
+    if (s.contains('400') || s.contains('invalid')) {
+      return 'Fotoğraf işlenemedi. Farklı bir fotoğraf deneyebilir misin?';
     }
     if (s.contains('format') || s.contains('parse') || s.contains('json')) {
       return 'Yanıt beklenmeyen formatta geldi. Tekrar dener misin?';
     }
-    return 'Bir sorun oluştu. Tekrar denemek için butona dokun.';
+    if (s.contains('fotoğraf analizi başarısız')) {
+      return e.toString().replaceAll('Exception: ', '');
+    }
+    return 'Bir sorun oluştu ($s). Tekrar denemek için butona dokun.';
   }
 
   Future<void> _sendToAIWithIntent({
