@@ -10,6 +10,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../core/theme/koala_tokens.dart';
 import '../services/evlumba_live_service.dart';
+import '../widgets/koala_widgets.dart';
 import 'chat_detail_screen.dart';
 
 // Alias — gradually migrate to KoalaColors directly
@@ -666,12 +667,7 @@ class _ProductEntryScreenState extends State<ProductEntryScreen> {
                 _topBar(context),
                 Expanded(
                   child: _loading
-                      ? const Center(
-                          child: CircularProgressIndicator(
-                            color: _K.primary,
-                            strokeWidth: 2.2,
-                          ),
-                        )
+                      ? const LoadingState()
                       : _error != null
                           ? _errorState()
                           : _content(),

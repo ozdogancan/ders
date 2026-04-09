@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' hide User;
 import '../../core/theme/koala_tokens.dart';
+import '../../widgets/koala_widgets.dart';
 
 /// Admin Dashboard — temel metrikler
 class AdminDashboard extends StatefulWidget {
@@ -69,7 +70,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
         automaticallyImplyLeading: false,
       ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator(strokeWidth: 2, color: KoalaColors.accent))
+          ? const LoadingState()
           : RefreshIndicator(
               onRefresh: _load,
               color: KoalaColors.accent,

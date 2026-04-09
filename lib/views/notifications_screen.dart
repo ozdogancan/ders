@@ -2,8 +2,7 @@ import 'package:flutter/material.dart';
 import '../core/theme/koala_tokens.dart';
 import '../core/utils/format_utils.dart';
 import '../services/notifications_service.dart';
-import '../widgets/error_state.dart';
-import '../widgets/shimmer_loading.dart';
+import '../widgets/koala_widgets.dart';
 import 'conversation_detail_screen.dart';
 
 /// In-app bildirim ekranı
@@ -210,7 +209,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                         _loadMore();
                         return const Padding(
                           padding: EdgeInsets.all(KoalaSpacing.lg),
-                          child: Center(child: CircularProgressIndicator(strokeWidth: 2, color: KoalaColors.accent)),
+                          child: LoadingState(),
                         );
                       }
                       final notif = _notifications[index];

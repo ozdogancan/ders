@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/theme/koala_tokens.dart';
+import '../widgets/koala_widgets.dart';
 import 'auth_common.dart';
 import 'auth_entry_screen.dart';
 import 'main_shell.dart';
@@ -55,9 +56,7 @@ class _AuthGateState extends State<AuthGate> {
         if (snapshot.connectionState != ConnectionState.done) {
           return const Scaffold(
             backgroundColor: KoalaColors.bgCool,
-            body: Center(
-              child: CircularProgressIndicator(color: KoalaColors.brand),
-            ),
+            body: LoadingState(),
           );
         }
         return snapshot.data ?? const OnboardingScreen();

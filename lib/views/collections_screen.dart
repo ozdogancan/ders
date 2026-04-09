@@ -3,8 +3,7 @@ import '../core/theme/koala_tokens.dart';
 import '../services/collections_service.dart';
 import '../services/saved_items_service.dart';
 import '../widgets/collection_bottom_sheet.dart';
-import '../widgets/error_state.dart';
-import '../widgets/shimmer_loading.dart';
+import '../widgets/koala_widgets.dart';
 
 /// Koleksiyonlar ekranı — grid görünümü
 class CollectionsScreen extends StatefulWidget {
@@ -295,12 +294,7 @@ class _CollectionDetailScreenState extends State<_CollectionDetailScreen> {
         title: Text(name, style: KoalaText.h2),
       ),
       body: _loading
-          ? const Center(
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                color: KoalaColors.accent,
-              ),
-            )
+          ? const LoadingState()
           : _items.isEmpty
               ? Center(
                   child: Column(

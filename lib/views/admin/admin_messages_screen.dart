@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' hide User;
 import '../../core/theme/koala_tokens.dart';
+import '../../widgets/koala_widgets.dart';
 
 /// Admin — Mesaj moderasyonu
 class AdminMessagesScreen extends StatefulWidget {
@@ -88,7 +89,7 @@ class _AdminMessagesScreenState extends State<AdminMessagesScreen> {
         automaticallyImplyLeading: false,
       ),
       body: _loading && _messages.isEmpty
-          ? const Center(child: CircularProgressIndicator(strokeWidth: 2, color: KoalaColors.accent))
+          ? const LoadingState()
           : RefreshIndicator(
               onRefresh: () => _load(),
               color: KoalaColors.accent,

@@ -1,0 +1,332 @@
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:url_launcher/url_launcher.dart';
+import '../../../core/theme/koala_tokens.dart';
+import '../../../services/messaging_service.dart';
+import '../../../services/saved_items_service.dart';
+import '../../../services/profile_feedback_service.dart';
+import '../../../widgets/save_button.dart';
+import '../../conversation_detail_screen.dart';
+import 'chat_constants.dart';
+
+class DesignerCards extends StatelessWidget {
+  const DesignerCards(this.d, {super.key});
+  final Map<String, dynamic> d;
+  @override
+  Widget build(BuildContext context) {
+    // Gemini bazen designers dizisi yerine flat data g\u00F6nderir \u2014 her iki format\u0131 da handle et
+    List<Map<String, dynamic>> designers;
+    final rawDesigners = d['designers'];
+    if (rawDesigners is List && rawDesigners.isNotEmpty) {
+      designers = rawDesigners.cast<Map<String, dynamic>>();
+    } else if (d['name'] != null) {
+      // Flat format \u2014 kart kendisi tek bir tasar\u0131mc\u0131
+      designers = [d];
+    } else {
+      designers = [];
+    }
+    if (designers.isEmpty) {
+      return const Padding(
+        padding: EdgeInsets.all(12),
+        child: Text('Tasar\u0131mc\u0131 bilgisi y\u00FCklenemedi.', style: TextStyle(color: Colors.grey)),
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Padding(
+          padding: EdgeInsets.only(bottom: 10),
+          child: Text(
+            'Sana Uygun Tasar\u0131mc\u0131lar',
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
+              color: ink,
+            ),
+          ),
+        ),
+        ...designers.map((ds) {
+          final name = ds['name'] as String? ?? '';
+          final initials = name
+              .split(' ')
+              .map((w) => w.isNotEmpty ? w[0] : '')
+              .take(2)
+              .join()
+              .toUpperCase();
+          return Container(
+            margin: const EdgeInsets.only(bottom: 10),
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(R),
+              color: Colors.white,
+            ),
+            child: Column(
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      width: 48,
+                      height: 48,
+                      decoration: const BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: LinearGradient(
+                          colors: [accent, KoalaColors.accentMuted],
+                        ),
+                      ),
+                      child: Center(
+                        child: Text(
+                          initials,
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            name,
+                            style: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700,
+                              color: ink,
+                            ),
+                          ),
+                          Text(
+                            '${ds['title'] ?? '\u0130\u00E7 Mimar'} \u00B7 ${ds['specialty'] ?? ''}',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey.shade500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (ds['rating'] != null)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(8),
+                          color: const Color(0xFFFFF7ED),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(
+                              Icons.star_rounded,
+                              size: 14,
+                              color: KoalaColors.star,
+                            ),
+                            Text(
+                              ' ${ds['rating']}',
+                              style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                                color: KoalaColors.star,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    SaveButton(
+                      itemType: SavedItemType.designer,
+                      itemId: ds['id']?.toString() ?? name,
+                      title: name,
+                      subtitle: ds['title'] as String? ?? '\u0130\u00E7 Mimar',
+                      size: 20,
+                      onToggled: (isSaved) {
+                        if (isSaved) {
+                          ProfileFeedbackService.recordSaveSignal(
+                            itemTitle: name,
+                            style: ds['specialty'] as String?,
+                          );
+                        }
+                      },
+                    ),
+                  ],
+                ),
+                if (ds['bio'] != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 10),
+                    child: Text(
+                      ds['bio'],
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey.shade600,
+                        height: 1.4,
+                      ),
+                      maxLines: 2,
+                    ),
+                  ),
+                // Response time indicator
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 8, height: 8,
+                        decoration: const BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: KoalaColors.greenAlt,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        ds['city'] != null ? 'Genellikle 24 saat i\u00E7inde yan\u0131tlar \u00B7 ${ds['city']}' : 'Genellikle 24 saat i\u00E7inde yan\u0131tlar',
+                        style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
+                      ),
+                    ],
+                  ),
+                ),
+                // Portfolio g\u00F6rselleri
+                if (ds['portfolio_images'] != null && (ds['portfolio_images'] as List).isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 10),
+                    child: SizedBox(
+                      height: 72,
+                      child: ListView.separated(
+                        scrollDirection: Axis.horizontal,
+                        itemCount: (ds['portfolio_images'] as List).length,
+                        separatorBuilder: (_, __) => const SizedBox(width: 8),
+                        itemBuilder: (_, i) => ClipRRect(
+                          borderRadius: BorderRadius.circular(10),
+                          child: Image.network(
+                            (ds['portfolio_images'] as List)[i] as String,
+                            width: 96,
+                            height: 72,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => Container(
+                              width: 96, height: 72,
+                              color: KoalaColors.surfaceMuted,
+                              child: Icon(Icons.image_rounded, color: KoalaColors.textTer),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                if (ds['min_budget'] != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 10),
+                    child: Text(
+                      'Min: ${ds['min_budget']}',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: Colors.grey.shade400,
+                      ),
+                    ),
+                  ),
+                const SizedBox(height: 12),
+                // Primary CTA \u2014 Tasar\u0131mc\u0131ya Yaz (full-width)
+                GestureDetector(
+                  onTap: () async {
+                    final designerId = ds['id']?.toString() ?? '';
+                    if (designerId.isEmpty) return;
+                    HapticFeedback.lightImpact();
+                    final conv = await MessagingService.getOrCreateConversation(
+                      designerId: designerId,
+                      contextType: 'designer',
+                      contextId: designerId,
+                      contextTitle: name,
+                    );
+                    if (conv != null && context.mounted) {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => ConversationDetailScreen(
+                            conversationId: conv['id'] as String,
+                            designerName: name,
+                            designerAvatarUrl: ds['avatar_url']?.toString(),
+                          ),
+                        ),
+                      );
+                    } else if (context.mounted) {
+                      ScaffoldMessenger.of(context).clearSnackBars();
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          behavior: SnackBarBehavior.floating,
+                          backgroundColor: KoalaColors.errorBright,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          duration: const Duration(seconds: 3),
+                          content: const Row(
+                            children: [
+                              Icon(Icons.info_outline_rounded, color: Colors.white, size: 18),
+                              SizedBox(width: 8),
+                              Expanded(child: Text('Ba\u011Flant\u0131 kurulamad\u0131. L\u00FCtfen tekrar deneyin.', style: TextStyle(color: Colors.white, fontSize: 13))),
+                            ],
+                          ),
+                        ),
+                      );
+                    }
+                  },
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(vertical: 11),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(12),
+                      color: KoalaColors.greenAlt,
+                    ),
+                    child: const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.chat_bubble_rounded, size: 15, color: Colors.white),
+                        SizedBox(width: 8),
+                        Text(
+                          'Tasar\u0131mc\u0131ya Yaz',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                // Secondary \u2014 Profili G\u00F6r (full-width outline)
+                GestureDetector(
+                  onTap: () {
+                    final designerId = ds['id']?.toString() ?? '';
+                    final profileUrl = designerId.isNotEmpty
+                        ? 'https://www.evlumba.com/tasarimci/$designerId'
+                        : 'https://www.evlumba.com/tasarimcilar';
+                    launchUrl(
+                      Uri.parse(profileUrl),
+                      mode: LaunchMode.inAppBrowserView,
+                    );
+                  },
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: accent.withValues(alpha: 0.25)),
+                    ),
+                    child: const Center(
+                      child: Text(
+                        'Profili G\u00F6r',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: accent,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        }),
+      ],
+    );
+  }
+}

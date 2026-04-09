@@ -11,6 +11,7 @@ import '../core/theme/koala_tokens.dart';
 import '../services/evlumba_live_service.dart';
 import '../services/messaging_service.dart';
 import '../services/saved_items_service.dart';
+import '../widgets/koala_widgets.dart';
 import '../widgets/save_button.dart';
 import 'chat_detail_screen.dart';
 import 'conversation_detail_screen.dart';
@@ -690,12 +691,7 @@ class _DesignersScreenState extends State<DesignersScreen> {
                 _topBar(context),
                 Expanded(
                   child: _loading
-                      ? const Center(
-                          child: CircularProgressIndicator(
-                            color: _ExpertK.primary,
-                            strokeWidth: 2,
-                          ),
-                        )
+                      ? const LoadingState()
                       : _error != null
                           ? _ErrorState(message: _error!)
                           : _content(),

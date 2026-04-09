@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' hide User;
 import '../../core/theme/koala_tokens.dart';
+import '../../widgets/koala_widgets.dart';
 
 /// Admin — Kullanıcı yönetimi
 class AdminUsersScreen extends StatefulWidget {
@@ -181,7 +182,7 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
           // List
           Expanded(
             child: _loading && _users.isEmpty
-                ? const Center(child: CircularProgressIndicator(strokeWidth: 2, color: KoalaColors.accent))
+                ? const LoadingState()
                 : RefreshIndicator(
                     onRefresh: () => _load(),
                     color: KoalaColors.accent,

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' hide User;
 import '../../core/theme/koala_tokens.dart';
+import '../../widgets/koala_widgets.dart';
 
 /// Admin — Analytics event özeti
 class AdminAnalyticsScreen extends StatefulWidget {
@@ -89,7 +90,7 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
           // Table
           Expanded(
             child: _loading
-                ? const Center(child: CircularProgressIndicator(strokeWidth: 2, color: KoalaColors.accent))
+                ? const LoadingState()
                 : _stats.isEmpty
                     ? const Center(child: Text('Bu dönemde event yok', style: KoalaText.bodySec))
                     : RefreshIndicator(

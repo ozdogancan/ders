@@ -55,3 +55,6 @@ android/app/koala-release.jks
 .env*.local
 .claude/worktrees/
 .claude/settings.local.json
+
+# Archived scripts (one-time migration/fix scripts)
+scripts/archive/

@@ -50,3 +50,28 @@ Firebase Auth (Google, Phone, Email). Dev bypass in `auth_gate.dart` (`devBypass
 - Theme: Purple accent (#6C5CE7)
 - All AI responses must be JSON: `{"message": "...", "cards": [...]}`
 - No plain text AI responses
+
+## Stabilization Mode - AKTIF
+
+> Bu repo su an stabilization/rescue modunda. Yeni feature eklenmeden once mevcut yapi toparlanacak.
+
+### Zorunlu Okunan Dokumanlar
+Claude bu repo uzerinde calismadan once asagidaki dokumanlari MUTLAKA okumali:
+
+1. `docs/06_claude_operating_rules.md` — Calisma kurallari, yasak operasyonlar
+2. `docs/04_module_boundaries.md` — Modul sinirlari, etki matrisi
+3. `docs/03_design_system_rules.md` — UI/tasarim kurallari
+4. `docs/05_known_issues.md` — Bilinen sorunlar listesi
+
+### Audit Raporlari
+- `docs/audit/current_state_audit.md` — Genel durum
+- `docs/audit/module_inventory.md` — Ekran ve servis envanteri
+- `docs/audit/risk_hotspots.md` — Risk alanlari
+- `docs/audit/design_inconsistencies.md` — Tasarim tutarsizliklari
+- `docs/audit/recommended_stabilization_plan.md` — Stabilizasyon plani
+
+### Temel Kurallar
+- Tek seferde tek modul degistir
+- Shared dosyalara dokunmadan once tum etkilenen modulleri kontrol et
+- chat_detail_screen.dart (2993 LOC) en kirilgan dosya - ekstra dikkat
+- Her degisiklik sonrasi rapor ver

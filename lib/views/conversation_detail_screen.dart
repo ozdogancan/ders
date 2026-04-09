@@ -3,6 +3,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' hide User;
 import '../core/theme/koala_tokens.dart';
 import '../services/messaging_service.dart';
+import '../widgets/koala_widgets.dart';
 
 /// Tasarımcı ile mesaj detay ekranı — gerçek zamanlı
 class ConversationDetailScreen extends StatefulWidget {
@@ -222,12 +223,7 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
           // Messages
           Expanded(
             child: _loading
-                ? const Center(
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: KoalaColors.accent,
-                    ),
-                  )
+                ? const LoadingState()
                 : _messages.isEmpty
                     ? const Center(
                         child: Text(

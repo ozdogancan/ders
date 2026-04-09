@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart' hide User;
 
 import '../../core/config/env.dart';
 import '../../core/theme/koala_tokens.dart';
+import '../../widgets/koala_widgets.dart';
 import 'admin_dashboard.dart';
 import 'admin_users_screen.dart';
 import 'admin_messages_screen.dart';
@@ -64,12 +65,7 @@ class _AdminShellState extends State<AdminShell> {
     if (_checking) {
       return const Scaffold(
         backgroundColor: KoalaColors.bg,
-        body: Center(
-          child: CircularProgressIndicator(
-            strokeWidth: 2,
-            color: KoalaColors.accent,
-          ),
-        ),
+        body: const LoadingState(),
       );
     }
 

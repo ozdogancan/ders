@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../core/theme/koala_tokens.dart';
 import '../services/evlumba_live_service.dart';
+import '../widgets/koala_widgets.dart';
 import 'chat_detail_screen.dart';
 
 // Alias for backward compat
@@ -266,7 +267,7 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
   // ═══════════════════════════════
   @override
   Widget build(BuildContext context) {
-    if (_loading) return const Scaffold(backgroundColor: _K.bg, body: Center(child: CircularProgressIndicator(color: _K.accent, strokeWidth: 2)));
+    if (_loading) return const Scaffold(backgroundColor: _K.bg, body: LoadingState());
     if (_error != null) return Scaffold(backgroundColor: _K.bg, body: SafeArea(child: Column(children: [_header(), Expanded(child: _errW())])));
 
     // Sub-pages

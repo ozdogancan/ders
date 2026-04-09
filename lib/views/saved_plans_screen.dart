@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../core/theme/koala_tokens.dart';
 import '../services/saved_plans_service.dart';
+import '../widgets/koala_widgets.dart';
 
 class SavedPlansScreen extends StatefulWidget {
   const SavedPlansScreen({super.key});
@@ -65,7 +66,7 @@ class _SavedPlansScreenState extends State<SavedPlansScreen> {
         title: Text('Kaydedilen Planlar', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: KoalaColors.ink)),
       ),
       body: _loading
-        ? Center(child: CircularProgressIndicator(color: KoalaColors.accentDeep))
+        ? const LoadingState()
         : _plans.isEmpty
           ? Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
               Icon(Icons.bookmark_border_rounded, size: 48, color: Colors.grey.shade300),

@@ -5,9 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../core/theme/koala_tokens.dart';
 import '../services/messaging_service.dart';
 import '../services/saved_items_service.dart';
-import '../widgets/empty_state.dart';
-import '../widgets/error_state.dart';
-import '../widgets/shimmer_loading.dart';
+import '../widgets/koala_widgets.dart';
 import 'conversation_detail_screen.dart';
 
 /// Kaydedilenler ekranı — 3 tab: Tasarımlar / Tasarımcılar / Ürünler
@@ -506,7 +504,7 @@ class _SavedListState extends State<_SavedList>
           if (index == _items.length) {
             return const Padding(
               padding: EdgeInsets.all(KoalaSpacing.lg),
-              child: Center(child: CircularProgressIndicator(strokeWidth: 2, color: KoalaColors.accent)),
+              child: LoadingState(),
             );
           }
           final item = _items[index];
