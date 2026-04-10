@@ -51,17 +51,20 @@ Firebase Auth (Google, Phone, Email). Dev bypass in `auth_gate.dart` (`devBypass
 - All AI responses must be JSON: `{"message": "...", "cards": [...]}`
 - No plain text AI responses
 
-## Stabilization Mode - AKTIF
+## Stabilization Mode - TAMAMLANDI → MVP MODE AKTIF
 
-> Bu repo su an stabilization/rescue modunda. Yeni feature eklenmeden once mevcut yapi toparlanacak.
+> Stabilizasyon tamamlandi. Simdi MVP gelistirme modundayiz.
+> Guided Discovery Flow + evlumba entegrasyonu + profesyonel form
 
 ### Zorunlu Okunan Dokumanlar
 Claude bu repo uzerinde calismadan once asagidaki dokumanlari MUTLAKA okumali:
 
-1. `docs/06_claude_operating_rules.md` — Calisma kurallari, yasak operasyonlar
-2. `docs/04_module_boundaries.md` — Modul sinirlari, etki matrisi
-3. `docs/03_design_system_rules.md` — UI/tasarim kurallari
-4. `docs/05_known_issues.md` — Bilinen sorunlar listesi
+1. `docs/07_product_spec.md` — PRD: kullanici hikayeleri, gereksinimler, basari metrikleri
+2. `docs/08_roadmap.md` — MVP roadmap: hafta hafta plan
+3. `docs/06_claude_operating_rules.md` — Calisma kurallari, yasak operasyonlar
+4. `docs/04_module_boundaries.md` — Modul sinirlari, etki matrisi
+5. `docs/03_design_system_rules.md` — UI/tasarim kurallari
+6. `docs/05_known_issues.md` — Bilinen sorunlar listesi
 
 ### Audit Raporlari
 - `docs/audit/current_state_audit.md` — Genel durum
