@@ -510,13 +510,17 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     }
 
     // Text-based hata ise son user mesajını tekrar gönder
-    final lastUser = _msgs.lastWhere(
-      (m) => m.role == 'user',
-      orElse: () => _Msg(role: 'user'),
-    );
+    final lastUserIdx = _msgs.lastIndexWhere((m) => m.role == 'user');
+    if (lastUserIdx < 0) return;
+    final lastUser = _msgs[lastUserIdx];
     if (lastUser.text != null || lastUser.photo != null) {
-      if (_history.isNotEmpty) _history.removeLast();
-      _msgs.removeLast(); // Remove user msg (will be re-added)
+      // History'den sadece hata olan user mesajını kaldır (model yanıtı eklenmemişti)
+      if (_history.isNotEmpty && _history.last['role'] == 'user') {
+        _history.removeLast();
+      }
+      setState(() {
+        _msgs.removeAt(lastUserIdx);
+      });
       _sendToAI(text: lastUser.text, photo: lastUser.photo);
     }
   }
