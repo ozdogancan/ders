@@ -80,11 +80,10 @@ class KoalaToolHandler {
       }
 
       // 2) Bu projelerdeki ürünleri ara
+      // Not: shop_name kolonu tabloda olmayabilir, tüm kolonları çek
       var shopQuery = EvlumbaLiveService.client
           .from('designer_project_shop_links')
-          .select(
-            'id, project_id, product_title, product_price, product_image_url, product_url, shop_name',
-          )
+          .select()
           .inFilter('project_id', projectIds);
 
       // Ürün adında arama — ama oda adı (salon, yatak odası vb.) ise filtre yapma,

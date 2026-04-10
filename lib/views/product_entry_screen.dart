@@ -39,7 +39,7 @@ class _DiscoveryCard {
   final int productCount;
   final String badge;
   final String reason;
-  final double rating;
+  final double? rating;
 
   const _DiscoveryCard({
     required this.project,
@@ -47,7 +47,7 @@ class _DiscoveryCard {
     required this.productCount,
     required this.badge,
     required this.reason,
-    required this.rating,
+    this.rating,
   });
 }
 
@@ -166,8 +166,8 @@ class _ProductEntryScreenState extends State<ProductEntryScreen> {
     }
 
     try {
-      // Daha geniş havuz — her alan için yeterli proje olsun
-      final projects = await EvlumbaLiveService.getProjects(limit: 60);
+      // Makul havuz — bellek dostu, her alan için yeterli
+      final projects = await EvlumbaLiveService.getProjects(limit: 30);
 
       // Her designer'ı sadece bir kez çek
       final designerCache = <String, Map<String, dynamic>?>{};
@@ -209,7 +209,7 @@ class _ProductEntryScreenState extends State<ProductEntryScreen> {
               designer: designer,
               productCount: products.length,
             ),
-            rating: designer == null ? 4.8 : 4.7 + ((products.length % 3) * 0.1),
+            rating: null, // Gerçek review sistemi yokken sahte rating gösterme
           );
         }),
       );
@@ -432,7 +432,7 @@ class _ProductEntryScreenState extends State<ProductEntryScreen> {
       score += card.productCount * 3;
 
       // Rating bonusu
-      score += card.rating;
+      score += card.rating ?? 0;
 
       // Kullanıcının tercih ettiği oda ile eşleşme bonusu
       if (_userRoom != null && _userRoom!.isNotEmpty) {
@@ -1625,17 +1625,19 @@ class _ProjectCard extends StatelessWidget {
                                     borderRadius: BorderRadius.circular(999),
                                   ),
                                 ),
-                                const SizedBox(width: 8),
-                                const Icon(Icons.star_rounded, size: 16, color: _K.primary),
-                                const SizedBox(width: 2),
-                                Text(
-                                  card.rating.toStringAsFixed(1),
-                                  style: GoogleFonts.manrope(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w700,
-                                    color: _K.primary,
+                                if (card.rating != null) ...[
+                                  const SizedBox(width: 8),
+                                  const Icon(Icons.star_rounded, size: 16, color: _K.primary),
+                                  const SizedBox(width: 2),
+                                  Text(
+                                    card.rating!.toStringAsFixed(1),
+                                    style: GoogleFonts.manrope(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w700,
+                                      color: _K.primary,
+                                    ),
                                   ),
-                                ),
+                                ],
                               ],
                             ),
                           ],
@@ -1993,27 +1995,28 @@ class _ProjectDetailSheetState extends State<_ProjectDetailSheet> {
                                         ),
                                       ),
                                     ),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-                                      decoration: BoxDecoration(
-                                        color: _K.surfaceContainerLow,
-                                        borderRadius: BorderRadius.circular(999),
-                                      ),
-                                      child: Row(
-                                        children: [
-                                          const Icon(Icons.star_rounded, size: 16, color: _K.primary),
-                                          const SizedBox(width: 4),
-                                          Text(
-                                            widget.card.rating.toStringAsFixed(1),
-                                            style: GoogleFonts.manrope(
-                                              fontSize: 13,
-                                              fontWeight: FontWeight.w800,
-                                              color: _K.onSurface,
+                                    if (widget.card.rating != null)
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                                        decoration: BoxDecoration(
+                                          color: _K.surfaceContainerLow,
+                                          borderRadius: BorderRadius.circular(999),
+                                        ),
+                                        child: Row(
+                                          children: [
+                                            const Icon(Icons.star_rounded, size: 16, color: _K.primary),
+                                            const SizedBox(width: 4),
+                                            Text(
+                                              widget.card.rating!.toStringAsFixed(1),
+                                              style: GoogleFonts.manrope(
+                                                fontSize: 13,
+                                                fontWeight: FontWeight.w800,
+                                                color: _K.onSurface,
+                                              ),
                                             ),
-                                          ),
-                                        ],
+                                          ],
+                                        ),
                                       ),
-                                    ),
                                   ],
                                 ),
                                 const SizedBox(height: 12),

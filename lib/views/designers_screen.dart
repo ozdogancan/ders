@@ -215,8 +215,8 @@ class _DesignersScreenState extends State<DesignersScreen> {
     }
 
     try {
-      // Daha fazla proje çek — tüm uzmanları görmek için
-      final publishedProjects = await EvlumbaLiveService.getProjects(limit: 100);
+      // Yeterli havuz — tüm uzmanları görmek için
+      final publishedProjects = await EvlumbaLiveService.getProjects(limit: 40);
       final projectsByDesigner = <String, List<Map<String, dynamic>>>{};
       for (final project in publishedProjects) {
         final designerId = (project['designer_id'] ?? '').toString().trim();
