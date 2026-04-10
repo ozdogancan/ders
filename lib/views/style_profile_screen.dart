@@ -23,12 +23,12 @@ class _StyleProfileScreenState extends State<StyleProfileScreen> {
   bool _saved = false;
 
   static const _styles = [
-    {'name': 'Minimalist', 'emoji': '⬜', 'color': KoalaColors.surfaceCool},
-    {'name': 'Modern', 'emoji': '🔲', 'color': KoalaColors.accentLight},
-    {'name': 'Japandi', 'emoji': '🎋', 'color': Color(0xFFF0FDF4)},
-    {'name': 'Bohem', 'emoji': '🌿', 'color': Color(0xFFFEF3C7)},
-    {'name': 'Skandinav', 'emoji': '❄️', 'color': Color(0xFFEFF6FF)},
-    {'name': 'Endüstriyel', 'emoji': '⚙️', 'color': KoalaColors.surfaceCool},
+    {'name': 'Minimalist', 'emoji': '⬜', 'color': KoalaColors.surfaceCool, 'desc': 'Sade, temiz hatlar'},
+    {'name': 'Modern', 'emoji': '🔲', 'color': KoalaColors.accentLight, 'desc': 'Sik ve cesur cizgiler'},
+    {'name': 'Japandi', 'emoji': '🎋', 'color': Color(0xFFF0FDF4), 'desc': 'Japon-Iskandinav uyumu'},
+    {'name': 'Bohem', 'emoji': '🌿', 'color': Color(0xFFFEF3C7), 'desc': 'Renkli, katmanli, ozgur'},
+    {'name': 'Skandinav', 'emoji': '❄️', 'color': Color(0xFFEFF6FF), 'desc': 'Isik, ahsap, huzur'},
+    {'name': 'Endüstriyel', 'emoji': '⚙️', 'color': KoalaColors.surfaceCool, 'desc': 'Metal, tugla, ham'},
   ];
 
   static const _colors = [
@@ -159,9 +159,14 @@ class _StyleProfileScreenState extends State<StyleProfileScreen> {
             decoration: BoxDecoration(borderRadius: BorderRadius.circular(14),
               color: s['color'] as Color,
               border: Border.all(color: selected ? KoalaColors.accentDeep : Colors.transparent, width: 2)),
-            child: Center(child: Text('${s['emoji']}  ${s['name']}',
-              style: TextStyle(fontSize: 15, fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                color: selected ? KoalaColors.accentDeep : KoalaColors.textMed)))));
+            child: Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
+              Text('${s['emoji']}  ${s['name']}',
+                style: TextStyle(fontSize: 15, fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                  color: selected ? KoalaColors.accentDeep : KoalaColors.textMed)),
+              const SizedBox(height: 4),
+              Text(s['desc'] as String,
+                style: TextStyle(fontSize: 11, color: selected ? KoalaColors.accentDeep.withValues(alpha: 0.7) : Colors.grey.shade500)),
+            ]))));
       }).toList())),
   ]);
 

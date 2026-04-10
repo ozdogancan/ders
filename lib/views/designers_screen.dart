@@ -1347,6 +1347,13 @@ class _Avatar extends StatelessWidget {
     this.size = 48,
   });
 
+  String get _initials {
+    final parts = name.trim().split(RegExp(r'\s+'));
+    if (parts.isEmpty || parts.first.isEmpty) return 'U';
+    if (parts.length == 1) return parts.first[0].toUpperCase();
+    return '${parts.first[0]}${parts.last[0]}'.toUpperCase();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -1354,17 +1361,18 @@ class _Avatar extends StatelessWidget {
       height: size,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        color: _ExpertK.primary.withValues(alpha: 0.14),
+        gradient: url.isEmpty ? const LinearGradient(colors: [_ExpertK.primary, Color(0xFF9B8AFF)]) : null,
+        color: url.isNotEmpty ? null : null,
         image: url.isNotEmpty ? DecorationImage(image: NetworkImage(url), fit: BoxFit.cover) : null,
       ),
       alignment: Alignment.center,
       child: url.isEmpty
           ? Text(
-              name.isEmpty ? 'U' : name.substring(0, 1).toUpperCase(),
+              _initials,
               style: GoogleFonts.manrope(
-                fontSize: size * 0.34,
+                fontSize: size * 0.3,
                 fontWeight: FontWeight.w800,
-                color: _ExpertK.primary,
+                color: Colors.white,
               ),
             )
           : null,

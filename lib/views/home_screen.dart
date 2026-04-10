@@ -18,6 +18,7 @@ import '../services/messaging_service.dart';
 import '../services/notifications_service.dart';
 import '../services/push_token_service.dart';
 import '../services/saved_items_service.dart';
+import '../services/evlumba_live_service.dart';
 import 'chat_detail_screen.dart';
 import 'chat_list_screen.dart';
 import 'style_discovery_screen.dart';
@@ -585,6 +586,11 @@ class _HomeScreenState extends State<HomeScreen>
             // ─── Aktif Mesajların ───
             _staggered(5, _ActiveConversationsRow()),
 
+            const SizedBox(height: 12),
+
+            // ─── İlham Galerisi ───
+            _staggered(6, const _InspirationGallery()),
+
             const SizedBox(height: 16),
                   ],
                 ),
@@ -593,7 +599,7 @@ class _HomeScreenState extends State<HomeScreen>
 
             // ─── Input bar (sabit, scroll dışında) ───
             _staggered(
-              6,
+              7,
               _TypewriterInput(
                 key: _inputKey,
                 bottomPadding: btm,
@@ -863,8 +869,11 @@ class _TypewriterInputState extends State<_TypewriterInput> {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: EdgeInsets.fromLTRB(16, 6, 16, widget.bottomPadding + 22),
-      child: Container(
+      padding: EdgeInsets.fromLTRB(16, 2, 16, widget.bottomPadding + 16),
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
+        Text('Koala\'ya sor', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: KoalaColors.textTer, letterSpacing: 0.5)),
+        const SizedBox(height: 4),
+        Container(
         height: 54,
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(28),
@@ -955,6 +964,7 @@ class _TypewriterInputState extends State<_TypewriterInput> {
           ],
         ),
       ),
+      ]),
     );
   }
 }
@@ -1200,6 +1210,141 @@ class _ActiveConversationsRowState extends State<_ActiveConversationsRow> {
               ),
             );
           }),
+        ],
+      ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// İlham Galerisi — ana sayfadaki boş alanı dolduran
+// son projelerin küçük grid gösterimi
+// ═══════════════════════════════════════════════════════
+class _InspirationGallery extends StatefulWidget {
+  const _InspirationGallery();
+  @override
+  State<_InspirationGallery> createState() => _InspirationGalleryState();
+}
+
+class _InspirationGalleryState extends State<_InspirationGallery> {
+  List<Map<String, dynamic>> _projects = [];
+  bool _loaded = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      if (!EvlumbaLiveService.isReady) return;
+      final data = await EvlumbaLiveService.getProjects(limit: 6);
+      if (mounted) setState(() { _projects = data; _loaded = true; });
+    } catch (_) {
+      if (mounted) setState(() => _loaded = true);
+    }
+  }
+
+  String? _imageUrl(Map<String, dynamic> project) {
+    final images = project['designer_project_images'] as List?;
+    if (images != null && images.isNotEmpty) {
+      final sorted = List<Map<String, dynamic>>.from(images)
+        ..sort((a, b) => ((a['sort_order'] ?? 99) as int).compareTo((b['sort_order'] ?? 99) as int));
+      return sorted.first['image_url'] as String?;
+    }
+    return null;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_loaded || _projects.isEmpty) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Ilham Al',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+              color: KoalaColors.ink,
+            ),
+          ),
+          const SizedBox(height: 10),
+          GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 3,
+              mainAxisSpacing: 6,
+              crossAxisSpacing: 6,
+              childAspectRatio: 1.0,
+            ),
+            itemCount: _projects.length,
+            itemBuilder: (context, index) {
+              final project = _projects[index];
+              final url = _imageUrl(project);
+              final name = (project['project_name'] ?? '').toString();
+
+              return GestureDetector(
+                onTap: () {
+                  Navigator.push(context, MaterialPageRoute(
+                    builder: (_) => const ProductEntryScreen(),
+                  ));
+                },
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      if (url != null)
+                        CachedNetworkImage(
+                          imageUrl: url,
+                          fit: BoxFit.cover,
+                          placeholder: (_, __) => Container(color: KoalaColors.surfaceCool),
+                          errorWidget: (_, __, ___) => Container(
+                            color: KoalaColors.surfaceCool,
+                            child: const Icon(Icons.image_outlined, color: KoalaColors.textTer),
+                          ),
+                        )
+                      else
+                        Container(
+                          color: KoalaColors.surfaceCool,
+                          child: const Icon(Icons.image_outlined, color: KoalaColors.textTer),
+                        ),
+                      // Alt gradient + proje tipi
+                      Positioned(
+                        bottom: 0, left: 0, right: 0,
+                        child: Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: const BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.bottomCenter,
+                              end: Alignment.topCenter,
+                              colors: [Color(0xAA000000), Colors.transparent],
+                            ),
+                          ),
+                          child: Text(
+                            (project['project_type'] ?? name).toString(),
+                            style: const TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.white,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
         ],
       ),
     );
