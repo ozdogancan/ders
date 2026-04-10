@@ -346,7 +346,6 @@ class KoalaAIService {
       'contents': contents,
       'generationConfig': {
         'temperature': 0.7,
-        'maxOutputTokens': 1024,
       },
     };
 
@@ -438,7 +437,6 @@ class KoalaAIService {
       ],
       'generationConfig': {
         'temperature': 0.7,
-        'maxOutputTokens': 1536,
       },
     };
 
@@ -524,7 +522,6 @@ class KoalaAIService {
         'tools': _toolDeclarations,
         'generationConfig': {
           'temperature': 0.7,
-          'maxOutputTokens': 1536,
         },
       };
 
@@ -729,7 +726,6 @@ class KoalaAIService {
       'stream': true,
       'generationConfig': {
         'temperature': 0.7,
-        'maxOutputTokens': 1024,
       },
     });
 
