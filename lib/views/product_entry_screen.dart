@@ -561,7 +561,17 @@ class _ProductEntryScreenState extends State<ProductEntryScreen> {
     _input.clear();
 
     final normalizedText = _normalize(text);
-    final resolvedArea = _resolveArea(text) ?? _selectedArea ?? 'Salon';
+    final resolvedArea = _resolveArea(text);
+
+    // Oda alanı tespit edilemezse → AI sohbetine yönlendir
+    if (resolvedArea == null) {
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => ChatDetailScreen(initialText: text),
+        ),
+      );
+      return;
+    }
 
     // "Başka" / "farklı" gibi kelimeler varsa önceki sonuçları hariç tut
     final wantsDifferent = normalizedText.contains('baska') ||
