@@ -394,6 +394,10 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
           history: _history,
         );
         _history.add({'role': 'model', 'content': resp.message});
+        // Metin sohbetinden de context çıkar (kartlarda stil/oda bilgisi varsa)
+        if (resp.cards.isNotEmpty && _photoAnalysisContext == null) {
+          _extractPhotoContext(resp);
+        }
         if (!mounted) return;
         setState(() {
           _msgs.add(_Msg(role: 'koala', text: resp.message, cards: resp.cards));
@@ -872,22 +876,51 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     );
   }
 
+  // ── Context-aware prompt builder ──
+  String _contextAwarePrompt(String baseRequest) {
+    final ctx = _photoAnalysisContext;
+    if (ctx == null || ctx.isEmpty) return baseRequest;
+    final room = ctx['room'];
+    final style = ctx['style'];
+    final colors = ctx['colors'];
+    final parts = <String>[];
+    if (room != null) parts.add('Oda: $room');
+    if (style != null) parts.add('Stil: $style');
+    if (colors != null) parts.add('Renkler: $colors');
+    return '[Sohbet bağlamı — ${parts.join(', ')}] $baseRequest';
+  }
+
   // ── Quick action chips above input ──
-  Widget _buildQuickActions() => Container(
-    padding: const EdgeInsets.fromLTRB(12, 6, 12, 4),
-    child: SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      physics: const BouncingScrollPhysics(),
-      child: Row(
-        children: [
-          _quickChip(Icons.color_lens_rounded, 'Renk öner', () => _sendToAI(text: 'Bu odaya renk öner')),
-          _quickChip(Icons.shopping_bag_rounded, 'Ürün bul', () => _sendToAI(text: 'Bana ürün öner')),
-          _quickChip(Icons.person_rounded, 'Uzman bul', () => _sendToAI(text: 'Bana tasarımcı öner')),
-          _quickChip(Icons.auto_awesome_rounded, 'Stil analizi', () => _sendToAI(text: 'Tarzımı analiz et')),
-        ],
+  Widget _buildQuickActions() {
+    final ctx = _photoAnalysisContext;
+    final room = ctx?['room'];
+    final style = ctx?['style'];
+    final hasContext = ctx != null && ctx.isNotEmpty;
+
+    final colorLabel = room != null ? 'Renk öner ($room)' : 'Renk öner';
+    final productLabel = style != null ? 'Ürün bul ($style)' : 'Ürün bul';
+    final expertLabel = hasContext ? 'Uzman bul' : 'Uzman bul';
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 6, 12, 4),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        physics: const BouncingScrollPhysics(),
+        child: Row(
+          children: [
+            _quickChip(Icons.color_lens_rounded, colorLabel,
+              () => _sendToAI(text: _contextAwarePrompt('Bu odaya uygun renk paleti öner'))),
+            _quickChip(Icons.shopping_bag_rounded, productLabel,
+              () => _sendToAI(text: _contextAwarePrompt('Bu oda ve stile uygun ürün öner'))),
+            _quickChip(Icons.person_rounded, expertLabel,
+              () => _sendToAI(text: _contextAwarePrompt('Bu tarz için uzman tasarımcı öner'))),
+            _quickChip(Icons.auto_awesome_rounded, 'Stil analizi',
+              () => _sendToAI(text: 'Tarzımı analiz et')),
+          ],
+        ),
       ),
-    ),
-  );
+    );
+  }
 
   Widget _quickChip(IconData icon, String label, VoidCallback onTap) => Padding(
     padding: const EdgeInsets.only(right: 8),
@@ -1268,9 +1301,12 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
             runSpacing: 8,
             children: [
               _fallbackChip(Icons.refresh_rounded, 'Tekrar dene', _retry),
-              _fallbackChip(Icons.color_lens_rounded, 'Renk öner', () => _sendToAI(text: 'Bu odaya renk öner')),
-              _fallbackChip(Icons.shopping_bag_rounded, 'Ürün bul', () => _sendToAI(text: 'Bana ürün öner')),
-              _fallbackChip(Icons.person_rounded, 'Uzman bul', () => _sendToAI(text: 'Bana tasarımcı öner')),
+              _fallbackChip(Icons.color_lens_rounded, 'Renk öner',
+                () => _sendToAI(text: _contextAwarePrompt('Bu odaya uygun renk paleti öner'))),
+              _fallbackChip(Icons.shopping_bag_rounded, 'Ürün bul',
+                () => _sendToAI(text: _contextAwarePrompt('Bu oda ve stile uygun ürün öner'))),
+              _fallbackChip(Icons.person_rounded, 'Uzman bul',
+                () => _sendToAI(text: _contextAwarePrompt('Bu tarz için uzman tasarımcı öner'))),
             ],
           ),
         ],
