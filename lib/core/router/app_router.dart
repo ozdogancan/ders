@@ -34,7 +34,7 @@ Future<void> initRouterState() async {
 /// Home ekranı hub, diğer ekranlar push ile açılır.
 final GoRouter appRouter = GoRouter(
   initialLocation: '/',
-  debugLogDiagnostics: true,
+  debugLogDiagnostics: false,
   redirect: (context, state) {
     final loc = state.matchedLocation;
     debugPrint('[GoRouter] redirect: loc=$loc, onboardingComplete=$onboardingComplete');

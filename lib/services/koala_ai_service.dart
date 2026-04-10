@@ -43,6 +43,45 @@ class KoalaAIService {
   KoalaAIService({http.Client? client}) : _client = client ?? http.Client();
   final http.Client _client;
 
+  String _detectMimeType(Uint8List bytes) {
+    if (bytes.length >= 3 &&
+        bytes[0] == 0xFF &&
+        bytes[1] == 0xD8 &&
+        bytes[2] == 0xFF) {
+      return 'image/jpeg';
+    }
+    if (bytes.length >= 8 &&
+        bytes[0] == 0x89 &&
+        bytes[1] == 0x50 &&
+        bytes[2] == 0x4E &&
+        bytes[3] == 0x47 &&
+        bytes[4] == 0x0D &&
+        bytes[5] == 0x0A &&
+        bytes[6] == 0x1A &&
+        bytes[7] == 0x0A) {
+      return 'image/png';
+    }
+    if (bytes.length >= 12 &&
+        bytes[0] == 0x52 &&
+        bytes[1] == 0x49 &&
+        bytes[2] == 0x46 &&
+        bytes[3] == 0x46 &&
+        bytes[8] == 0x57 &&
+        bytes[9] == 0x45 &&
+        bytes[10] == 0x42 &&
+        bytes[11] == 0x50) {
+      return 'image/webp';
+    }
+    if (bytes.length >= 12 &&
+        bytes[4] == 0x66 &&
+        bytes[5] == 0x74 &&
+        bytes[6] == 0x79 &&
+        bytes[7] == 0x70) {
+      return 'image/heic';
+    }
+    return 'image/jpeg';
+  }
+
   /// Gemini Function Calling tool tanımları
   static const List<Map<String, dynamic>> _toolDeclarations = [
     {
@@ -355,6 +394,7 @@ class KoalaAIService {
   Future<KoalaResponse> _callGeminiWithImage({required String prompt, required Uint8List imageBytes}) async {
     // Moondream ön-analiz (paralel değil, önce çalışsın — context zenginleştirme)
     final preAnalysis = await _moondreamPreAnalyze(imageBytes);
+    final mimeType = _detectMimeType(imageBytes);
 
     // Moondream sonuçlarını prompt'a ekle
     String enrichedPrompt = prompt;
@@ -394,7 +434,7 @@ class KoalaAIService {
         {
           'parts': [
             {'text': enrichedPrompt},
-            {'inline_data': {'mime_type': 'image/jpeg', 'data': base64Encode(imageBytes)}},
+            {'inline_data': {'mime_type': mimeType, 'data': base64Encode(imageBytes)}},
           ]
         }
       ],
@@ -431,7 +471,11 @@ class KoalaAIService {
       break;
     }
 
-    if (response!.statusCode >= 300) {
+    if (response == null) {
+      throw Exception('Sunucuya ulaşılamadı. İnternet bağlantını kontrol et.');
+    }
+
+    if (response.statusCode >= 300) {
       final body = response.body.length > 300 ? response.body.substring(0, 300) : response.body;
       debugPrint('KoalaAI: Image request FINAL fail: ${response.statusCode} — $body');
       throw Exception('Fotoğraf analizi başarısız (hata: ${response.statusCode}). Lütfen tekrar dene.');

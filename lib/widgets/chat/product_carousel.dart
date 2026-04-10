@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/theme/koala_tokens.dart';
@@ -246,7 +247,7 @@ class _ProductCardState extends State<_ProductCard> {
             label: 'Kaydedilenlerimi Gör',
             textColor: Colors.white,
             onPressed: () {
-              Navigator.of(context).pushNamed('/saved');
+              GoRouter.of(context).push('/saved');
             },
           ),
         ),

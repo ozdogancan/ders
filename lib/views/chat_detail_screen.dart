@@ -1473,7 +1473,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
           action: SnackBarAction(
             label: 'Kaydedilenlerimi Gör',
             textColor: Colors.white,
-            onPressed: () => Navigator.of(context).pushNamed('/saved'),
+            onPressed: () => GoRouter.of(context).push('/saved'),
           ),
         ),
       );
