@@ -105888,7 +105888,7 @@ h=i.h(0,"role")==="user"?"user":"model"
 g=i.h(0,"content")
 d.push(A.J(["role",h,"parts",A.b([A.J(["text",g==null?"":g],m,m)],l)],m,k))}}o=t.N
 d.push(A.J(["role","user","parts",A.b([A.J(["text",b],o,o)],t.SN)],o,t.z))
-f=A.J(["contents",d,"generationConfig",A.J(["temperature",0.7],o,t.i)],o,t.K)
+f=A.J(["contents",d,"generationConfig",A.J(["temperature",0.7,"maxOutputTokens",1024],o,t.Ci)],o,t.K)
 A.b2().$1("KoalaAI: Sending request via proxy ("+d.length+" messages)...")
 s=3
 return A.f(p.a.hW("POST",A.c0(u.F,0,null),A.J(["Content-Type","application/json"],o,o),B.J.jb(f,null),null),$async$tJ)
@@ -105959,7 +105959,7 @@ m=o+("Tespit edilen mobilyalar: "+A.eg(m,m.$ti.i("A.E")).b8(0,", ")+"\n")
 o=m}o+="--- \xd6n-Analiz Sonu ---\nYukar\u0131daki \xf6n-analiz verisini dikkate alarak yan\u0131t ver.\n"
 l=a0+(o.charCodeAt(0)==0?o:o)}else l=a0
 o=t.N
-k=B.J.jb(A.J(["contents",A.b([A.J(["parts",A.b([A.J(["text",l],o,o),A.J(["inline_data",A.J(["mime_type",b,"data",B.mm.gvf().cb(a)],o,o)],o,t.GU)],t.Mq)],o,t.JD)],t.lU),"generationConfig",A.J(["temperature",0.7],o,t.i)],o,t.K),null)
+k=B.J.jb(A.J(["contents",A.b([A.J(["parts",A.b([A.J(["text",l],o,o),A.J(["inline_data",A.J(["mime_type",b,"data",B.mm.gvf().cb(a)],o,o)],o,t.GU)],t.Mq)],o,t.JD)],t.lU),"generationConfig",A.J(["temperature",0.7,"maxOutputTokens",1536],o,t.Ci)],o,t.K),null)
 j=B.d.aO(k.length/1024)
 A.b2().$1("KoalaAI: Image payload size: "+j+"KB")
 if(j>4000)A.b2().$1("KoalaAI: WARNING \u2014 payload > 4MB, Vercel may reject")
@@ -106023,9 +106023,9 @@ i=k.h(0,"content")
 b1.push(A.J(["role",j,"parts",A.b([A.J(["text",i==null?"":i],o,o)],n)],o,m))}b2=t.N
 o=t.z
 b1.push(A.J(["role","user","parts",A.b([A.J(["text",b5],b2,b2)],t.SN)],b2,o))
-n=t.K,m=t.nf,j=t.TK,i=t.P,h=t.R,g=t.g,f=t.i,e=p.a,d=0
+n=t.K,m=t.nf,j=t.TK,i=t.P,h=t.R,g=t.g,f=t.Ci,e=p.a,d=0
 case 3:if(!(d<3)){s=5
-break}c=A.J(["contents",b1,"tools",B.Vq,"generationConfig",A.J(["temperature",0.7],b2,f)],b2,n)
+break}c=A.J(["contents",b1,"tools",B.Vq,"generationConfig",A.J(["temperature",0.7,"maxOutputTokens",1536],b2,f)],b2,n)
 A.b2().$1("KoalaAI: Tools request turn="+d+" ("+b1.length+" messages)...")
 s=6
 return A.f(e.hW("POST",A.c0(u.F,0,null),A.J(["Content-Type","application/json"],b2,b2),B.J.jb(c,null),null).pS(B.tH),$async$wS)

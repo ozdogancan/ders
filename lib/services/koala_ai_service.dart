@@ -346,9 +346,7 @@ class KoalaAIService {
       'contents': contents,
       'generationConfig': {
         'temperature': 0.7,
-        // NOT: responseMimeType: 'application/json' kaldırıldı —
-        // Gemini 2.5 Flash bu parametreyle 503 döndürüyor.
-        // JSON formatı prompt içinde zorlanıyor (KoalaPrompts.systemPrompt).
+        'maxOutputTokens': 1024,
       },
     };
 
@@ -440,7 +438,7 @@ class KoalaAIService {
       ],
       'generationConfig': {
         'temperature': 0.7,
-        // NOT: responseMimeType kaldırıldı — Gemini 2.5 Flash 503 döndürüyor.
+        'maxOutputTokens': 1536,
       },
     };
 
@@ -526,6 +524,7 @@ class KoalaAIService {
         'tools': _toolDeclarations,
         'generationConfig': {
           'temperature': 0.7,
+          'maxOutputTokens': 1536,
         },
       };
 
@@ -730,7 +729,7 @@ class KoalaAIService {
       'stream': true,
       'generationConfig': {
         'temperature': 0.7,
-        // NOT: responseMimeType kaldırıldı — Gemini 2.5 Flash 503 döndürüyor.
+        'maxOutputTokens': 1024,
       },
     });
 
