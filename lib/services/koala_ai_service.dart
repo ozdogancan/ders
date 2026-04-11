@@ -88,9 +88,9 @@ class KoalaAIService {
       'function_declarations': [
         {
           'name': 'search_products',
-          'description': 'Evlumba ürün kataloğundan gerçek ürün ara. Kullanıcı bir ürün tipi söylediğinde, '
-              'mobilya/dekorasyon önerisi istediğinde veya bütçeye göre ürün filtrelemek istediğinde çağır. '
-              'ASLA ürün adı, fiyat veya marka uydurma — bu fonksiyonu çağır.',
+          'description': 'Türkiye\'deki online mağazalardan (Trendyol, Hepsiburada, IKEA, Amazon TR vb.) gerçek ürün ara. '
+              'Kullanıcı bir ürün tipi söylediğinde, mobilya/dekorasyon önerisi istediğinde veya bütçeye göre ürün filtrelemek istediğinde çağır. '
+              'ASLA ürün adı, fiyat veya marka uydurma — bu fonksiyonu çağır. Sonuçlar gerçek marketplace ürünleridir.',
           'parameters': {
             'type': 'object',
             'properties': {
@@ -326,13 +326,18 @@ class KoalaAIService {
   Future<KoalaResponse> _callGemini({required String prompt, List<Map<String, String>>? history}) async {
     final contents = <Map<String, dynamic>>[];
 
-    // Conversation history (last 10 messages for context)
+    // Conversation history (last 10 messages, max 6000 karakter)
     if (history != null) {
       final recent = history.length > 10 ? history.sublist(history.length - 10) : history;
-      for (final msg in recent) {
-        contents.add({
+      int totalChars = 0;
+      const maxHistoryChars = 6000;
+      for (final msg in recent.reversed) {
+        final text = msg['content'] ?? '';
+        if (totalChars + text.length > maxHistoryChars) break;
+        totalChars += text.length;
+        contents.insert(0, {
           'role': msg['role'] == 'user' ? 'user' : 'model',
-          'parts': [{'text': msg['content'] ?? ''}],
+          'parts': [{'text': text}],
         });
       }
     }
@@ -350,7 +355,8 @@ class KoalaAIService {
     };
 
     debugPrint('KoalaAI: Sending request via proxy (${contents.length} messages)...');
-    final response = await _client.post(_proxyUri, headers: {'Content-Type': 'application/json'}, body: jsonEncode(payload));
+    final response = await _client.post(_proxyUri, headers: {'Content-Type': 'application/json'}, body: jsonEncode(payload))
+        .timeout(const Duration(seconds: 45));
 
     if (response.statusCode >= 300) {
       debugPrint('KoalaAI ERROR ${response.statusCode}: ${response.body.substring(0, 300.clamp(0, response.body.length))}');
@@ -499,14 +505,19 @@ class KoalaAIService {
     List<Map<String, String>>? history,
   }) async {
 
-    // Mesaj geçmişi hazırla
+    // Mesaj geçmişi hazırla (max 10 mesaj, max 6000 karakter)
     final contents = <Map<String, dynamic>>[];
     if (history != null) {
       final recent = history.length > 10 ? history.sublist(history.length - 10) : history;
-      for (final msg in recent) {
-        contents.add({
+      int totalChars = 0;
+      const maxHistoryChars = 6000;
+      for (final msg in recent.reversed) {
+        final text = msg['content'] ?? '';
+        if (totalChars + text.length > maxHistoryChars) break;
+        totalChars += text.length;
+        contents.insert(0, {
           'role': msg['role'] == 'user' ? 'user' : 'model',
-          'parts': [{'text': msg['content'] ?? ''}],
+          'parts': [{'text': text}],
         });
       }
     }

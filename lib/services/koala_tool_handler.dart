@@ -1,4 +1,9 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+
+import '../core/config/env.dart';
 import 'evlumba_live_service.dart';
 
 /// Gemini Function Calling handler.
@@ -46,26 +51,118 @@ class KoalaToolHandler {
   }
 
   // ═══════════════════════════════════════════════════════
-  // ÜRÜN ARA — designer_project_shop_links tablosundan
-  // Evlumba'da ayrı products tablosu yok, ürünler proje bazlı
+  // ÜRÜN ARA — Gemini Google Search Grounding ile gerçek ürünler
+  // Koala API /api/products/search endpoint'ini çağırır
+  // Fallback: Evlumba DB'den arama
   // ═══════════════════════════════════════════════════════
   static Future<Map<String, dynamic>> _searchProducts(
     Map<String, dynamic> args,
   ) async {
     try {
       final query = (args['query'] as String?) ?? '';
-      final roomType = _mapRoomType(args['room_type'] as String?);
+      final roomType = args['room_type'] as String?;
       final maxPrice = args['max_price'] as num?;
       final limit = (args['limit'] as num?)?.toInt().clamp(1, 8) ?? 6;
 
-      // 1) Önce projeleri filtrele (room_type varsa)
+      // Koala API'den gerçek ürün ara (Google Search Grounding)
+      final apiResult = await _searchProductsFromAPI(
+        query: query,
+        roomType: roomType,
+        maxPrice: maxPrice,
+        limit: limit,
+      );
+
+      if (apiResult != null && (apiResult['products'] as List).isNotEmpty) {
+        return apiResult;
+      }
+
+      // API başarısız olursa Evlumba DB fallback
+      debugPrint('KoalaToolHandler: API returned no products, trying Evlumba DB fallback');
+      return _searchProductsFromEvlumba(
+        query: query,
+        roomType: roomType,
+        maxPrice: maxPrice,
+        limit: limit,
+      );
+    } catch (e) {
+      debugPrint('KoalaToolHandler _searchProducts error: $e');
+      return {'products': [], 'error': e.toString()};
+    }
+  }
+
+  /// Koala API üzerinden Gemini Google Search Grounding ile gerçek ürün ara
+  static Future<Map<String, dynamic>?> _searchProductsFromAPI({
+    required String query,
+    String? roomType,
+    num? maxPrice,
+    required int limit,
+  }) async {
+    try {
+      final uri = Uri.parse('${Env.koalaApiUrl}/api/products/search');
+      final body = {
+        'query': query,
+        if (roomType != null && roomType.isNotEmpty) 'room_type': roomType,
+        if (maxPrice != null) 'max_price': maxPrice,
+        'limit': limit,
+      };
+
+      final response = await http
+          .post(
+            uri,
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode(body),
+          )
+          .timeout(const Duration(seconds: 30));
+
+      if (response.statusCode != 200) {
+        debugPrint('KoalaToolHandler API error: ${response.statusCode}');
+        return null;
+      }
+
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      final products = (data['products'] as List?) ?? [];
+
+      if (products.isEmpty) return null;
+
+      // API formatını UI formatına dönüştür (zaten uyumlu ama garanti olsun)
+      final result = products.map((p) {
+        final item = p as Map<String, dynamic>;
+        return {
+          'id': item['id'] ?? 'search-${DateTime.now().millisecondsSinceEpoch}',
+          'name': item['name'] ?? 'Ürün',
+          'price': item['price'] ?? '',
+          'image_url': item['image_url'] ?? '',
+          'url': item['url'] ?? '',
+          'shop_name': item['shop_name'] ?? '',
+          'source': item['source'] ?? 'google_search',
+          'project_id': '',
+        };
+      }).toList();
+
+      return {'products': result, 'count': result.length};
+    } catch (e) {
+      debugPrint('KoalaToolHandler _searchProductsFromAPI error: $e');
+      return null;
+    }
+  }
+
+  /// Evlumba DB'den ürün ara (fallback)
+  static Future<Map<String, dynamic>> _searchProductsFromEvlumba({
+    required String query,
+    String? roomType,
+    num? maxPrice,
+    required int limit,
+  }) async {
+    try {
+      final mappedRoom = _mapRoomType(roomType);
+
       var projectQuery = EvlumbaLiveService.client
           .from('designer_projects')
           .select('id')
           .eq('is_published', true);
 
-      if (roomType != null && roomType.isNotEmpty) {
-        projectQuery = projectQuery.ilike('project_type', roomType);
+      if (mappedRoom != null && mappedRoom.isNotEmpty) {
+        projectQuery = projectQuery.ilike('project_type', mappedRoom);
       }
 
       final projects = await projectQuery.limit(50);
@@ -75,27 +172,21 @@ class KoalaToolHandler {
       if (projectIds.isEmpty) {
         return {
           'products': [],
-          'message': 'Bu alan için ürün kataloğu henüz hazırlanıyor. Kullanıcıya ürün önerisi yerine tasarım ipuçları veya tasarımcı önerisi sun.',
+          'message': 'Bu ürün için Türkiye marketplace\'lerinde arama yapılamadı. Kullanıcıya genel tasarım ipuçları sun.',
         };
       }
 
-      // 2) Bu projelerdeki ürünleri ara
-      // Not: shop_name kolonu tabloda olmayabilir, tüm kolonları çek
       var shopQuery = EvlumbaLiveService.client
           .from('designer_project_shop_links')
           .select()
           .inFilter('project_id', projectIds);
 
-      // Ürün adında arama — ama oda adı (salon, yatak odası vb.) ise filtre yapma,
-      // çünkü room_type zaten projeleri filtreledi
       if (query.isNotEmpty && !_isRoomName(query)) {
         shopQuery = shopQuery.ilike('product_title', '%$query%');
       }
 
-      final rawProducts =
-          await shopQuery.limit(limit * 3); // fazla çek, sonra filtrele
+      final rawProducts = await shopQuery.limit(limit * 3);
 
-      // 3) Fiyat filtresi (product_price string olabilir, parse et)
       var products = (rawProducts as List).map((p) {
         final priceStr = (p['product_price'] ?? '')
             .toString()
@@ -115,7 +206,6 @@ class KoalaToolHandler {
             .toList();
       }
 
-      // 4) Limitle ve döndür
       final result = products.take(limit).map((p) {
         return {
           'id': p['id'],
@@ -124,6 +214,7 @@ class KoalaToolHandler {
           'image_url': p['product_image_url'] ?? '',
           'url': p['product_url'] ?? '',
           'shop_name': p['shop_name'] ?? '',
+          'source': 'evlumba',
           'project_id': p['project_id'],
         };
       }).toList();
@@ -132,12 +223,12 @@ class KoalaToolHandler {
         return {
           'products': [],
           'count': 0,
-          'message': 'Ürün kataloğu henüz hazırlanıyor. Kullanıcıya ürün önerisi yerine tasarım ipuçları, renk önerileri veya uzman önerisi sun.',
+          'message': 'Bu ürün için sonuç bulunamadı. Kullanıcıya alternatif öneriler sun.',
         };
       }
       return {'products': result, 'count': result.length};
     } catch (e) {
-      debugPrint('KoalaToolHandler _searchProducts error: $e');
+      debugPrint('KoalaToolHandler _searchProductsFromEvlumba error: $e');
       return {'products': [], 'error': e.toString()};
     }
   }

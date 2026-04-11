@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/theme/koala_tokens.dart';
+import '../../services/product_analytics_service.dart';
 import '../../services/saved_items_service.dart';
 import '../../services/profile_feedback_service.dart';
 
@@ -16,6 +17,7 @@ class ProductCarouselItem {
   final String imageUrl;
   final String url;
   final String shopName;
+  final String source;
   final String projectId;
 
   const ProductCarouselItem({
@@ -25,6 +27,7 @@ class ProductCarouselItem {
     required this.imageUrl,
     required this.url,
     this.shopName = '',
+    this.source = '',
     this.projectId = '',
   });
 
@@ -43,6 +46,7 @@ class ProductCarouselItem {
       imageUrl: (data['image_url'] ?? data['product_image_url'] ?? '').toString(),
       url: (data['url'] ?? data['product_url'] ?? '').toString(),
       shopName: (data['shop_name'] ?? '').toString(),
+      source: (data['source'] ?? '').toString(),
       projectId: (data['project_id'] ?? '').toString(),
     );
   }
@@ -196,6 +200,19 @@ class _ProductCardState extends State<_ProductCard> {
   void initState() {
     super.initState();
     _checkSaved();
+    _trackImpression();
+  }
+
+  void _trackImpression() {
+    final p = widget.product;
+    ProductAnalyticsService.trackImpression(
+      productId: p.id,
+      productName: p.name,
+      shopName: p.shopName,
+      price: p.price,
+      url: p.url,
+      source: p.source,
+    );
   }
 
   Future<void> _checkSaved() async {
@@ -232,6 +249,13 @@ class _ProductCardState extends State<_ProductCard> {
     final nowSaved = !_isSaved;
     if (mounted) setState(() { _isSaved = nowSaved; });
     if (nowSaved && mounted) {
+      ProductAnalyticsService.trackSave(
+        productId: widget.product.id,
+        productName: widget.product.name,
+        shopName: widget.product.shopName,
+        price: widget.product.price,
+        source: widget.product.source,
+      );
       ProfileFeedbackService.recordSaveSignal(
         itemTitle: widget.product.name,
       );
@@ -258,9 +282,19 @@ class _ProductCardState extends State<_ProductCard> {
   }
 
   void _openProduct() {
-    final link = widget.product.url.isNotEmpty
-        ? widget.product.url
-        : 'https://www.evlumba.com/kesfet?q=${Uri.encodeComponent(widget.product.name)}';
+    final p = widget.product;
+    // Tıklama analitik kaydı
+    ProductAnalyticsService.trackClick(
+      productId: p.id,
+      productName: p.name,
+      shopName: p.shopName,
+      price: p.price,
+      url: p.url,
+      source: p.source,
+    );
+    final link = p.url.isNotEmpty
+        ? p.url
+        : 'https://www.evlumba.com/kesfet?q=${Uri.encodeComponent(p.name)}';
     launchUrl(Uri.parse(link), mode: LaunchMode.inAppBrowserView);
   }
 
@@ -362,6 +396,12 @@ class _ProductCardState extends State<_ProductCard> {
                         )
                       : _placeholder(),
                 ),
+                // Mağaza badge
+                if (p.shopName.isNotEmpty)
+                  Positioned(
+                    top: 8, left: 8,
+                    child: _marketplaceBadge(p.shopName),
+                  ),
                 // Kaydet butonu
                 Positioned(
                   top: 8, right: 8,
@@ -397,12 +437,6 @@ class _ProductCardState extends State<_ProductCard> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Mağaza
-                    if (p.shopName.isNotEmpty)
-                      Text(p.shopName,
-                        style: const TextStyle(fontSize: 11, color: KoalaColors.textSec),
-                        maxLines: 1, overflow: TextOverflow.ellipsis),
-                    const SizedBox(height: 2),
                     // Ürün adı
                     Text(p.name,
                       style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: KoalaColors.ink, height: 1.3),
@@ -467,6 +501,44 @@ class _ProductCardState extends State<_ProductCard> {
         ),
       ),
     ),
+    );
+  }
+
+  Widget _marketplaceBadge(String shop) {
+    final key = shop.toLowerCase().trim();
+    Color bg;
+    Color fg;
+    if (key.contains('trendyol')) {
+      bg = const Color(0xFFFF6600);
+      fg = Colors.white;
+    } else if (key.contains('hepsiburada')) {
+      bg = const Color(0xFF00AEEF);
+      fg = Colors.white;
+    } else if (key.contains('ikea')) {
+      bg = const Color(0xFF0058A3);
+      fg = const Color(0xFFFFDA1A);
+    } else if (key.contains('amazon')) {
+      bg = const Color(0xFF232F3E);
+      fg = const Color(0xFFFF9900);
+    } else if (key.contains('koçtaş') || key.contains('koctas')) {
+      bg = const Color(0xFF00A651);
+      fg = Colors.white;
+    } else {
+      bg = KoalaColors.accentSoft;
+      fg = KoalaColors.textSec;
+    }
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: bg.withValues(alpha: 0.9),
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Text(
+        shop,
+        style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: fg),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      ),
     );
   }
 
