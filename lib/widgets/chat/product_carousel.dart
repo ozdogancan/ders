@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -396,12 +395,13 @@ class _ProductCardState extends State<_ProductCard> {
                 ClipRRect(
                   borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
                   child: p.imageUrl.isNotEmpty
-                      ? CachedNetworkImage(
-                          imageUrl: p.imageUrl,
+                      ? Image.network(
+                          p.imageUrl,
                           width: 180, height: 140,
                           fit: BoxFit.cover,
-                          placeholder: (_, __) => _placeholder(),
-                          errorWidget: (_, __, ___) => _placeholder(),
+                          loadingBuilder: (_, child, progress) =>
+                            progress == null ? child : _placeholder(),
+                          errorBuilder: (_, __, ___) => _placeholder(),
                         )
                       : _placeholder(),
                 ),
