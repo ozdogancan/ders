@@ -330,7 +330,7 @@ class KoalaAIService {
     if (history != null) {
       final recent = history.length > 10 ? history.sublist(history.length - 10) : history;
       int totalChars = 0;
-      const maxHistoryChars = 6000;
+      const maxHistoryChars = 12000;
       for (final msg in recent.reversed) {
         final text = msg['content'] ?? '';
         if (totalChars + text.length > maxHistoryChars) break;
@@ -510,7 +510,7 @@ class KoalaAIService {
     if (history != null) {
       final recent = history.length > 10 ? history.sublist(history.length - 10) : history;
       int totalChars = 0;
-      const maxHistoryChars = 6000;
+      const maxHistoryChars = 12000;
       for (final msg in recent.reversed) {
         final text = msg['content'] ?? '';
         if (totalChars + text.length > maxHistoryChars) break;

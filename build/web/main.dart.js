@@ -103731,7 +103731,7 @@ if(h==null)h=o.a(h)
 g=h.h(0,"content")
 if(g==null)g=""
 i+=g.length
-if(i>6000)break
+if(i>12e3)break
 h=h.h(0,"role")==="user"?"user":"model"
 B.b.fw(d,0,A.Q(["role",h,"parts",A.b([A.Q(["text",g],l,l)],k)],l,j))}}o=t.N
 d.push(A.Q(["role","user","parts",A.b([A.Q(["text",b],o,o)],t.SN)],o,t.z))
@@ -103869,7 +103869,7 @@ if(j==null)j=b1.a(j)
 i=j.h(0,"content")
 if(i==null)i=""
 k+=i.length
-if(k>6000)break
+if(k>12e3)break
 j=j.h(0,"role")==="user"?"user":"model"
 B.b.fw(b0,0,A.Q(["role",j,"parts",A.b([A.Q(["text",i],n,n)],m)],n,l))}b1=t.N
 o=t.z
