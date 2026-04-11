@@ -1697,12 +1697,12 @@ class _TypingDotsState extends State<_TypingDots>
       3,
       (i) => AnimationController(
         vsync: this,
-        duration: const Duration(milliseconds: 400),
-      )..repeat(reverse: true),
+        duration: const Duration(milliseconds: 600),
+      ),
     );
     for (var i = 0; i < 3; i++) {
-      Future.delayed(Duration(milliseconds: i * 150), () {
-        if (mounted) _c[i].forward();
+      Future.delayed(Duration(milliseconds: i * 180), () {
+        if (mounted) _c[i].repeat(reverse: true);
       });
     }
   }
@@ -1722,18 +1722,24 @@ class _TypingDotsState extends State<_TypingDots>
       3,
       (i) => AnimatedBuilder(
         animation: _c[i],
-        builder: (_, _) => Transform.translate(
-          offset: Offset(0, -3 * _c[i].value),
-          child: Container(
-            width: 8,
-            height: 8,
-            margin: const EdgeInsets.symmetric(horizontal: 2),
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: Color.lerp(KoalaColors.accentLight, _accent, _c[i].value),
+        builder: (_, __) {
+          final t = Curves.easeInOut.transform(_c[i].value);
+          return Transform.translate(
+            offset: Offset(0, -5 * t),
+            child: Opacity(
+              opacity: 0.45 + 0.55 * t,
+              child: Container(
+                width: 9,
+                height: 9,
+                margin: const EdgeInsets.symmetric(horizontal: 2.5),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Color.lerp(KoalaColors.accentLight, _accent, t),
+                ),
+              ),
             ),
-          ),
-        ),
+          );
+        },
       ),
     ),
   );
