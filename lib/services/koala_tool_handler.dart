@@ -62,7 +62,7 @@ class KoalaToolHandler {
       final query = (args['query'] as String?) ?? '';
       final roomType = args['room_type'] as String?;
       final maxPrice = args['max_price'] as num?;
-      final limit = (args['limit'] as num?)?.toInt().clamp(1, 8) ?? 6;
+      final limit = (args['limit'] as num?)?.toInt().clamp(1, 4) ?? 4;
 
       // Koala API'den gerçek ürün ara (Google Search Grounding)
       final apiResult = await _searchProductsFromAPI(
@@ -124,21 +124,38 @@ class KoalaToolHandler {
 
       if (products.isEmpty) return null;
 
-      // API formatını UI formatına dönüştür (zaten uyumlu ama garanti olsun)
-      final result = products.map((p) {
+      // API formatını UI formatına dönüştür + kalite filtresi
+      final result = <Map<String, dynamic>>[];
+      for (final p in products) {
         final item = p as Map<String, dynamic>;
-        return {
+        final url = (item['url'] ?? '').toString();
+        final price = (item['price'] ?? '').toString();
+
+        // URL doğrulama — boş, geçersiz veya ana sayfa URL'lerini atla
+        if (url.isEmpty || url.length < 10) continue;
+        try {
+          final uri = Uri.parse(url);
+          if (!uri.hasScheme || uri.path == '/' || uri.path.isEmpty) continue;
+        } catch (_) {
+          continue;
+        }
+
+        // Fiyatı olmayan ürünleri atla
+        if (price.isEmpty || price == 'Fiyat bilgisi yok' || price == 'Bilinmiyor') continue;
+
+        result.add({
           'id': item['id'] ?? 'search-${DateTime.now().millisecondsSinceEpoch}',
           'name': item['name'] ?? 'Ürün',
-          'price': item['price'] ?? '',
+          'price': price,
           'image_url': item['image_url'] ?? '',
-          'url': item['url'] ?? '',
+          'url': url,
           'shop_name': item['shop_name'] ?? '',
           'source': item['source'] ?? 'google_search',
           'project_id': '',
-        };
-      }).toList();
+        });
+      }
 
+      if (result.isEmpty) return null;
       return {'products': result, 'count': result.length};
     } catch (e) {
       debugPrint('KoalaToolHandler _searchProductsFromAPI error: $e');
@@ -154,6 +171,10 @@ class KoalaToolHandler {
     required int limit,
   }) async {
     try {
+      if (!EvlumbaLiveService.isReady) {
+        debugPrint('KoalaToolHandler: EvlumbaLiveService not initialized, skipping Evlumba search');
+        return {'products': [], 'count': 0, 'message': 'Ürün veritabanı henüz hazır değil.'};
+      }
       final mappedRoom = _mapRoomType(roomType);
 
       var projectQuery = EvlumbaLiveService.client
@@ -240,6 +261,10 @@ class KoalaToolHandler {
     Map<String, dynamic> args,
   ) async {
     try {
+      if (!EvlumbaLiveService.isReady) {
+        debugPrint('KoalaToolHandler: EvlumbaLiveService not initialized, skipping project search');
+        return {'projects': [], 'count': 0, 'message': 'Proje veritabanı henüz hazır değil. Lütfen daha sonra tekrar dene.'};
+      }
       final roomType = _mapRoomType(args['room_type'] as String?);
       final limit = (args['limit'] as num?)?.toInt().clamp(1, 6) ?? 4;
       final offset = (args['offset'] as num?)?.toInt().clamp(0, 50) ?? 0;
@@ -287,6 +312,10 @@ class KoalaToolHandler {
     Map<String, dynamic> args,
   ) async {
     try {
+      if (!EvlumbaLiveService.isReady) {
+        debugPrint('KoalaToolHandler: EvlumbaLiveService not initialized, skipping designer search');
+        return {'designers': [], 'count': 0, 'message': 'Tasarımcı veritabanı henüz hazır değil. Lütfen daha sonra tekrar dene.'};
+      }
       final city = args['city'] as String?;
       final query = args['query'] as String?;
       final limit = (args['limit'] as num?)?.toInt().clamp(1, 5) ?? 3;

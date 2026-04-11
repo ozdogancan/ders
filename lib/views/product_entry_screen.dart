@@ -563,13 +563,23 @@ class _ProductEntryScreenState extends State<ProductEntryScreen> {
     final normalizedText = _normalize(text);
     final resolvedArea = _resolveArea(text);
 
-    // Oda alanı tespit edilemezse → AI sohbetine yönlendir
-    if (resolvedArea == null) {
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) => ChatDetailScreen(initialText: text),
-        ),
-      );
+    // Oda alanı tespit edilemezse → son aktif bağlamı kullan, yoksa bilgilendir
+    final effectiveArea = resolvedArea
+        ?? (_turns.isNotEmpty ? _turns.last.area : null);
+    if (effectiveArea == null || effectiveArea == 'reset') {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Lütfen bir oda tipi belirtin: Salon, Yatak Odası, Mutfak, Banyo, Antre…',
+              style: const TextStyle(fontSize: 13),
+            ),
+            backgroundColor: const Color(0xFF4A6741),
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
       return;
     }
 
@@ -579,7 +589,7 @@ class _ProductEntryScreenState extends State<ProductEntryScreen> {
         normalizedText.contains('daha') ||
         normalizedText.contains('yeni');
 
-    _pickArea(resolvedArea, text, excludePrev: wantsDifferent);
+    _pickArea(effectiveArea, text, excludePrev: wantsDifferent);
   }
 
   String? _resolveArea(String text) {

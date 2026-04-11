@@ -153,8 +153,8 @@ class _ProductCarouselState extends State<ProductCarousel> {
           ),
         ),
 
-        // Dot indicator (3'ten fazla üründe)
-        if (widget.products.length > 3)
+        // Dot indicator (4'ten fazla üründe — max 4 ürün önerildiğinde gizle)
+        if (widget.products.length > 4)
           Padding(
             padding: const EdgeInsets.only(top: 10),
             child: Row(
@@ -295,7 +295,16 @@ class _ProductCardState extends State<_ProductCard> {
     final link = p.url.isNotEmpty
         ? p.url
         : 'https://www.evlumba.com/kesfet?q=${Uri.encodeComponent(p.name)}';
-    launchUrl(Uri.parse(link), mode: LaunchMode.inAppBrowserView);
+    try {
+      final uri = Uri.parse(link);
+      if (uri.scheme.isEmpty || (!uri.scheme.startsWith('http'))) {
+        debugPrint('KoalaCarousel: Invalid URL scheme: $link');
+        return;
+      }
+      launchUrl(uri, mode: LaunchMode.inAppBrowserView);
+    } catch (e) {
+      debugPrint('KoalaCarousel: Failed to open URL: $link — $e');
+    }
   }
 
   void _showAskAISheet() {

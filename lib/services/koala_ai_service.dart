@@ -608,15 +608,30 @@ class KoalaAIService {
         }
       }
 
+      // Boş yanıt kontrolü
+      if (text.isEmpty) {
+        debugPrint('KoalaAI: Empty text response, falling back to _callGemini...');
+        return _callGemini(prompt: prompt, history: history);
+      }
+
       // JSON parse dene
       final parsed = _parseResponse(text);
       // Eğer parse başarılı ve kartlar varsa → döndür
       if (parsed.cards.isNotEmpty) return parsed;
-      // Kartlar boşsa ama mesaj varsa → mesajla birlikte döndür (Gemini JSON vermemiş olabilir)
-      if (parsed.message.isNotEmpty && parsed.message != 'İşte önerilerim!') return parsed;
+      // Kartlar boşsa ama mesaj varsa → mesajla birlikte döndür
+      // "aksilik oldu" mesajı _extractFriendlyText fallback'i — Gemini düz Türkçe yazmış demek
+      // Bu durumda düz metni doğrudan kullanıcıya göster (kalite korunsun)
+      if (parsed.message.isNotEmpty && !parsed.message.contains('aksilik oldu')) return parsed;
 
-      // Gemini JSON döndürmedi → responseMimeType ile tekrar dene (tools olmadan)
-      debugPrint('KoalaAI: Tools response was not JSON, retrying with _callGemini...');
+      // Gemini JSON vermedi ama düz Türkçe metin döndü → metni doğrudan göster
+      // Bu, function call sonrası error geldiğinde Gemini'nin Türkçe açıklama yazması durumunu yakalar
+      if (text.length > 20 && !text.trimLeft().startsWith('{')) {
+        debugPrint('KoalaAI: Plain text response from Gemini (${text.length} chars), using directly');
+        return KoalaResponse(message: _sanitizeMessage(text), cards: []);
+      }
+
+      // Son çare: tools olmadan tekrar dene
+      debugPrint('KoalaAI: Tools response was not usable, retrying with _callGemini...');
       return _callGemini(prompt: prompt, history: history);
     }
 
@@ -723,7 +738,16 @@ class KoalaAIService {
     final contents = <Map<String, dynamic>>[];
     if (history != null) {
       final recent = history.length > 10 ? history.sublist(history.length - 10) : history;
-      for (final msg in recent) {
+      // Token limiti: toplam 12000 karakter
+      int charBudget = 12000;
+      final trimmed = <Map<String, String>>[];
+      for (int i = recent.length - 1; i >= 0 && charBudget > 0; i--) {
+        final content = recent[i]['content'] ?? '';
+        if (content.length > charBudget) break;
+        charBudget -= content.length;
+        trimmed.insert(0, recent[i]);
+      }
+      for (final msg in trimmed) {
         contents.add({
           'role': msg['role'] == 'user' ? 'user' : 'model',
           'parts': [{'text': msg['content'] ?? ''}],
