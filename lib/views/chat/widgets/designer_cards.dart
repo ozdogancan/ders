@@ -2,11 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../core/theme/koala_tokens.dart';
-import '../../../services/messaging_service.dart';
 import '../../../services/saved_items_service.dart';
 import '../../../services/profile_feedback_service.dart';
 import '../../../widgets/save_button.dart';
-import '../../conversation_detail_screen.dart';
+import '../../../widgets/chat/designer_chat_popup.dart';
 import 'chat_constants.dart';
 
 class DesignerCards extends StatelessWidget {
@@ -225,46 +224,21 @@ class DesignerCards extends StatelessWidget {
                     ),
                   ),
                 const SizedBox(height: 12),
-                // Primary CTA \u2014 Tasar\u0131mc\u0131ya Yaz (full-width)
+                // Primary CTA — Tasarımcıya Yaz (popup — AI chat kaybolmaz)
                 GestureDetector(
-                  onTap: () async {
+                  onTap: () {
                     final designerId = ds['id']?.toString() ?? '';
                     if (designerId.isEmpty) return;
                     HapticFeedback.lightImpact();
-                    final conv = await MessagingService.getOrCreateConversation(
+                    DesignerChatPopup.show(
+                      context,
                       designerId: designerId,
-                      contextType: 'designer',
+                      designerName: name,
+                      designerAvatarUrl: ds['avatar_url']?.toString(),
+                      contextType: 'ai_chat',
                       contextId: designerId,
                       contextTitle: name,
                     );
-                    if (conv != null && context.mounted) {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => ConversationDetailScreen(
-                            conversationId: conv['id'] as String,
-                            designerName: name,
-                            designerAvatarUrl: ds['avatar_url']?.toString(),
-                          ),
-                        ),
-                      );
-                    } else if (context.mounted) {
-                      ScaffoldMessenger.of(context).clearSnackBars();
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          behavior: SnackBarBehavior.floating,
-                          backgroundColor: KoalaColors.errorBright,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                          duration: const Duration(seconds: 3),
-                          content: const Row(
-                            children: [
-                              Icon(Icons.info_outline_rounded, color: Colors.white, size: 18),
-                              SizedBox(width: 8),
-                              Expanded(child: Text('Ba\u011Flant\u0131 kurulamad\u0131. L\u00FCtfen tekrar deneyin.', style: TextStyle(color: Colors.white, fontSize: 13))),
-                            ],
-                          ),
-                        ),
-                      );
-                    }
                   },
                   child: Container(
                     width: double.infinity,
