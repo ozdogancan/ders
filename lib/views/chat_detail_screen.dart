@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
@@ -378,8 +379,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
         });
       } else {
         // Follow-up: fotoğraf analiz bağlamı varsa prompt'a ekle
+        // (chip'lerden zaten _contextAwarePrompt ile gelebilir, çift ekleme yapma)
         String? enrichedText = text;
-        if (text != null && _photoAnalysisContext != null) {
+        if (text != null && _photoAnalysisContext != null && !text.startsWith('[Sohbet bağlamı')) {
           final ctx = _photoAnalysisContext!;
           enrichedText = '[Önceki fotoğraf analizi bağlamı — '
               'Oda: ${ctx['room'] ?? 'bilinmiyor'}, '
@@ -528,8 +530,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
   /// Fotoğraf analiz yanıtından oda/stil/renk bağlamını çıkar
   void _extractPhotoContext(KoalaResponse resp) {
     final cards = resp.cards;
-    if (cards.isEmpty) return;
     final ctx = <String, String>{};
+
+    // 1) Kartlardan stil/renk/mood çıkar
     for (final card in cards) {
       if (card.type == 'style_analysis') {
         final styleName = card.data['style_name'] ?? card.data['style'] ?? '';
@@ -545,7 +548,8 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
         if (mood != null && mood.isNotEmpty) ctx['mood'] = mood;
       }
     }
-    // Oda tipi: önce kartlardan, sonra message'dan
+
+    // 2) Oda tipi: önce kartlardan, sonra message'dan
     for (final card in cards) {
       if (card.type == 'style_analysis') {
         final roomType = card.data['room_type']?.toString();
@@ -561,7 +565,23 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
         if (msg.contains(room)) { ctx['room'] = room; break; }
       }
     }
+
+    // 3) Stil: kartlardan bulunamadıysa message'dan çıkar
+    if (!ctx.containsKey('style')) {
+      final msg = resp.message.toLowerCase();
+      for (final style in _knownStyles) {
+        if (msg.contains(style)) { ctx['style'] = style; break; }
+      }
+      // Ek stiller — kartlardaki standart listede olmayan
+      if (!ctx.containsKey('style')) {
+        for (final style in ['eklektik', 'eclectic', 'retro', 'art deco', 'mid-century', 'coastal', 'farmhouse', 'transitional']) {
+          if (msg.contains(style)) { ctx['style'] = style; break; }
+        }
+      }
+    }
+
     if (ctx.isNotEmpty) _photoAnalysisContext = ctx;
+    debugPrint('PhotoContext: $ctx');
   }
 
   static const _knownStyles = {
@@ -583,7 +603,8 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     // "Uzman öner" akışını tespit et
     if (lower.contains('uzman öner') || lower.contains('uzman bul') || lower.contains('tasarımcı öner')) {
       _awaitingDesignerCity = true;
-      _sendToAI(text: chipText);
+      // Fotoğraf analiz bağlamını ekle — oda tipi ve stile göre uzman önersin
+      _sendToAI(text: _contextAwarePrompt(chipText));
       return;
     }
 
@@ -603,8 +624,8 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
       return;
     }
 
-    // Normal chip — function-calling destekli intent olarak gönder
-    _sendToAI(text: chipText);
+    // Normal chip — fotoğraf analiz bağlamıyla gönder
+    _sendToAI(text: _contextAwarePrompt(chipText));
   }
 
   Future<void> _generateImage(String prompt) async {
@@ -658,6 +679,13 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
 
   void _showPicker() {
     HapticFeedback.lightImpact();
+
+    // Web'de kamera yok, doğrudan galeriyi aç
+    if (kIsWeb) {
+      _doPick(ImageSource.gallery);
+      return;
+    }
+
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
