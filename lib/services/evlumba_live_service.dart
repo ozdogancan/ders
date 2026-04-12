@@ -84,13 +84,12 @@ class EvlumbaLiveService {
     return List<Map<String, dynamic>>.from(data);
   }
 
-  /// Tek tasarımcı detay
+  /// Tek tasarımcı detay (role filtresi yok — proje sahibi zaten tasarımcı)
   static Future<Map<String, dynamic>?> getDesigner(String id) async {
     final data = await client
         .from('profiles')
         .select()
         .eq('id', id)
-        .eq('role', 'designer')
         .maybeSingle();
     return data;
   }
