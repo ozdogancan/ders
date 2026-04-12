@@ -29,6 +29,7 @@ class ChatDetailScreen extends StatefulWidget {
     this.intentParams,
     this.chatId,
     this.fromDiscovery = false,
+    this.hiddenContext,
   });
 
   final String? initialText;
@@ -37,6 +38,9 @@ class ChatDetailScreen extends StatefulWidget {
   final Map<String, String>? intentParams;
   final String? chatId;
   final bool fromDiscovery;
+  /// AI'a gönderilecek ama kullanıcıya gösterilmeyecek gizli bağlam
+  /// (örn: görsel URL, tasarımcı bilgileri)
+  final String? hiddenContext;
 
   @override
   State<ChatDetailScreen> createState() => _ChatDetailScreenState();
@@ -96,7 +100,11 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
           params: widget.intentParams ?? {},
         );
       } else if (widget.initialText != null || widget.initialPhoto != null) {
-        _sendToAI(text: widget.initialText, photo: widget.initialPhoto);
+        _sendToAI(
+          text: widget.initialText,
+          photo: widget.initialPhoto,
+          hiddenContext: widget.hiddenContext,
+        );
       }
     });
   }
@@ -348,7 +356,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
   }
 
   // ── AI ──
-  Future<void> _sendToAI({String? text, Uint8List? photo}) async {
+  Future<void> _sendToAI({String? text, Uint8List? photo, String? hiddenContext}) async {
     if (text == null && photo == null) return;
     if (_loading) return; // Önceki istek bitmeden yeni istek gönderme
     if (_msgs.isEmpty) {
@@ -358,12 +366,18 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
       }
     }
 
+    // Kullanıcı balonunda sadece temiz text göster
     setState(() {
       _msgs.add(_Msg(role: 'user', text: text, photo: photo));
       _loading = true;
     });
     _scrollDown();
-    if (text != null) _history.add({'role': 'user', 'content': text});
+
+    // AI'a gönderilecek text: gizli bağlam varsa ekle
+    final aiText = hiddenContext != null && text != null
+        ? '[$hiddenContext]\n\nKullanıcı isteği: $text'
+        : text;
+    if (aiText != null) _history.add({'role': 'user', 'content': aiText});
 
     try {
       if (photo != null) {

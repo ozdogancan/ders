@@ -241,12 +241,15 @@ class _DesignerChatSheetState extends State<_DesignerChatSheet>
         startIndex: startIndex,
         designerName: widget.designerName,
         designerId: widget.designerId,
-        onAskAI: (question) {
+        onAskAI: (question, {String? hiddenContext}) {
           // AI chat'e yönlendir
           Navigator.of(context).pop(); // viewer kapat
           Navigator.of(context).pop(); // designer popup kapat
           Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => ChatDetailScreen(initialText: question)),
+            MaterialPageRoute(builder: (_) => ChatDetailScreen(
+              initialText: question,
+              hiddenContext: hiddenContext,
+            )),
           );
         },
       ),
@@ -538,7 +541,7 @@ class _ProjectViewerSheet extends StatefulWidget {
   final int startIndex;
   final String designerName;
   final String designerId;
-  final void Function(String question) onAskAI;
+  final void Function(String question, {String? hiddenContext}) onAskAI;
 
   @override
   State<_ProjectViewerSheet> createState() => _ProjectViewerSheetState();
@@ -584,14 +587,16 @@ class _ProjectViewerSheetState extends State<_ProjectViewerSheet> {
     setState(() { _styleTapped = true; _styleLoading = true; });
     try {
       final title = (_current['title'] ?? 'Proje').toString();
-      final imageUrl = _coverUrl(_current);
+      final description = (_current['description'] ?? '').toString();
       final ai = KoalaAIService();
-      final prompt = 'Bu iç mimari tasarımın tarzını kısaca analiz et (2-3 cümle). '
-          'Tasarım adı: "$title". '
-          '${imageUrl.isNotEmpty ? "Görsel: $imageUrl" : ""} '
-          'Hangi tasarım akımına ait? Kullanılan renkler ve malzemeler neler?';
-      final resp = await ai.ask(prompt);
-      if (mounted) setState(() { _styleAnswer = resp.message; _styleLoading = false; });
+      final prompt = 'Kullanıcı "$title" adlı bir iç mimari tasarıma bakıyor. '
+          '${description.isNotEmpty ? "Proje açıklaması: $description. " : ""}'
+          'Tasarımcı: ${widget.designerName}. '
+          'Bu tasarımın stilini kısaca analiz et. Sadece düz metin olarak 2-3 cümle yaz. '
+          'Hangi tasarım akımına ait olabileceğini, muhtemel renk paletini ve malzeme seçimlerini belirt. '
+          'JSON formatı kullanma, sadece düz Türkçe metin yaz.';
+      final answer = await ai.askPlainText(prompt);
+      if (mounted) setState(() { _styleAnswer = answer; _styleLoading = false; });
     } catch (e) {
       if (mounted) setState(() { _styleAnswer = 'Stil analizi şu an yapılamadı.'; _styleLoading = false; });
     }
@@ -709,20 +714,20 @@ class _ProjectViewerSheetState extends State<_ProjectViewerSheet> {
                         icon: Icons.search_rounded,
                         label: 'Bu tasarımdaki ürünleri bul',
                         onTap: () {
-                          final prompt = currentImageUrl.isNotEmpty
-                              ? '[Tasarım görseli: $currentImageUrl]\n$title tasarımındaki ürünleri bul. Görseli analiz et ve içindeki mobilya/dekorasyon ürünlerini Türkiye marketlerinden ara.'
-                              : '$title tasarımındaki ürünleri bul';
-                          widget.onAskAI(prompt);
+                          final context = currentImageUrl.isNotEmpty
+                              ? 'Tasarım: "$title", Tasarımcı: ${widget.designerName}, Görsel URL: $currentImageUrl. Bu görseldeki mobilya ve dekorasyon ürünlerini analiz et ve search_products ile Türkiye marketlerinden benzerlerini bul.'
+                              : null;
+                          widget.onAskAI('$title tasarımındaki ürünleri bul', hiddenContext: context);
                         },
                       ),
                       _SmartChip(
                         icon: Icons.palette_rounded,
                         label: 'Benzer tasarımlar göster',
                         onTap: () {
-                          final prompt = currentImageUrl.isNotEmpty
-                              ? '[Tasarım görseli: $currentImageUrl]\n$title tasarımına benzer projeler bul. Görseldeki stil ve renk paletine yakın tasarımlar göster.'
-                              : '$title gibi benzer tasarımlar göster';
-                          widget.onAskAI(prompt);
+                          final context = currentImageUrl.isNotEmpty
+                              ? 'Tasarım: "$title", Tasarımcı: ${widget.designerName}, Görsel URL: $currentImageUrl. Bu tasarıma benzer projeleri search_projects ile bul.'
+                              : null;
+                          widget.onAskAI('$title tasarımına benzer projeler göster', hiddenContext: context);
                         },
                       ),
                       _SmartChip(

@@ -314,6 +314,25 @@ class KoalaAIService {
   Future<KoalaResponse> ask(String text, {List<Map<String, String>>? history}) =>
     askWithIntent(intent: KoalaIntent.freeChat, freeText: text, history: history);
 
+  /// Sade metin cevabı al — JSON formatı yok, kart yok.
+  /// Inline bilgi kartları için (stil analizi, kısa açıklamalar).
+  Future<String> askPlainText(String prompt) async {
+    final contents = [
+      {
+        'role': 'user',
+        'parts': [{'text': prompt}],
+      },
+    ];
+    final payload = {
+      'contents': contents,
+      'generationConfig': {'temperature': 0.7, 'maxOutputTokens': 300},
+    };
+    final response = await _client.post(_proxyUri, headers: {'Content-Type': 'application/json'}, body: jsonEncode(payload))
+        .timeout(const Duration(seconds: 30));
+    if (response.statusCode >= 300) throw Exception('Gemini failed: ${response.statusCode}');
+    return _extractText(response.body);
+  }
+
   /// Photo ask
   Future<KoalaResponse> askWithPhoto(Uint8List photo, {String? text, List<Map<String, String>>? history}) =>
     askWithIntent(intent: KoalaIntent.photoAnalysis, freeText: text, photo: photo, history: history);
