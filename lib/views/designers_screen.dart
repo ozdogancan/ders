@@ -8,13 +8,14 @@ import 'package:lucide_icons/lucide_icons.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/theme/koala_tokens.dart';
+import '../helpers/auth_guard.dart';
 import '../services/evlumba_live_service.dart';
 import '../services/messaging_service.dart';
 import '../services/saved_items_service.dart';
+import '../widgets/chat/designer_chat_popup.dart';
 import '../widgets/koala_widgets.dart';
 import '../widgets/save_button.dart';
 import 'chat_detail_screen.dart';
-import 'conversation_detail_screen.dart';
 
 // Alias — KoalaTokens source of truth
 class _ExpertK {
@@ -119,68 +120,21 @@ class _DesignersScreenState extends State<DesignersScreen> {
   Future<void> _openExpertChat(_ExpertPreview expert, {String? customMessage}) async {
     final designerId = expert.designer['id']?.toString() ?? '';
     final name = (expert.designer['full_name'] ?? 'Tasarımcı').toString();
-    final uid = MessagingService.currentUserId;
 
-    // Giriş yapmamışsa auth ekranına yönlendir
-    if (uid == null && mounted) {
-      Navigator.of(context).pop(); // bottom sheet'i kapat
-      ScaffoldMessenger.of(context).clearSnackBars();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          behavior: SnackBarBehavior.floating,
-          backgroundColor: KoalaColors.accentDeep,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          duration: const Duration(seconds: 3),
-          content: const Row(
-            children: [
-              Icon(Icons.login_rounded, color: Colors.white, size: 18),
-              SizedBox(width: 8),
-              Expanded(child: Text('Tasarımcıya mesaj atmak için giriş yapın.', style: TextStyle(color: Colors.white, fontSize: 13))),
-            ],
-          ),
-        ),
-      );
-      return;
-    }
+    // Auth kontrolü — anonim kullanıcıyı giriş ekranına yönlendir
+    if (!await ensureAuthenticated(context)) return;
+    if (!mounted) return;
 
-    // Gerçek mesajlaşma konuşması başlat
-    final conv = await MessagingService.getOrCreateConversation(
+    // Popup ile sohbet aç (mevcut ekran kaybolmaz)
+    DesignerChatPopup.show(
+      context,
       designerId: designerId,
+      designerName: name,
+      designerAvatarUrl: expert.designer['avatar_url']?.toString(),
       contextType: 'designer',
       contextId: designerId,
       contextTitle: name,
     );
-
-    if (conv != null && mounted) {
-      // Bottom sheet açıksa kapat
-      Navigator.of(context).pop();
-      await Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) => ConversationDetailScreen(
-            conversationId: conv['id'] as String,
-            designerName: name,
-            designerAvatarUrl: expert.designer['avatar_url']?.toString(),
-          ),
-        ),
-      );
-    } else if (mounted) {
-      ScaffoldMessenger.of(context).clearSnackBars();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          behavior: SnackBarBehavior.floating,
-          backgroundColor: KoalaColors.errorBright,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          duration: const Duration(seconds: 3),
-          content: const Row(
-            children: [
-              Icon(Icons.info_outline_rounded, color: Colors.white, size: 18),
-              SizedBox(width: 8),
-              Expanded(child: Text('Bağlantı kurulamadı. Lütfen tekrar deneyin.', style: TextStyle(color: Colors.white, fontSize: 13))),
-            ],
-          ),
-        ),
-      );
-    }
   }
 
   @override

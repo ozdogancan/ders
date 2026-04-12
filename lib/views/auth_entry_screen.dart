@@ -8,9 +8,28 @@ import 'auth_common.dart';
 import 'phone_auth_screen.dart';
 
 class AuthEntryScreen extends StatefulWidget {
-  const AuthEntryScreen({super.key, required this.mode});
+  const AuthEntryScreen({
+    super.key,
+    required this.mode,
+    this.showGuestOption = true,
+    this.showCloseButton = false,
+    this.returnOnSuccess = false,
+    this.toastMessage,
+  });
 
   final AuthFlowMode mode;
+
+  /// Misafir girişi gösterilsin mi? (mesajlaşma akışından geliyorsa false)
+  final bool showGuestOption;
+
+  /// Sağ üstte X butonu gösterilsin mi? (misafirken yönlendirilenlerde true)
+  final bool showCloseButton;
+
+  /// Login sonrası ana sayfaya git mi (false) yoksa pop mu (true)?
+  final bool returnOnSuccess;
+
+  /// Giriş sayfasında gösterilecek toast mesajı
+  final String? toastMessage;
 
   @override
   State<AuthEntryScreen> createState() => _AuthEntryScreenState();
@@ -29,6 +48,29 @@ class _AuthEntryScreenState extends State<AuthEntryScreen>
       vsync: this,
       duration: const Duration(milliseconds: 1100),
     )..forward();
+
+    // Toast mesajı varsa göster
+    if (widget.toastMessage != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).clearSnackBars();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: KoalaColors.accentDeep,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            duration: const Duration(seconds: 4),
+            content: Row(
+              children: [
+                const Icon(Icons.login_rounded, color: Colors.white, size: 18),
+                const SizedBox(width: 8),
+                Expanded(child: Text(widget.toastMessage!, style: const TextStyle(color: Colors.white, fontSize: 13))),
+              ],
+            ),
+          ),
+        );
+      });
+    }
   }
 
   @override
@@ -79,6 +121,10 @@ class _AuthEntryScreenState extends State<AuthEntryScreen>
       }
 
       if (!mounted) return;
+      if (widget.returnOnSuccess) {
+        Navigator.of(context).pop(true);
+        return;
+      }
       await AuthCoordinator.goToHome(context);
     } catch (error) {
       if (!mounted) return;
@@ -113,6 +159,26 @@ class _AuthEntryScreenState extends State<AuthEntryScreen>
     );
   }
 
+  Future<void> _handleGuestLogin() async {
+    if (_loadingAction != null) return;
+    _safeSetState(() => _loadingAction = AuthActionType.google); // reuse loading state
+    try {
+      await FirebaseAuth.instance.signInAnonymously();
+      if (!mounted) return;
+      if (widget.returnOnSuccess) {
+        Navigator.of(context).pop(false); // false = guest, not real login
+        return;
+      }
+      await AuthCoordinator.goToHome(context);
+    } catch (e) {
+      _safeSetState(() {
+        _error = 'Misafir girişi başarısız oldu. Lütfen tekrar deneyin.';
+        _loadingAction = null;
+      });
+    }
+    _safeSetState(() => _loadingAction = null);
+  }
+
 
   @override
   Widget build(BuildContext context) {
@@ -136,7 +202,26 @@ class _AuthEntryScreenState extends State<AuthEntryScreen>
     );
 
     return AuthScene(
-      child: LayoutBuilder(
+      child: Stack(
+        children: [
+          // Close button (sadece misafirken yönlendirilenlerde)
+          if (widget.showCloseButton)
+            Positioned(
+              top: 12,
+              right: 12,
+              child: SafeArea(
+                child: IconButton(
+                  onPressed: () => Navigator.of(context).pop(false),
+                  style: IconButton.styleFrom(
+                    backgroundColor: KoalaColors.surfaceCool,
+                    foregroundColor: KoalaColors.textMed,
+                    minimumSize: const Size(40, 40),
+                  ),
+                  icon: const Icon(Icons.close_rounded, size: 20),
+                ),
+              ),
+            ),
+          LayoutBuilder(
         builder: (BuildContext context, BoxConstraints constraints) {
           return SingleChildScrollView(
             padding: const EdgeInsets.fromLTRB(28, 12, 28, 24),
@@ -251,6 +336,32 @@ class _AuthEntryScreenState extends State<AuthEntryScreen>
                         ),
                         const SizedBox(height: 20),
 
+                        // Misafir girişi (sadece izin verildiğinde)
+                        if (widget.showGuestOption)
+                          FadeSlideIn(
+                            animation: buttonsAnim,
+                            child: Padding(
+                              padding: const EdgeInsets.only(top: 8),
+                              child: TextButton(
+                                onPressed: _handleGuestLogin,
+                                style: TextButton.styleFrom(
+                                  foregroundColor: KoalaColors.textMuted,
+                                  padding: const EdgeInsets.symmetric(vertical: 14),
+                                ),
+                                child: const Text(
+                                  'Misafir olarak göz at',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w500,
+                                    decoration: TextDecoration.underline,
+                                    decorationColor: KoalaColors.textMuted,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        const SizedBox(height: 12),
+
                         // Legal text
                         FadeSlideIn(
                           animation: buttonsAnim,
@@ -264,6 +375,8 @@ class _AuthEntryScreenState extends State<AuthEntryScreen>
             ),
           );
         },
+      ),
+        ],
       ),
     );
   }

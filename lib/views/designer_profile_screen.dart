@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../core/theme/koala_tokens.dart';
+import '../helpers/auth_guard.dart';
 import '../services/evlumba_live_service.dart';
 import '../widgets/chat/designer_chat_popup.dart';
 
@@ -49,7 +50,11 @@ class _DesignerProfileScreenState extends State<DesignerProfileScreen> {
     }
   }
 
-  void _openChat() {
+  Future<void> _openChat() async {
+    // Auth kontrolü
+    if (!await ensureAuthenticated(context)) return;
+    if (!mounted) return;
+
     final name = _designer?['full_name'] as String? ??
         widget.designerName ??
         'Tasarımcı';

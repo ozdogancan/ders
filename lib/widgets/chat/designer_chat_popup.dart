@@ -2,9 +2,13 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' hide User;
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/theme/koala_tokens.dart';
+import '../../services/evlumba_live_service.dart';
 import '../../services/messaging_service.dart';
+import '../../services/saved_items_service.dart';
+import '../save_button.dart';
 
 /// Tasarımcıya mesaj atma popup'ı.
 /// Mevcut ekranın üzerinde açılır, AI chat kaybolmaz.
@@ -344,7 +348,7 @@ class _DesignerChatSheetState extends State<_DesignerChatSheet>
     );
   }
 
-  // ─── HEADER ──────────────────────────────────────────
+  // ─── HEADER — Tasarımcı bilgi kartı ──────────────────
   Widget _buildHeader() {
     final initials = widget.designerName
         .split(' ')
@@ -366,7 +370,7 @@ class _DesignerChatSheetState extends State<_DesignerChatSheet>
           ),
         ),
 
-        // Designer info + close
+        // Designer info card + actions
         Padding(
           padding: const EdgeInsets.symmetric(
             horizontal: KoalaSpacing.lg,
@@ -374,56 +378,70 @@ class _DesignerChatSheetState extends State<_DesignerChatSheet>
           ),
           child: Row(
             children: [
-              // Avatar
-              Container(
-                width: 40,
-                height: 40,
-                decoration: const BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: LinearGradient(
-                    colors: [KoalaColors.accent, KoalaColors.accentMuted],
+              // Avatar (tıklanınca profil aç)
+              GestureDetector(
+                onTap: _openDesignerProfile,
+                child: Container(
+                  width: 44,
+                  height: 44,
+                  decoration: const BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: LinearGradient(
+                      colors: [KoalaColors.accent, KoalaColors.accentMuted],
+                    ),
                   ),
-                ),
-                child: widget.designerAvatarUrl != null
-                    ? ClipOval(
-                        child: Image.network(
-                          widget.designerAvatarUrl!,
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => Center(
-                            child: Text(initials,
-                                style: const TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w700,
-                                    color: Colors.white)),
+                  child: widget.designerAvatarUrl != null
+                      ? ClipOval(
+                          child: Image.network(
+                            widget.designerAvatarUrl!,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => Center(
+                              child: Text(initials,
+                                  style: const TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w700,
+                                      color: Colors.white)),
+                            ),
                           ),
+                        )
+                      : Center(
+                          child: Text(initials,
+                              style: const TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w700,
+                                  color: Colors.white)),
                         ),
-                      )
-                    : Center(
-                        child: Text(initials,
-                            style: const TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w700,
-                                color: Colors.white)),
-                      ),
+                ),
               ),
               const SizedBox(width: KoalaSpacing.md),
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(widget.designerName, style: KoalaText.h4),
-                    Text(
-                      _state == _SheetState.connecting
-                          ? 'Bağlanılıyor...'
-                          : 'evlumba.com',
-                      style: KoalaText.bodySmall.copyWith(
-                        color: _state == _SheetState.connecting
-                            ? KoalaColors.accent
-                            : KoalaColors.textTer,
+                child: GestureDetector(
+                  onTap: _openDesignerProfile,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(widget.designerName, style: KoalaText.h4),
+                      Text(
+                        _state == _SheetState.connecting
+                            ? 'Bağlanılıyor...'
+                            : 'evlumba.com · Profili Gör',
+                        style: KoalaText.bodySmall.copyWith(
+                          color: _state == _SheetState.connecting
+                              ? KoalaColors.accent
+                              : KoalaColors.textTer,
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
+              ),
+              // Save/Heart button
+              SaveButton(
+                itemType: SavedItemType.designer,
+                itemId: widget.designerId,
+                title: widget.designerName,
+                subtitle: 'İç Mimar',
+                size: 22,
               ),
               // Expand button
               IconButton(
@@ -440,8 +458,10 @@ class _DesignerChatSheetState extends State<_DesignerChatSheet>
                       ? Icons.expand_more_rounded
                       : Icons.expand_less_rounded,
                   color: KoalaColors.textSec,
+                  size: 22,
                 ),
                 tooltip: 'Büyüt / Küçült',
+                visualDensity: VisualDensity.compact,
               ),
               // Close
               IconButton(
@@ -449,6 +469,7 @@ class _DesignerChatSheetState extends State<_DesignerChatSheet>
                 icon: const Icon(Icons.close_rounded,
                     color: KoalaColors.textSec, size: 22),
                 tooltip: 'Kapat',
+                visualDensity: VisualDensity.compact,
               ),
             ],
           ),
@@ -456,6 +477,12 @@ class _DesignerChatSheetState extends State<_DesignerChatSheet>
         const Divider(height: 1, color: KoalaColors.borderSolid),
       ],
     );
+  }
+
+  /// Tasarımcı profilini Evlumba'da aç
+  void _openDesignerProfile() {
+    final url = 'https://www.evlumba.com/tasarimci/${widget.designerId}';
+    launchUrl(Uri.parse(url), mode: LaunchMode.inAppBrowserView);
   }
 
   // ─── CONNECTING STATE ────────────────────────────────

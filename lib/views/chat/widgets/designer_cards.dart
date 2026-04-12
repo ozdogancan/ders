@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../core/theme/koala_tokens.dart';
+import '../../../helpers/auth_guard.dart';
 import '../../../services/saved_items_service.dart';
 import '../../../services/profile_feedback_service.dart';
 import '../../../widgets/save_button.dart';
@@ -226,10 +227,15 @@ class DesignerCards extends StatelessWidget {
                 const SizedBox(height: 12),
                 // Primary CTA — Tasarımcıya Yaz (popup — AI chat kaybolmaz)
                 GestureDetector(
-                  onTap: () {
+                  onTap: () async {
                     final designerId = ds['id']?.toString() ?? '';
                     if (designerId.isEmpty) return;
                     HapticFeedback.lightImpact();
+
+                    // Auth kontrolü — anonim kullanıcıyı giriş ekranına yönlendir
+                    if (!await ensureAuthenticated(context)) return;
+                    if (!context.mounted) return;
+
                     DesignerChatPopup.show(
                       context,
                       designerId: designerId,

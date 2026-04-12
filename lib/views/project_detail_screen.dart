@@ -3,12 +3,13 @@ import 'package:lucide_icons/lucide_icons.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../core/theme/koala_tokens.dart';
+import '../helpers/auth_guard.dart';
 import '../services/evlumba_live_service.dart';
 import '../services/messaging_service.dart';
 import '../services/saved_items_service.dart';
+import '../widgets/chat/designer_chat_popup.dart';
 import '../widgets/koala_widgets.dart';
 import '../widgets/save_button.dart';
-import 'conversation_detail_screen.dart';
 
 class ProjectDetailScreen extends StatefulWidget {
   const ProjectDetailScreen({super.key, required this.project});
@@ -334,26 +335,24 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                                   project['designer_id']?.toString() ??
                                   '';
                               if (id.isEmpty) return;
-                              final designerName =
+
+                              // Auth kontrolü
+                              if (!await ensureAuthenticated(context)) return;
+                              if (!context.mounted) return;
+
+                              final dName =
                                   designer?['full_name']?.toString() ?? 'Tasarımcı';
-                              final conv = await MessagingService.getOrCreateConversation(
+
+                              // Popup aç (mevcut ekran kaybolmaz)
+                              DesignerChatPopup.show(
+                                context,
                                 designerId: id,
+                                designerName: dName,
+                                designerAvatarUrl: designer?['avatar_url']?.toString(),
                                 contextType: 'project',
                                 contextId: project['id']?.toString(),
                                 contextTitle: project['title']?.toString(),
                               );
-                              if (conv != null && mounted) {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => ConversationDetailScreen(
-                                      conversationId: conv['id'] as String,
-                                      designerName: designerName,
-                                      designerAvatarUrl: designer?['avatar_url']?.toString(),
-                                    ),
-                                  ),
-                                );
-                              }
                             },
                             child: Container(
                               padding: const EdgeInsets.symmetric(
