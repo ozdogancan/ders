@@ -381,12 +381,17 @@ class _DesignerChatSheetState extends State<_DesignerChatSheet>
       initialChildSize: 0.65,
       minChildSize: 0.35,
       maxChildSize: 1.0,
+      snap: true,
+      snapSizes: const [0.65, 1.0],
       builder: (context, scrollController) {
+        final isFullScreen = _sheetController.isAttached && _sheetController.size > 0.95;
         return Container(
-          decoration: const BoxDecoration(
+          decoration: BoxDecoration(
             color: KoalaColors.surface,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-            boxShadow: [
+            borderRadius: isFullScreen
+                ? BorderRadius.zero
+                : const BorderRadius.vertical(top: Radius.circular(24)),
+            boxShadow: const [
               BoxShadow(
                 color: Colors.black12,
                 blurRadius: 20,
@@ -396,6 +401,9 @@ class _DesignerChatSheetState extends State<_DesignerChatSheet>
           ),
           child: Column(
             children: [
+              // SafeArea top padding for full screen
+              if (isFullScreen) SizedBox(height: MediaQuery.of(context).padding.top),
+
               // ── Handle + Header ──
               _buildHeader(),
 
@@ -410,9 +418,6 @@ class _DesignerChatSheetState extends State<_DesignerChatSheet>
 
               // ── Input bar (sadece ready durumunda) ──
               if (_state == _SheetState.ready) _buildInputBar(),
-
-              // Klavye yüksekliği kadar boşluk
-              if (keyboardVisible) SizedBox(height: bottomInset),
             ],
           ),
         );
@@ -773,14 +778,16 @@ class _DesignerChatSheetState extends State<_DesignerChatSheet>
 
   // ─── INPUT BAR ───────────────────────────────────────
   Widget _buildInputBar() {
-    final keyboardUp = MediaQuery.of(context).viewInsets.bottom > 0;
+    final media = MediaQuery.of(context);
+    final keyboardUp = media.viewInsets.bottom > 0;
     return Container(
       padding: EdgeInsets.only(
         left: KoalaSpacing.lg,
         right: KoalaSpacing.sm,
         top: KoalaSpacing.sm,
-        bottom: KoalaSpacing.sm +
-            (keyboardUp ? 0 : MediaQuery.of(context).padding.bottom),
+        bottom: keyboardUp
+            ? media.viewInsets.bottom + KoalaSpacing.sm
+            : media.padding.bottom + KoalaSpacing.sm,
       ),
       decoration: const BoxDecoration(
         color: KoalaColors.surface,

@@ -1133,7 +1133,10 @@ class _ActiveConversationsRowState extends State<_ActiveConversationsRow> {
             return GestureDetector(
               onTap: () => context.push(
                 '/chat/dm/${conv['id']}',
-                extra: {'designerName': title},
+                extra: {
+                  'designerId': (conv['designer_id'] ?? '').toString(),
+                  'designerName': title,
+                },
               ),
               child: Container(
                 margin: const EdgeInsets.only(bottom: 6),

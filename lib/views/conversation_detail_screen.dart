@@ -1,20 +1,26 @@
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' hide User;
+import 'package:url_launcher/url_launcher.dart';
 import '../core/theme/koala_tokens.dart';
+import '../services/evlumba_live_service.dart';
 import '../services/messaging_service.dart';
+import '../services/saved_items_service.dart';
 import '../widgets/koala_widgets.dart';
+import '../widgets/save_button.dart';
 
 /// Tasarımcı ile mesaj detay ekranı — gerçek zamanlı
 class ConversationDetailScreen extends StatefulWidget {
   const ConversationDetailScreen({
     super.key,
     required this.conversationId,
+    this.designerId,
     this.designerName = 'Tasarımcı',
     this.designerAvatarUrl,
   });
 
   final String conversationId;
+  final String? designerId;
   final String designerName;
   final String? designerAvatarUrl;
 
@@ -33,6 +39,10 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
   bool _uploadingImage = false;
   String? _uid;
 
+  // Designer detay bilgileri
+  Map<String, dynamic>? _designerDetail;
+  List<Map<String, dynamic>> _designerProjects = [];
+
   @override
   void initState() {
     super.initState();
@@ -41,6 +51,7 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
     _subscribeRealtime();
     _markRead();
     _scrollController.addListener(_onScroll);
+    _loadDesignerDetail();
   }
 
   @override
@@ -49,6 +60,28 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
     _textController.dispose();
     _scrollController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadDesignerDetail() async {
+    if (widget.designerId == null || widget.designerId!.isEmpty) return;
+    try {
+      if (!EvlumbaLiveService.isReady) {
+        await EvlumbaLiveService.waitForReady(timeout: const Duration(seconds: 5));
+      }
+      if (!EvlumbaLiveService.isReady) return;
+
+      final detail = await EvlumbaLiveService.getDesignerById(widget.designerId!);
+      final projects = await EvlumbaLiveService.getDesignerProjects(
+        widget.designerId!,
+        limit: 4,
+      );
+      if (mounted) {
+        setState(() {
+          _designerDetail = detail;
+          _designerProjects = projects;
+        });
+      }
+    } catch (_) {}
   }
 
   Future<void> _loadMessages() async {
@@ -80,7 +113,6 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
       onMessage: (msg) {
         if (mounted) {
           setState(() => _messages.insert(0, msg));
-          // Gelen mesaj karşı taraftansa okundu işaretle
           if (msg['sender_id'] != _uid) {
             MessagingService.markAsRead(widget.conversationId);
           }
@@ -128,7 +160,17 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
 
     try {
       final bytes = await picked.readAsBytes();
-      final ext = picked.path.split('.').last;
+      final ext = picked.path.split('.').last.toLowerCase();
+      const allowedExt = {'jpg', 'jpeg', 'png', 'gif', 'webp', 'heic'};
+      if (!allowedExt.contains(ext)) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Desteklenmeyen dosya türü')),
+          );
+        }
+        setState(() => _uploadingImage = false);
+        return;
+      }
       final fileName = '${_uid ?? 'anon'}/${DateTime.now().millisecondsSinceEpoch}.$ext';
 
       await Supabase.instance.client.storage
@@ -141,7 +183,7 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
 
       await MessagingService.sendMessage(
         conversationId: widget.conversationId,
-        content: '📷 Fotoğraf',
+        content: '\u{1F4F7} Fotoğraf',
         type: MessageType.image,
         attachmentUrl: imageUrl,
       );
@@ -156,8 +198,163 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
     if (mounted) setState(() => _uploadingImage = false);
   }
 
+  void _openDesignerProfile() {
+    if (widget.designerId == null) return;
+    final url = 'https://www.evlumba.com/tasarimci/${widget.designerId}';
+    launchUrl(Uri.parse(url), mode: LaunchMode.inAppBrowserView);
+  }
+
   @override
   Widget build(BuildContext context) {
+    final media = MediaQuery.of(context);
+    final keyboardUp = media.viewInsets.bottom > 0;
+
+    return Scaffold(
+      backgroundColor: KoalaColors.bg,
+      body: SafeArea(
+        bottom: false,
+        child: Column(
+          children: [
+            // ── Zengin Header ──
+            _buildHeader(),
+
+            // Messages
+            Expanded(
+              child: _loading
+                  ? const LoadingState()
+                  : _messages.isEmpty
+                      ? const Center(
+                          child: Text(
+                            'Henüz mesaj yok. İlk mesajı sen gönder!',
+                            style: KoalaText.bodySec,
+                          ),
+                        )
+                      : ListView.builder(
+                          controller: _scrollController,
+                          reverse: true,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: KoalaSpacing.lg,
+                            vertical: KoalaSpacing.md,
+                          ),
+                          itemCount: _messages.length + (_loadingMore ? 1 : 0),
+                          itemBuilder: (context, index) {
+                            if (_loadingMore && index == _messages.length) {
+                              return const Center(
+                                child: Padding(
+                                  padding: EdgeInsets.all(KoalaSpacing.md),
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: KoalaColors.accent,
+                                  ),
+                                ),
+                              );
+                            }
+                            return _MessageBubble(
+                              message: _messages[index],
+                              isMe: _messages[index]['sender_id'] == _uid,
+                            );
+                          },
+                        ),
+            ),
+
+            // Input bar
+            Container(
+              padding: EdgeInsets.only(
+                left: KoalaSpacing.lg,
+                right: KoalaSpacing.sm,
+                top: KoalaSpacing.sm,
+                bottom: keyboardUp
+                    ? media.viewInsets.bottom + KoalaSpacing.sm
+                    : media.padding.bottom + KoalaSpacing.sm,
+              ),
+              decoration: const BoxDecoration(
+                color: KoalaColors.surface,
+                border: Border(
+                  top: BorderSide(color: KoalaColors.border, width: 0.5),
+                ),
+              ),
+              child: Row(
+                children: [
+                  // Image picker
+                  GestureDetector(
+                    onTap: _uploadingImage ? null : _pickAndSendImage,
+                    child: Padding(
+                      padding: const EdgeInsets.only(right: KoalaSpacing.sm),
+                      child: _uploadingImage
+                          ? const SizedBox(
+                              width: 24,
+                              height: 24,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: KoalaColors.accent,
+                              ),
+                            )
+                          : const Icon(
+                              Icons.camera_alt_rounded,
+                              color: KoalaColors.textSec,
+                              size: 24,
+                            ),
+                    ),
+                  ),
+                  Expanded(
+                    child: TextField(
+                      controller: _textController,
+                      style: KoalaText.body,
+                      maxLines: 4,
+                      minLines: 1,
+                      textInputAction: TextInputAction.send,
+                      onSubmitted: (_) => _sendMessage(),
+                      decoration: InputDecoration(
+                        hintText: '${widget.designerName} ile mesajlaş...',
+                        hintStyle: KoalaText.hint,
+                        filled: true,
+                        fillColor: KoalaColors.bg,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(KoalaRadius.xl),
+                          borderSide: BorderSide.none,
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: KoalaSpacing.lg,
+                          vertical: KoalaSpacing.md,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: KoalaSpacing.sm),
+                  GestureDetector(
+                    onTap: _sendMessage,
+                    child: Container(
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        color: _sending ? KoalaColors.accentLight : KoalaColors.accent,
+                        shape: BoxShape.circle,
+                      ),
+                      child: _sending
+                          ? const Padding(
+                              padding: EdgeInsets.all(12),
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : const Icon(
+                              Icons.send_rounded,
+                              color: Colors.white,
+                              size: 20,
+                            ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHeader() {
     final initials = widget.designerName
         .split(' ')
         .map((w) => w.isNotEmpty ? w[0] : '')
@@ -165,189 +362,177 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
         .join()
         .toUpperCase();
 
-    return Scaffold(
-      backgroundColor: KoalaColors.bg,
-      appBar: AppBar(
-        backgroundColor: KoalaColors.surface,
-        surfaceTintColor: KoalaColors.surface,
-        elevation: 0,
-        titleSpacing: 0,
-        title: Row(
-          children: [
-            // Avatar
-            Container(
-              width: 36,
-              height: 36,
-              decoration: const BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: LinearGradient(
-                  colors: [KoalaColors.accent, KoalaColors.accentMuted],
-                ),
-              ),
-              child: widget.designerAvatarUrl != null
-                  ? ClipOval(
-                      child: Image.network(
-                        widget.designerAvatarUrl!,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => Center(
-                          child: Text(initials,
-                              style: const TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w700,
-                                  color: Colors.white)),
-                        ),
-                      ),
-                    )
-                  : Center(
-                      child: Text(initials,
-                          style: const TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w700,
-                              color: Colors.white)),
-                    ),
-            ),
-            const SizedBox(width: KoalaSpacing.md),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(widget.designerName, style: KoalaText.h4),
-                Text('evlumba.com', style: KoalaText.bodySmall.copyWith(color: KoalaColors.textTer)),
-              ],
-            ),
-          ],
-        ),
-      ),
-      body: Column(
-        children: [
-          // Messages
-          Expanded(
-            child: _loading
-                ? const LoadingState()
-                : _messages.isEmpty
-                    ? const Center(
-                        child: Text(
-                          'Henüz mesaj yok. İlk mesajı sen gönder!',
-                          style: KoalaText.bodySec,
-                        ),
-                      )
-                    : ListView.builder(
-                        controller: _scrollController,
-                        reverse: true,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: KoalaSpacing.lg,
-                          vertical: KoalaSpacing.md,
-                        ),
-                        itemCount: _messages.length + (_loadingMore ? 1 : 0),
-                        itemBuilder: (context, index) {
-                          if (_loadingMore && index == _messages.length) {
-                            return const Center(
-                              child: Padding(
-                                padding: EdgeInsets.all(KoalaSpacing.md),
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: KoalaColors.accent,
-                                ),
-                              ),
-                            );
-                          }
-                          return _MessageBubble(
-                            message: _messages[index],
-                            isMe: _messages[index]['sender_id'] == _uid,
-                          );
-                        },
-                      ),
-          ),
+    final specialty = (_designerDetail?['specialty'] ?? '').toString().trim();
+    final city = (_designerDetail?['city'] ?? '').toString().trim();
 
-          // Input bar
-          Container(
-            padding: EdgeInsets.only(
-              left: KoalaSpacing.lg,
-              right: KoalaSpacing.sm,
-              top: KoalaSpacing.sm,
-              bottom: KoalaSpacing.sm + MediaQuery.of(context).padding.bottom,
-            ),
-            decoration: BoxDecoration(
-              color: KoalaColors.surface,
-              border: Border(
-                top: BorderSide(color: KoalaColors.border, width: 0.5),
-              ),
-            ),
+    return Container(
+      color: KoalaColors.surface,
+      child: Column(
+        children: [
+          // Top row: back + actions
+          Padding(
+            padding: const EdgeInsets.only(left: 4, right: 8, top: 4),
             child: Row(
               children: [
-                // Image picker
-                GestureDetector(
-                  onTap: _uploadingImage ? null : _pickAndSendImage,
-                  child: Padding(
-                    padding: const EdgeInsets.only(right: KoalaSpacing.sm),
-                    child: _uploadingImage
-                        ? const SizedBox(
-                            width: 24,
-                            height: 24,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: KoalaColors.accent,
-                            ),
-                          )
-                        : const Icon(
-                            Icons.camera_alt_rounded,
-                            color: KoalaColors.textSec,
-                            size: 24,
-                          ),
-                  ),
+                IconButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  icon: const Icon(Icons.arrow_back_rounded,
+                      color: KoalaColors.text, size: 22),
                 ),
-                Expanded(
-                  child: TextField(
-                    controller: _textController,
-                    style: KoalaText.body,
-                    maxLines: 4,
-                    minLines: 1,
-                    textInputAction: TextInputAction.send,
-                    onSubmitted: (_) => _sendMessage(),
-                    decoration: InputDecoration(
-                      hintText: 'Mesaj yaz...',
-                      hintStyle: KoalaText.hint,
-                      filled: true,
-                      fillColor: KoalaColors.bg,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(KoalaRadius.xl),
-                        borderSide: BorderSide.none,
-                      ),
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: KoalaSpacing.lg,
-                        vertical: KoalaSpacing.md,
-                      ),
-                    ),
+                const Spacer(),
+                if (widget.designerId != null)
+                  SaveButton(
+                    itemType: SavedItemType.designer,
+                    itemId: widget.designerId!,
+                    title: widget.designerName,
+                    subtitle: specialty.isNotEmpty ? specialty : 'İç Mimar',
+                    size: 20,
                   ),
-                ),
-                const SizedBox(width: KoalaSpacing.sm),
-                GestureDetector(
-                  onTap: _sendMessage,
-                  child: Container(
-                    width: 44,
-                    height: 44,
-                    decoration: BoxDecoration(
-                      color: _sending ? KoalaColors.accentLight : KoalaColors.accent,
-                      shape: BoxShape.circle,
-                    ),
-                    child: _sending
-                        ? const Padding(
-                            padding: EdgeInsets.all(12),
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.white,
-                            ),
-                          )
-                        : const Icon(
-                            Icons.send_rounded,
-                            color: Colors.white,
-                            size: 20,
-                          ),
-                  ),
+                IconButton(
+                  onPressed: _openDesignerProfile,
+                  icon: const Icon(Icons.open_in_new_rounded,
+                      color: KoalaColors.textSec, size: 20),
+                  tooltip: 'Profili Gör',
+                  visualDensity: VisualDensity.compact,
                 ),
               ],
             ),
           ),
+
+          // Designer info
+          GestureDetector(
+            onTap: _openDesignerProfile,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Avatar
+                  Container(
+                    width: 52,
+                    height: 52,
+                    decoration: const BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: LinearGradient(
+                        colors: [KoalaColors.accent, KoalaColors.accentMuted],
+                      ),
+                    ),
+                    child: widget.designerAvatarUrl != null
+                        ? ClipOval(
+                            child: Image.network(
+                              widget.designerAvatarUrl!,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => Center(
+                                child: Text(initials,
+                                    style: const TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w700,
+                                        color: Colors.white)),
+                              ),
+                            ),
+                          )
+                        : Center(
+                            child: Text(initials,
+                                style: const TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w700,
+                                    color: Colors.white)),
+                          ),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          widget.designerName,
+                          style: const TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w800,
+                            color: KoalaColors.text,
+                          ),
+                        ),
+                        if (specialty.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 2),
+                            child: Text(
+                              specialty,
+                              style: const TextStyle(
+                                fontSize: 13,
+                                color: KoalaColors.textSec,
+                              ),
+                            ),
+                          ),
+                        const SizedBox(height: 4),
+                        Row(
+                          children: [
+                            Container(
+                              width: 7,
+                              height: 7,
+                              decoration: const BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: Color(0xFF4CAF50),
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                city.isNotEmpty
+                                    ? 'Genellikle 24 saat içinde yanıtlar \u00b7 $city'
+                                    : 'Genellikle 24 saat içinde yanıtlar',
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: KoalaColors.textTer,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          // Portfolio mini-gallery
+          if (_designerProjects.isNotEmpty)
+            SizedBox(
+              height: 64,
+              child: ListView.separated(
+                padding: const EdgeInsets.only(left: 20, right: 20, bottom: 10),
+                scrollDirection: Axis.horizontal,
+                itemCount: _designerProjects.length.clamp(0, 4),
+                separatorBuilder: (_, __) => const SizedBox(width: 6),
+                itemBuilder: (_, i) {
+                  final img = (_designerProjects[i]['cover_image_url'] ??
+                          _designerProjects[i]['cover_url'] ??
+                          _designerProjects[i]['image_url'] ??
+                          '')
+                      .toString()
+                      .trim();
+                  if (img.isEmpty) return const SizedBox.shrink();
+                  return ClipRRect(
+                    borderRadius: BorderRadius.circular(10),
+                    child: Image.network(
+                      img,
+                      width: 80,
+                      height: 54,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => Container(
+                        width: 80,
+                        height: 54,
+                        color: KoalaColors.surfaceAlt,
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+
+          const Divider(height: 1, color: KoalaColors.borderSolid),
         ],
       ),
     );

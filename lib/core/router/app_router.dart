@@ -112,6 +112,7 @@ final GoRouter appRouter = GoRouter(
         final extra = state.extra as Map<String, dynamic>?;
         return ConversationDetailScreen(
           conversationId: state.pathParameters['conversationId']!,
+          designerId: extra?['designerId'] as String?,
           designerName: extra?['designerName'] as String? ?? 'Tasarımcı',
           designerAvatarUrl: extra?['designerAvatarUrl'] as String?,
         );

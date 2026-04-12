@@ -261,6 +261,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
     return GestureDetector(
       onTap: () async {
         await context.push('/chat/dm/${conv['id']}', extra: {
+          'designerId': (conv['designer_id'] ?? '').toString(),
           'designerName': title,
         });
         _load(); // Refresh unread counts

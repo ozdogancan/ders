@@ -38,6 +38,13 @@ class _AuthGateState extends State<AuthGate> {
     final onboardingDone = prefs.getBool('onboarding_done') ?? false;
     final user = FirebaseAuth.instance.currentUser;
 
+    // Safari özel durum: localStorage silinebilir ama Firebase IndexedDB kalır
+    // Kullanıcı varsa onboarding'i atla ve flag'i tekrar kaydet
+    if (!onboardingDone && user != null) {
+      await prefs.setBool('onboarding_done', true);
+      return const MainShell();
+    }
+
     if (!onboardingDone) {
       return const OnboardingScreen();
     }
