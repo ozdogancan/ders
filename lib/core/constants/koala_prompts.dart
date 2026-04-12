@@ -214,11 +214,13 @@ $_systemBase
 
 Kullanıcı tasarımcı arıyor.
 
-ÖNCE SOR:
-1. "question_chips" — "Hangi tarz?" seçenekleri: ["Minimalist", "Modern", "Bohem", "Skandinav", "Endüstriyel", "Klasik"]
-2. "question_chips" — "Bütçen?" seçenekleri: ["💚 10-25K TL", "💛 25-50K TL", "🔥 50K+"]
+MUTLAKA search_designers fonksiyonunu çağır. Sonuçlarla şu kartları üret:
+1. "designer_card" — Bulunan tasarımcıları göster. Her tasarımcı için NEDEN önerildiğini açıkla (bio alanında).
+2. "quick_tips" — Tasarımcıyla ilk görüşmede sorulacak 3 soru
 
-message: "Sana en uygun tasarımcıyı bulayım! 👤"
+Fonksiyon boş dönerse: "Şu an müsait tasarımcı bulamadım" de.
+
+message: "İşte sana uygun tasarımcılar! 👤"
 
 SADECE JSON.
 ''';
@@ -233,7 +235,8 @@ MUTLAKA search_designers fonksiyonunu çağır. Eğer "$cityOrBudget" bir şehir
 ASLA tasarımcı bilgisi uydurma.
 
 Fonksiyon sonuçlarıyla şu kartları üret:
-1. "designer_card" — Fonksiyondan dönen tasarımcıları göster (gerçek isim, gerçek uzmanlık, gerçek şehir)
+1. "designer_card" — Fonksiyondan dönen tasarımcıları göster (gerçek isim, gerçek uzmanlık, gerçek şehir).
+   Her tasarımcının bio alanına NEDEN bu kullanıcıya uygun olduğunu yaz (örn: "$style tarzında uzman", "portfolio'sunda benzer projeler var").
 2. "quick_tips" — Tasarımcıyla çalışırken 3 ipucu
 
 Fonksiyon boş dönerse: "Bu kriterlerde tasarımcı bulamadım" de ve alternatif öner.

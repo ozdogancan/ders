@@ -153,17 +153,32 @@ class DesignerCards extends StatelessWidget {
                     ),
                   ],
                 ),
-                if (ds['bio'] != null)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 10),
-                    child: Text(
-                      ds['bio'],
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.grey.shade600,
-                        height: 1.4,
-                      ),
-                      maxLines: 2,
+                if (ds['bio'] != null && (ds['bio'] as String).isNotEmpty)
+                  Container(
+                    margin: const EdgeInsets.only(top: 10),
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(10),
+                      color: const Color(0xFFF3F0FF),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Icon(Icons.auto_awesome_rounded, size: 14, color: accent),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            ds['bio'] as String,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey.shade700,
+                              height: 1.4,
+                            ),
+                            maxLines: 3,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 // Response time indicator
@@ -236,6 +251,13 @@ class DesignerCards extends StatelessWidget {
                     if (!await ensureAuthenticated(context)) return;
                     if (!context.mounted) return;
 
+                    final specialty = ds['specialty']?.toString() ?? '';
+                    final city = ds['city']?.toString() ?? '';
+                    final contextParts = <String>[];
+                    if (specialty.isNotEmpty) contextParts.add(specialty);
+                    if (city.isNotEmpty) contextParts.add(city);
+                    final contextInfo = contextParts.isNotEmpty ? ' (${contextParts.join(', ')})' : '';
+
                     DesignerChatPopup.show(
                       context,
                       designerId: designerId,
@@ -244,6 +266,7 @@ class DesignerCards extends StatelessWidget {
                       contextType: 'ai_chat',
                       contextId: designerId,
                       contextTitle: name,
+                      initialMessage: 'Merhaba, Koala uygulaması üzerinden ulaşıyorum. $name$contextInfo ile çalışmak istiyorum.',
                     );
                   },
                   child: Container(

@@ -59,8 +59,6 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
   Uint8List? _pendingPhoto;
   bool _loading = false;
   bool _showScrollToBottom = false;
-  /// Tasarımcı arama akışında şehir bekleniyor mu?
-  bool _awaitingDesignerCity = false;
   late String _chatId;
   String _chatTitle = 'Yeni Sohbet';
 
@@ -392,21 +390,11 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
           _loading = false;
         });
       } else {
-        // Follow-up: fotoğraf analiz bağlamı varsa prompt'a ekle
-        // (chip'lerden zaten _contextAwarePrompt ile gelebilir, çift ekleme yapma)
-        String? enrichedText = text;
-        if (text != null && _photoAnalysisContext != null && !text.startsWith('[Sohbet bağlamı')) {
-          final ctx = _photoAnalysisContext!;
-          enrichedText = '[Önceki fotoğraf analizi bağlamı — '
-              'Oda: ${ctx['room'] ?? 'bilinmiyor'}, '
-              'Stil: ${ctx['style'] ?? 'bilinmiyor'}, '
-              'Renkler: ${ctx['colors'] ?? 'bilinmiyor'}] '
-              'Kullanıcı isteği: $text';
-        }
         // Function-calling destekli istek — gerçek ürün/tasarımcı/proje verisi getirebilir
+        // hiddenContext zaten _history'de AI'a gönderildi, ekstra eklemeye gerek yok
         final resp = await _ai.askWithIntent(
           intent: KoalaIntent.freeChat,
-          freeText: enrichedText,
+          freeText: text,
           history: _history,
         );
         _history.add({'role': 'model', 'content': resp.message});
@@ -614,32 +602,8 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
       }
     }
 
-    // "Uzman öner" akışını tespit et
-    if (lower.contains('uzman öner') || lower.contains('uzman bul') || lower.contains('tasarımcı öner')) {
-      _awaitingDesignerCity = true;
-      // Fotoğraf analiz bağlamını ekle — oda tipi ve stile göre uzman önersin
-      _sendToAI(text: _contextAwarePrompt(chipText));
-      return;
-    }
-
-    // Tasarımcı şehir seçimi bekliyorsa → direkt designerMatch intent'ine yönlendir
-    if (_awaitingDesignerCity) {
-      _awaitingDesignerCity = false;
-      final style = _photoAnalysisContext?['style'] ?? 'modern';
-      // Kullanıcı mesajını ekrana ekle
-      setState(() {
-        _msgs.add(_Msg(role: 'user', text: chipText));
-      });
-      _history.add({'role': 'user', 'content': chipText});
-      _sendToAIWithIntent(
-        intent: KoalaIntent.designerMatch,
-        params: {'style': style, 'budget': chipText},
-      );
-      return;
-    }
-
-    // Normal chip — fotoğraf analiz bağlamıyla gönder
-    _sendToAI(text: _contextAwarePrompt(chipText));
+    // Tüm chip'ler: kullanıcı temiz text görür, AI bağlamı hiddenContext ile alır
+    _sendToAI(text: chipText, hiddenContext: _buildHiddenContext());
   }
 
   Future<void> _generateImage(String prompt) async {
@@ -922,10 +886,10 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     );
   }
 
-  // ── Context-aware prompt builder ──
-  String _contextAwarePrompt(String baseRequest) {
+  // ── Hidden context builder — AI'a gönderilir ama kullanıcıya gösterilmez ──
+  String? _buildHiddenContext() {
     final ctx = _photoAnalysisContext;
-    if (ctx == null || ctx.isEmpty) return baseRequest;
+    if (ctx == null || ctx.isEmpty) return null;
     final room = ctx['room'];
     final style = ctx['style'];
     final colors = ctx['colors'];
@@ -933,7 +897,8 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     if (room != null) parts.add('Oda: $room');
     if (style != null) parts.add('Stil: $style');
     if (colors != null) parts.add('Renkler: $colors');
-    return '[Sohbet bağlamı — ${parts.join(', ')}] $baseRequest';
+    if (parts.isEmpty) return null;
+    return 'Fotoğraf analizi bağlamı — ${parts.join(', ')}';
   }
 
   // ── Quick action chips above input ──
@@ -941,11 +906,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     final ctx = _photoAnalysisContext;
     final room = ctx?['room'];
     final style = ctx?['style'];
-    final hasContext = ctx != null && ctx.isNotEmpty;
 
-    final colorLabel = room != null ? 'Renk öner ($room)' : 'Renk öner';
-    final productLabel = style != null ? 'Ürün bul ($style)' : 'Ürün bul';
-    final expertLabel = hasContext ? 'Uzman bul' : 'Uzman bul';
+    final colorLabel = room != null ? 'Renk öner' : 'Renk öner';
+    final productLabel = style != null ? 'Ürün bul' : 'Ürün bul';
 
     return Container(
       padding: const EdgeInsets.fromLTRB(12, 6, 12, 4),
@@ -955,11 +918,11 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
         child: Row(
           children: [
             _quickChip(Icons.color_lens_rounded, colorLabel,
-              () => _sendToAI(text: _contextAwarePrompt('Bu odaya uygun renk paleti öner'))),
+              () => _sendToAI(text: 'Bu odaya uygun renk paleti öner', hiddenContext: _buildHiddenContext())),
             _quickChip(Icons.shopping_bag_rounded, productLabel,
-              () => _sendToAI(text: _contextAwarePrompt('Bu oda ve stile uygun ürün öner'))),
-            _quickChip(Icons.person_rounded, expertLabel,
-              () => _sendToAI(text: _contextAwarePrompt('Bu tarz için uzman tasarımcı öner'))),
+              () => _sendToAI(text: 'Bu oda ve stile uygun ürün öner', hiddenContext: _buildHiddenContext())),
+            _quickChip(Icons.person_rounded, 'Uzman öner',
+              () => _sendToAI(text: 'Bu oda için uzman tasarımcı öner', hiddenContext: _buildHiddenContext())),
             _quickChip(Icons.auto_awesome_rounded, 'Stil analizi',
               () => _sendToAI(text: 'Tarzımı analiz et')),
           ],
@@ -1348,11 +1311,11 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
             children: [
               _fallbackChip(Icons.refresh_rounded, 'Tekrar dene', _retry),
               _fallbackChip(Icons.color_lens_rounded, 'Renk öner',
-                () => _sendToAI(text: _contextAwarePrompt('Bu odaya uygun renk paleti öner'))),
+                () => _sendToAI(text: 'Bu odaya uygun renk paleti öner', hiddenContext: _buildHiddenContext())),
               _fallbackChip(Icons.shopping_bag_rounded, 'Ürün bul',
-                () => _sendToAI(text: _contextAwarePrompt('Bu oda ve stile uygun ürün öner'))),
+                () => _sendToAI(text: 'Bu oda ve stile uygun ürün öner', hiddenContext: _buildHiddenContext())),
               _fallbackChip(Icons.person_rounded, 'Uzman bul',
-                () => _sendToAI(text: _contextAwarePrompt('Bu tarz için uzman tasarımcı öner'))),
+                () => _sendToAI(text: 'Bu tarz için uzman tasarımcı öner', hiddenContext: _buildHiddenContext())),
             ],
           ),
         ],

@@ -132,6 +132,17 @@ class _DesignerChatSheetState extends State<_DesignerChatSheet>
 
   Future<void> _connect() async {
     try {
+      // Auth kontrolü — yoksa tekrar dene
+      if (FirebaseAuth.instance.currentUser == null) {
+        try {
+          await FirebaseAuth.instance.signInAnonymously();
+        } catch (_) {}
+      }
+      if (FirebaseAuth.instance.currentUser == null) {
+        if (mounted) setState(() { _state = _SheetState.error; _errorMsg = 'Oturum açılamadı. İnternet bağlantınızı kontrol edip tekrar deneyin.'; });
+        return;
+      }
+
       final conv = await MessagingService.getOrCreateConversation(
         designerId: widget.designerId,
         contextType: widget.contextType,
@@ -139,7 +150,7 @@ class _DesignerChatSheetState extends State<_DesignerChatSheet>
         contextTitle: widget.contextTitle,
       );
       if (conv == null) {
-        if (mounted) setState(() { _state = _SheetState.error; _errorMsg = 'Bağlantı kurulamadı.'; });
+        if (mounted) setState(() { _state = _SheetState.error; _errorMsg = 'Bağlantı kurulamadı. Lütfen internet bağlantınızı kontrol edin.'; });
         return;
       }
       _conversationId = conv['id'] as String;
