@@ -157,15 +157,29 @@ class SavedItemsService {
     final cached = CacheService.get<Map<String, int>>('saved_counts_$_uid');
     if (cached != null) return cached;
     try {
-      final res = await _db
+      // Her tip için ayrı count sorgusu — tüm veriyi çekmekten çok daha verimli
+      final designCount = await _db
           .from('saved_items')
-          .select('item_type')
-          .eq('user_id', _uid!);
-      final list = List<Map<String, dynamic>>.from(res);
+          .select()
+          .eq('user_id', _uid!)
+          .eq('item_type', 'design')
+          .count(CountOption.exact);
+      final designerCount = await _db
+          .from('saved_items')
+          .select()
+          .eq('user_id', _uid!)
+          .eq('item_type', 'designer')
+          .count(CountOption.exact);
+      final productCount = await _db
+          .from('saved_items')
+          .select()
+          .eq('user_id', _uid!)
+          .eq('item_type', 'product')
+          .count(CountOption.exact);
       final counts = {
-        'design': list.where((r) => r['item_type'] == 'design').length,
-        'designer': list.where((r) => r['item_type'] == 'designer').length,
-        'product': list.where((r) => r['item_type'] == 'product').length,
+        'design': designCount.count,
+        'designer': designerCount.count,
+        'product': productCount.count,
       };
       CacheService.set('saved_counts_$_uid', counts, duration: const Duration(minutes: 2));
       return counts;

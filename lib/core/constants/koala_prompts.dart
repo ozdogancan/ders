@@ -331,13 +331,13 @@ KRİTİK STİL TESPİT KURALLARI:
 Eğer ODA fotoğrafıysa:
 1. "style_analysis" — Mevcut stilini tespit et (style_name, confidence 0-100, description, color_palette 4 renk, mood, tags)
 2. "color_palette" — İyileştirme için önerilen renk paleti (4 renk + kullanım). title: "Önerilen renk paleti"
-3. "product_grid" — Tespit edilen stile uygun 3 ürün önerisi (isim + tahmini fiyat + neden uygun). title: "Bu stile uygun ürünler"
+3. ÜRÜN ÖNERİSİ İÇİN MUTLAKA search_products FUNCTION CALL YAP — tespit ettiğin stile ve oda tipine uygun ürünleri gerçek mağazalardan getir. Ürün bilgilerini ASLA kendin uydurma.
 4. "quick_tips" — 3 iyileştirme ipucu
 5. "question_chips" — "Ne yapmak istersin?" seçenekleri: ["Bu odayı yeniden tasarla", "Renk paletini değiştir", "Bu oda için uzman öner", "Farklı bir stil dene"]
 
 Eğer MOBİLYA/OBJE fotoğrafıysa:
 1. "style_analysis" — Bu objenin stili
-2. "product_grid" — Bu objeyle uyumlu 3 tamamlayıcı ürün önerisi. title: "Bu objeyle uyumlu ürünler"
+2. ÜRÜN ÖNERİSİ İÇİN MUTLAKA search_products FUNCTION CALL YAP — bu objeyle uyumlu tamamlayıcı ürünleri gerçek mağazalardan getir. Ürün bilgilerini ASLA kendin uydurma.
 3. "quick_tips" — Kombinasyon önerileri
 4. "question_chips" — Seçenekler: ["Bu objeye ne yakışır?", "Hangi odaya uyar?", "Bu stilde uzman öner"]
 

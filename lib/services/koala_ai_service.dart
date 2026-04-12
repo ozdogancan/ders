@@ -432,29 +432,27 @@ class KoalaAIService {
       enrichedPrompt = '$prompt${context.toString()}';
     }
 
-    final payload = {
+    // ── Tur 1: Görsel + tools ile Gemini çağır ──
+    final imageB64 = base64Encode(imageBytes);
+    final firstPayload = {
       'contents': [
         {
+          'role': 'user',
           'parts': [
             {'text': enrichedPrompt},
-            {'inline_data': {'mime_type': mimeType, 'data': base64Encode(imageBytes)}},
+            {'inline_data': {'mime_type': mimeType, 'data': imageB64}},
           ]
         }
       ],
-      'generationConfig': {
-        'temperature': 0.7,
-      },
+      'tools': _toolDeclarations,
+      'generationConfig': {'temperature': 0.7},
     };
 
-    final jsonBody = jsonEncode(payload);
+    final jsonBody = jsonEncode(firstPayload);
     final payloadSizeKB = (jsonBody.length / 1024).round();
-    debugPrint('KoalaAI: Image payload size: ${payloadSizeKB}KB');
+    debugPrint('KoalaAI: Image+tools payload: ${payloadSizeKB}KB');
 
-    if (payloadSizeKB > 4000) {
-      debugPrint('KoalaAI: WARNING — payload > 4MB, Vercel may reject');
-    }
-
-    // Retry logic — Gemini 503/429 geçici hatalar için 2 deneme daha
+    // Retry logic
     http.Response? response;
     for (int attempt = 1; attempt <= 3; attempt++) {
       response = await _client
@@ -462,28 +460,94 @@ class KoalaAIService {
           .timeout(const Duration(seconds: 45));
 
       debugPrint('KoalaAI: Image attempt $attempt → ${response.statusCode}');
-
-      if (response.statusCode < 300) break; // başarılı
+      if (response.statusCode < 300) break;
       if (response.statusCode == 503 || response.statusCode == 429) {
-        debugPrint('KoalaAI: Retryable error ${response.statusCode}, waiting ${attempt * 2}s...');
         if (attempt < 3) await Future.delayed(Duration(seconds: attempt * 2));
         continue;
       }
-      // Diğer hatalar retry'lanmaz
       break;
     }
 
     if (response == null) {
       throw Exception('Sunucuya ulaşılamadı. İnternet bağlantını kontrol et.');
     }
-
     if (response.statusCode >= 300) {
       final body = response.body.length > 300 ? response.body.substring(0, 300) : response.body;
-      debugPrint('KoalaAI: Image request FINAL fail: ${response.statusCode} — $body');
+      debugPrint('KoalaAI: Image FAIL: ${response.statusCode} — $body');
       throw Exception('Fotoğraf analizi başarısız (hata: ${response.statusCode}). Lütfen tekrar dene.');
     }
 
-    return _parseResponse(_extractText(response.body));
+    var data = jsonDecode(response.body) as Map<String, dynamic>;
+    var candidates = data['candidates'] as List<dynamic>? ?? [];
+    if (candidates.isEmpty) throw const FormatException('No candidates');
+
+    var content = (candidates.first as Map<String, dynamic>)['content'] as Map<String, dynamic>? ?? {};
+    var parts = content['parts'] as List<dynamic>? ?? [];
+
+    // Function call kontrolü
+    Map<String, dynamic>? functionCall;
+    for (final p in parts) {
+      if ((p as Map<String, dynamic>).containsKey('functionCall')) {
+        functionCall = p;
+        break;
+      }
+    }
+
+    // ── Tur 2: Function call varsa çalıştır, sonuçla tekrar çağır (IMAGE OLMADAN) ──
+    if (functionCall != null) {
+      final fc = functionCall['functionCall'] as Map<String, dynamic>;
+      final fnName = fc['name'] as String;
+      final fnArgs = (fc['args'] as Map<String, dynamic>?) ?? {};
+      debugPrint('KoalaAI: Image function call → $fnName($fnArgs)');
+
+      final result = await KoalaToolHandler.handle(fnName, fnArgs);
+
+      // 2. tur: image yok, sadece text context + function call sonucu
+      final turn2Payload = {
+        'contents': [
+          // Orijinal kullanıcı mesajı (image olmadan, sadece text)
+          {'role': 'user', 'parts': [{'text': enrichedPrompt}]},
+          // Model'in function call'ı
+          {'role': 'model', 'parts': [{'functionCall': {'name': fnName, 'args': fnArgs}}]},
+          // Function sonucu
+          {'role': 'user', 'parts': [{'functionResponse': {'name': fnName, 'response': result}}]},
+        ],
+        'tools': _toolDeclarations,
+        'generationConfig': {'temperature': 0.7},
+      };
+
+      debugPrint('KoalaAI: Image turn2 (function result)...');
+      final resp2 = await _client
+          .post(_proxyUri, headers: {'Content-Type': 'application/json'}, body: jsonEncode(turn2Payload))
+          .timeout(const Duration(seconds: 45));
+
+      if (resp2.statusCode >= 300) {
+        debugPrint('KoalaAI: Turn2 fail: ${resp2.statusCode}');
+        // Function call sonucu ile cevap üretilemezse, ilk turdan text varsa onu kullan
+        throw Exception('Ürün bilgileri alındı ama yanıt oluşturulamadı.');
+      }
+
+      data = jsonDecode(resp2.body) as Map<String, dynamic>;
+      candidates = data['candidates'] as List<dynamic>? ?? [];
+      if (candidates.isEmpty) throw const FormatException('No candidates turn2');
+      content = (candidates.first as Map<String, dynamic>)['content'] as Map<String, dynamic>? ?? {};
+      parts = content['parts'] as List<dynamic>? ?? [];
+    }
+
+    // Text response çıkar
+    String text = '';
+    for (final p in parts) {
+      if ((p as Map<String, dynamic>).containsKey('text')) {
+        text = (p['text'] as String? ?? '').trim();
+        break;
+      }
+    }
+
+    if (text.isEmpty) {
+      throw const FormatException('Empty response from Gemini');
+    }
+
+    return _parseResponse(text);
   }
 
   String _extractText(String rawBody) {

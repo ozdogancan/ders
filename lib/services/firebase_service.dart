@@ -111,6 +111,7 @@ class FirebaseService {
     await _syncToSupabase(user);
 
     // Supabase client'a x-user-id header ekle (RLS için)
+    // NOT: Firebase Auth + Supabase pattern — gelecekte custom JWT'ye geçilmeli
     if (Env.hasSupabaseConfig) {
       Supabase.instance.client.rest.headers['x-user-id'] = user.uid;
     }

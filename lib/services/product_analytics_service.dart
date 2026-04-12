@@ -6,9 +6,15 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 class ProductAnalyticsService {
   const ProductAnalyticsService._();
 
-  static SupabaseClient get _db => Supabase.instance.client;
+  static SupabaseClient? get _db {
+    try {
+      return Supabase.instance.client;
+    } catch (_) {
+      return null; // Supabase henüz initialize olmamış
+    }
+  }
 
-  static String? get _userId => _db.auth.currentUser?.id;
+  static String? get _userId => _db?.auth.currentUser?.id;
 
   /// Ürün gösterildiğinde çağır (impression)
   static Future<void> trackImpression({
@@ -83,10 +89,11 @@ class ProductAnalyticsService {
     String? conversationId,
   }) async {
     try {
+      final db = _db;
       final userId = _userId;
-      if (userId == null) return; // Giriş yapmamış kullanıcı, takip etme
+      if (db == null || userId == null) return; // Supabase hazır değil veya giriş yapılmamış
 
-      await _db.from('product_events').insert({
+      await db.from('product_events').insert({
         'user_id': userId,
         'product_id': productId,
         'product_name': productName,

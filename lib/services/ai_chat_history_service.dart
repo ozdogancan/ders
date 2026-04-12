@@ -85,24 +85,48 @@ class AIChatHistoryService {
     }
   }
 
+  /// ILIKE wildcard karakterlerini escape et (SQL injection koruması)
+  static String _escapeIlike(String input) {
+    return input
+        .replaceAll(r'\', r'\\')
+        .replaceAll('%', r'\%')
+        .replaceAll('_', r'\_');
+  }
+
   /// Content ILIKE arama
   static Future<List<Map<String, dynamic>>> searchSessions(String query) async {
     if (_uid == null || !Env.hasSupabaseConfig || query.trim().isEmpty) return [];
     try {
+      final safeQuery = _escapeIlike(query.trim());
+
       // Session'larda başlık ara
       final titleResults = await _db
           .from('ai_chat_sessions')
           .select()
           .eq('user_id', _uid!)
-          .ilike('title', '%$query%')
+          .ilike('title', '%$safeQuery%')
           .order('updated_at', ascending: false)
           .limit(10);
 
       // Mesaj içeriğinde ara → session_id'leri getir
+      // user_id filtresi: sadece kendi session'larımızın mesajlarını ara
+      final userSessions = await _db
+          .from('ai_chat_sessions')
+          .select('id')
+          .eq('user_id', _uid!);
+      final userSessionIds = (userSessions as List)
+          .map((s) => s['id'] as String)
+          .toList();
+
+      if (userSessionIds.isEmpty) {
+        return List<Map<String, dynamic>>.from(titleResults);
+      }
+
       final msgResults = await _db
           .from('ai_chat_messages')
           .select('session_id')
-          .ilike('content', '%$query%')
+          .inFilter('session_id', userSessionIds)
+          .ilike('content', '%$safeQuery%')
           .limit(20);
 
       final sessionIds = (msgResults as List)

@@ -85,6 +85,12 @@ class ConnectivityService {
         : const Duration(seconds: 15);
     _timer = Timer.periodic(interval, (_) => check());
   }
+
+  /// Timer ve listener temizliği (app lifecycle dispose)
+  static void dispose() {
+    _timer?.cancel();
+    _timer = null;
+  }
 }
 
 /// Helper to expose ValueNotifier as a stream.

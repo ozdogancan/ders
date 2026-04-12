@@ -586,11 +586,6 @@ class _HomeScreenState extends State<HomeScreen>
             // ─── Aktif Mesajların ───
             _staggered(5, _ActiveConversationsRow()),
 
-            const SizedBox(height: 12),
-
-            // ─── İlham Galerisi ───
-            _staggered(6, const _InspirationGallery()),
-
             const SizedBox(height: 16),
                   ],
                 ),
@@ -871,7 +866,6 @@ class _TypewriterInputState extends State<_TypewriterInput> {
     return Padding(
       padding: EdgeInsets.fromLTRB(16, 2, 16, widget.bottomPadding + 16),
       child: Column(mainAxisSize: MainAxisSize.min, children: [
-        Text('Koala\'ya sor', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: KoalaColors.textTer, letterSpacing: 0.5)),
         const SizedBox(height: 4),
         Container(
         height: 54,
