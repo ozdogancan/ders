@@ -119,6 +119,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
 
   @override
   void dispose() {
+    _ai.dispose();
     _scroll.removeListener(_onScrollChanged);
     _ctrl.dispose();
     _scroll.dispose();

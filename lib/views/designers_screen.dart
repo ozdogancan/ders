@@ -179,29 +179,35 @@ class _DesignersScreenState extends State<DesignersScreen> {
         projectsByDesigner.putIfAbsent(designerId, () => <Map<String, dynamic>>[]).add(project);
       }
 
-      // Tüm tasarımcıları yükle (12 ile sınırlama)
-      final previews = await Future.wait(
-        projectsByDesigner.entries.map((entry) async {
-          final designerId = entry.key;
-          final designer = await EvlumbaLiveService.getDesigner(designerId);
-          if (designer == null) return null;
-          final projects = List<Map<String, dynamic>>.from(entry.value);
+      // Tüm tasarımcıları tek sorguda yükle (N+1 → 1 sorgu)
+      final designerIds = projectsByDesigner.keys.toList();
+      final allDesigners = await EvlumbaLiveService.getDesignersByIds(designerIds);
+      final designerMap = <String, Map<String, dynamic>>{};
+      for (final d in allDesigners) {
+        designerMap[d['id'].toString()] = d;
+      }
 
-          final rating = (designer['rating'] as num?)?.toDouble() ?? 0;
-          final specialty = (designer['specialty'] ?? designer['about'] ?? '')
-              .toString()
-              .trim();
+      final previews = designerIds.map((designerId) {
+        final designer = designerMap[designerId];
+        if (designer == null) return null;
+        final projects = List<Map<String, dynamic>>.from(
+          projectsByDesigner[designerId] ?? [],
+        );
 
-          return _ExpertPreview(
-            designer: designer,
-            projects: projects.take(6).toList(),
-            rating: rating,
-            summary: specialty.isEmpty
-                ? 'Yaşam alanları için dengeli ve uygulanabilir çözümler üretiyor.'
-                : specialty,
-          );
-        }),
-      );
+        final rating = (designer['rating'] as num?)?.toDouble() ?? 0;
+        final specialty = (designer['specialty'] ?? designer['about'] ?? '')
+            .toString()
+            .trim();
+
+        return _ExpertPreview(
+          designer: designer,
+          projects: projects.take(6).toList(),
+          rating: rating,
+          summary: specialty.isEmpty
+              ? 'Yaşam alanları için dengeli ve uygulanabilir çözümler üretiyor.'
+              : specialty,
+        );
+      }).toList();
 
       if (!mounted) return;
 

@@ -360,29 +360,30 @@ class KoalaToolHandler {
             }
           }
 
-          // Her designer_id için profil ve portfolio getir
-          for (final did in designerIds.take(limit)) {
-            try {
-              final profile = await EvlumbaLiveService.getDesignerById(did);
-              if (profile != null) {
-                designers.add(profile);
-              } else {
-                // Profil yoksa projelerden oluştur
-                final dProjects = projectsByDesigner[did] ?? [];
-                if (dProjects.isNotEmpty) {
-                  designers.add({
-                    'id': did,
-                    'full_name': dProjects.first['title'] != null
-                        ? 'Tasarımcı'
-                        : 'Evlumba Tasarımcı',
-                    'specialty': 'İç Mimar',
-                    'city': '',
-                    'avatar_url': '',
-                    'business_name': '',
-                  });
-                }
+          // Tüm designer profilleri tek sorguda getir (N+1 → 1)
+          final idList = designerIds.take(limit).toList();
+          final profiles = await EvlumbaLiveService.getDesignersByIds(idList);
+          final profileMap = <String, Map<String, dynamic>>{};
+          for (final p in profiles) {
+            profileMap[p['id'].toString()] = p;
+          }
+          for (final did in idList) {
+            final profile = profileMap[did];
+            if (profile != null) {
+              designers.add(profile);
+            } else {
+              final dProjects = projectsByDesigner[did] ?? [];
+              if (dProjects.isNotEmpty) {
+                designers.add({
+                  'id': did,
+                  'full_name': 'Tasarımcı',
+                  'specialty': 'İç Mimar',
+                  'city': '',
+                  'avatar_url': '',
+                  'business_name': '',
+                });
               }
-            } catch (_) {}
+            }
           }
         } catch (e) {
           debugPrint('KoalaToolHandler: project-based designer discovery failed: $e');
@@ -451,13 +452,16 @@ class KoalaToolHandler {
         return {'comparison': [], 'message': 'Karşılaştırılacak ürün belirtilmedi'};
       }
 
-      final allProducts = <Map<String, dynamic>>[];
-      for (final name in productNames.take(3)) {
-        final result = await _searchProducts({
+      // Paralel ürün arama (N sequential → 1 parallel batch)
+      final results = await Future.wait(
+        productNames.take(3).map((name) => _searchProducts({
           'query': name,
           'room_type': roomType,
           'limit': 1,
-        });
+        })),
+      );
+      final allProducts = <Map<String, dynamic>>[];
+      for (final result in results) {
         final products = (result['products'] as List?) ?? [];
         if (products.isNotEmpty) {
           allProducts.add(Map<String, dynamic>.from(products.first));

@@ -43,6 +43,10 @@ class KoalaAIService {
   KoalaAIService({http.Client? client}) : _client = client ?? http.Client();
   final http.Client _client;
 
+  void dispose() {
+    _client.close();
+  }
+
   String _detectMimeType(Uint8List bytes) {
     if (bytes.length >= 3 &&
         bytes[0] == 0xFF &&

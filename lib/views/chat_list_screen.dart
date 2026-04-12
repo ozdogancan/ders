@@ -53,7 +53,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
     }
   }
 
-  /// Tüm tasarımcıların avatarlarını toplu yükle
+  /// Tüm tasarımcıların avatarlarını tek sorguda yükle (N+1 → 1)
   Future<void> _loadDesignerAvatars() async {
     if (_conversations.isEmpty) return;
     try {
@@ -62,15 +62,25 @@ class _ChatListScreenState extends State<ChatListScreen> {
       }
       if (!EvlumbaLiveService.isReady) return;
 
+      // Eksik avatar'ları topla
+      final missingIds = <String>[];
       for (final conv in _conversations) {
         final designerId = (conv['designer_id'] ?? '').toString();
-        if (designerId.isEmpty || _avatarCache.containsKey(designerId)) continue;
-        try {
-          final detail = await EvlumbaLiveService.getDesignerById(designerId);
-          _avatarCache[designerId] = (detail?['avatar_url'] ?? '').toString().trim();
-        } catch (_) {
-          _avatarCache[designerId] = null;
+        if (designerId.isNotEmpty && !_avatarCache.containsKey(designerId)) {
+          missingIds.add(designerId);
         }
+      }
+      if (missingIds.isEmpty) return;
+
+      // Tek sorguda tüm profilleri getir
+      final profiles = await EvlumbaLiveService.getDesignersByIds(missingIds);
+      for (final p in profiles) {
+        final id = p['id'].toString();
+        _avatarCache[id] = (p['avatar_url'] ?? '').toString().trim();
+      }
+      // Bulunamayan ID'ler için null set et
+      for (final id in missingIds) {
+        _avatarCache.putIfAbsent(id, () => null);
       }
       if (mounted) setState(() {});
     } catch (_) {}

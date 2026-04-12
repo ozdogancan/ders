@@ -12,6 +12,8 @@ class EvlumbaLiveService {
   static String? _pendingUrl;
   static String? _pendingAnonKey;
   static bool _initializing = false;
+  static int _retryCount = 0;
+  static const int _maxRetries = 5;
   static final Completer<bool> _readyCompleter = Completer<bool>();
 
   /// main.dart'tan bir kere çağrılır
@@ -30,10 +32,15 @@ class EvlumbaLiveService {
       debugPrint('EvlumbaLive: initialized → $_pendingUrl');
       if (!_readyCompleter.isCompleted) _readyCompleter.complete(true);
     } catch (e) {
-      debugPrint('EvlumbaLive: init failed → $e');
+      debugPrint('EvlumbaLive: init failed (attempt ${_retryCount + 1}/$_maxRetries) → $e');
       _initializing = false;
-      // Retry after 3 seconds
-      Future.delayed(const Duration(seconds: 3), _tryInit);
+      if (_retryCount < _maxRetries) {
+        _retryCount++;
+        Future.delayed(const Duration(seconds: 3), _tryInit);
+      } else {
+        debugPrint('EvlumbaLive: giving up after $_maxRetries retries');
+        if (!_readyCompleter.isCompleted) _readyCompleter.complete(false);
+      }
     }
   }
 
@@ -92,6 +99,23 @@ class EvlumbaLiveService {
         .eq('id', id)
         .maybeSingle();
     return data;
+  }
+
+  /// Birden fazla tasarımcıyı tek sorguda getir (N+1 önleme)
+  static Future<List<Map<String, dynamic>>> getDesignersByIds(
+    List<String> ids,
+  ) async {
+    if (ids.isEmpty) return [];
+    try {
+      final data = await client
+          .from('profiles')
+          .select()
+          .inFilter('id', ids);
+      return List<Map<String, dynamic>>.from(data);
+    } catch (e) {
+      debugPrint('EvlumbaLive: getDesignersByIds failed: $e');
+      return [];
+    }
   }
 
   /// Tasarımcı ara (isim veya uzmanlık)
@@ -179,7 +203,8 @@ class EvlumbaLiveService {
           .eq('id', designerId)
           .maybeSingle();
       return data;
-    } catch (_) {
+    } catch (e) {
+      debugPrint('EvlumbaLive: getDesignerById($designerId) failed: $e');
       return null;
     }
   }
@@ -259,22 +284,30 @@ class EvlumbaLiveService {
   // İSTATİSTİKLER (AI context için)
   // ═══════════════════════════════════════
 
-  /// AI'a verilecek hızlı özet
-  static Future<Map<String, dynamic>> getQuickStats() async {
-    try {
-      final designers = await client
-          .from('profiles')
-          .select('id')
-          .eq('role', 'designer');
-      final projects = await client
-          .from('designer_projects')
-          .select('id')
-          .eq('is_published', true);
+  /// AI'a verilecek hızlı özet (5 dk cache)
+  static Map<String, dynamic>? _statsCache;
+  static DateTime? _statsCachedAt;
 
-      return {
-        'designer_count': (designers as List).length,
-        'project_count': (projects as List).length,
+  static Future<Map<String, dynamic>> getQuickStats() async {
+    // Cache kontrolü — 5 dakika geçerli
+    if (_statsCache != null &&
+        _statsCachedAt != null &&
+        DateTime.now().difference(_statsCachedAt!).inMinutes < 5) {
+      return _statsCache!;
+    }
+    try {
+      // Paralel sorgula
+      final results = await Future.wait([
+        client.from('profiles').select('id'),
+        client.from('designer_projects').select('id').eq('is_published', true),
+      ]);
+
+      _statsCache = {
+        'designer_count': (results[0] as List).length,
+        'project_count': (results[1] as List).length,
       };
+      _statsCachedAt = DateTime.now();
+      return _statsCache!;
     } catch (e) {
       return {'designer_count': 0, 'project_count': 0};
     }
