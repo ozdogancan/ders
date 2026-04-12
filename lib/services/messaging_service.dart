@@ -48,38 +48,12 @@ class MessagingService {
 
       if (existing != null) return existing;
 
-      // Yeni olustur
+      // Yeni olustur — mesaj göndermeden, kullanıcıya bırak
       final res = await _db.from('koala_conversations').insert({
         'user_id': _uid,
         'designer_id': designerId,
         'title': contextTitle,
       }).select().single();
-
-      // Context varsa otomatik inquiry system mesaji gonder
-      if (contextType != null && res != null) {
-        final inquiryText = contextTitle != null
-            ? '🏠 $contextTitle hakkında bilgi almak istiyorum'
-            : '🏠 Merhaba, sizinle çalışmak istiyorum';
-
-        await _db.from('koala_direct_messages').insert({
-          'conversation_id': res['id'],
-          'sender_id': _uid,
-          'content': inquiryText,
-          'message_type': 'system',
-          'metadata': {
-            if (contextType != null) 'context_type': contextType,
-            if (contextId != null) 'context_id': contextId,
-            if (contextTitle != null) 'context_title': contextTitle,
-            'source': 'inquiry',
-          },
-        });
-
-        // last_message guncelle
-        await _db.from('koala_conversations').update({
-          'last_message': inquiryText,
-          'last_message_at': DateTime.now().toIso8601String(),
-        }).eq('id', res['id']);
-      }
 
       return res;
     } catch (e) {

@@ -146,40 +146,14 @@ class _DesignerChatSheetState extends State<_DesignerChatSheet>
       _subscribeRealtime();
       MessagingService.markAsRead(_conversationId!);
 
-      if (messages.isEmpty && widget.contextType != null) {
-        final user = FirebaseAuth.instance.currentUser;
-        final displayName = user?.displayName ?? 'Kullanıcı';
-        final email = user?.email ?? '';
-        await MessagingService.sendMessage(
-          conversationId: _conversationId!,
-          content: '${widget.contextTitle ?? 'Merhaba'} hakkında bilgi almak istiyorum.',
-          metadata: {
-            'sender_display': 'Koala - $displayName', 'sender_email': email,
-            'source': 'koala_app',
-            if (widget.contextType != null) 'context_type': widget.contextType,
-            if (widget.contextId != null) 'context_id': widget.contextId,
-          },
-        );
-        if (widget.initialMessage != null && widget.initialMessage!.trim().isNotEmpty) {
-          await MessagingService.sendMessage(
-            conversationId: _conversationId!, content: widget.initialMessage!.trim(),
-            metadata: { 'sender_display': 'Koala - $displayName', 'sender_email': email, 'source': 'koala_app' },
-          );
-        }
-        final updated = await MessagingService.getMessages(conversationId: _conversationId!);
-        if (mounted) setState(() { _messages = updated; _state = _SheetState.ready; });
-      } else {
-        if (widget.initialMessage != null && widget.initialMessage!.trim().isNotEmpty) {
-          final user = FirebaseAuth.instance.currentUser;
-          await MessagingService.sendMessage(
-            conversationId: _conversationId!, content: widget.initialMessage!.trim(),
-            metadata: { 'sender_display': 'Koala - ${user?.displayName ?? 'Kullanıcı'}', 'sender_email': user?.email ?? '', 'source': 'koala_app' },
-          );
-          final updated = await MessagingService.getMessages(conversationId: _conversationId!);
-          if (mounted) setState(() { _messages = updated; _state = _SheetState.ready; });
-        } else {
-          if (mounted) setState(() { _messages = messages; _state = _SheetState.ready; });
-        }
+      // Mesajları göster
+      if (mounted) setState(() { _messages = messages; _state = _SheetState.ready; });
+
+      // Context veya initialMessage varsa input'a yaz — kullanıcı karar versin
+      if (messages.isEmpty && widget.contextTitle != null && widget.contextTitle!.isNotEmpty) {
+        _textController.text = '${widget.contextTitle} hakk\u0131nda bilgi almak istiyorum.';
+      } else if (widget.initialMessage != null && widget.initialMessage!.trim().isNotEmpty) {
+        _textController.text = widget.initialMessage!.trim();
       }
     } catch (e) {
       if (mounted) setState(() { _state = _SheetState.error; _errorMsg = 'Bir hata oluştu: $e'; });
