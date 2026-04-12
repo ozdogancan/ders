@@ -161,11 +161,12 @@ class _DesignersScreenState extends State<DesignersScreen> {
 
   Future<void> _loadExperts() async {
     if (!EvlumbaLiveService.isReady) {
-      setState(() {
-        _loading = false;
-        _error = 'Bağlantı hazır değil.';
-      });
-      return;
+      // Bağlantıyı bekle (max 10 sn)
+      final ready = await EvlumbaLiveService.waitForReady();
+      if (!ready) {
+        if (mounted) setState(() => _loading = false);
+        return; // Sessizce bitir, hata gösterme
+      }
     }
 
     try {

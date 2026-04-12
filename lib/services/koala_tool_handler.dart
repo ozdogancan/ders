@@ -172,8 +172,11 @@ class KoalaToolHandler {
   }) async {
     try {
       if (!EvlumbaLiveService.isReady) {
-        debugPrint('KoalaToolHandler: EvlumbaLiveService not initialized, skipping Evlumba search');
-        return {'products': [], 'count': 0, 'message': 'Ürün veritabanı henüz hazır değil.'};
+        await EvlumbaLiveService.waitForReady();
+        if (!EvlumbaLiveService.isReady) {
+          debugPrint('KoalaToolHandler: EvlumbaLiveService not initialized after wait');
+          return {'products': [], 'count': 0};
+        }
       }
       final mappedRoom = _mapRoomType(roomType);
 
@@ -262,8 +265,10 @@ class KoalaToolHandler {
   ) async {
     try {
       if (!EvlumbaLiveService.isReady) {
-        debugPrint('KoalaToolHandler: EvlumbaLiveService not initialized, skipping project search');
-        return {'projects': [], 'count': 0, 'message': 'Proje veritabanı henüz hazır değil. Lütfen daha sonra tekrar dene.'};
+        await EvlumbaLiveService.waitForReady();
+        if (!EvlumbaLiveService.isReady) {
+          return {'projects': [], 'count': 0};
+        }
       }
       final roomType = _mapRoomType(args['room_type'] as String?);
       final limit = (args['limit'] as num?)?.toInt().clamp(1, 6) ?? 4;
@@ -313,8 +318,10 @@ class KoalaToolHandler {
   ) async {
     try {
       if (!EvlumbaLiveService.isReady) {
-        debugPrint('KoalaToolHandler: EvlumbaLiveService not initialized, skipping designer search');
-        return {'designers': [], 'count': 0, 'message': 'Tasarımcı veritabanı henüz hazır değil. Lütfen daha sonra tekrar dene.'};
+        await EvlumbaLiveService.waitForReady();
+        if (!EvlumbaLiveService.isReady) {
+          return {'designers': [], 'count': 0};
+        }
       }
       final city = args['city'] as String?;
       final query = args['query'] as String?;

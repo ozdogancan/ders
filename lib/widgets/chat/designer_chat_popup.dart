@@ -264,7 +264,17 @@ class _DesignerChatSheetState extends State<_DesignerChatSheet>
 
     try {
       final bytes = await picked.readAsBytes();
-      final ext = picked.path.split('.').last;
+      final ext = picked.path.split('.').last.toLowerCase();
+      const allowedExt = {'jpg', 'jpeg', 'png', 'gif', 'webp', 'heic'};
+      if (!allowedExt.contains(ext)) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Desteklenmeyen dosya türü')),
+          );
+        }
+        setState(() => _uploadingImage = false);
+        return;
+      }
       final fileName =
           '${_uid ?? 'anon'}/${DateTime.now().millisecondsSinceEpoch}.$ext';
 

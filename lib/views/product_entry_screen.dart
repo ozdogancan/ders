@@ -161,12 +161,11 @@ class _ProductEntryScreenState extends State<ProductEntryScreen> {
 
   Future<void> _loadProjects() async {
     if (!EvlumbaLiveService.isReady) {
-      setState(() {
-        _loading = false;
-        _error = 'Bağlantı hazır değil.';
-      });
-      _scrollToBottom();
-      return;
+      final ready = await EvlumbaLiveService.waitForReady();
+      if (!ready) {
+        if (mounted) setState(() => _loading = false);
+        return;
+      }
     }
 
     try {

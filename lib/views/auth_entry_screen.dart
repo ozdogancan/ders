@@ -151,12 +151,19 @@ class _AuthEntryScreenState extends State<AuthEntryScreen>
     if (_loadingAction != null) return;
     if (!mounted) return;
 
-    await Navigator.of(context).push<void>(
-      buildAuthRoute<void>(
-        PhoneAuthScreen(mode: widget.mode),
+    final phoneResult = await Navigator.of(context).push<bool>(
+      buildAuthRoute<bool>(
+        PhoneAuthScreen(
+          mode: widget.mode,
+          returnOnSuccess: widget.returnOnSuccess,
+        ),
         begin: const Offset(0.1, 0),
       ),
     );
+    // Telefon auth başarılıysa ve returnOnSuccess aktifse → AuthEntryScreen'i de kapat
+    if (phoneResult == true && widget.returnOnSuccess && mounted) {
+      Navigator.of(context).pop(true);
+    }
   }
 
   Future<void> _handleGuestLogin() async {

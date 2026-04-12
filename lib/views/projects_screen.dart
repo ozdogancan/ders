@@ -80,8 +80,11 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
 
   Future<void> _load() async {
     if (!EvlumbaLiveService.isReady) {
-      setState(() { _loading = false; _error = 'Bağlantı hazır değil'; });
-      return;
+      final ready = await EvlumbaLiveService.waitForReady();
+      if (!ready) {
+        if (mounted) setState(() => _loading = false);
+        return;
+      }
     }
     setState(() { _loading = true; });
     try {

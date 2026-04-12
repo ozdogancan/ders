@@ -12,8 +12,13 @@ import 'auth_common.dart';
 enum _PhoneAuthStage { enterPhone, verifyCode }
 
 class PhoneAuthScreen extends StatefulWidget {
-  const PhoneAuthScreen({super.key, required this.mode});
+  const PhoneAuthScreen({
+    super.key,
+    required this.mode,
+    this.returnOnSuccess = false,
+  });
   final AuthFlowMode mode;
+  final bool returnOnSuccess;
   @override
   State<PhoneAuthScreen> createState() => _PhoneAuthScreenState();
 }
@@ -199,6 +204,10 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
       await AuthCoordinator.touchLogin(user);
     }
     if (!mounted) return;
+    if (widget.returnOnSuccess) {
+      Navigator.of(context).pop(true); // AuthEntryScreen'e true dön
+      return;
+    }
     await AuthCoordinator.goToHome(context);
   }
 

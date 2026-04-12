@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -7,19 +9,56 @@ class EvlumbaLiveService {
   EvlumbaLiveService._();
 
   static SupabaseClient? _client;
+  static String? _pendingUrl;
+  static String? _pendingAnonKey;
+  static bool _initializing = false;
+  static final Completer<bool> _readyCompleter = Completer<bool>();
 
   /// main.dart'tan bir kere çağrılır
   static void initialize({required String url, required String anonKey}) {
-    _client = SupabaseClient(url, anonKey);
-    debugPrint('EvlumbaLive: initialized → $url');
+    _pendingUrl = url;
+    _pendingAnonKey = anonKey;
+    _tryInit();
+  }
+
+  static void _tryInit() {
+    if (_client != null || _initializing) return;
+    if (_pendingUrl == null || _pendingAnonKey == null) return;
+    _initializing = true;
+    try {
+      _client = SupabaseClient(_pendingUrl!, _pendingAnonKey!);
+      debugPrint('EvlumbaLive: initialized → $_pendingUrl');
+      if (!_readyCompleter.isCompleted) _readyCompleter.complete(true);
+    } catch (e) {
+      debugPrint('EvlumbaLive: init failed → $e');
+      _initializing = false;
+      // Retry after 3 seconds
+      Future.delayed(const Duration(seconds: 3), _tryInit);
+    }
   }
 
   static SupabaseClient get client {
-    if (_client == null) throw StateError('EvlumbaLiveService not initialized');
+    if (_client == null) {
+      // Auto-retry if pending config exists
+      _tryInit();
+      if (_client == null) throw StateError('EvlumbaLiveService not initialized');
+    }
     return _client!;
   }
 
   static bool get isReady => _client != null;
+
+  /// Bağlantı hazır olana kadar bekle (max 10 saniye)
+  static Future<bool> waitForReady({Duration timeout = const Duration(seconds: 10)}) async {
+    if (isReady) return true;
+    if (_pendingUrl == null) return false; // config yok
+    _tryInit();
+    try {
+      return await _readyCompleter.future.timeout(timeout, onTimeout: () => false);
+    } catch (_) {
+      return false;
+    }
+  }
 
   // ═══════════════════════════════════════
   // TASARIMCILAR (profiles tablosu)
