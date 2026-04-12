@@ -952,7 +952,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
               );
             }),
             _quickChip(Icons.auto_awesome_rounded, 'Stil analizi',
-              () => _sendToAI(text: 'Tarzımı analiz et')),
+              () => _sendToAI(text: 'Bu odanın stilini detaylı analiz et', hiddenContext: _buildHiddenContext())),
           ],
         ),
       ),

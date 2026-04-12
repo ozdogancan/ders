@@ -131,11 +131,19 @@ class KoalaToolHandler {
         final url = (item['url'] ?? '').toString();
         final price = (item['price'] ?? '').toString();
 
-        // URL doğrulama — boş, geçersiz veya ana sayfa URL'lerini atla
-        if (url.isEmpty || url.length < 10) continue;
+        // URL doğrulama — boş, geçersiz, ana sayfa veya alakasız URL'leri atla
+        if (url.isEmpty || url.length < 15) continue;
         try {
           final uri = Uri.parse(url);
           if (!uri.hasScheme || uri.path == '/' || uri.path.isEmpty) continue;
+          // Bilinen hatalı domain/path kalıplarını filtrele
+          final host = uri.host.toLowerCase();
+          final path = uri.path.toLowerCase();
+          // Çiçeksepeti ev/dekor dışı, koçtaş oto kategorisi gibi alakasız linkleri atla
+          if (host.contains('ciceksepeti') && !path.contains('ev-') && !path.contains('dekor') && !path.contains('mobilya')) continue;
+          if (path.contains('/otomobil') || path.contains('/oto-') || path.contains('/araba')) continue;
+          // 404 veren yaygın kalıplar
+          if (path.contains('/404') || path.contains('/error')) continue;
         } catch (_) {
           continue;
         }
@@ -320,20 +328,73 @@ class KoalaToolHandler {
       if (!EvlumbaLiveService.isReady) {
         await EvlumbaLiveService.waitForReady();
         if (!EvlumbaLiveService.isReady) {
-          return {'designers': [], 'count': 0};
+          return {'designers': [], 'count': 0, 'message': 'Veritabanı bağlantısı kurulamadı. Lütfen tekrar deneyin.'};
         }
       }
       final city = args['city'] as String?;
       final query = args['query'] as String?;
       final limit = (args['limit'] as num?)?.toInt().clamp(1, 5) ?? 3;
 
-      List<Map<String, dynamic>> designers;
+      List<Map<String, dynamic>> designers = [];
 
+      // 1. Önce profiles tablosundan dene
       if (query != null && query.isNotEmpty) {
         designers = await EvlumbaLiveService.searchDesigners(query);
       } else {
-        designers =
-            await EvlumbaLiveService.getDesigners(limit: limit, city: city);
+        designers = await EvlumbaLiveService.getDesigners(limit: limit, city: city);
+      }
+
+      // 2. Profiles boşsa → projelerden designer keşfet (fallback)
+      if (designers.isEmpty) {
+        debugPrint('KoalaToolHandler: profiles empty, discovering designers from projects...');
+        try {
+          final projects = await EvlumbaLiveService.getProjects(limit: 20);
+          // designer_id'leri topla (unique)
+          final designerIds = <String>{};
+          final projectsByDesigner = <String, List<Map<String, dynamic>>>{};
+          for (final p in projects) {
+            final did = (p['designer_id'] ?? '').toString();
+            if (did.isNotEmpty && did != 'null') {
+              designerIds.add(did);
+              projectsByDesigner.putIfAbsent(did, () => []).add(p);
+            }
+          }
+
+          // Her designer_id için profil ve portfolio getir
+          for (final did in designerIds.take(limit)) {
+            try {
+              final profile = await EvlumbaLiveService.getDesignerById(did);
+              if (profile != null) {
+                designers.add(profile);
+              } else {
+                // Profil yoksa projelerden oluştur
+                final dProjects = projectsByDesigner[did] ?? [];
+                if (dProjects.isNotEmpty) {
+                  designers.add({
+                    'id': did,
+                    'full_name': dProjects.first['title'] != null
+                        ? 'Tasarımcı'
+                        : 'Evlumba Tasarımcı',
+                    'specialty': 'İç Mimar',
+                    'city': '',
+                    'avatar_url': '',
+                    'business_name': '',
+                  });
+                }
+              }
+            } catch (_) {}
+          }
+        } catch (e) {
+          debugPrint('KoalaToolHandler: project-based designer discovery failed: $e');
+        }
+      }
+
+      if (designers.isEmpty) {
+        return {
+          'designers': [],
+          'count': 0,
+          'message': 'Veritabanında henüz tasarımcı profili bulunamadı. Kullanıcıyı Evlumba Design premium hizmetine yönlendir.',
+        };
       }
 
       // Her tasarımcıya 3 portfolio görseli ekle

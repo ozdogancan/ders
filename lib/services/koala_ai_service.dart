@@ -261,8 +261,12 @@ class KoalaAIService {
       case KoalaIntent.colorAdvice:
         prompt = KoalaPrompts.colorAdvice(params['room']);
       case KoalaIntent.designerMatch:
-        if (params.containsKey('style') && params.containsKey('budget')) {
-          prompt = KoalaPrompts.designerResult(params['style']!, params['budget']!);
+        if (params.containsKey('style')) {
+          // Stil bilgisi varsa direkt sonuç getir (şehir/bütçe opsiyonel)
+          prompt = KoalaPrompts.designerResult(
+            params['style']!,
+            params['budget'] ?? params['city'] ?? 'tümü',
+          );
         } else {
           prompt = KoalaPrompts.designerMatch();
         }
@@ -282,8 +286,11 @@ class KoalaAIService {
         prompt = KoalaPrompts.freeChat(freeText ?? 'Merhaba');
     }
 
-    // Inject user profile into prompt
-    prompt = _withProfile(prompt);
+    // Inject user profile — fotoğraf analizinde profil ekleme (bias yaratır)
+    // photoAnalysis'de AI odanın gerçek stilini tespit etmeli, kullanıcı tercihine göre değil
+    if (intent != KoalaIntent.photoAnalysis) {
+      prompt = _withProfile(prompt);
+    }
 
     if (photo != null) {
       return _callGeminiWithImage(prompt: prompt, imageBytes: photo);
@@ -343,13 +350,14 @@ class KoalaAIService {
   Uri get _proxyUri => Uri.parse('${Env.koalaApiUrl}/api/chat');
 
   Future<KoalaResponse> _callGemini({required String prompt, List<Map<String, String>>? history}) async {
+    final systemInstruction = {'parts': [{'text': prompt}]};
     final contents = <Map<String, dynamic>>[];
 
-    // Conversation history (last 10 messages, max 6000 karakter)
+    // Conversation history (last 8 messages, max 6000 karakter)
     if (history != null) {
-      final recent = history.length > 10 ? history.sublist(history.length - 10) : history;
+      final recent = history.length > 8 ? history.sublist(history.length - 8) : history;
       int totalChars = 0;
-      const maxHistoryChars = 12000;
+      const maxHistoryChars = 6000;
       for (final msg in recent.reversed) {
         final text = msg['content'] ?? '';
         if (totalChars + text.length > maxHistoryChars) break;
@@ -361,12 +369,13 @@ class KoalaAIService {
       }
     }
 
-    contents.add({
-      'role': 'user',
-      'parts': [{'text': prompt}],
-    });
+    // Gemini en az 1 user mesajı ister
+    if (contents.isEmpty || (contents.last['role'] != 'user')) {
+      contents.add({'role': 'user', 'parts': [{'text': 'Devam et'}]});
+    }
 
     final payload = {
+      'system_instruction': systemInstruction,
       'contents': contents,
       'generationConfig': {
         'temperature': 0.7,
@@ -588,12 +597,16 @@ class KoalaAIService {
     List<Map<String, String>>? history,
   }) async {
 
-    // Mesaj geçmişi hazırla (max 10 mesaj, max 6000 karakter)
+    // System instruction'ı ayır — contents'e kullanıcı mesajı olarak ekleme
+    // Bu, history'nin system prompt ile kirlenmesini önler
+    final systemInstruction = {'parts': [{'text': prompt}]};
+
+    // Mesaj geçmişi hazırla (max 8 mesaj, max 6000 karakter)
     final contents = <Map<String, dynamic>>[];
     if (history != null) {
-      final recent = history.length > 10 ? history.sublist(history.length - 10) : history;
+      final recent = history.length > 8 ? history.sublist(history.length - 8) : history;
       int totalChars = 0;
-      const maxHistoryChars = 12000;
+      const maxHistoryChars = 6000;
       for (final msg in recent.reversed) {
         final text = msg['content'] ?? '';
         if (totalChars + text.length > maxHistoryChars) break;
@@ -604,7 +617,10 @@ class KoalaAIService {
         });
       }
     }
-    contents.add({'role': 'user', 'parts': [{'text': prompt}]});
+    // Son kullanıcı mesajı yoksa boş bir mesaj ekle (Gemini en az 1 user mesajı ister)
+    if (contents.isEmpty || (contents.last['role'] != 'user')) {
+      contents.add({'role': 'user', 'parts': [{'text': 'Devam et'}]});
+    }
 
     // Max 2 tur (ilk istek + 1 function call) — 3 tur çok yavaş
     for (int turn = 0; turn < 2; turn++) {
@@ -612,6 +628,7 @@ class KoalaAIService {
       // döndürmesi gereken turda JSON zorlama function call'ı engelleyebilir.
       // JSON formatını prompt ile zorluyoruz (SADECE JSON kuralı).
       final payload = {
+        'system_instruction': systemInstruction,
         'contents': contents,
         'tools': _toolDeclarations,
         'generationConfig': {
