@@ -161,7 +161,7 @@ class _ProductEntryScreenState extends State<ProductEntryScreen> {
     // Proje detay sheet'i kapat
     if (mounted) Navigator.of(context).pop();
 
-    // Designer chat popup aç
+    // Designer chat popup aç — auth öncesi yazılan mesajı da geçir
     if (mounted) {
       await DesignerChatPopup.show(
         context,
@@ -171,6 +171,7 @@ class _ProductEntryScreenState extends State<ProductEntryScreen> {
         contextType: 'project',
         contextId: (card.project['id'] ?? '').toString(),
         contextTitle: projectTitle.isNotEmpty ? projectTitle : null,
+        initialMessage: customMessage,
       );
     }
   }

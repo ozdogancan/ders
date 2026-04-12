@@ -171,16 +171,32 @@ class EvlumbaLiveService {
     return List<Map<String, dynamic>>.from(data);
   }
 
+  /// Tek tasarımcı bilgisi
+  static Future<Map<String, dynamic>?> getDesignerById(String designerId) async {
+    try {
+      final data = await client
+          .from('profiles')
+          .select()
+          .eq('id', designerId)
+          .maybeSingle();
+      return data;
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// Tasarımcının tüm projeleri
   static Future<List<Map<String, dynamic>>> getDesignerProjects(
-    String designerId,
-  ) async {
+    String designerId, {
+    int limit = 50,
+  }) async {
     final data = await client
         .from('designer_projects')
         .select('*, designer_project_images(image_url, sort_order)')
         .eq('designer_id', designerId)
         .eq('is_published', true)
-        .order('created_at', ascending: false);
+        .order('created_at', ascending: false)
+        .limit(limit);
     return List<Map<String, dynamic>>.from(data);
   }
 
