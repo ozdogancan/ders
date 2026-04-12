@@ -602,7 +602,23 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
       }
     }
 
-    // Tüm chip'ler: kullanıcı temiz text görür, AI bağlamı hiddenContext ile alır
+    // "Uzman/tasarımcı öner" → designerMatch intent'i kullan (search_designers garanti)
+    if (lower.contains('uzman') || lower.contains('tasarımcı')) {
+      final ctx = _photoAnalysisContext;
+      final style = ctx?['style'] ?? 'modern';
+      setState(() {
+        _msgs.add(_Msg(role: 'user', text: chipText));
+        _loading = true;
+      });
+      _scrollDown();
+      _sendToAIWithIntent(
+        intent: KoalaIntent.designerMatch,
+        params: {'style': style},
+      );
+      return;
+    }
+
+    // Diğer chip'ler: kullanıcı temiz text görür, AI bağlamı hiddenContext ile alır
     _sendToAI(text: chipText, hiddenContext: _buildHiddenContext());
   }
 
@@ -921,8 +937,20 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
               () => _sendToAI(text: 'Bu odaya uygun renk paleti öner', hiddenContext: _buildHiddenContext())),
             _quickChip(Icons.shopping_bag_rounded, productLabel,
               () => _sendToAI(text: 'Bu oda ve stile uygun ürün öner', hiddenContext: _buildHiddenContext())),
-            _quickChip(Icons.person_rounded, 'Uzman öner',
-              () => _sendToAI(text: 'Bu oda için uzman tasarımcı öner', hiddenContext: _buildHiddenContext())),
+            _quickChip(Icons.person_rounded, 'Uzman öner', () {
+              // Direkt designerMatch intent'i — search_designers function call'ını garanti eder
+              final ctx = _photoAnalysisContext;
+              final style = ctx?['style'] ?? 'modern';
+              setState(() {
+                _msgs.add(_Msg(role: 'user', text: 'Bu oda için uzman tasarımcı öner'));
+                _loading = true;
+              });
+              _scrollDown();
+              _sendToAIWithIntent(
+                intent: KoalaIntent.designerMatch,
+                params: {'style': style},
+              );
+            }),
             _quickChip(Icons.auto_awesome_rounded, 'Stil analizi',
               () => _sendToAI(text: 'Tarzımı analiz et')),
           ],
@@ -1314,8 +1342,18 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                 () => _sendToAI(text: 'Bu odaya uygun renk paleti öner', hiddenContext: _buildHiddenContext())),
               _fallbackChip(Icons.shopping_bag_rounded, 'Ürün bul',
                 () => _sendToAI(text: 'Bu oda ve stile uygun ürün öner', hiddenContext: _buildHiddenContext())),
-              _fallbackChip(Icons.person_rounded, 'Uzman bul',
-                () => _sendToAI(text: 'Bu tarz için uzman tasarımcı öner', hiddenContext: _buildHiddenContext())),
+              _fallbackChip(Icons.person_rounded, 'Uzman bul', () {
+                final style = _photoAnalysisContext?['style'] ?? 'modern';
+                setState(() {
+                  _msgs.add(_Msg(role: 'user', text: 'Bu tarz için uzman tasarımcı öner'));
+                  _loading = true;
+                });
+                _scrollDown();
+                _sendToAIWithIntent(
+                  intent: KoalaIntent.designerMatch,
+                  params: {'style': style},
+                );
+              }),
             ],
           ),
         ],

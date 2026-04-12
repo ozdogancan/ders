@@ -375,7 +375,7 @@ class KoalaAIService {
 
     debugPrint('KoalaAI: Sending request via proxy (${contents.length} messages)...');
     final response = await _client.post(_proxyUri, headers: {'Content-Type': 'application/json'}, body: jsonEncode(payload))
-        .timeout(const Duration(seconds: 45));
+        .timeout(const Duration(seconds: 30));
 
     if (response.statusCode >= 300) {
       debugPrint('KoalaAI ERROR ${response.statusCode}: ${response.body.substring(0, 300.clamp(0, response.body.length))}');
@@ -476,7 +476,7 @@ class KoalaAIService {
     for (int attempt = 1; attempt <= 3; attempt++) {
       response = await _client
           .post(_proxyUri, headers: {'Content-Type': 'application/json'}, body: jsonBody)
-          .timeout(const Duration(seconds: 45));
+          .timeout(const Duration(seconds: 30));
 
       debugPrint('KoalaAI: Image attempt $attempt → ${response.statusCode}');
       if (response.statusCode < 300) break;
@@ -538,7 +538,7 @@ class KoalaAIService {
       debugPrint('KoalaAI: Image turn2 (function result)...');
       final resp2 = await _client
           .post(_proxyUri, headers: {'Content-Type': 'application/json'}, body: jsonEncode(turn2Payload))
-          .timeout(const Duration(seconds: 45));
+          .timeout(const Duration(seconds: 30));
 
       if (resp2.statusCode >= 300) {
         debugPrint('KoalaAI: Turn2 fail: ${resp2.statusCode}');
@@ -606,8 +606,8 @@ class KoalaAIService {
     }
     contents.add({'role': 'user', 'parts': [{'text': prompt}]});
 
-    // Max 3 tur (ilk istek + 2 function call)
-    for (int turn = 0; turn < 3; turn++) {
+    // Max 2 tur (ilk istek + 1 function call) — 3 tur çok yavaş
+    for (int turn = 0; turn < 2; turn++) {
       // Not: responseMimeType + tools birlikte kullanılmaz — Gemini function call
       // döndürmesi gereken turda JSON zorlama function call'ı engelleyebilir.
       // JSON formatını prompt ile zorluyoruz (SADECE JSON kuralı).
@@ -624,7 +624,7 @@ class KoalaAIService {
         _proxyUri,
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode(payload),
-      ).timeout(const Duration(seconds: 45));
+      ).timeout(const Duration(seconds: 30));
 
       if (response.statusCode >= 300) {
         debugPrint('KoalaAI ERROR ${response.statusCode}: ${response.body.substring(0, 300.clamp(0, response.body.length))}');
@@ -693,8 +693,8 @@ class KoalaAIService {
 
       // Boş yanıt kontrolü
       if (text.isEmpty) {
-        debugPrint('KoalaAI: Empty text response, falling back to _callGemini...');
-        return _callGemini(prompt: prompt, history: history);
+        debugPrint('KoalaAI: Empty text response');
+        return KoalaResponse(message: 'Yanıt oluşturulamadı, lütfen tekrar deneyin.', cards: []);
       }
 
       // JSON parse dene
@@ -702,25 +702,22 @@ class KoalaAIService {
       // Eğer parse başarılı ve kartlar varsa → döndür
       if (parsed.cards.isNotEmpty) return parsed;
       // Kartlar boşsa ama mesaj varsa → mesajla birlikte döndür
-      // "aksilik oldu" mesajı _extractFriendlyText fallback'i — Gemini düz Türkçe yazmış demek
-      // Bu durumda düz metni doğrudan kullanıcıya göster (kalite korunsun)
       if (parsed.message.isNotEmpty && !parsed.message.contains('aksilik oldu')) return parsed;
 
       // Gemini JSON vermedi ama düz Türkçe metin döndü → metni doğrudan göster
-      // Bu, function call sonrası error geldiğinde Gemini'nin Türkçe açıklama yazması durumunu yakalar
       if (text.length > 20 && !text.trimLeft().startsWith('{')) {
         debugPrint('KoalaAI: Plain text response from Gemini (${text.length} chars), using directly');
         return KoalaResponse(message: _sanitizeMessage(text), cards: []);
       }
 
-      // Son çare: tools olmadan tekrar dene
-      debugPrint('KoalaAI: Tools response was not usable, retrying with _callGemini...');
-      return _callGemini(prompt: prompt, history: history);
+      // JSON parse başarısız — metni olduğu gibi göster (ek request yapma)
+      debugPrint('KoalaAI: Tools response parse failed, showing raw text');
+      return KoalaResponse(message: _sanitizeMessage(text), cards: []);
     }
 
-    // 3 tur dolduysa fallback — son çare olarak tools olmadan dene
-    debugPrint('KoalaAI: 3 turns exhausted, falling back to _callGemini...');
-    return _callGemini(prompt: prompt, history: history);
+    // Turlar tükendi — ek request yapma, kullanıcıyı beklemeye bırakma
+    debugPrint('KoalaAI: Turns exhausted');
+    return KoalaResponse(message: 'İşlem tamamlanamadı, lütfen tekrar deneyin.', cards: []);
   }
 
   KoalaResponse _parseResponse(String raw) {

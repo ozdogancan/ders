@@ -161,11 +161,13 @@ class _DesignerChatSheetState extends State<_DesignerChatSheet>
       // Mesajları göster
       if (mounted) setState(() { _messages = messages; _state = _SheetState.ready; });
 
-      // Context veya initialMessage varsa input'a yaz — kullanıcı karar versin
-      if (messages.isEmpty && widget.contextTitle != null && widget.contextTitle!.isNotEmpty) {
-        _textController.text = '${widget.contextTitle} hakk\u0131nda bilgi almak istiyorum.';
-      } else if (widget.initialMessage != null && widget.initialMessage!.trim().isNotEmpty) {
-        _textController.text = widget.initialMessage!.trim();
+      // initialMessage varsa öncelikli kullan, yoksa contextTitle'dan üret
+      if (messages.isEmpty) {
+        if (widget.initialMessage != null && widget.initialMessage!.trim().isNotEmpty) {
+          _textController.text = widget.initialMessage!.trim();
+        } else if (widget.contextTitle != null && widget.contextTitle!.isNotEmpty) {
+          _textController.text = 'Merhaba, ${widget.contextTitle} hakkında bilgi almak istiyorum.';
+        }
       }
     } catch (e) {
       if (mounted) setState(() { _state = _SheetState.error; _errorMsg = 'Bir hata oluştu: $e'; });

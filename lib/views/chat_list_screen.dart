@@ -7,6 +7,7 @@ import '../services/evlumba_live_service.dart';
 import '../services/messaging_service.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/error_state.dart';
+import '../services/koala_ai_service.dart';
 import '../widgets/shimmer_loading.dart';
 import 'chat_detail_screen.dart';
 
@@ -141,10 +142,165 @@ class _ChatListScreenState extends State<ChatListScreen> {
   }
 
   Widget _buildEmpty() {
-    return const EmptyState(
-      icon: Icons.chat_rounded,
-      title: 'Henüz bir mesajın yok',
-      description: 'Koala AI ile sohbet başlat veya tasarımcı profillerinden mesaj gönder',
+    return SingleChildScrollView(
+      padding: const EdgeInsets.symmetric(horizontal: KoalaSpacing.lg),
+      child: Column(
+        children: [
+          const SizedBox(height: KoalaSpacing.xl),
+
+          // ─── Koala AI Hero Card ───
+          GestureDetector(
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const ChatDetailScreen()),
+            ),
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                gradient: KoalaColors.accentGradient,
+                borderRadius: BorderRadius.circular(KoalaRadius.xl),
+                boxShadow: KoalaShadows.accentGlow,
+              ),
+              child: Column(
+                children: [
+                  // Koala avatar
+                  Container(
+                    width: 64,
+                    height: 64,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.2),
+                      shape: BoxShape.circle,
+                    ),
+                    child: ClipOval(
+                      child: Image.asset(
+                        'assets/images/koalas.png',
+                        width: 48, height: 48,
+                        errorBuilder: (_, _, _) => const Icon(Icons.auto_awesome_rounded, size: 32, color: Colors.white),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Koala AI Asistan',
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: Colors.white, letterSpacing: -0.3),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Odanı fotoğrafla, stil analizi yap, ürün bul\nveya uzman tasarımcı önerisi al',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 13, color: Colors.white.withValues(alpha: 0.85), height: 1.5),
+                  ),
+                  const SizedBox(height: 20),
+                  // CTA buton
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(KoalaRadius.pill),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.chat_rounded, size: 16, color: KoalaColors.accentDeep),
+                        SizedBox(width: 8),
+                        Text(
+                          'Sohbet Başlat',
+                          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: KoalaColors.accentDeep),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 16),
+
+          // ─── Hızlı eylem butonları ───
+          Row(
+            children: [
+              Expanded(
+                child: _emptyActionCard(
+                  icon: Icons.camera_alt_rounded,
+                  label: 'Odamı Analiz Et',
+                  color: KoalaColors.accent,
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const ChatDetailScreen(
+                        intent: KoalaIntent.photoAnalysis,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _emptyActionCard(
+                  icon: Icons.person_search_rounded,
+                  label: 'Tasarımcı Bul',
+                  color: KoalaColors.greenAlt,
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => ChatDetailScreen(
+                        initialText: 'Tasarımcı öner',
+                        intent: KoalaIntent.designerMatch,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 20),
+
+          // ─── Evlumba Design Premium ───
+          _buildEvlumbaDesignSection(),
+
+          const SizedBox(height: KoalaSpacing.xxxl),
+        ],
+      ),
+    );
+  }
+
+  Widget _emptyActionCard({
+    required IconData icon,
+    required String label,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 12),
+        decoration: BoxDecoration(
+          color: KoalaColors.surface,
+          borderRadius: BorderRadius.circular(KoalaRadius.lg),
+          border: Border.all(color: color.withValues(alpha: 0.15)),
+        ),
+        child: Column(
+          children: [
+            Container(
+              width: 44, height: 44,
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(icon, size: 22, color: color),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              label,
+              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: KoalaColors.text),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      ),
     );
   }
 

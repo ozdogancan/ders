@@ -252,11 +252,6 @@ class DesignerCards extends StatelessWidget {
                     if (!context.mounted) return;
 
                     final specialty = ds['specialty']?.toString() ?? '';
-                    final city = ds['city']?.toString() ?? '';
-                    final contextParts = <String>[];
-                    if (specialty.isNotEmpty) contextParts.add(specialty);
-                    if (city.isNotEmpty) contextParts.add(city);
-                    final contextInfo = contextParts.isNotEmpty ? ' (${contextParts.join(', ')})' : '';
 
                     DesignerChatPopup.show(
                       context,
@@ -265,8 +260,9 @@ class DesignerCards extends StatelessWidget {
                       designerAvatarUrl: ds['avatar_url']?.toString(),
                       contextType: 'ai_chat',
                       contextId: designerId,
-                      contextTitle: name,
-                      initialMessage: 'Merhaba, Koala uygulaması üzerinden ulaşıyorum. $name$contextInfo ile çalışmak istiyorum.',
+                      initialMessage: specialty.isNotEmpty
+                          ? 'Merhaba, $specialty alanındaki çalışmalarınızı inceledim. Projem için görüşmek isterim.'
+                          : 'Merhaba, çalışmalarınızı çok beğendim. Projem için görüşmek isterim.',
                     );
                   },
                   child: Container(
