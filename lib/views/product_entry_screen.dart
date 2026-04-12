@@ -13,6 +13,8 @@ import '../services/evlumba_live_service.dart';
 import '../services/koala_tool_handler.dart';
 import '../widgets/koala_widgets.dart';
 import '../widgets/chat/product_carousel.dart';
+import '../helpers/auth_guard.dart';
+import '../widgets/chat/designer_chat_popup.dart';
 import 'chat_detail_screen.dart';
 
 // Alias — gradually migrate to KoalaColors directly
@@ -128,13 +130,49 @@ class _ProductEntryScreenState extends State<ProductEntryScreen> {
   }
 
   Future<void> _openProjectChat(_DiscoveryCard card, {String? customMessage}) async {
-    await Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => ChatDetailScreen(
-          initialText: _projectInquiryText(card, customMessage: customMessage),
-        ),
-      ),
+    if (!mounted) return;
+
+    // Auth kontrolü — anonim kullanıcıyı sign-in'e yönlendir
+    final authed = await ensureAuthenticated(
+      context,
+      toastMessage: 'Tasarımcıya mesaj atmak için giriş yapın.',
     );
+    if (!authed || !mounted) return;
+
+    // Designer bilgilerini al
+    final designer = card.designer ?? card.project['profiles'] as Map<String, dynamic>?;
+    final designerId = (designer?['id'] ?? card.project['designer_id'] ?? '').toString();
+    final designerName = (designer?['full_name'] ?? 'Tasarımcı').toString().trim();
+    final designerAvatar = (designer?['avatar_url'] ?? '').toString().trim();
+    final projectTitle = (card.project['title'] ?? '').toString().trim();
+
+    if (designerId.isEmpty) {
+      // Fallback: AI chat'e yönlendir
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => ChatDetailScreen(
+            initialText: _projectInquiryText(card, customMessage: customMessage),
+          ),
+        ),
+      );
+      return;
+    }
+
+    // Proje detay sheet'i kapat
+    if (mounted) Navigator.of(context).pop();
+
+    // Designer chat popup aç
+    if (mounted) {
+      await DesignerChatPopup.show(
+        context,
+        designerId: designerId,
+        designerName: designerName,
+        designerAvatarUrl: designerAvatar.isNotEmpty ? designerAvatar : null,
+        contextType: 'project',
+        contextId: (card.project['id'] ?? '').toString(),
+        contextTitle: projectTitle.isNotEmpty ? projectTitle : null,
+      );
+    }
   }
 
   @override
@@ -1940,6 +1978,7 @@ class _ProjectDetailSheetState extends State<_ProjectDetailSheet> {
   List<Map<String, dynamic>> _shopLinks = <Map<String, dynamic>>[];
   final TextEditingController _messageController = TextEditingController();
   final DraggableScrollableController _sheetCtrl = DraggableScrollableController();
+  final ScrollController _innerScrollCtrl = ScrollController();
   bool _loading = true;
 
   Map<String, dynamic> get _project => widget.card.project;
@@ -1956,6 +1995,7 @@ class _ProjectDetailSheetState extends State<_ProjectDetailSheet> {
   void dispose() {
     _messageController.dispose();
     _sheetCtrl.dispose();
+    _innerScrollCtrl.dispose();
     super.dispose();
   }
 
@@ -2014,10 +2054,10 @@ class _ProjectDetailSheetState extends State<_ProjectDetailSheet> {
         .toString()
         .trim();
 
-    // Klavye açıldığında sheet'i büyüt
-    if (media.viewInsets.bottom > 0 &&
-        _sheetCtrl.isAttached &&
-        _sheetCtrl.size < 0.9) {
+    final keyboardVisible = media.viewInsets.bottom > 0;
+
+    // Klavye açıldığında sheet'i büyüt ve scroll'u en alta kaydır
+    if (keyboardVisible && _sheetCtrl.isAttached && _sheetCtrl.size < 0.9) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (_sheetCtrl.isAttached) {
           _sheetCtrl.animateTo(
@@ -2026,6 +2066,16 @@ class _ProjectDetailSheetState extends State<_ProjectDetailSheet> {
             curve: Curves.easeOut,
           );
         }
+        // Input'u görünür yap
+        Future.delayed(const Duration(milliseconds: 250), () {
+          if (_innerScrollCtrl.hasClients) {
+            _innerScrollCtrl.animateTo(
+              _innerScrollCtrl.position.maxScrollExtent,
+              duration: const Duration(milliseconds: 200),
+              curve: Curves.easeOut,
+            );
+          }
+        });
       });
     }
 
@@ -2052,8 +2102,8 @@ class _ProjectDetailSheetState extends State<_ProjectDetailSheet> {
                         20,
                         12,
                         20,
-                        (media.viewInsets.bottom > 0
-                                ? media.viewInsets.bottom + 16
+                        (keyboardVisible
+                                ? media.viewInsets.bottom + 24
                                 : media.padding.bottom + 36),
                       ),
                       child: Column(
@@ -2200,6 +2250,18 @@ class _ProjectDetailSheetState extends State<_ProjectDetailSheet> {
                             avatarUrl: designerAvatar,
                             controller: _messageController,
                             onSubmit: _submitMessage,
+                            onInputFocused: () {
+                              // Klavye açılınca input'u görünür yap
+                              Future.delayed(const Duration(milliseconds: 350), () {
+                                if (controller.hasClients) {
+                                  controller.animateTo(
+                                    controller.position.maxScrollExtent,
+                                    duration: const Duration(milliseconds: 200),
+                                    curve: Curves.easeOut,
+                                  );
+                                }
+                              });
+                            },
                           ),
                           if (_shopLinks.isNotEmpty) ...[
                             const SizedBox(height: 22),
@@ -2302,6 +2364,7 @@ class _DesignerContactCard extends StatelessWidget {
   final String avatarUrl;
   final TextEditingController controller;
   final VoidCallback onSubmit;
+  final VoidCallback? onInputFocused;
 
   const _DesignerContactCard({
     required this.designerName,
@@ -2309,6 +2372,7 @@ class _DesignerContactCard extends StatelessWidget {
     required this.avatarUrl,
     required this.controller,
     required this.onSubmit,
+    this.onInputFocused,
   });
 
   @override
@@ -2380,6 +2444,7 @@ class _DesignerContactCard extends StatelessWidget {
                     controller: controller,
                     textInputAction: TextInputAction.send,
                     onSubmitted: (_) => onSubmit(),
+                    onTap: onInputFocused,
                     scrollPadding: const EdgeInsets.only(bottom: 120),
                     decoration: InputDecoration(
                       hintText: '$designerName için mesaj yaz...',
