@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import '../core/theme/koala_tokens.dart';
 import '../core/utils/format_utils.dart';
 import '../services/chat_persistence.dart';
+import '../services/evlumba_live_service.dart';
 import '../services/messaging_service.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/error_state.dart';
@@ -23,6 +24,9 @@ class _ChatListScreenState extends State<ChatListScreen> {
   bool _hasError = false;
   bool _showAllAi = false;
 
+  // Designer avatar cache
+  final Map<String, String?> _avatarCache = {};
+
   @override
   void initState() {
     super.initState();
@@ -41,10 +45,34 @@ class _ChatListScreenState extends State<ChatListScreen> {
           _aiChats = results[1] as List<ChatSummary>;
           _loading = false;
         });
+        _loadDesignerAvatars();
       }
     } catch (e) {
       if (mounted) setState(() { _loading = false; _hasError = true; });
     }
+  }
+
+  /// Tüm tasarımcıların avatarlarını toplu yükle
+  Future<void> _loadDesignerAvatars() async {
+    if (_conversations.isEmpty) return;
+    try {
+      if (!EvlumbaLiveService.isReady) {
+        await EvlumbaLiveService.waitForReady(timeout: const Duration(seconds: 5));
+      }
+      if (!EvlumbaLiveService.isReady) return;
+
+      for (final conv in _conversations) {
+        final designerId = (conv['designer_id'] ?? '').toString();
+        if (designerId.isEmpty || _avatarCache.containsKey(designerId)) continue;
+        try {
+          final detail = await EvlumbaLiveService.getDesignerById(designerId);
+          _avatarCache[designerId] = (detail?['avatar_url'] ?? '').toString().trim();
+        } catch (_) {
+          _avatarCache[designerId] = null;
+        }
+      }
+      if (mounted) setState(() {});
+    } catch (_) {}
   }
 
   @override
@@ -258,11 +286,15 @@ class _ChatListScreenState extends State<ChatListScreen> {
         .join()
         .toUpperCase();
 
+    final designerId = (conv['designer_id'] ?? '').toString();
+    final avatarUrl = _avatarCache[designerId];
+
     return GestureDetector(
       onTap: () async {
         await context.push('/chat/dm/${conv['id']}', extra: {
-          'designerId': (conv['designer_id'] ?? '').toString(),
+          'designerId': designerId,
           'designerName': title,
+          'designerAvatarUrl': avatarUrl,
         });
         _load(); // Refresh unread counts
       },
@@ -272,7 +304,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
         decoration: KoalaDeco.card,
         child: Row(
           children: [
-            // Avatar
+            // Avatar — profil fotosu varsa göster
             Container(
               width: 48,
               height: 48,
@@ -282,16 +314,19 @@ class _ChatListScreenState extends State<ChatListScreen> {
                   colors: [KoalaColors.accent, KoalaColors.accentMuted],
                 ),
               ),
-              child: Center(
-                child: Text(
-                  initials,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.white,
-                  ),
-                ),
-              ),
+              child: avatarUrl != null && avatarUrl.isNotEmpty
+                  ? ClipOval(
+                      child: Image.network(
+                        avatarUrl,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => Center(
+                          child: Text(initials, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.white)),
+                        ),
+                      ),
+                    )
+                  : Center(
+                      child: Text(initials, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.white)),
+                    ),
             ),
             const SizedBox(width: KoalaSpacing.md),
 

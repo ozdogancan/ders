@@ -8,6 +8,7 @@ import '../services/messaging_service.dart';
 import '../services/saved_items_service.dart';
 import '../widgets/koala_widgets.dart';
 import '../widgets/save_button.dart';
+import 'chat_detail_screen.dart';
 
 /// Tasarımcı ile mesaj detay ekranı — gerçek zamanlı
 class ConversationDetailScreen extends StatefulWidget {
@@ -202,6 +203,28 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
     if (widget.designerId == null) return;
     final url = 'https://www.evlumba.com/tasarimci/${widget.designerId}';
     launchUrl(Uri.parse(url), mode: LaunchMode.inAppBrowserView);
+  }
+
+  /// Portfolio görseline tıklanınca proje detay overlay aç
+  void _openProjectViewer(Map<String, dynamic> project, int startIndex) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      barrierColor: Colors.black54,
+      builder: (_) => _ProjectViewerSheet(
+        project: project,
+        allProjects: _designerProjects,
+        startIndex: startIndex,
+        designerName: widget.designerName,
+        onAskAI: (question) {
+          Navigator.of(context).pop(); // viewer kapat
+          Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => ChatDetailScreen(initialText: question)),
+          );
+        },
+      ),
+    );
   }
 
   @override
@@ -504,7 +527,7 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
               child: ListView.separated(
                 padding: const EdgeInsets.only(left: 20, right: 20, bottom: 10),
                 scrollDirection: Axis.horizontal,
-                itemCount: _designerProjects.length.clamp(0, 4),
+                itemCount: _designerProjects.length.clamp(0, 6),
                 separatorBuilder: (_, __) => const SizedBox(width: 6),
                 itemBuilder: (_, i) {
                   final img = (_designerProjects[i]['cover_image_url'] ??
@@ -514,17 +537,20 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
                       .toString()
                       .trim();
                   if (img.isEmpty) return const SizedBox.shrink();
-                  return ClipRRect(
-                    borderRadius: BorderRadius.circular(10),
-                    child: Image.network(
-                      img,
-                      width: 80,
-                      height: 54,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => Container(
+                  return GestureDetector(
+                    onTap: () => _openProjectViewer(_designerProjects[i], i),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(10),
+                      child: Image.network(
+                        img,
                         width: 80,
                         height: 54,
-                        color: KoalaColors.surfaceAlt,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => Container(
+                          width: 80,
+                          height: 54,
+                          color: KoalaColors.surfaceAlt,
+                        ),
                       ),
                     ),
                   );
@@ -534,6 +560,130 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
 
           const Divider(height: 1, color: KoalaColors.borderSolid),
         ],
+      ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// PROJECT VIEWER — portfolio görseli tıklanınca
+// ═══════════════════════════════════════════════════════
+class _ProjectViewerSheet extends StatefulWidget {
+  const _ProjectViewerSheet({
+    required this.project,
+    required this.allProjects,
+    required this.startIndex,
+    required this.designerName,
+    required this.onAskAI,
+  });
+  final Map<String, dynamic> project;
+  final List<Map<String, dynamic>> allProjects;
+  final int startIndex;
+  final String designerName;
+  final void Function(String question) onAskAI;
+
+  @override
+  State<_ProjectViewerSheet> createState() => _ProjectViewerSheetState();
+}
+
+class _ProjectViewerSheetState extends State<_ProjectViewerSheet> {
+  late PageController _pageCtrl;
+  late int _currentIndex;
+
+  @override
+  void initState() {
+    super.initState();
+    _currentIndex = widget.startIndex;
+    _pageCtrl = PageController(initialPage: widget.startIndex);
+  }
+
+  @override
+  void dispose() { _pageCtrl.dispose(); super.dispose(); }
+
+  Map<String, dynamic> get _current => widget.allProjects[_currentIndex];
+
+  String _coverUrl(Map<String, dynamic> p) {
+    for (final k in ['cover_image_url', 'cover_url', 'image_url']) {
+      final v = (p[k] ?? '').toString().trim();
+      if (v.isNotEmpty) return v;
+    }
+    return '';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final title = (_current['title'] ?? 'Proje').toString();
+    return Container(
+      height: MediaQuery.of(context).size.height * 0.85,
+      decoration: const BoxDecoration(color: KoalaColors.surface, borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      child: Column(
+        children: [
+          Center(child: Container(margin: const EdgeInsets.only(top: 10, bottom: 6), width: 40, height: 4, decoration: BoxDecoration(color: KoalaColors.borderSolid, borderRadius: BorderRadius.circular(2)))),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            child: Row(
+              children: [
+                IconButton(onPressed: () => Navigator.of(context).pop(), icon: const Icon(Icons.close_rounded, color: KoalaColors.textSec, size: 22)),
+                Expanded(child: Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: KoalaColors.text), textAlign: TextAlign.center, overflow: TextOverflow.ellipsis)),
+                Text('${_currentIndex + 1}/${widget.allProjects.length}', style: const TextStyle(fontSize: 13, color: KoalaColors.textTer)),
+                const SizedBox(width: 12),
+              ],
+            ),
+          ),
+          const SizedBox(height: 8),
+          Expanded(
+            child: PageView.builder(
+              controller: _pageCtrl, itemCount: widget.allProjects.length,
+              onPageChanged: (i) => setState(() => _currentIndex = i),
+              itemBuilder: (_, i) {
+                final url = _coverUrl(widget.allProjects[i]);
+                if (url.isEmpty) return Container(color: KoalaColors.surfaceAlt, alignment: Alignment.center, child: const Icon(Icons.image_rounded, size: 48, color: KoalaColors.textTer));
+                return Padding(padding: const EdgeInsets.symmetric(horizontal: 16), child: ClipRRect(borderRadius: BorderRadius.circular(20), child: Image.network(url, fit: BoxFit.cover, errorBuilder: (_, __, ___) => Container(color: KoalaColors.surfaceAlt))));
+              },
+            ),
+          ),
+          const SizedBox(height: 12),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text("Koala AI'a Sor", style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: KoalaColors.textTer, letterSpacing: 0.5)),
+                const SizedBox(height: 8),
+                Wrap(spacing: 8, runSpacing: 8, children: [
+                  _SmartChip(icon: Icons.search_rounded, label: 'Bu tasar\u0131mdaki \u00fcr\u00fcnleri bul', onTap: () => widget.onAskAI('$title tasar\u0131m\u0131ndaki \u00fcr\u00fcnleri bul')),
+                  _SmartChip(icon: Icons.palette_rounded, label: 'Benzer tasar\u0131mlar g\u00f6ster', onTap: () => widget.onAskAI('$title gibi benzer tasar\u0131mlar g\u00f6ster')),
+                  _SmartChip(icon: Icons.style_rounded, label: 'Bu tarz nedir?', onTap: () => widget.onAskAI('$title tasar\u0131m\u0131n\u0131n tarz\u0131 nedir? Detayl\u0131 analiz et')),
+                  _SmartChip(icon: Icons.person_search_rounded, label: '${widget.designerName} hakk\u0131nda', onTap: () => widget.onAskAI('${widget.designerName} tasar\u0131mc\u0131s\u0131n\u0131 bul')),
+                ]),
+              ],
+            ),
+          ),
+          SizedBox(height: MediaQuery.of(context).padding.bottom + 8),
+        ],
+      ),
+    );
+  }
+}
+
+class _SmartChip extends StatelessWidget {
+  const _SmartChip({required this.icon, required this.label, required this.onTap});
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(color: KoalaColors.accentSoft, borderRadius: BorderRadius.circular(20), border: Border.all(color: KoalaColors.accent.withValues(alpha: 0.2))),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Icon(icon, size: 15, color: KoalaColors.accent),
+          const SizedBox(width: 6),
+          Flexible(child: Text(label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: KoalaColors.accent))),
+        ]),
       ),
     );
   }
