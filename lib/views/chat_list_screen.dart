@@ -10,7 +10,7 @@ import '../widgets/error_state.dart';
 import '../widgets/shimmer_loading.dart';
 import 'chat_detail_screen.dart';
 
-/// Mesajlar ekranı — AI chat geçmişi + tasarımcı konuşmaları
+/// Mesajlar ekranı — AI chat geçmişi + Evlumba Design + tasarımcı konuşmaları
 class ChatListScreen extends StatefulWidget {
   const ChatListScreen({super.key});
   @override
@@ -101,17 +101,26 @@ class _ChatListScreenState extends State<ChatListScreen> {
                   child: ListView(
                     padding: const EdgeInsets.symmetric(horizontal: KoalaSpacing.lg),
                     children: [
-                      // ─── AI Asistan (pinli) ───
+                      // ─── 1. Koala AI Asistan ───
                       _buildAiSection(),
 
-                      // ─── Tasarımcı konuşmaları ───
+                      // ─── 2. Evlumba Design (Premium) ───
+                      _buildEvlumbaDesignSection(),
+
+                      // ─── 3. Tasarımcı konuşmaları ───
                       if (_conversations.isNotEmpty) ...[
                         const Padding(
                           padding: EdgeInsets.only(
-                            top: KoalaSpacing.lg,
+                            top: KoalaSpacing.xl,
                             bottom: KoalaSpacing.sm,
                           ),
-                          child: Text('Tasarımcılar', style: KoalaText.caption),
+                          child: Row(
+                            children: [
+                              Icon(Icons.forum_rounded, size: 14, color: KoalaColors.textTer),
+                              SizedBox(width: 6),
+                              Text('Tasarımcılar', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: KoalaColors.textTer, letterSpacing: 0.5)),
+                            ],
+                          ),
                         ),
                         ..._conversations.map(_buildConversationTile),
                       ],
@@ -134,21 +143,29 @@ class _ChatListScreenState extends State<ChatListScreen> {
   Widget _buildEmpty() {
     return const EmptyState(
       icon: Icons.chat_rounded,
-      title: 'Henüz bir tasarımcıyla mesajlaşmadın',
-      description: 'Tasarımcı profillerinden "Mesaj Gönder" ile sohbet başlat',
+      title: 'Henüz bir mesajın yok',
+      description: 'Koala AI ile sohbet başlat veya tasarımcı profillerinden mesaj gönder',
     );
   }
 
-  // ─── AI Asistan section ───
+  // ═══════════════════════════════════════════════════════
+  // 1. AI ASISTAN SECTION
+  // ═══════════════════════════════════════════════════════
   Widget _buildAiSection() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Padding(
           padding: EdgeInsets.only(top: KoalaSpacing.sm, bottom: KoalaSpacing.sm),
-          child: Text('AI Asistan', style: KoalaText.caption),
+          child: Row(
+            children: [
+              Icon(Icons.auto_awesome_rounded, size: 14, color: KoalaColors.textTer),
+              SizedBox(width: 6),
+              Text('AI Asistan', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: KoalaColors.textTer, letterSpacing: 0.5)),
+            ],
+          ),
         ),
-        // Yeni AI sohbet başlat
+        // Yeni AI sohbet başlat — hero card
         GestureDetector(
           onTap: () => Navigator.push(
             context,
@@ -159,6 +176,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
             decoration: BoxDecoration(
               gradient: KoalaColors.accentGradient,
               borderRadius: BorderRadius.circular(KoalaRadius.lg),
+              boxShadow: KoalaShadows.accentGlow,
             ),
             child: const Row(
               children: [
@@ -266,7 +284,124 @@ class _ChatListScreenState extends State<ChatListScreen> {
     );
   }
 
-  // ─── Tasarımcı konuşma tile ───
+  // ═══════════════════════════════════════════════════════
+  // 2. EVLUMBA DESIGN (Premium)
+  // ═══════════════════════════════════════════════════════
+  Widget _buildEvlumbaDesignSection() {
+    return Padding(
+      padding: const EdgeInsets.only(top: KoalaSpacing.xl),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.verified_rounded, size: 14, color: Color(0xFFD4A853)),
+              SizedBox(width: 6),
+              Text('Evlumba Design', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFFD4A853), letterSpacing: 0.5)),
+            ],
+          ),
+          const SizedBox(height: KoalaSpacing.sm),
+          GestureDetector(
+            onTap: _openEvlumbaDesign,
+            child: Container(
+              padding: const EdgeInsets.all(KoalaSpacing.lg),
+              decoration: BoxDecoration(
+                color: KoalaColors.surface,
+                borderRadius: BorderRadius.circular(KoalaRadius.lg),
+                border: Border.all(color: const Color(0xFFD4A853).withValues(alpha: 0.3), width: 1),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFFD4A853).withValues(alpha: 0.08),
+                    blurRadius: 16,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Row(
+                children: [
+                  // Premium icon
+                  Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFFD4A853), Color(0xFFE8C76A)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      borderRadius: BorderRadius.circular(KoalaRadius.sm),
+                    ),
+                    child: const Icon(Icons.diamond_rounded, color: Colors.white, size: 24),
+                  ),
+                  const SizedBox(width: KoalaSpacing.md),
+                  // Text
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Profesyonel Destek',
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                            color: KoalaColors.text,
+                          ),
+                        ),
+                        SizedBox(height: 2),
+                        Text(
+                          'Uzman iç mimarlardan 1 saat içinde yanıt',
+                          style: TextStyle(fontSize: 12, color: KoalaColors.textSec),
+                        ),
+                      ],
+                    ),
+                  ),
+                  // Badge + arrow
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFDF8EC),
+                          borderRadius: BorderRadius.circular(KoalaRadius.pill),
+                          border: Border.all(color: const Color(0xFFD4A853).withValues(alpha: 0.3)),
+                        ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.schedule_rounded, size: 11, color: Color(0xFFD4A853)),
+                            SizedBox(width: 3),
+                            Text('1 saat', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Color(0xFFD4A853))),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      const Icon(Icons.chevron_right_rounded, size: 20, color: Color(0xFFD4A853)),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _openEvlumbaDesign() {
+    // TODO: Sonraki iterasyonda WhatsApp entegrasyonu ile birlikte
+    // Şimdilik bilgi popup'ı göster
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => const _EvlumbaDesignSheet(),
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════
+  // 3. TASARIMCI KONUŞMA TILE
+  // ═══════════════════════════════════════════════════════
   Widget _buildConversationTile(Map<String, dynamic> conv) {
     final lastMessage = conv['last_message'] as String? ?? '';
     final title = conv['title'] as String? ?? 'Tasarımcı';
@@ -382,5 +517,135 @@ class _ChatListScreenState extends State<ChatListScreen> {
       ),
     );
   }
+}
 
+// ═══════════════════════════════════════════════════════
+// EVLUMBA DESIGN — Bilgi & Başlat Sheet
+// ═══════════════════════════════════════════════════════
+class _EvlumbaDesignSheet extends StatelessWidget {
+  const _EvlumbaDesignSheet();
+
+  @override
+  Widget build(BuildContext context) {
+    final bottomPad = MediaQuery.of(context).padding.bottom;
+
+    return Container(
+      padding: EdgeInsets.fromLTRB(24, 16, 24, bottomPad + 24),
+      decoration: const BoxDecoration(
+        color: KoalaColors.surface,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Handle
+          Container(
+            width: 40, height: 4,
+            decoration: BoxDecoration(color: KoalaColors.borderSolid, borderRadius: BorderRadius.circular(2)),
+          ),
+          const SizedBox(height: 24),
+
+          // Icon
+          Container(
+            width: 64, height: 64,
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFFD4A853), Color(0xFFE8C76A)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(KoalaRadius.lg),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFFD4A853).withValues(alpha: 0.25),
+                  blurRadius: 20,
+                  offset: const Offset(0, 6),
+                ),
+              ],
+            ),
+            child: const Icon(Icons.diamond_rounded, color: Colors.white, size: 32),
+          ),
+          const SizedBox(height: 20),
+
+          // Title
+          const Text(
+            'Evlumba Design',
+            style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: KoalaColors.text, letterSpacing: -0.3),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Uzman iç mimarlarımız projenize özel çözümler sunar',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 14, color: KoalaColors.textSec, height: 1.4),
+          ),
+          const SizedBox(height: 28),
+
+          // Feature list
+          _buildFeatureRow(Icons.schedule_rounded, '1 Saat İçinde Yanıt', 'Uzmanlarımız hızlıca döner'),
+          const SizedBox(height: 16),
+          _buildFeatureRow(Icons.verified_rounded, 'Sertifikalı Uzmanlar', 'Deneyimli iç mimarlar'),
+          const SizedBox(height: 16),
+          _buildFeatureRow(Icons.design_services_rounded, 'Kişiye Özel Çözüm', 'Projenize göre tasarlanmış öneriler'),
+          const SizedBox(height: 28),
+
+          // CTA Button
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: () {
+                Navigator.pop(context);
+                // TODO: WhatsApp entegrasyonu gelecek
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Evlumba Design yakında aktif olacak!'),
+                    behavior: SnackBarBehavior.floating,
+                  ),
+                );
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFD4A853),
+                foregroundColor: Colors.white,
+                elevation: 0,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(KoalaRadius.md)),
+              ),
+              child: const Text('Sohbet Başlat', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+            ),
+          ),
+          const SizedBox(height: 12),
+
+          // Subtle note
+          const Text(
+            'İlk danışma ücretsizdir',
+            style: TextStyle(fontSize: 12, color: KoalaColors.textTer),
+          ),
+        ],
+      ),
+    );
+  }
+
+  static Widget _buildFeatureRow(IconData icon, String title, String subtitle) {
+    return Row(
+      children: [
+        Container(
+          width: 40, height: 40,
+          decoration: BoxDecoration(
+            color: const Color(0xFFFDF8EC),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Icon(icon, size: 20, color: const Color(0xFFD4A853)),
+        ),
+        const SizedBox(width: 14),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: KoalaColors.text)),
+              Text(subtitle, style: const TextStyle(fontSize: 12, color: KoalaColors.textSec)),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
 }
