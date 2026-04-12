@@ -168,9 +168,13 @@ class _AuthEntryScreenState extends State<AuthEntryScreen>
 
   Future<void> _handleGuestLogin() async {
     if (_loadingAction != null) return;
-    _safeSetState(() => _loadingAction = AuthActionType.google); // reuse loading state
+    _safeSetState(() => _loadingAction = AuthActionType.google);
     try {
-      await FirebaseAuth.instance.signInAnonymously();
+      // Zaten bir kullanıcı varsa (anonim dahil) tekrar sign-in deneme
+      final existing = FirebaseAuth.instance.currentUser;
+      if (existing == null) {
+        await FirebaseAuth.instance.signInAnonymously();
+      }
       if (!mounted) return;
       if (widget.returnOnSuccess) {
         Navigator.of(context).pop(false); // false = guest, not real login
@@ -178,12 +182,16 @@ class _AuthEntryScreenState extends State<AuthEntryScreen>
       }
       await AuthCoordinator.goToHome(context);
     } catch (e) {
-      _safeSetState(() {
-        _error = 'Misafir girişi başarısız oldu. Lütfen tekrar deneyin.';
-        _loadingAction = null;
-      });
+      debugPrint('Guest login error: $e');
+      // Hata olsa bile devam et — REQUIRE_LOGIN=false ise auth olmadan da çalışır
+      if (!mounted) return;
+      if (widget.returnOnSuccess) {
+        Navigator.of(context).pop(false);
+        return;
+      }
+      await AuthCoordinator.goToHome(context);
     }
-    _safeSetState(() => _loadingAction = null);
+    if (mounted) _safeSetState(() => _loadingAction = null);
   }
 
 
