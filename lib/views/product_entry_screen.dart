@@ -10,7 +10,9 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../core/theme/koala_tokens.dart';
 import '../services/evlumba_live_service.dart';
+import '../services/koala_tool_handler.dart';
 import '../widgets/koala_widgets.dart';
+import '../widgets/chat/product_carousel.dart';
 import 'chat_detail_screen.dart';
 
 // Alias — gradually migrate to KoalaColors directly
@@ -60,6 +62,7 @@ class _ConversationTurn {
   bool isLoading;
   bool isComplete;
   final int replyKey;
+  List<ProductCarouselItem> products; // SerpAPI ürün sonuçları
 
   _ConversationTurn({
     required this.area,
@@ -70,7 +73,8 @@ class _ConversationTurn {
     required this.isLoading,
     required this.isComplete,
     required this.replyKey,
-  });
+    List<ProductCarouselItem>? products,
+  }) : products = products ?? [];
 }
 
 class ProductEntryScreen extends StatefulWidget {
@@ -373,6 +377,15 @@ class _ProductEntryScreenState extends State<ProductEntryScreen> {
   }
 
   Future<void> _loadReplyFor(_ConversationTurn turn, {bool excludePrev = false}) async {
+    // Ürün arama isteği mi kontrol et
+    final isProductSearch = _isProductSearchQuery(turn.userMessage);
+
+    if (isProductSearch) {
+      // SerpAPI'den ürün ara
+      await _searchProducts(turn);
+      return;
+    }
+
     await Future<void>.delayed(const Duration(milliseconds: 850));
     if (!mounted) return;
 
@@ -388,6 +401,96 @@ class _ProductEntryScreenState extends State<ProductEntryScreen> {
       );
       turn.isLoading = false;
     });
+  }
+
+  bool _isProductSearchQuery(String text) {
+    final lower = _normalize(text);
+    const productKeywords = [
+      'abajur', 'koltuk', 'masa', 'sandalye', 'sehpa', 'tv', 'lamba',
+      'perde', 'hali', 'ayna', 'raf', 'dolap', 'yatak', 'komodin',
+      'aksesuar', 'dekor', 'vazo', 'kirlent', 'yastik', 'avize',
+      'mobilya', 'urun', 'oner', 'bul', 'ara', 'getir', 'goster',
+      'butce', 'tl', 'fiyat', 'ucuz', 'pahali', 'indirim',
+    ];
+    int matchCount = 0;
+    for (final keyword in productKeywords) {
+      if (lower.contains(keyword)) matchCount++;
+    }
+    return matchCount >= 2;
+  }
+
+  /// Kullanıcı mesajından arama query'si çıkar (fiiller, bütçe kısmı temizlenir)
+  String _extractSearchQuery(String text) {
+    var query = text.toLowerCase();
+    // Bütçe kısmını çıkar (ör: "1500 TL bütçe", "2000 lira")
+    query = query.replaceAll(RegExp(r'\d[\d.]*\s*(?:tl|lira)\s*(?:butce|bütçe)?'), '');
+    // Fiilleri ve gereksiz kelimeleri çıkar
+    const removeWords = [
+      'oner', 'öner', 'bul', 'ara', 'getir', 'goster', 'göster',
+      'istiyorum', 'lazim', 'lazım', 'ariyorum', 'arıyorum',
+      'butce', 'bütçe', 'icin', 'için', 'salon', 'yatak', 'odasi', 'odası',
+      'mutfak', 'banyo', 'antre', 'bana', 'benim', 'lütfen', 'lutfen',
+    ];
+    for (final word in removeWords) {
+      query = query.replaceAll(RegExp('\\b$word\\b'), '');
+    }
+    query = query.replaceAll(RegExp(r'\s+'), ' ').trim();
+    // Çok kısaysa orijinal mesajı kullan
+    if (query.length < 3) query = text;
+    return query;
+  }
+
+  Future<void> _searchProducts(_ConversationTurn turn) async {
+    try {
+      // Bütçe çıkar
+      num? maxPrice;
+      final priceMatch = RegExp(r'(\d[\d.]*)\s*(?:tl|lira)', caseSensitive: false)
+          .firstMatch(turn.userMessage);
+      if (priceMatch != null) {
+        maxPrice = num.tryParse(priceMatch.group(1)!.replaceAll('.', ''));
+      }
+
+      // Query'yi temizle
+      final cleanQuery = _extractSearchQuery(turn.userMessage);
+      debugPrint('ProductEntry: searching "$cleanQuery", max_price=$maxPrice');
+
+      final result = await KoalaToolHandler.handle('search_products', {
+        'query': cleanQuery,
+        'room_type': turn.area,
+        if (maxPrice != null) 'max_price': maxPrice,
+        'limit': 4,
+      });
+
+      if (!mounted) return;
+
+      final productsRaw = (result['products'] as List?) ?? [];
+      final products = productsRaw
+          .map((p) => ProductCarouselItem.fromCardData(p as Map<String, dynamic>))
+          .toList();
+
+      setState(() {
+        turn.products = products;
+        turn.cards.clear(); // Ürün arandığında projeler gösterme
+        turn.assistantText = products.isNotEmpty
+            ? 'Senin için ${products.length} ürün buldum! İşte ${turn.area.toLowerCase()} için en uygun seçenekler:'
+            : 'Maalesef bu kriterlere uygun ürün bulamadım. Farklı bir arama dene!';
+        turn.prompts = [
+          '🔄 Farklı ürünler göster',
+          '💰 Daha uygun fiyatlı seçenekler',
+          '🏠 Başka bir alan seçmek istiyorum',
+        ];
+        turn.isLoading = false;
+      });
+    } catch (e) {
+      debugPrint('ProductEntry: search error: $e');
+      if (!mounted) return;
+      setState(() {
+        turn.cards.clear();
+        turn.assistantText = 'Ürün ararken bir sorun oluştu. Tekrar dene!';
+        turn.prompts = ['🔄 Tekrar dene', '🏠 Başka bir alan seçmek istiyorum'];
+        turn.isLoading = false;
+      });
+    }
   }
 
   List<_DiscoveryCard> _filterCards(String area, {bool excludePrev = false}) {
@@ -902,8 +1005,23 @@ class _ProductEntryScreenState extends State<ProductEntryScreen> {
                   ),
                 ),
               if (turn.area != 'reset') ...[
+                // SerpAPI ürün sonuçları varsa carousel göster
+                if (turn.products.isNotEmpty)
+                  _EntranceItem(
+                    index: 0,
+                    child: ProductCarousel(
+                      title: 'Önerilen Ürünler',
+                      products: turn.products,
+                      onAskAI: (product, question) {
+                        // Ürün hakkında soru sor
+                        _pickArea(turn.area, '"${product.name}" hakkında: $question');
+                      },
+                    ),
+                  ),
+                if (turn.products.isNotEmpty) const SizedBox(height: 18),
+                // Evlumba projeleri
                 _EntranceItem(
-                  index: 0,
+                  index: turn.products.isNotEmpty ? 1 : 0,
                   child: _projectDeck(turn.cards),
                 ),
                 const SizedBox(height: 18),
@@ -1822,6 +1940,7 @@ class _ProjectDetailSheetState extends State<_ProjectDetailSheet> {
   List<Map<String, dynamic>> _images = <Map<String, dynamic>>[];
   List<Map<String, dynamic>> _shopLinks = <Map<String, dynamic>>[];
   final TextEditingController _messageController = TextEditingController();
+  final DraggableScrollableController _sheetCtrl = DraggableScrollableController();
   bool _loading = true;
 
   Map<String, dynamic> get _project => widget.card.project;
@@ -1837,6 +1956,7 @@ class _ProjectDetailSheetState extends State<_ProjectDetailSheet> {
   @override
   void dispose() {
     _messageController.dispose();
+    _sheetCtrl.dispose();
     super.dispose();
   }
 
@@ -1895,7 +2015,23 @@ class _ProjectDetailSheetState extends State<_ProjectDetailSheet> {
         .toString()
         .trim();
 
+    // Klavye açıldığında sheet'i büyüt
+    if (media.viewInsets.bottom > 0 &&
+        _sheetCtrl.isAttached &&
+        _sheetCtrl.size < 0.9) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_sheetCtrl.isAttached) {
+          _sheetCtrl.animateTo(
+            0.94,
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeOut,
+          );
+        }
+      });
+    }
+
     return DraggableScrollableSheet(
+      controller: _sheetCtrl,
       expand: false,
       minChildSize: 0.58,
       initialChildSize: 0.82,
@@ -1913,7 +2049,14 @@ class _ProjectDetailSheetState extends State<_ProjectDetailSheet> {
                 slivers: [
                   SliverToBoxAdapter(
                     child: Padding(
-                      padding: EdgeInsets.fromLTRB(20, 12, 20, media.padding.bottom + 36),
+                      padding: EdgeInsets.fromLTRB(
+                        20,
+                        12,
+                        20,
+                        (media.viewInsets.bottom > 0
+                                ? media.viewInsets.bottom + 16
+                                : media.padding.bottom + 36),
+                      ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -2238,6 +2381,7 @@ class _DesignerContactCard extends StatelessWidget {
                     controller: controller,
                     textInputAction: TextInputAction.send,
                     onSubmitted: (_) => onSubmit(),
+                    scrollPadding: const EdgeInsets.only(bottom: 120),
                     decoration: InputDecoration(
                       hintText: '$designerName için mesaj yaz...',
                       hintStyle: GoogleFonts.manrope(

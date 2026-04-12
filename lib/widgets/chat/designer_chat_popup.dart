@@ -301,7 +301,23 @@ class _DesignerChatSheetState extends State<_DesignerChatSheet>
 
   @override
   Widget build(BuildContext context) {
-    final bottomPad = MediaQuery.of(context).viewInsets.bottom;
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+    final keyboardVisible = bottomInset > 0;
+
+    // Klavye açıldığında sheet'i otomatik büyüt
+    if (keyboardVisible &&
+        _sheetController.isAttached &&
+        _sheetController.size < 0.85) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_sheetController.isAttached) {
+          _sheetController.animateTo(
+            0.95,
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeOut,
+          );
+        }
+      });
+    }
 
     return DraggableScrollableSheet(
       controller: _sheetController,
@@ -336,11 +352,10 @@ class _DesignerChatSheetState extends State<_DesignerChatSheet>
               ),
 
               // ── Input bar (sadece ready durumunda) ──
-              if (_state == _SheetState.ready)
-                Padding(
-                  padding: EdgeInsets.only(bottom: bottomPad),
-                  child: _buildInputBar(),
-                ),
+              if (_state == _SheetState.ready) _buildInputBar(),
+
+              // Klavye yüksekliği kadar boşluk
+              if (keyboardVisible) SizedBox(height: bottomInset),
             ],
           ),
         );
@@ -620,12 +635,14 @@ class _DesignerChatSheetState extends State<_DesignerChatSheet>
 
   // ─── INPUT BAR ───────────────────────────────────────
   Widget _buildInputBar() {
+    final keyboardUp = MediaQuery.of(context).viewInsets.bottom > 0;
     return Container(
       padding: EdgeInsets.only(
         left: KoalaSpacing.lg,
         right: KoalaSpacing.sm,
         top: KoalaSpacing.sm,
-        bottom: KoalaSpacing.sm + MediaQuery.of(context).padding.bottom,
+        bottom: KoalaSpacing.sm +
+            (keyboardUp ? 0 : MediaQuery.of(context).padding.bottom),
       ),
       decoration: const BoxDecoration(
         color: KoalaColors.surface,
