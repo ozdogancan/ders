@@ -108764,7 +108764,7 @@ B.b.fq(c4,0,A.B(["role",l,"parts",A.b([A.B(["text",j],c1,c1)],c2)],c1,n))}if(c4.
 if(c4.length!==0){c2=t.g.a(J.w(B.b.ga1(c4),"parts"))
 c2=A.T(c2==null?null:J.w(J.bn4(c2,new A.aqa(),new A.aqb()),"text"))
 i=c2==null?"":c2}else i=""
-c2=A.bL("\xfcr\xfcn \xf6ner|\xfcr\xfcn bul|\xfcr\xfcn ara|mobilya|tasar\u0131mc\u0131 \xf6ner|tasar\u0131mc\u0131 bul|uzman \xf6ner|uzman bul|dekorasyon \xf6ner",!1,!1)
+c2=A.bL("\xfcr\xfcn \xf6ner|\xfcr\xfcn bul|\xfcr\xfcn ara|mobilya|koltuk|kanepe|sehpa|masa|sandalye|ayd\u0131nlatma|hal\u0131|perde|tasar\u0131mc\u0131 \xf6ner|tasar\u0131mc\u0131 bul|uzman \xf6ner|uzman bul|i\xe7 mimar|dekorasyon \xf6ner|mimar bul|mimar \xf6ner",!1,!1)
 h=c2.b.test(i)
 c2=t.AM
 g=A.b([],c2)

@@ -631,7 +631,8 @@ class KoalaAIService {
             (p) => (p as Map).containsKey('text'), orElse: () => {'text': ''})['text'] as String? ?? ''
         : '';
     final shouldForceTools = RegExp(
-      r'ürün öner|ürün bul|ürün ara|mobilya|tasarımcı öner|tasarımcı bul|uzman öner|uzman bul|dekorasyon öner',
+      r'ürün öner|ürün bul|ürün ara|mobilya|koltuk|kanepe|sehpa|masa|sandalye|aydınlatma|halı|perde'
+      r'|tasarımcı öner|tasarımcı bul|uzman öner|uzman bul|iç mimar|dekorasyon öner|mimar bul|mimar öner',
       caseSensitive: false,
     ).hasMatch(lastUserText);
 
