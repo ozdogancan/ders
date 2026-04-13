@@ -312,7 +312,12 @@ class KoalaAIService {
     };
 
     if (toolIntents.contains(intent)) {
-      return _callGeminiWithTools(prompt: prompt, history: history);
+      // Intent'e göre izin verilen fonksiyonları kısıtla
+      List<String>? allowedFunctions;
+      if (intent == KoalaIntent.designerMatch) {
+        allowedFunctions = ['search_designers'];
+      }
+      return _callGeminiWithTools(prompt: prompt, history: history, allowedFunctions: allowedFunctions);
     }
 
     return _callGemini(prompt: prompt, history: history);
@@ -592,6 +597,7 @@ class KoalaAIService {
   Future<KoalaResponse> _callGeminiWithTools({
     required String prompt,
     List<Map<String, String>>? history,
+    List<String>? allowedFunctions,
   }) async {
 
     // System instruction'ı ayır — contents'e kullanıcı mesajı olarak ekleme
@@ -642,14 +648,17 @@ class KoalaAIService {
           'temperature': 0.7,
         },
       };
-      // İlk turda, ürün/tasarımcı isteği varsa function call'ı zorla
-      // flash-lite bazen text ile cevap vermeye çalışır, mode:ANY bunu önler
+      // İlk turda function call'ı zorla:
+      // 1. allowedFunctions varsa → belirli fonksiyona kısıtla (designerMatch gibi)
+      // 2. shouldForceTools → ürün/tasarımcı keyword'ü algılandı
       // Sonraki turlarda AUTO moda dön (Gemini text response üretebilsin)
-      if (turn == 0 && shouldForceTools) {
-        payload['tool_config'] = {
-          'function_calling_config': {'mode': 'ANY'},
-        };
-        debugPrint('KoalaAI: Forcing function call (detected product/designer request)');
+      if (turn == 0 && (allowedFunctions != null || shouldForceTools)) {
+        final fcConfig = <String, dynamic>{'mode': 'ANY'};
+        if (allowedFunctions != null) {
+          fcConfig['allowed_function_names'] = allowedFunctions;
+        }
+        payload['tool_config'] = {'function_calling_config': fcConfig};
+        debugPrint('KoalaAI: Forcing function call (allowed: ${allowedFunctions ?? "any"})');
       }
 
       debugPrint('KoalaAI: Tools request turn=$turn (${contents.length} messages)...');
