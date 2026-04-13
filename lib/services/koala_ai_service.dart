@@ -308,6 +308,7 @@ class KoalaAIService {
       KoalaIntent.designerMatch,
       KoalaIntent.budgetPlan,
       KoalaIntent.beforeAfter,
+      KoalaIntent.colorAdvice,
     };
 
     if (toolIntents.contains(intent)) {
@@ -411,7 +412,7 @@ class KoalaAIService {
             headers: {'Content-Type': 'application/json'},
             body: jsonEncode({'image': b64}),
           )
-          .timeout(const Duration(seconds: 15));
+          .timeout(const Duration(seconds: 8));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
@@ -427,42 +428,13 @@ class KoalaAIService {
   }
 
   Future<KoalaResponse> _callGeminiWithImage({required String prompt, required Uint8List imageBytes}) async {
-    // Moondream ön-analiz (paralel değil, önce çalışsın — context zenginleştirme)
-    final preAnalysis = await _moondreamPreAnalyze(imageBytes);
+    // Moondream devre dışı — API key 401 veriyor, 8s boşa bekleme yapıyordu
+    // final preAnalysis = await _moondreamPreAnalyze(imageBytes);
     final mimeType = _detectMimeType(imageBytes);
 
-    // Moondream sonuçlarını prompt'a ekle
+    // Moondream devre dışı — API key 401, 8s boşa bekleme
+    // Gemini 2.5 Flash image'ı doğrudan analiz ediyor
     String enrichedPrompt = prompt;
-    if (preAnalysis != null) {
-      final context = StringBuffer('\n\n--- Oda Ön-Analizi (Vision AI) ---\n');
-      if (preAnalysis['room_type'] != null) {
-        context.write('Oda tipi: ${preAnalysis['room_type']}\n');
-      }
-      if (preAnalysis['style'] != null) {
-        context.write('Tespit edilen stil: ${preAnalysis['style']}\n');
-      }
-      if (preAnalysis['colors'] != null) {
-        context.write('Dominant renkler: ${preAnalysis['colors']}\n');
-      }
-      if (preAnalysis['mood'] != null) {
-        context.write('Atmosfer: ${preAnalysis['mood']}\n');
-      }
-      if (preAnalysis['caption'] != null) {
-        context.write('Genel açıklama: ${preAnalysis['caption']}\n');
-      }
-      final furniture = preAnalysis['furniture'] as List<dynamic>? ?? [];
-      if (furniture.isNotEmpty) {
-        final labels = furniture
-            .map((f) => (f as Map<String, dynamic>)['label'] ?? '')
-            .where((l) => l.toString().isNotEmpty)
-            .toSet()
-            .join(', ');
-        context.write('Tespit edilen mobilyalar: $labels\n');
-      }
-      context.write('--- Ön-Analiz Sonu ---\n');
-      context.write('Yukarıdaki ön-analiz verisini dikkate alarak yanıt ver.\n');
-      enrichedPrompt = '$prompt${context.toString()}';
-    }
 
     // ── Tur 1: Görsel + tools ile Gemini çağır ──
     final imageB64 = base64Encode(imageBytes);
@@ -484,17 +456,17 @@ class KoalaAIService {
     final payloadSizeKB = (jsonBody.length / 1024).round();
     debugPrint('KoalaAI: Image+tools payload: ${payloadSizeKB}KB');
 
-    // Retry logic
+    // Retry logic — max 2 deneme, daha kısa timeout
     http.Response? response;
-    for (int attempt = 1; attempt <= 3; attempt++) {
+    for (int attempt = 1; attempt <= 2; attempt++) {
       response = await _client
           .post(_proxyUri, headers: {'Content-Type': 'application/json'}, body: jsonBody)
-          .timeout(const Duration(seconds: 30));
+          .timeout(const Duration(seconds: 25));
 
       debugPrint('KoalaAI: Image attempt $attempt → ${response.statusCode}');
       if (response.statusCode < 300) break;
       if (response.statusCode == 503 || response.statusCode == 429) {
-        if (attempt < 3) await Future.delayed(Duration(seconds: attempt * 2));
+        if (attempt < 2) await Future.delayed(const Duration(seconds: 2));
         continue;
       }
       break;
