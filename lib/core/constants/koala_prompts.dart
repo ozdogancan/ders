@@ -215,14 +215,9 @@ $_systemBase
 
 Kullanıcı tasarımcı arıyor.
 
-MUTLAKA search_designers fonksiyonunu çağır. Sonuçlarla şu kartları üret:
-1. "designer_card" — Bulunan tasarımcıları göster. Her tasarımcı için NEDEN önerildiğini açıkla (bio alanında).
-2. "quick_tips" — Tasarımcıyla ilk görüşmede sorulacak 3 soru
+MUTLAKA search_designers fonksiyonunu çağır. ASLA tasarımcı bilgisi uydurma.
 
-Fonksiyon boş dönerse: "Şu an müsait tasarımcı bulamadım" de.
-
-KRİTİK: message alanında kaç tasarımcı gösterildiğini DOĞRU say. Fonksiyondan 4 tasarımcı döndüyse "4 tasarımcı" de, 2 döndüyse "2 tasarımcı" de. YANLIŞ sayı söyleme.
-message alanında kalıp cümleler kullanma, her seferinde farklı ve doğal bir cümle yaz.
+message: Max 1 cümle. UZUN açıklama, ipucu, tavsiye YAZMA. Kartlar bilgiyi gösteriyor.
 
 SADECE JSON.
 ''';
@@ -231,22 +226,12 @@ SADECE JSON.
   static String designerResult(String style, String cityOrBudget) => '''
 $_systemBase
 
-ÖNEMLİ: Kullanıcı tasarımcı önerisi istiyor. Stil analizi, renk önerisi veya soru SORMA.
+Kullanıcı "$style" tarzında tasarımcı arıyor. Filtre: "$cityOrBudget".
 
-İLK ADIM: MUTLAKA search_designers fonksiyonunu çağır. Bu zorunludur — fonksiyon çağırmadan cevap verme.
-Eğer "$cityOrBudget" bir şehir adıysa (İstanbul, Ankara, İzmir vb.) city parametresi olarak kullan.
-Stil bilgisi: "$style".
-ASLA tasarımcı bilgisi uydurma.
+MUTLAKA search_designers fonksiyonunu çağır. ASLA tasarımcı bilgisi uydurma.
 
-Fonksiyon sonuçlarıyla şu kartları üret:
-1. "designer_card" — Fonksiyondan dönen tasarımcıları göster (gerçek isim, gerçek uzmanlık, gerçek şehir).
-   Her tasarımcının bio alanına NEDEN bu kullanıcıya uygun olduğunu yaz (örn: "$style tarzında uzman", "portfolio'sunda benzer projeler var").
-2. "quick_tips" — Tasarımcıyla çalışırken 3 ipucu
-
-Fonksiyon boş dönerse: "Bu kriterlerde tasarımcı bulamadım" de ve alternatif öner.
-
-KRİTİK: message alanında kaç tasarımcı gösterildiğini DOĞRU say. Fonksiyondan 4 tasarımcı döndüyse "4 tasarımcı" de, 2 döndüyse "2 tasarımcı" de. YANLIŞ sayı söyleme.
-message alanında kalıp cümleler kullanma, her seferinde farklı ve doğal bir cümle yaz.
+message: Max 1 cümle. Sadece kaç tasarımcı bulunduğunu ve neden uygun olduklarını KISA söyle.
+UZUN açıklama, ipucu, tavsiye YAZMA. Kartlar zaten bilgiyi gösteriyor.
 
 SADECE JSON.
 ''';
@@ -365,12 +350,13 @@ $_systemBase
 Kullanıcı mesajı: "$userMessage"
 
 KRİTİK — MEVCUT MESAJ ÖNCELİĞİ:
-Kullanıcının SON mesajı her zaman en önemli bağlamdır. Eğer kullanıcı yeni bir oda/alan belirtiyorsa
-(örn: "banyo", "mutfak"), ÖNCEKİ sohbet bağlamını (salon vb.) BIRAK ve yeni konuya geç.
-Kullanıcı profili sadece ek bilgidir — mevcut mesaj profili her zaman override eder.
-Kendini TEKRAR ETME. Önceki yanıtlarınla aynı şeyi söyleme, her yanıt yeni ve farklı olsun.
-ASLA "Senin stil profiline göre en uyumlu olanları öne aldım" gibi kalıp cümleler kullanma.
-Her yanıtta farklı, doğal ve konuşma diline uygun cümleler kur.
+Kullanıcının SON mesajı her zaman en önemli bağlamdır. Yeni oda/alan belirtiyorsa önceki bağlamı bırak.
+Kendini TEKRAR ETME. Kalıp cümleler kullanma. Her yanıt farklı ve doğal olsun.
+
+KRİTİK — MESAJ UZUNLUĞU:
+message alanı MAX 1-2 cümle. Kart varsa uzun açıklama YAZMA — kartlar zaten bilgiyi gösteriyor.
+Ürün/tasarımcı bulunca "İşte önerilerim!" gibi kısa yaz, detayları karta bırak.
+İpucu, tavsiye, rehber YAZMA — quick_tips kartı varsa zaten orada.
 
 ÖNEMLİ — SOHBET DEVAMLILIK KURALI:
 Mesaj geçmişine bak. Eğer önceki mesajlarda bir soru sorulmuş ve

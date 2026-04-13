@@ -745,10 +745,13 @@ class KoalaAIService {
           }
         }
 
-        // JSON parse başarısızsa düz metni mesaj olarak kullan
-        if (message.isEmpty || message.contains('aksilik oldu')) {
-          if (text.length > 20 && !text.trimLeft().startsWith('{')) {
-            message = _sanitizeMessage(text);
+        // JSON parse başarısızsa düz metinden kart çıkarmayı dene
+        if ((message.isEmpty || message.contains('aksilik oldu')) &&
+            text.length > 20 && !text.trimLeft().startsWith('{')) {
+          message = _sanitizeMessage(text);
+          // Düz text'ten renk/stil kartları çıkarmayı dene
+          if (cards.isEmpty) {
+            cards.addAll(_extractCardsFromPlainText(text));
           }
         }
       }
@@ -758,6 +761,15 @@ class KoalaAIService {
         message = cards.isNotEmpty
             ? 'İşte senin için bulduklarım!'
             : 'Yanıt oluşturulamadı, lütfen tekrar deneyin.';
+      }
+
+      // Kartlar varsa mesajı kısa tut — uzun text'i kırp
+      if (cards.isNotEmpty && message.length > 150) {
+        // İlk 2 cümleyi al
+        final sentences = message.split(RegExp(r'[.!?]\s+'));
+        if (sentences.length > 2) {
+          message = '${sentences.take(2).join('. ')}.';
+        }
       }
 
       return KoalaResponse(message: message, cards: cards);
@@ -811,6 +823,50 @@ class KoalaAIService {
       default:
         return [];
     }
+  }
+
+  /// Düz text'ten renk ve stil kartları çıkar — Gemini JSON vermediğinde fallback
+  List<KoalaCard> _extractCardsFromPlainText(String text) {
+    final cards = <KoalaCard>[];
+
+    // HEX renk kodlarını bul (#RRGGBB veya #RGB)
+    final hexPattern = RegExp(r'#([0-9a-fA-F]{6}|[0-9a-fA-F]{3})\b');
+    final hexMatches = hexPattern.allMatches(text).toList();
+
+    if (hexMatches.length >= 3) {
+      // Renk isimleri ve kullanım bilgilerini çıkarmaya çalış
+      final colors = <Map<String, String>>[];
+      for (final match in hexMatches.take(6)) {
+        final hex = '#${match.group(1)!}';
+        // Hex'in etrafındaki text'ten isim çıkar
+        final start = (match.start - 40).clamp(0, text.length);
+        final end = (match.end + 40).clamp(0, text.length);
+        final context = text.substring(start, end);
+
+        // "İsim (#HEX)" veya "**İsim**: #HEX" pattern'ini ara
+        final nameMatch = RegExp(r'(?:\*\*)?([A-Za-zÀ-ÿçğıöşüÇĞİÖŞÜ\s]{2,25})(?:\*\*)?[\s:–\-]*' + RegExp.escape(hex))
+            .firstMatch(context);
+        final name = nameMatch?.group(1)?.trim() ?? 'Renk ${colors.length + 1}';
+
+        // Kullanım bilgisi: hex'ten sonraki text
+        final afterHex = text.substring(match.end, (match.end + 80).clamp(0, text.length));
+        final usageMatch = RegExp(r'[:\-–]\s*(.{5,60}?)(?:\.|$|\n)').firstMatch(afterHex);
+        final usage = usageMatch?.group(1)?.trim() ?? '';
+
+        colors.add({
+          'name': name,
+          'hex': hex.length == 4 ? '#${hex[1]}${hex[1]}${hex[2]}${hex[2]}${hex[3]}${hex[3]}' : hex,
+          'usage': usage,
+        });
+      }
+
+      cards.add(KoalaCard(type: 'color_palette', data: {
+        'title': 'Önerilen Renk Paleti',
+        'colors': colors,
+      }));
+    }
+
+    return cards;
   }
 
   KoalaResponse _parseResponse(String raw) {
