@@ -598,12 +598,19 @@ class KoalaAIService {
       contents.add({'role': 'user', 'parts': [{'text': 'Devam et'}]});
     }
 
+    // Son kullanıcı mesajında ürün/tasarımcı isteği var mı kontrol et
+    final lastUserText = contents.isNotEmpty
+        ? (contents.last['parts'] as List?)?.firstWhere(
+            (p) => (p as Map).containsKey('text'), orElse: () => {'text': ''})['text'] as String? ?? ''
+        : '';
+    final shouldForceTools = RegExp(
+      r'ürün öner|ürün bul|ürün ara|mobilya|tasarımcı öner|tasarımcı bul|uzman öner|uzman bul|dekorasyon öner',
+      caseSensitive: false,
+    ).hasMatch(lastUserText);
+
     // Max 3 tur (ilk istek + 2 function call) — lite hızlı, 3 tur yeterli
     for (int turn = 0; turn < 3; turn++) {
-      // Not: responseMimeType + tools birlikte kullanılmaz — Gemini function call
-      // döndürmesi gereken turda JSON zorlama function call'ı engelleyebilir.
-      // JSON formatını prompt ile zorluyoruz (SADECE JSON kuralı).
-      final payload = {
+      final payload = <String, dynamic>{
         'system_instruction': systemInstruction,
         'contents': contents,
         'tools': _toolDeclarations,
@@ -611,6 +618,15 @@ class KoalaAIService {
           'temperature': 0.7,
         },
       };
+      // İlk turda, ürün/tasarımcı isteği varsa function call'ı zorla
+      // flash-lite bazen text ile cevap vermeye çalışır, mode:ANY bunu önler
+      // Sonraki turlarda AUTO moda dön (Gemini text response üretebilsin)
+      if (turn == 0 && shouldForceTools) {
+        payload['tool_config'] = {
+          'function_calling_config': {'mode': 'ANY'},
+        };
+        debugPrint('KoalaAI: Forcing function call (detected product/designer request)');
+      }
 
       debugPrint('KoalaAI: Tools request turn=$turn (${contents.length} messages)...');
       final response = await _client.post(
