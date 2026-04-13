@@ -108227,7 +108227,7 @@ return new A.vm(this.d,s,s,s,$.baa(),"Koala",q,!1,s)}}
 A.b2P.prototype={
 $2(a,b){var s=b.c
 A.aP().$1("[GoRouter] redirect: loc="+s+", onboardingComplete="+$.Sh)
-if(s==="/auth"||s==="/onboarding")return null
+if(s==="/auth"||s==="/onboarding"||s==="/test-photo")return null
 if(!$.Sh&&s!=="/")return"/"
 return null},
 $S:662}
