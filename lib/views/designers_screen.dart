@@ -237,12 +237,12 @@ class _DesignersScreenState extends State<DesignersScreen> {
       final sortedSpecialties = specialtyCounts.entries.toList()
         ..sort((a, b) => b.value.compareTo(a.value));
       for (final entry in sortedSpecialties) {
-        if (entry.value >= 3) {
+        if (entry.value >= 1) {
           dynamicChips.add(_ExpertChip(entry.key, 'specialty:${entry.key}'));
         }
       }
 
-      // Oda tipi chipsleri ekle (en az 5 proje olan)
+      // Oda tipi chipsleri ekle (en az 1 proje olan)
       final roomLabels = <String, String>{
         'Yatak Odası': 'Yatak Odası',
         'Banyo': 'Banyo',
@@ -253,7 +253,7 @@ class _DesignersScreenState extends State<DesignersScreen> {
       final sortedRooms = roomCounts.entries.toList()
         ..sort((a, b) => b.value.compareTo(a.value));
       for (final entry in sortedRooms) {
-        if (entry.value >= 5) {
+        if (entry.value >= 1) {
           final label = roomLabels[entry.key] ?? entry.key;
           dynamicChips.add(_ExpertChip(label, 'room:${entry.key}'));
         }
@@ -369,14 +369,18 @@ class _DesignersScreenState extends State<DesignersScreen> {
     // 1) Filtreleme: chip'e göre aday havuzunu daralt
     List<_ExpertPreview> candidates;
     if (isSpecialtyFilter) {
+      final normalizedFilter = _normalize(filterValue);
       candidates = _allExperts.where((e) {
-        final spec = (e.designer['specialty'] ?? '').toString().trim();
-        return spec == filterValue;
+        final spec = _normalize((e.designer['specialty'] ?? '').toString().trim());
+        return spec == normalizedFilter || spec.contains(normalizedFilter) || normalizedFilter.contains(spec);
       }).toList();
     } else if (isRoomFilter) {
+      final normalizedFilter = _normalize(filterValue);
       candidates = _allExperts.where((e) {
-        return e.projects.any((p) =>
-            (p['project_type'] ?? '').toString().trim() == filterValue);
+        return e.projects.any((p) {
+          final pt = _normalize((p['project_type'] ?? '').toString().trim());
+          return pt == normalizedFilter || pt.contains(normalizedFilter) || normalizedFilter.contains(pt);
+        });
       }).toList();
     } else {
       // Serbest metin araması

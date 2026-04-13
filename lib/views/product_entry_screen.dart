@@ -305,7 +305,7 @@ class _ProductEntryScreenState extends State<ProductEntryScreen> {
         });
 
       for (final entry in sortedRooms) {
-        if (entry.value >= 3) {
+        if (entry.value >= 1) {
           final label = entry.key == 'Oturma Odası' ? 'Salon' : entry.key;
           final emoji = _roomEmojis[entry.key] ?? _roomEmojis[label] ?? '🏠';
           dynamicChips.add(_ChipOption(emoji, label));
@@ -367,6 +367,8 @@ class _ProductEntryScreenState extends State<ProductEntryScreen> {
     return 'Salon';
   }
 
+  static int _reasonIndex = 0;
+
   static String _reasonForArea({
     required String area,
     required Map<String, dynamic>? designer,
@@ -386,7 +388,17 @@ class _ProductEntryScreenState extends State<ProductEntryScreen> {
     }
     final name = (designer?['full_name'] ?? '').toString().trim();
     if (name.isNotEmpty) {
-      return '$name çizgisine yakın, dengeli ve uygulanabilir bir yön seçtim.';
+      // Her kart farklı açıklama alsın — monoton template yerine çeşitli ifadeler
+      const templates = [
+        'projelerinde alan kullanımı ve denge ön planda.',
+        'tarzı, bu alan için uyumlu bir seçenek.',
+        'portfolyosunda benzer mekanlar dikkat çekiyor.',
+        'yaklaşımı stiline yakın duruyor.',
+        'projeleri fonksiyon ve estetik dengesini iyi kuruyor.',
+      ];
+      final template = templates[_reasonIndex % templates.length];
+      _reasonIndex++;
+      return '$name $template';
     }
     return 'Bu kompozisyon, alanın için dengeli ve güvenli bir başlangıç sunuyor.';
   }
