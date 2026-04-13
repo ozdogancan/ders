@@ -650,6 +650,10 @@ class KoalaAIService {
 
     // Function result'lardan oluşturulan kartları biriktir
     final functionResultCards = <KoalaCard>[];
+    // Tekrar eden önerileri filtrele — aynı sohbette aynı öğeyi iki kere gösterme
+    final seenProjectIds = <String>{};
+    final seenDesignerIds = <String>{};
+    final seenProductNames = <String>{};
 
     // Max 3 tur (ilk istek + 2 function call) — lite hızlı, 3 tur yeterli
     for (int turn = 0; turn < 3; turn++) {
@@ -717,6 +721,9 @@ class KoalaAIService {
         });
 
         debugPrint('KoalaAI: Function result → ${result.keys.toList()}');
+
+        // Tekrar edenleri filtrele
+        _deduplicateResult(fnName, result, seenProjectIds, seenDesignerIds, seenProductNames);
 
         // Function sonucundan direkt kart oluştur — Gemini'nin JSON formatına güvenme
         final builtCards = _buildCardsFromFunctionResult(fnName, result);
@@ -807,6 +814,51 @@ class KoalaAIService {
       return KoalaResponse(message: 'İşte senin için bulduklarım!', cards: functionResultCards);
     }
     return KoalaResponse(message: 'İşlem tamamlanamadı, lütfen tekrar deneyin.', cards: []);
+  }
+
+  /// Aynı sohbette tekrar eden önerileri filtrele
+  void _deduplicateResult(
+    String fnName,
+    Map<String, dynamic> result,
+    Set<String> seenProjectIds,
+    Set<String> seenDesignerIds,
+    Set<String> seenProductNames,
+  ) {
+    switch (fnName) {
+      case 'search_projects':
+        final projects = result['projects'] as List<dynamic>? ?? [];
+        final unique = projects.where((p) {
+          final id = (p as Map<String, dynamic>)['id']?.toString() ?? '';
+          if (id.isEmpty || seenProjectIds.contains(id)) return false;
+          seenProjectIds.add(id);
+          return true;
+        }).toList();
+        result['projects'] = unique;
+        result['count'] = unique.length;
+        break;
+      case 'search_designers':
+        final designers = result['designers'] as List<dynamic>? ?? [];
+        final unique = designers.where((d) {
+          final id = (d as Map<String, dynamic>)['id']?.toString() ?? '';
+          if (id.isEmpty || seenDesignerIds.contains(id)) return false;
+          seenDesignerIds.add(id);
+          return true;
+        }).toList();
+        result['designers'] = unique;
+        result['count'] = unique.length;
+        break;
+      case 'search_products':
+        final products = result['products'] as List<dynamic>? ?? [];
+        final unique = products.where((p) {
+          final name = ((p as Map<String, dynamic>)['name'] ?? '').toString().toLowerCase().trim();
+          if (name.isEmpty || seenProductNames.contains(name)) return false;
+          seenProductNames.add(name);
+          return true;
+        }).toList();
+        result['products'] = unique;
+        result['count'] = unique.length;
+        break;
+    }
   }
 
   /// Function result'tan direkt kart oluştur — Gemini'nin JSON formatına güvenme

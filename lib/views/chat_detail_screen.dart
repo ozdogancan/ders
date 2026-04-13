@@ -1384,14 +1384,16 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                           bottomRight: Radius.circular(isUser ? 4 : 18),
                         ),
                       ),
-                      child: Text(
-                        msg.text!,
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: isUser ? Colors.white : _ink,
-                          height: 1.5,
-                        ),
-                      ),
+                      child: isUser
+                          ? Text(
+                              msg.text!,
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: Colors.white,
+                                height: 1.5,
+                              ),
+                            )
+                          : _buildSimpleMarkdown(msg.text!, _ink),
                     ),
                   ),
                 ),
@@ -1767,6 +1769,79 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
       ),
     ),
   );
+
+  /// Parses simple markdown: **bold**, *italic*, and bullet points (* item)
+  Widget _buildSimpleMarkdown(String text, Color color) {
+    final lines = text.split('\n');
+    final children = <Widget>[];
+
+    for (final line in lines) {
+      final trimmed = line.trim();
+      // Bullet point
+      if (trimmed.startsWith('* ') || trimmed.startsWith('- ')) {
+        children.add(Padding(
+          padding: const EdgeInsets.only(left: 8, top: 2, bottom: 2),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('• ', style: TextStyle(fontSize: 14, color: color, height: 1.5)),
+              Expanded(child: _buildInlineMarkdown(trimmed.substring(2), color)),
+            ],
+          ),
+        ));
+      } else if (trimmed.isNotEmpty) {
+        children.add(_buildInlineMarkdown(trimmed, color));
+      } else {
+        children.add(const SizedBox(height: 6));
+      }
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: children,
+    );
+  }
+
+  /// Handles inline **bold** and *italic* within a single line
+  Widget _buildInlineMarkdown(String text, Color color) {
+    final spans = <TextSpan>[];
+    final regex = RegExp(r'\*\*(.+?)\*\*|\*(.+?)\*');
+    int lastEnd = 0;
+
+    for (final match in regex.allMatches(text)) {
+      // Text before this match
+      if (match.start > lastEnd) {
+        spans.add(TextSpan(text: text.substring(lastEnd, match.start)));
+      }
+      if (match.group(1) != null) {
+        // **bold**
+        spans.add(TextSpan(
+          text: match.group(1),
+          style: const TextStyle(fontWeight: FontWeight.w700),
+        ));
+      } else if (match.group(2) != null) {
+        // *italic*
+        spans.add(TextSpan(
+          text: match.group(2),
+          style: const TextStyle(fontStyle: FontStyle.italic),
+        ));
+      }
+      lastEnd = match.end;
+    }
+
+    // Remaining text
+    if (lastEnd < text.length) {
+      spans.add(TextSpan(text: text.substring(lastEnd)));
+    }
+
+    return RichText(
+      text: TextSpan(
+        style: TextStyle(fontSize: 14, color: color, height: 1.5),
+        children: spans.isEmpty ? [TextSpan(text: text)] : spans,
+      ),
+    );
+  }
 
   Widget _renderCard(KoalaCard card) {
     Analytics.aiCardDisplayed(card.type);

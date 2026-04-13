@@ -156,7 +156,9 @@ class _HomeScreenState extends State<HomeScreen>
           fromDiscovery: fromDiscovery,
         ),
       ),
-    );
+    ).then((_) {
+      _inputKey.currentState?.clearAndReset();
+    });
   }
 
   void _showPicker() {
@@ -283,6 +285,7 @@ class _HomeScreenState extends State<HomeScreen>
                       onTap: () async {
                         await context.push('/notifications');
                         _loadNotifCount();
+                        _inputKey.currentState?.clearAndReset();
                       },
                       child: Stack(
                         clipBehavior: Clip.none,
@@ -333,7 +336,7 @@ class _HomeScreenState extends State<HomeScreen>
                         MaterialPageRoute(
                           builder: (_) => const ChatListScreen(),
                         ),
-                      ),
+                      ).then((_) => _inputKey.currentState?.clearAndReset()),
                       child: Container(
                         width: 36,
                         height: 36,
@@ -350,7 +353,7 @@ class _HomeScreenState extends State<HomeScreen>
                     ),
                     const SizedBox(width: 10),
                     _Pressable(
-                      onTap: () => context.push('/profile'),
+                      onTap: () => context.push('/profile').then((_) => _inputKey.currentState?.clearAndReset()),
                       child: Container(
                         width: 36,
                         height: 36,
@@ -538,7 +541,7 @@ class _HomeScreenState extends State<HomeScreen>
                                   MaterialPageRoute(
                                     builder: (_) => const ProductEntryScreen(),
                                   ),
-                                );
+                                ).then((_) => _inputKey.currentState?.clearAndReset());
                               },
                             ),
                           ),
@@ -556,7 +559,7 @@ class _HomeScreenState extends State<HomeScreen>
                                   MaterialPageRoute(
                                     builder: (_) => const DesignersScreen(),
                                   ),
-                                );
+                                ).then((_) => _inputKey.currentState?.clearAndReset());
                               },
                             ),
                           ),
@@ -845,6 +848,14 @@ class _TypewriterInputState extends State<_TypewriterInput> {
     final text = _ctrl.text.trim();
     widget.onSubmit(text);
     if (text.isNotEmpty) _ctrl.clear();
+  }
+
+  /// Clears leftover text and restarts typewriter animation.
+  void clearAndReset() {
+    _ctrl.clear();
+    _hasText = false;
+    _focus.unfocus();
+    _resumeTw();
   }
 
   @override
