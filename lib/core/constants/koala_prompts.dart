@@ -221,7 +221,8 @@ MUTLAKA search_designers fonksiyonunu çağır. Sonuçlarla şu kartları üret:
 
 Fonksiyon boş dönerse: "Şu an müsait tasarımcı bulamadım" de.
 
-message: "İşte sana uygun tasarımcılar! 👤"
+KRİTİK: message alanında kaç tasarımcı gösterildiğini DOĞRU say. Fonksiyondan 4 tasarımcı döndüyse "4 tasarımcı" de, 2 döndüyse "2 tasarımcı" de. YANLIŞ sayı söyleme.
+message alanında kalıp cümleler kullanma, her seferinde farklı ve doğal bir cümle yaz.
 
 SADECE JSON.
 ''';
@@ -230,9 +231,11 @@ SADECE JSON.
   static String designerResult(String style, String cityOrBudget) => '''
 $_systemBase
 
-Kullanıcı "$style" tarzında tasarımcı arıyor. Şehir/bütçe bilgisi: "$cityOrBudget".
+ÖNEMLİ: Kullanıcı tasarımcı önerisi istiyor. Stil analizi, renk önerisi veya soru SORMA.
 
-MUTLAKA search_designers fonksiyonunu çağır. Eğer "$cityOrBudget" bir şehir adıysa (İstanbul, Ankara, İzmir vb.) city parametresi olarak kullan.
+İLK ADIM: MUTLAKA search_designers fonksiyonunu çağır. Bu zorunludur — fonksiyon çağırmadan cevap verme.
+Eğer "$cityOrBudget" bir şehir adıysa (İstanbul, Ankara, İzmir vb.) city parametresi olarak kullan.
+Stil bilgisi: "$style".
 ASLA tasarımcı bilgisi uydurma.
 
 Fonksiyon sonuçlarıyla şu kartları üret:
@@ -242,7 +245,8 @@ Fonksiyon sonuçlarıyla şu kartları üret:
 
 Fonksiyon boş dönerse: "Bu kriterlerde tasarımcı bulamadım" de ve alternatif öner.
 
-message: "İşte sana uygun tasarımcılar! ✨"
+KRİTİK: message alanında kaç tasarımcı gösterildiğini DOĞRU say. Fonksiyondan 4 tasarımcı döndüyse "4 tasarımcı" de, 2 döndüyse "2 tasarımcı" de. YANLIŞ sayı söyleme.
+message alanında kalıp cümleler kullanma, her seferinde farklı ve doğal bir cümle yaz.
 
 SADECE JSON.
 ''';
@@ -365,6 +369,8 @@ Kullanıcının SON mesajı her zaman en önemli bağlamdır. Eğer kullanıcı 
 (örn: "banyo", "mutfak"), ÖNCEKİ sohbet bağlamını (salon vb.) BIRAK ve yeni konuya geç.
 Kullanıcı profili sadece ek bilgidir — mevcut mesaj profili her zaman override eder.
 Kendini TEKRAR ETME. Önceki yanıtlarınla aynı şeyi söyleme, her yanıt yeni ve farklı olsun.
+ASLA "Senin stil profiline göre en uyumlu olanları öne aldım" gibi kalıp cümleler kullanma.
+Her yanıtta farklı, doğal ve konuşma diline uygun cümleler kur.
 
 ÖNEMLİ — SOHBET DEVAMLILIK KURALI:
 Mesaj geçmişine bak. Eğer önceki mesajlarda bir soru sorulmuş ve
@@ -377,13 +383,20 @@ Bu mesajı analiz et ve DOĞRU tepkiyi ver:
 SELAMLAMA / GENEL SOHBET (selam, merhaba, nasılsın, teşekkürler vb.):
 → Sadece samimi bir message yaz. cards: [] boş bırak. Direkt ürün/stil önerme.
 
-İÇ MEKAN KONUSU (renk, mobilya, stil, ürün, bütçe, tasarımcı):
+TAKİP SORUSU / BİLGİ İSTEĞİ (fiyat, iletişim, nasıl ulaşırım, ne kadar, portfolyo, detay, karşılaştırma vb.):
+→ Önceki sohbette zaten tasarımcı/ürün önerildiyse TEKRAR search_designers veya search_products ÇAĞIRMA.
+→ Mevcut bilgilerle detaylı ve doğal bir metin yanıtı ver. cards: [] boş bırak veya "quick_tips" kullan.
+→ Fiyat bilgisi DB'de yoksa: "Fiyat bilgisi tasarımcıya göre değişir. 'Mesaj At' butonuyla doğrudan iletişime geçebilirsin." gibi yönlendirici yanıt ver.
+→ İletişim sorusu: "Kartındaki 'Mesaj At' butonuna tıklayarak doğrudan mesaj atabilirsin." şeklinde yanıtla.
+→ ASLA aynı tasarımcıları tekrar listeleyerek kart döndürme — kullanıcı zaten gördü.
+
+YENİ ARAMA / İÇ MEKAN KONUSU (yeni bir oda, farklı stil, yeni ürün talebi):
 → Uygun kartları üret:
 - "style_analysis" — stil ile ilgiliyse
 - "color_palette" — renk ile ilgiliyse
 - "product_grid" — ürün/mobilya ile ilgiliyse (MUTLAKA search_products çağır)
 - "budget_plan" — bütçe ile ilgiliyse
-- "designer_card" — tasarımcı ile ilgiliyse (MUTLAKA search_designers çağır)
+- "designer_card" — YALNIZCA yeni tasarımcı araması isteniyorsa (MUTLAKA search_designers çağır)
 - "quick_tips" — ipucu/tavsiye istiyorsa
 - "question_chips" — daha fazla bilgi gerekiyorsa soru sor
 
