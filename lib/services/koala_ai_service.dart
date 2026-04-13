@@ -317,7 +317,7 @@ class KoalaAIService {
       if (intent == KoalaIntent.designerMatch) {
         allowedFunctions = ['search_designers'];
       }
-      return _callGeminiWithTools(prompt: prompt, history: history, allowedFunctions: allowedFunctions);
+      return _callGeminiWithTools(prompt: prompt, history: history, initialAllowedFunctions: allowedFunctions);
     }
 
     return _callGemini(prompt: prompt, history: history);
@@ -597,8 +597,9 @@ class KoalaAIService {
   Future<KoalaResponse> _callGeminiWithTools({
     required String prompt,
     List<Map<String, String>>? history,
-    List<String>? allowedFunctions,
+    List<String>? initialAllowedFunctions,
   }) async {
+    var allowedFunctions = initialAllowedFunctions;
 
     // System instruction'ı ayır — contents'e kullanıcı mesajı olarak ekleme
     // Bu, history'nin system prompt ile kirlenmesini önler
@@ -630,11 +631,22 @@ class KoalaAIService {
         ? (contents.last['parts'] as List?)?.firstWhere(
             (p) => (p as Map).containsKey('text'), orElse: () => {'text': ''})['text'] as String? ?? ''
         : '';
-    final shouldForceTools = RegExp(
-      r'ürün öner|ürün bul|ürün ara|mobilya|koltuk|kanepe|sehpa|masa|sandalye|aydınlatma|halı|perde'
-      r'|tasarımcı öner|tasarımcı bul|uzman öner|uzman bul|iç mimar|dekorasyon öner|mimar bul|mimar öner',
+    final isDesignerRequest = RegExp(
+      r'tasarımcı öner|tasarımcı bul|uzman öner|uzman bul|iç mimar|mimar bul|mimar öner|tasarımcı ara',
       caseSensitive: false,
     ).hasMatch(lastUserText);
+    final isProductRequest = RegExp(
+      r'ürün öner|ürün bul|ürün ara|mobilya|koltuk|kanepe|sehpa|masa|sandalye|aydınlatma|halı|perde|dekorasyon öner',
+      caseSensitive: false,
+    ).hasMatch(lastUserText);
+    final shouldForceTools = isDesignerRequest || isProductRequest;
+
+    // freeChat'te de keyword'den doğru fonksiyonu kısıtla
+    if (allowedFunctions == null && isDesignerRequest) {
+      allowedFunctions = ['search_designers'];
+    } else if (allowedFunctions == null && isProductRequest) {
+      allowedFunctions = ['search_products'];
+    }
 
     // Function result'lardan oluşturulan kartları biriktir
     final functionResultCards = <KoalaCard>[];
@@ -667,7 +679,7 @@ class KoalaAIService {
         _proxyUri,
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode(payload),
-      ).timeout(const Duration(seconds: 30));
+      ).timeout(const Duration(seconds: 20));
 
       if (response.statusCode >= 300) {
         debugPrint('KoalaAI ERROR ${response.statusCode}: ${response.body.substring(0, 300.clamp(0, response.body.length))}');
@@ -697,8 +709,12 @@ class KoalaAIService {
 
         debugPrint('KoalaAI: Function call → $fnName($fnArgs)');
 
-        // Function'ı çalıştır
-        final result = await KoalaToolHandler.handle(fnName, fnArgs);
+        // Function'ı çalıştır (15s timeout — DB sorguları uzayabilir)
+        final result = await KoalaToolHandler.handle(fnName, fnArgs)
+            .timeout(const Duration(seconds: 15), onTimeout: () {
+          debugPrint('KoalaAI: Function handler timeout for $fnName');
+          return <String, dynamic>{'error': 'timeout', 'message': 'Veri alınamadı'};
+        });
 
         debugPrint('KoalaAI: Function result → ${result.keys.toList()}');
 
