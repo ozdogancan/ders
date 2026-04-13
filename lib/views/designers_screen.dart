@@ -182,13 +182,14 @@ class _DesignersScreenState extends State<DesignersScreen> {
       // Tüm tasarımcıları tek sorguda yükle (N+1 → 1 sorgu)
       final designerIds = projectsByDesigner.keys.toList();
       final allDesigners = await EvlumbaLiveService.getDesignersByIds(designerIds);
+      debugPrint('Experts: ${designerIds.length} designer IDs → ${allDesigners.length} profiles loaded');
       final designerMap = <String, Map<String, dynamic>>{};
       for (final d in allDesigners) {
-        designerMap[d['id'].toString()] = d;
+        designerMap[d['id'].toString().trim()] = d;
       }
 
       final previews = designerIds.map((designerId) {
-        final designer = designerMap[designerId];
+        final designer = designerMap[designerId] ?? designerMap[designerId.trim()];
         if (designer == null) return null;
         final projects = List<Map<String, dynamic>>.from(
           projectsByDesigner[designerId] ?? [],

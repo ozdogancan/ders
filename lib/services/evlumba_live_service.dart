@@ -102,19 +102,36 @@ class EvlumbaLiveService {
   }
 
   /// Birden fazla tasarımcıyı tek sorguda getir (N+1 önleme)
+  /// Batch sorgu başarısız olursa tek tek fallback yapar.
   static Future<List<Map<String, dynamic>>> getDesignersByIds(
     List<String> ids,
   ) async {
     if (ids.isEmpty) return [];
     try {
-      final data = await client
-          .from('profiles')
-          .select()
-          .inFilter('id', ids);
-      return List<Map<String, dynamic>>.from(data);
+      // Chunk: PostgREST URL uzunluğu aşılmasın (max 15 ID per chunk)
+      final results = <Map<String, dynamic>>[];
+      for (var i = 0; i < ids.length; i += 15) {
+        final chunk = ids.sublist(i, (i + 15).clamp(0, ids.length));
+        final data = await client
+            .from('profiles')
+            .select()
+            .inFilter('id', chunk);
+        results.addAll(List<Map<String, dynamic>>.from(data));
+      }
+      debugPrint('EvlumbaLive: getDesignersByIds batch OK → ${results.length}/${ids.length}');
+      return results;
     } catch (e) {
-      debugPrint('EvlumbaLive: getDesignersByIds failed: $e');
-      return [];
+      debugPrint('EvlumbaLive: getDesignersByIds batch failed ($e), falling back to individual queries');
+      // Fallback: tek tek çek (N+1 ama en azından çalışır)
+      final results = <Map<String, dynamic>>[];
+      for (final id in ids) {
+        try {
+          final d = await getDesigner(id);
+          if (d != null) results.add(d);
+        } catch (_) {}
+      }
+      debugPrint('EvlumbaLive: getDesignersByIds fallback → ${results.length}/${ids.length}');
+      return results;
     }
   }
 

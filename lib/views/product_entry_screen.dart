@@ -211,50 +211,65 @@ class _ProductEntryScreenState extends State<ProductEntryScreen> {
       // Makul havuz — bellek dostu, her alan için yeterli
       final projects = await EvlumbaLiveService.getProjects(limit: 30);
 
-      // Her designer'ı sadece bir kez çek
-      final designerCache = <String, Map<String, dynamic>?>{};
+      // Tüm tasarımcıları tek batch'te yükle (N+1 → 1 sorgu)
+      final designerIds = projects
+          .map((p) => (p['designer_id'] ?? '').toString().trim())
+          .where((id) => id.isNotEmpty)
+          .toSet()
+          .toList();
+      final allDesigners = await EvlumbaLiveService.getDesignersByIds(designerIds);
+      final designerCache = <String, Map<String, dynamic>>{};
+      for (final d in allDesigners) {
+        designerCache[d['id'].toString().trim()] = d;
+      }
 
-      final cards = await Future.wait(
-        projects.map((project) async {
-          final next = Map<String, dynamic>.from(project);
-          final designerId = (project['designer_id'] ?? '').toString();
-          final projectId = (project['id'] ?? '').toString();
-
-          Map<String, dynamic>? designer;
-          List<Map<String, dynamic>> products = <Map<String, dynamic>>[];
-
-          if (designerId.isNotEmpty) {
-            if (designerCache.containsKey(designerId)) {
-              designer = designerCache[designerId];
-            } else {
-              try {
-                designer = await EvlumbaLiveService.getDesigner(designerId);
-                designerCache[designerId] = designer;
-              } catch (_) {}
-            }
-            if (designer != null) next['profiles'] = designer;
-          }
-
-          if (projectId.isNotEmpty) {
+      // Shop link'leri paralel ama max 5 concurrent (bağlantı havuzunu korumak için)
+      final projectIds = projects
+          .map((p) => (p['id'] ?? '').toString().trim())
+          .where((id) => id.isNotEmpty)
+          .toList();
+      final shopLinksMap = <String, List<Map<String, dynamic>>>{};
+      for (var i = 0; i < projectIds.length; i += 5) {
+        final chunk = projectIds.sublist(i, (i + 5).clamp(0, projectIds.length));
+        final results = await Future.wait(
+          chunk.map((id) async {
             try {
-              products = await EvlumbaLiveService.getProjectShopLinks(projectId);
-            } catch (_) {}
-          }
+              return MapEntry(id, await EvlumbaLiveService.getProjectShopLinks(id));
+            } catch (_) {
+              return MapEntry(id, <Map<String, dynamic>>[]);
+            }
+          }),
+        );
+        for (final entry in results) {
+          shopLinksMap[entry.key] = entry.value;
+        }
+      }
 
-          return _DiscoveryCard(
-            project: next,
+      final cards = projects.map((project) {
+        final next = Map<String, dynamic>.from(project);
+        final designerId = (project['designer_id'] ?? '').toString().trim();
+        final projectId = (project['id'] ?? '').toString().trim();
+
+        final designer = designerId.isNotEmpty ? designerCache[designerId] : null;
+        if (designer != null) next['profiles'] = designer;
+
+        final products = projectId.isNotEmpty
+            ? (shopLinksMap[projectId] ?? <Map<String, dynamic>>[])
+            : <Map<String, dynamic>>[];
+
+        return _DiscoveryCard(
+          project: next,
+          designer: designer,
+          productCount: products.length,
+          badge: _badgeForProject(next, designer),
+          reason: _reasonForArea(
+            area: _guessArea(next),
             designer: designer,
             productCount: products.length,
-            badge: _badgeForProject(next, designer),
-            reason: _reasonForArea(
-              area: _guessArea(next),
-              designer: designer,
-              productCount: products.length,
-            ),
-            rating: null, // Gerçek review sistemi yokken sahte rating gösterme
-          );
-        }),
-      );
+          ),
+          rating: null, // Gerçek review sistemi yokken sahte rating gösterme
+        );
+      }).toList();
 
       if (!mounted) return;
 
