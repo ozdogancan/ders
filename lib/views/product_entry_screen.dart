@@ -199,10 +199,24 @@ class _ProductEntryScreenState extends State<ProductEntryScreen> {
   }
 
   Future<void> _loadProjects() async {
+    debugPrint('ProductEntry: _loadProjects başladı, isReady=${EvlumbaLiveService.isReady}');
     if (!EvlumbaLiveService.isReady) {
       final ready = await EvlumbaLiveService.waitForReady();
       if (!ready) {
-        if (mounted) setState(() => _loading = false);
+        debugPrint('ProductEntry: EvlumbaLive NOT ready — fallback chips');
+        if (mounted) {
+          setState(() {
+            _loading = false;
+            // Servis hazır değilse varsayılan chip'leri göster
+            _chips = const [
+              _ChipOption('🛋️', 'Salon'),
+              _ChipOption('🛏️', 'Yatak Odası'),
+              _ChipOption('🍳', 'Mutfak'),
+              _ChipOption('🛁', 'Banyo'),
+              _ChipOption('🚪', 'Antre'),
+            ];
+          });
+        }
         return;
       }
     }
@@ -335,6 +349,16 @@ class _ProductEntryScreenState extends State<ProductEntryScreen> {
       setState(() {
         _loading = false;
         _error = e.toString();
+        // Hata durumunda da varsayılan chip'leri göster
+        if (_chips.isEmpty) {
+          _chips = const [
+            _ChipOption('🛋️', 'Salon'),
+            _ChipOption('🛏️', 'Yatak Odası'),
+            _ChipOption('🍳', 'Mutfak'),
+            _ChipOption('🛁', 'Banyo'),
+            _ChipOption('🚪', 'Antre'),
+          ];
+        }
       });
     }
   }

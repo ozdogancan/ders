@@ -164,8 +164,20 @@ class _DesignersScreenState extends State<DesignersScreen> {
       // Bağlantıyı bekle (max 10 sn)
       final ready = await EvlumbaLiveService.waitForReady();
       if (!ready) {
-        if (mounted) setState(() => _loading = false);
-        return; // Sessizce bitir, hata gösterme
+        if (mounted) {
+          setState(() {
+            _loading = false;
+            // Servis hazır değilse varsayılan chip'leri göster
+            _chips = [
+              _ExpertChip('İç Mimar', 'specialty:İç Mimar'),
+              _ExpertChip('Mimar', 'specialty:Mimar'),
+              _ExpertChip('Dekoratör', 'specialty:Dekoratör'),
+              _ExpertChip('Salon', 'room:Oturma Odası'),
+              _ExpertChip('Yatak Odası', 'room:Yatak Odası'),
+            ];
+          });
+        }
+        return;
       }
     }
 
@@ -282,6 +294,16 @@ class _DesignersScreenState extends State<DesignersScreen> {
       setState(() {
         _loading = false;
         _error = e.toString();
+        // Hata durumunda da varsayılan chip'leri göster
+        if (_chips.isEmpty) {
+          _chips = [
+            _ExpertChip('İç Mimar', 'specialty:İç Mimar'),
+            _ExpertChip('Mimar', 'specialty:Mimar'),
+            _ExpertChip('Dekoratör', 'specialty:Dekoratör'),
+            _ExpertChip('Salon', 'room:Oturma Odası'),
+            _ExpertChip('Yatak Odası', 'room:Yatak Odası'),
+          ];
+        }
       });
     }
   }
