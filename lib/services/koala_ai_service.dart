@@ -608,6 +608,9 @@ class KoalaAIService {
       caseSensitive: false,
     ).hasMatch(lastUserText);
 
+    // Function result'lardan oluşturulan kartları biriktir
+    final functionResultCards = <KoalaCard>[];
+
     // Max 3 tur (ilk istek + 2 function call) — lite hızlı, 3 tur yeterli
     for (int turn = 0; turn < 3; turn++) {
       final payload = <String, dynamic>{
@@ -668,6 +671,12 @@ class KoalaAIService {
 
         debugPrint('KoalaAI: Function result → ${result.keys.toList()}');
 
+        // Function sonucundan direkt kart oluştur — Gemini'nin JSON formatına güvenme
+        final builtCards = _buildCardsFromFunctionResult(fnName, result);
+        if (builtCards.isNotEmpty) {
+          functionResultCards.addAll(builtCards);
+        }
+
         // Model response'u history'ye ekle
         contents.add({
           'role': 'model',
@@ -700,33 +709,86 @@ class KoalaAIService {
         }
       }
 
-      // Boş yanıt kontrolü
-      if (text.isEmpty) {
-        debugPrint('KoalaAI: Empty text response');
-        return KoalaResponse(message: 'Yanıt oluşturulamadı, lütfen tekrar deneyin.', cards: []);
+      // Gemini'nin text mesajını al, kartları function result'tan kullan
+      String message = '';
+      final cards = List<KoalaCard>.from(functionResultCards);
+
+      if (text.isNotEmpty) {
+        // JSON parse dene — Gemini doğru JSON döndüyse onun kartlarını da ekle
+        final parsed = _parseResponse(text);
+        message = parsed.message;
+        // Sadece Gemini'nin kendi ürettiği kartları ekle (function result kartlarını tekrarlama)
+        for (final card in parsed.cards) {
+          if (card.type != 'product_grid' && card.type != 'designer_card' && card.type != 'project_card') {
+            cards.add(card);
+          }
+        }
+
+        // JSON parse başarısızsa düz metni mesaj olarak kullan
+        if (message.isEmpty || message.contains('aksilik oldu')) {
+          if (text.length > 20 && !text.trimLeft().startsWith('{')) {
+            message = _sanitizeMessage(text);
+          }
+        }
       }
 
-      // JSON parse dene
-      final parsed = _parseResponse(text);
-      // Eğer parse başarılı ve kartlar varsa → döndür
-      if (parsed.cards.isNotEmpty) return parsed;
-      // Kartlar boşsa ama mesaj varsa → mesajla birlikte döndür
-      if (parsed.message.isNotEmpty && !parsed.message.contains('aksilik oldu')) return parsed;
-
-      // Gemini JSON vermedi ama düz Türkçe metin döndü → metni doğrudan göster
-      if (text.length > 20 && !text.trimLeft().startsWith('{')) {
-        debugPrint('KoalaAI: Plain text response from Gemini (${text.length} chars), using directly');
-        return KoalaResponse(message: _sanitizeMessage(text), cards: []);
+      // Mesaj hala boşsa fallback
+      if (message.isEmpty) {
+        message = cards.isNotEmpty
+            ? 'İşte senin için bulduklarım!'
+            : 'Yanıt oluşturulamadı, lütfen tekrar deneyin.';
       }
 
-      // JSON parse başarısız — metni olduğu gibi göster (ek request yapma)
-      debugPrint('KoalaAI: Tools response parse failed, showing raw text');
-      return KoalaResponse(message: _sanitizeMessage(text), cards: []);
+      return KoalaResponse(message: message, cards: cards);
     }
 
-    // Turlar tükendi — ek request yapma, kullanıcıyı beklemeye bırakma
-    debugPrint('KoalaAI: Turns exhausted');
+    // Turlar tükendi — toplanan kartlar varsa onları göster
+    debugPrint('KoalaAI: Turns exhausted, functionResultCards=${functionResultCards.length}');
+    if (functionResultCards.isNotEmpty) {
+      return KoalaResponse(message: 'İşte senin için bulduklarım!', cards: functionResultCards);
+    }
     return KoalaResponse(message: 'İşlem tamamlanamadı, lütfen tekrar deneyin.', cards: []);
+  }
+
+  /// Function result'tan direkt kart oluştur — Gemini'nin JSON formatına güvenme
+  List<KoalaCard> _buildCardsFromFunctionResult(
+    String fnName, Map<String, dynamic> result,
+  ) {
+    switch (fnName) {
+      case 'search_products':
+        final products = result['products'] as List<dynamic>? ?? [];
+        if (products.isEmpty) return [];
+        return [KoalaCard(type: 'product_grid', data: {
+          'title': 'Önerilen Ürünler',
+          'products': products.map((p) {
+            final pm = p as Map<String, dynamic>;
+            return {
+              'name': pm['name'] ?? '',
+              'price': pm['price'] ?? '',
+              'shop_name': pm['shop_name'] ?? '',
+              'image_url': pm['image_url'] ?? '',
+              'link': pm['link'] ?? '',
+            };
+          }).toList(),
+        })];
+
+      case 'search_designers':
+        final designers = result['designers'] as List<dynamic>? ?? [];
+        if (designers.isEmpty) return [];
+        return designers.map((d) =>
+          KoalaCard(type: 'designer_card', data: d as Map<String, dynamic>),
+        ).toList();
+
+      case 'search_projects':
+        final projects = result['projects'] as List<dynamic>? ?? [];
+        if (projects.isEmpty) return [];
+        return projects.map((p) =>
+          KoalaCard(type: 'project_card', data: p as Map<String, dynamic>),
+        ).toList();
+
+      default:
+        return [];
+    }
   }
 
   KoalaResponse _parseResponse(String raw) {
