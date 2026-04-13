@@ -598,8 +598,8 @@ class KoalaAIService {
       contents.add({'role': 'user', 'parts': [{'text': 'Devam et'}]});
     }
 
-    // Max 2 tur (ilk istek + 1 function call) — 3 tur çok yavaş
-    for (int turn = 0; turn < 2; turn++) {
+    // Max 3 tur (ilk istek + 2 function call) — lite hızlı, 3 tur yeterli
+    for (int turn = 0; turn < 3; turn++) {
       // Not: responseMimeType + tools birlikte kullanılmaz — Gemini function call
       // döndürmesi gereken turda JSON zorlama function call'ı engelleyebilir.
       // JSON formatını prompt ile zorluyoruz (SADECE JSON kuralı).

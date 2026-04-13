@@ -8,6 +8,7 @@ import '../../views/saved_screen.dart';
 import '../../views/chat_list_screen.dart';
 import '../../views/profile_screen.dart';
 import '../../views/chat_detail_screen.dart';
+import '../../services/koala_ai_service.dart';
 import '../../views/conversation_detail_screen.dart';
 import '../../views/project_detail_screen.dart';
 import '../../views/designers_screen.dart';
@@ -39,7 +40,7 @@ final GoRouter appRouter = GoRouter(
     final loc = state.matchedLocation;
     debugPrint('[GoRouter] redirect: loc=$loc, onboardingComplete=$onboardingComplete');
     // Auth ve onboarding sayfalarına her zaman izin ver
-    if (loc == '/auth' || loc == '/onboarding') return null;
+    if (loc == '/auth' || loc == '/onboarding' || loc == '/test-photo') return null;
     // Onboarding tamamlanmadıysa ve ana sayfa/alt sayfalardaysa → / 'a (OnboardingScreen)
     if (!onboardingComplete && loc != '/') return '/';
     return null;
@@ -87,6 +88,16 @@ final GoRouter appRouter = GoRouter(
           entryPoint: extra?['entryPoint'] as String? ?? 'manual',
         );
       },
+    ),
+
+    // ─── Test: auto-load bundled photo for analysis ───
+    GoRoute(
+      path: '/test-photo',
+      builder: (context, state) => const ChatDetailScreen(
+        intent: KoalaIntent.photoAnalysis,
+        initialText: 'Bu odayı analiz et',
+        testAssetPhoto: true,
+      ),
     ),
 
     // ─── Detay ekranları ───

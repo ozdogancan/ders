@@ -14,6 +14,7 @@ import '../services/profile_feedback_service.dart';
 import '../core/theme/koala_tokens.dart';
 import '../widgets/chat/product_carousel.dart';
 import '../widgets/offline_banner.dart';
+import '../helpers/web_drop.dart' as web_drop;
 import 'chat/widgets/chat_widgets.dart';
 
 const _accent = KoalaColors.accentDeep;
@@ -30,6 +31,7 @@ class ChatDetailScreen extends StatefulWidget {
     this.chatId,
     this.fromDiscovery = false,
     this.hiddenContext,
+    this.testAssetPhoto = false,
   });
 
   final String? initialText;
@@ -41,6 +43,9 @@ class ChatDetailScreen extends StatefulWidget {
   /// AI'a gönderilecek ama kullanıcıya gösterilmeyecek gizli bağlam
   /// (örn: görsel URL, tasarımcı bilgileri)
   final String? hiddenContext;
+
+  /// true ise assets/images/test_room.webp'den test görseli yükler
+  final bool testAssetPhoto;
 
   @override
   State<ChatDetailScreen> createState() => _ChatDetailScreenState();
@@ -59,6 +64,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
   Uint8List? _pendingPhoto;
   bool _loading = false;
   bool _showScrollToBottom = false;
+  bool _isDragHovering = false;
   late String _chatId;
   String _chatTitle = 'Yeni Sohbet';
 
@@ -72,6 +78,18 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     _chatId = widget.chatId ?? 'chat_${DateTime.now().millisecondsSinceEpoch}';
     _loadUserPreferences();
     _scroll.addListener(_onScrollChanged);
+    if (kIsWeb) {
+      web_drop.registerWebDrop(
+        onDrop: (bytes) {
+          if (!mounted) return;
+          setState(() => _pendingPhoto = bytes);
+        },
+        onHover: (hovering) {
+          if (!mounted) return;
+          setState(() => _isDragHovering = hovering);
+        },
+      );
+    }
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (widget.chatId != null) await _loadMessages();
@@ -84,13 +102,18 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
           'Tarzımı kısaca özetle ve bana uygun bir ilk öneri sun.',
         );
       } else if (widget.intent == KoalaIntent.photoAnalysis &&
-          widget.initialPhoto != null) {
+          (widget.initialPhoto != null || widget.testAssetPhoto)) {
         // Photo analysis — send photo directly to AI
         _chatTitle = 'Fotoğraf Analizi';
-        _sendToAI(
-          text: widget.initialText ?? 'Bu odayı analiz et',
-          photo: widget.initialPhoto,
-        );
+        if (widget.testAssetPhoto) {
+          // Load test image from bundled assets
+          _loadTestAssetAndAnalyze();
+        } else {
+          _sendToAI(
+            text: widget.initialText ?? 'Bu odayı analiz et',
+            photo: widget.initialPhoto,
+          );
+        }
       } else if (widget.intent != null) {
         _chatTitle = _intentTitle(widget.intent!);
         _sendToAIWithIntent(
@@ -119,11 +142,31 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
 
   @override
   void dispose() {
+    if (kIsWeb) web_drop.unregisterWebDrop();
     _ai.dispose();
     _scroll.removeListener(_onScrollChanged);
     _ctrl.dispose();
     _scroll.dispose();
     super.dispose();
+  }
+
+  // ── Test asset photo loader ──
+  Future<void> _loadTestAssetAndAnalyze() async {
+    try {
+      final data = await rootBundle.load('assets/images/test_room.webp');
+      final bytes = data.buffer.asUint8List();
+      _sendToAI(
+        text: widget.initialText ?? 'Bu odayı analiz et',
+        photo: bytes,
+      );
+    } catch (e) {
+      setState(() {
+        _msgs.add(_Msg(
+          role: 'koala',
+          text: 'Test görseli yüklenemedi: $e',
+        ));
+      });
+    }
   }
 
   // ── User Preferences → AI context ──
@@ -603,18 +646,63 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
       }
     }
 
+    final ctx = _photoAnalysisContext;
+
     // "Uzman/tasarımcı öner" → designerMatch intent'i kullan (search_designers garanti)
     if (lower.contains('uzman') || lower.contains('tasarımcı')) {
-      final ctx = _photoAnalysisContext;
       final style = ctx?['style'] ?? 'modern';
       setState(() {
         _msgs.add(_Msg(role: 'user', text: chipText));
         _loading = true;
       });
+      _history.add({'role': 'user', 'content': chipText});
       _scrollDown();
       _sendToAIWithIntent(
         intent: KoalaIntent.designerMatch,
         params: {'style': style},
+      );
+      return;
+    }
+
+    // "Fotoğraf çekeyim 📸" → kamera/galeri picker aç, AI'a gönderme
+    if (lower.contains('fotoğraf çek') || lower.contains('fotoğraf çekeyim')) {
+      setState(() {
+        _msgs.add(_Msg(role: 'user', text: chipText));
+      });
+      _scrollDown();
+      _showPicker();
+      return;
+    }
+
+    // "Yeniden tasarla" → roomRenovation intent'i ile oda/stil bağlamını koru
+    if (lower.contains('yeniden tasarla')) {
+      final room = ctx?['room'] ?? 'salon';
+      final style = ctx?['style'] ?? 'modern';
+      setState(() {
+        _msgs.add(_Msg(role: 'user', text: chipText));
+        _loading = true;
+      });
+      _history.add({'role': 'user', 'content': chipText});
+      _scrollDown();
+      _sendToAIWithIntent(
+        intent: KoalaIntent.roomRenovation,
+        params: {'room': room, 'style': style},
+      );
+      return;
+    }
+
+    // "Renk paletini değiştir" → colorAdvice intent'i ile oda bağlamını koru
+    if (lower.contains('renk paleti') || lower.contains('renk öner')) {
+      final room = ctx?['room'];
+      setState(() {
+        _msgs.add(_Msg(role: 'user', text: chipText));
+        _loading = true;
+      });
+      _history.add({'role': 'user', 'content': chipText});
+      _scrollDown();
+      _sendToAIWithIntent(
+        intent: KoalaIntent.colorAdvice,
+        params: room != null ? {'room': room} : {},
       );
       return;
     }
@@ -845,15 +933,17 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
           ],
         ),
       ),
-      body: Column(
+      body: Stack(
         children: [
-          const OfflineBanner(),
-          Expanded(
-            child: Stack(
-              children: [
-                _msgs.isEmpty && !_loading
-                    ? _buildEmptyState()
-                    : ListView.builder(
+          Column(
+            children: [
+              const OfflineBanner(),
+              Expanded(
+                child: Stack(
+                  children: [
+                    _msgs.isEmpty && !_loading
+                        ? _buildEmptyState()
+                        : ListView.builder(
                         controller: _scroll,
                         padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
                         itemCount: _msgs.length + (_loading ? 1 : 0),
@@ -898,6 +988,49 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
           // Quick action chips — show when chat has messages and not loading
           if (_msgs.isNotEmpty && !_loading) _buildQuickActions(),
           _buildInputBar(btm),
+        ],
+          ),
+          // Drag-and-drop overlay
+          if (_isDragHovering)
+            Positioned.fill(
+              child: IgnorePointer(
+                child: Container(
+                  color: _accent.withValues(alpha: 0.12),
+                  child: Center(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 32, vertical: 20),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                        boxShadow: [
+                          BoxShadow(
+                            color: _accent.withValues(alpha: 0.25),
+                            blurRadius: 24,
+                          ),
+                        ],
+                      ),
+                      child: const Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.add_photo_alternate_rounded,
+                              size: 48, color: _accent),
+                          SizedBox(height: 12),
+                          Text(
+                            'Fotoğrafı buraya bırak',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700,
+                              color: _ink,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
         ],
       ),
     );

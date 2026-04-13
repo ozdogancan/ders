@@ -97,6 +97,10 @@ void registerWebDrop({
 void unregisterWebDrop() {
   _onDropCallback = null;
   _onHoverCallback = null;
-  js.context.callMethod('__koalaDropCleanup', []);
+  try {
+    if (js.context.hasProperty('__koalaDropCleanup')) {
+      js.context.callMethod('__koalaDropCleanup', []);
+    }
+  } catch (_) {}
   html.document.getElementById('koala-drop-bridge')?.remove();
 }

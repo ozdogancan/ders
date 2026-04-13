@@ -108732,7 +108732,7 @@ if(m>6000)break
 l=k.h(l,"role")==="user"?"user":"model"
 B.b.fq(b1,0,A.D(["role",l,"parts",A.b([A.D(["text",j],a8,a8)],a9)],a8,n))}if(b1.length===0||!J.c(J.x(B.b.ga2(b1),"role"),"user"))b1.push(A.D(["role","user","parts",A.b([A.D(["text","Devam et"],a8,a8)],a9)],a8,t.z))
 a9=t.K,b2=t.nf,o=t.TK,n=t.z,l=t.P,k=t.Q,i=t.g,h=t.i,g=p.a,f=0
-case 3:if(!(f<2)){s=5
+case 3:if(!(f<3)){s=5
 break}e=A.D(["system_instruction",b0,"contents",b1,"tools",B.oP,"generationConfig",A.D(["temperature",0.7],a8,h)],a8,a9)
 A.aR().$1("KoalaAI: Tools request turn="+f+" ("+b1.length+" messages)...")
 s=6
