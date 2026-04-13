@@ -259,6 +259,17 @@ class _DesignersScreenState extends State<DesignersScreen> {
         }
       }
 
+      // DB'de specialty/room boşsa varsayılan chip'leri göster
+      if (dynamicChips.isEmpty) {
+        dynamicChips.addAll([
+          _ExpertChip('İç Mimar', 'specialty:İç Mimar'),
+          _ExpertChip('Mimar', 'specialty:Mimar'),
+          _ExpertChip('Dekoratör', 'specialty:Dekoratör'),
+          _ExpertChip('Salon', 'room:Oturma Odası'),
+          _ExpertChip('Yatak Odası', 'room:Yatak Odası'),
+        ]);
+      }
+
       setState(() {
         _allExperts
           ..clear()

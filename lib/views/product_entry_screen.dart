@@ -312,6 +312,17 @@ class _ProductEntryScreenState extends State<ProductEntryScreen> {
         }
       }
 
+      // DB'de project_type boşsa varsayılan chip'leri göster
+      if (dynamicChips.isEmpty) {
+        dynamicChips.addAll(const [
+          _ChipOption('🛋️', 'Salon'),
+          _ChipOption('🛏️', 'Yatak Odası'),
+          _ChipOption('🍳', 'Mutfak'),
+          _ChipOption('🛁', 'Banyo'),
+          _ChipOption('🚪', 'Antre'),
+        ]);
+      }
+
       setState(() {
         _allCards
           ..clear()
