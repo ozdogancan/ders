@@ -498,6 +498,7 @@ class KoalaAIService {
     }
 
     // ── Tur 2: Function call varsa çalıştır, sonuçla tekrar çağır (IMAGE OLMADAN) ──
+    final imageFunctionCards = <KoalaCard>[];
     if (functionCall != null) {
       final fc = functionCall['functionCall'] as Map<String, dynamic>;
       final fnName = fc['name'] as String;
@@ -505,6 +506,9 @@ class KoalaAIService {
       debugPrint('KoalaAI: Image function call → $fnName($fnArgs)');
 
       final result = await KoalaToolHandler.handle(fnName, fnArgs);
+
+      // Function result'tan direkt kart oluştur
+      imageFunctionCards.addAll(_buildCardsFromFunctionResult(fnName, result));
 
       // 2. tur: image yok, sadece text context + function call sonucu
       final turn2Payload = {
@@ -547,11 +551,28 @@ class KoalaAIService {
       }
     }
 
+    if (text.isEmpty && imageFunctionCards.isNotEmpty) {
+      // Gemini text boş ama function result kartları var
+      return KoalaResponse(message: 'İşte odanız için önerilerim!', cards: imageFunctionCards);
+    }
     if (text.isEmpty) {
       throw const FormatException('Empty response from Gemini');
     }
 
-    return _parseResponse(text);
+    // Gemini'nin JSON'unu parse et, function result kartlarını ekle
+    final parsed = _parseResponse(text);
+    if (imageFunctionCards.isNotEmpty) {
+      final mergedCards = <KoalaCard>[];
+      for (final card in parsed.cards) {
+        // Function result'tan zaten oluşturulan kart tiplerini tekrarlama
+        if (card.type != 'product_grid' && card.type != 'designer_card' && card.type != 'project_card') {
+          mergedCards.add(card);
+        }
+      }
+      mergedCards.addAll(imageFunctionCards);
+      return KoalaResponse(message: parsed.message, cards: mergedCards);
+    }
+    return parsed;
   }
 
   String _extractText(String rawBody) {
@@ -767,7 +788,7 @@ class KoalaAIService {
               'price': pm['price'] ?? '',
               'shop_name': pm['shop_name'] ?? '',
               'image_url': pm['image_url'] ?? '',
-              'link': pm['link'] ?? '',
+              'url': pm['link'] ?? pm['url'] ?? '',
             };
           }).toList(),
         })];
@@ -775,9 +796,10 @@ class KoalaAIService {
       case 'search_designers':
         final designers = result['designers'] as List<dynamic>? ?? [];
         if (designers.isEmpty) return [];
-        return designers.map((d) =>
-          KoalaCard(type: 'designer_card', data: d as Map<String, dynamic>),
-        ).toList();
+        // DesignerCards widget tek kart içinde designers[] array bekler
+        return [KoalaCard(type: 'designer_card', data: {
+          'designers': designers,
+        })];
 
       case 'search_projects':
         final projects = result['projects'] as List<dynamic>? ?? [];
