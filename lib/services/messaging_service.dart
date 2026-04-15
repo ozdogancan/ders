@@ -26,8 +26,10 @@ class MessagingService {
   /// Firebase auth henüz restore edilmemiş olabilir (özellikle hard refresh
   /// sonrası). currentUser null ise authStateChanges ile gelen ilk user'ı
   /// kısa bir timeout ile bekler; yoksa null döner.
+  /// 8s default — yavaş cihaz/ağlarda IndexedDB restore uzayabilir, conversation
+  /// listesi boş gözükmesindense küçük bir gecikme ile doğru liste daha iyidir.
   static Future<String?> _waitForUid({
-    Duration timeout = const Duration(seconds: 3),
+    Duration timeout = const Duration(seconds: 8),
   }) async {
     final direct = FirebaseAuth.instance.currentUser?.uid;
     if (direct != null) return direct;

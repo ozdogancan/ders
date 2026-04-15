@@ -58,13 +58,30 @@ class _ChatListScreenState extends State<ChatListScreen> {
       final convFuture = MessagingService.getConversations();
       final aiFuture = ChatPersistence.loadConversations();
       final results = await Future.wait([convFuture, aiFuture]);
-      if (mounted) {
-        setState(() {
-          _conversations = results[0] as List<Map<String, dynamic>>;
-          _aiChats = results[1] as List<ChatSummary>;
-          _loading = false;
+      if (!mounted) return;
+      final convs = results[0] as List<Map<String, dynamic>>;
+      final ais = results[1] as List<ChatSummary>;
+      setState(() {
+        _conversations = convs;
+        _aiChats = ais;
+        _loading = false;
+      });
+      _loadDesignerAvatars();
+
+      // Auth restore henüz tamamlanmamış olabilir → conversations boş gelmiş
+      // olabilir ama DB'de gerçekte var. 1.5s sonra sessizce bir kez daha dene.
+      // AI chats local, dolu dönmüşse user login; conv boşsa auth race muhtemel.
+      if (convs.isEmpty && ais.isNotEmpty) {
+        Future<void>.delayed(const Duration(milliseconds: 1500), () async {
+          if (!mounted) return;
+          try {
+            final retry = await MessagingService.getConversations();
+            if (mounted && retry.isNotEmpty) {
+              setState(() => _conversations = retry);
+              _loadDesignerAvatars();
+            }
+          } catch (_) {}
         });
-        _loadDesignerAvatars();
       }
     } catch (e) {
       if (mounted) setState(() { _loading = false; _hasError = true; });
