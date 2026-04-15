@@ -1037,6 +1037,29 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     );
   }
 
+  // ── Foto gereken chip'ler için koruma ──
+  // "Bu odaya uygun…", "Bu odanın stilini…" gibi ifadeleri chat'te foto yokken
+  // göndermek AI'ı eski/stale context'e zorluyor. Önce foto yükletiyoruz.
+  bool _guardRequiresPhoto() {
+    final hasPhoto = _msgs.any((m) => m.role == 'user' && m.photo != null);
+    if (!hasPhoto) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Önce odanın fotoğrafını paylaşırsan sana özel öneri yapabilirim'),
+          duration: Duration(seconds: 3),
+        ),
+      );
+      _showPicker();
+      return false;
+    }
+    return true;
+  }
+
+  void _onPhotoChip(String text) {
+    if (!_guardRequiresPhoto()) return;
+    _sendToAI(text: text, hiddenContext: _buildHiddenContext());
+  }
+
   // ── Hidden context builder — AI'a gönderilir ama kullanıcıya gösterilmez ──
   String? _buildHiddenContext() {
     final ctx = _photoAnalysisContext;
@@ -1069,9 +1092,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
         child: Row(
           children: [
             _quickChip(Icons.color_lens_rounded, colorLabel,
-              () => _sendToAI(text: 'Bu odaya uygun renk paleti öner', hiddenContext: _buildHiddenContext())),
+              () => _onPhotoChip('Bu odaya uygun renk paleti öner')),
             _quickChip(Icons.shopping_bag_rounded, productLabel,
-              () => _sendToAI(text: 'Bu oda ve stile uygun ürün öner', hiddenContext: _buildHiddenContext())),
+              () => _onPhotoChip('Bu oda ve stile uygun ürün öner')),
             _quickChip(Icons.person_rounded, 'Uzman öner', () {
               // Direkt designerMatch intent'i — search_designers function call'ını garanti eder
               final ctx = _photoAnalysisContext;
@@ -1087,7 +1110,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
               );
             }),
             _quickChip(Icons.auto_awesome_rounded, 'Stil analizi',
-              () => _sendToAI(text: 'Bu odanın stilini detaylı analiz et', hiddenContext: _buildHiddenContext())),
+              () => _onPhotoChip('Bu odanın stilini detaylı analiz et')),
           ],
         ),
       ),
@@ -1476,9 +1499,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
             children: [
               _fallbackChip(Icons.refresh_rounded, 'Tekrar dene', _retry),
               _fallbackChip(Icons.color_lens_rounded, 'Renk öner',
-                () => _sendToAI(text: 'Bu odaya uygun renk paleti öner', hiddenContext: _buildHiddenContext())),
+                () => _onPhotoChip('Bu odaya uygun renk paleti öner')),
               _fallbackChip(Icons.shopping_bag_rounded, 'Ürün bul',
-                () => _sendToAI(text: 'Bu oda ve stile uygun ürün öner', hiddenContext: _buildHiddenContext())),
+                () => _onPhotoChip('Bu oda ve stile uygun ürün öner')),
               _fallbackChip(Icons.person_rounded, 'Uzman bul', () {
                 final style = _photoAnalysisContext?['style'] ?? 'modern';
                 setState(() {

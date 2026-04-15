@@ -653,7 +653,15 @@ class KoalaAIService {
 
     if (isCasualMessage) {
       debugPrint('KoalaAI: Casual message detected, skipping tools: "$lastUserText"');
-      return _callGemini(prompt: prompt, history: history);
+      // Fix B-fix: Tool-odaklı sistem prompt'unu değil, kısa/dostça bir casual prompt kullan.
+      // Aksi halde Gemini "bu tool'ları kullan" diyen prompt alır ama tool yoktur → boş yanıt.
+      const casualPrompt =
+          'Sen Koala\'sın — samimi bir iç mimari asistan. Kullanıcı kısa bir '
+          'selamlama veya dolgu sözcüğü gönderdi ("naber", "selam", "tamam" gibi). '
+          'Çok kısa, dostça, 1-2 cümlelik bir cevap ver. İstersen hafifçe yönlendirici '
+          'olabilirsin (örn: "Selam! Bir oda fotoğrafı paylaşırsan birlikte bakalım 🐨"). '
+          'Tool, kart, liste, başlık verme. Sadece sohbet.';
+      return _callGemini(prompt: casualPrompt, history: history);
     }
 
     // Fix E: Belirsiz ürün isteği → oda sorusu sor
