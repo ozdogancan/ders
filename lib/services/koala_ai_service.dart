@@ -671,7 +671,7 @@ class KoalaAIService {
       caseSensitive: false,
     );
     final isCasualGreeting = RegExp(
-      r'^(naber|selam|merhaba|sa|hi|hey|teşekkürler|tşk|tamam|peki|hmm|evet|hayır|ok|okay)[\s\!\?\.]*$',
+      r'^(naber|nbr|nasılsın|nslsn|selam|merhaba|mrb|sa|selamün|aleyküm|hi|hey|hello|yoo|teşekkürler|teşekkür|tşk|sağol|sağ ol|eyvallah|tamam|tmm|peki|ok|okay|hmm|hmmm|evet|hayır|yes|no|güzel|harika|süper|iyi|iyiyim|sen)[\s\!\?\.\,]*$',
       caseSensitive: false,
     ).hasMatch(lastUserText.trim());
     final isShortNonDesign = lastUserText.trim().split(RegExp(r'\s+')).length <= 3 &&
@@ -733,12 +733,22 @@ class KoalaAIService {
       );
     }
 
+    // Tasarımcı/iç mimar araması — fiil veya net niyet ile birlikte
     final isDesignerRequest = RegExp(
-      r'tasarımcı öner|tasarımcı bul|uzman öner|uzman bul|iç mimar|mimar bul|mimar öner|tasarımcı ara',
+      r'(tasarımcı|mimar)\s+(öner|bul|ara|tavsiye|seç|lazım|arıyor|bakıyor)|'
+      r'(iç\s*mimar)|'
+      r'(uzman)\s+(öner|bul|tavsiye|ara)|'
+      r'(bana|bize|bana göre|bize göre)\s+.*(tasarımcı|mimar)|'
+      r'(tasarımcı|mimar).*(bul|öner|seç|tavsiye|uygun)',
       caseSensitive: false,
     ).hasMatch(lastUserText);
+    // Ürün isteği: fiil + isim ya da doğrudan mobilya/dekor nesnesi
+    // "kanepe arıyorum", "koltuk önerir misin", "mutfakta masa lazım" gibi serbest ifadeleri de yakalar
+    // Ürün isteği: fiil + isim ya da somut mobilya/dekor nesnesi
+    // "kanepe arıyorum", "odama koltuk bakıyorum", "mutfakta masa lazım" da yakalanır
     final isProductRequest = RegExp(
-      r'ürün öner|ürün bul|ürün ara|mobilya|koltuk|kanepe|sehpa|masa|sandalye|aydınlatma|halı|perde|dekorasyon öner',
+      r'(ürün|mobilya|dekorasyon)\s+(öner|bul|ara|tavsiye|lazım|arıyor|bakıyor)|'
+      r'\b(koltuk|kanepe|sehpa|masa|sandalye|aydınlatma|lamba|avize|halı|kilim|perde|yatak|dolap|gardırop|komodin|raf|kitaplık|vitrin|puf|berjer|tv\s*ünitesi|yemek\s*masası|abajur|saksı|ayna|tablo|ottoman)\b',
       caseSensitive: false,
     ).hasMatch(lastUserText);
     final shouldForceTools = isDesignerRequest || isProductRequest;

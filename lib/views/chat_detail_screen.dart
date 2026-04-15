@@ -658,19 +658,22 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     }
 
     final ctx = _photoAnalysisContext;
+    // Profile fallback'leri: foto analizi > onboarding profili > son çare default
+    final profileStyle = ctx?['style'] ?? _ai.userStyle;
+    final profileRoom = ctx?['room'] ?? _ai.userRoom;
+    final profileBudget = _ai.userBudget;
 
-    // "Uzman/tasarımcı öner" → designerMatch intent'i kullan (search_designers garanti)
-    if (lower.contains('uzman') || lower.contains('tasarımcı')) {
-      final style = ctx?['style'] ?? 'modern';
-      setState(() {
-        _msgs.add(_Msg(role: 'user', text: chipText));
-        _loading = true;
-      });
-      _history.add({'role': 'user', 'content': chipText});
-      _scrollDown();
-      _sendToAIWithIntent(
-        intent: KoalaIntent.designerMatch,
-        params: {'style': style},
+    // "Uzman/tasarımcı/iç mimar öner" → designerMatch intent'i (search_designers garanti)
+    if (lower.contains('uzman') ||
+        lower.contains('tasarımcı') ||
+        lower.contains('iç mimar') ||
+        lower.contains('mimar öner') ||
+        lower.contains('mimar bul') ||
+        lower.contains('mimar ara')) {
+      _dispatchIntent(
+        chipText,
+        KoalaIntent.designerMatch,
+        {'style': profileStyle ?? 'modern'},
       );
       return;
     }
@@ -685,41 +688,73 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
       return;
     }
 
-    // "Yeniden tasarla" → roomRenovation intent'i ile oda/stil bağlamını koru
-    if (lower.contains('yeniden tasarla')) {
-      final room = ctx?['room'] ?? 'salon';
-      final style = ctx?['style'] ?? 'modern';
-      setState(() {
-        _msgs.add(_Msg(role: 'user', text: chipText));
-        _loading = true;
-      });
-      _history.add({'role': 'user', 'content': chipText});
-      _scrollDown();
-      _sendToAIWithIntent(
-        intent: KoalaIntent.roomRenovation,
-        params: {'room': room, 'style': style},
+    // "Yeniden tasarla" / "Odamı yenile" → roomRenovation intent'i
+    if (lower.contains('yeniden tasarla') ||
+        (lower.contains('yenile') && (lower.contains('oda') || lower.contains('salon') ||
+            lower.contains('mutfak') || lower.contains('banyo') || lower.contains('evim')))) {
+      _dispatchIntent(
+        chipText,
+        KoalaIntent.roomRenovation,
+        {
+          'room': profileRoom ?? 'salon',
+          'style': profileStyle ?? 'modern',
+        },
       );
       return;
     }
 
-    // "Renk paletini değiştir" → colorAdvice intent'i ile oda bağlamını koru
-    if (lower.contains('renk paleti') || lower.contains('renk öner')) {
-      final room = ctx?['room'];
-      setState(() {
-        _msgs.add(_Msg(role: 'user', text: chipText));
-        _loading = true;
-      });
-      _history.add({'role': 'user', 'content': chipText});
-      _scrollDown();
-      _sendToAIWithIntent(
-        intent: KoalaIntent.colorAdvice,
-        params: room != null ? {'room': room} : {},
+    // "Bütçe planı" / "30K bütçem var" → budgetPlan intent'i
+    final isBudgetRequest = lower.contains('bütçe') &&
+        (lower.contains('plan') || lower.contains('planla') ||
+            RegExp(r'\d+\s*k\b').hasMatch(lower) || lower.contains('tl'));
+    if (isBudgetRequest) {
+      _dispatchIntent(
+        chipText,
+        KoalaIntent.budgetPlan,
+        {
+          if (profileRoom != null) 'room': profileRoom,
+          if (profileBudget != null) 'budget': profileBudget,
+        },
       );
+      return;
+    }
+
+    // "Renk paleti / renk öner" → colorAdvice intent'i
+    if (lower.contains('renk paleti') || lower.contains('renk öner') ||
+        (lower.contains('renk') && lower.contains('tarz'))) {
+      _dispatchIntent(
+        chipText,
+        KoalaIntent.colorAdvice,
+        {if (profileRoom != null) 'room': profileRoom},
+      );
+      return;
+    }
+
+    // "Önce-sonra / dönüşüm" → beforeAfter intent'i
+    if (lower.contains('önce-sonra') || lower.contains('önce sonra') ||
+        lower.contains('dönüşüm') || lower.contains('ilham')) {
+      _dispatchIntent(chipText, KoalaIntent.beforeAfter, const {});
       return;
     }
 
     // Diğer chip'ler: kullanıcı temiz text görür, AI bağlamı hiddenContext ile alır
     _sendToAI(text: chipText, hiddenContext: _buildHiddenContext());
+  }
+
+  /// Chip metnini kullanıcı balonuna ekler + history'ye yazar + intent çağırır.
+  /// _onChipTap içindeki tekrar eden boilerplate'i azaltır.
+  void _dispatchIntent(
+    String chipText,
+    KoalaIntent intent,
+    Map<String, String> params,
+  ) {
+    setState(() {
+      _msgs.add(_Msg(role: 'user', text: chipText));
+      _loading = true;
+    });
+    _history.add({'role': 'user', 'content': chipText});
+    _scrollDown();
+    _sendToAIWithIntent(intent: intent, params: params);
   }
 
   Future<void> _generateImage(String prompt) async {
@@ -1289,32 +1324,33 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     final room = _ai.userRoom;
     final budget = _ai.userBudget;
 
-    // If we have profile data, personalize the suggestions
+    // If we have profile data, personalize the suggestions.
+    // _onChipTap → dedicated intent router (designerMatch, roomRenovation, colorAdvice, budgetPlan)
     if (style != null && style.isNotEmpty) {
       final roomLabel = room ?? 'Odamı';
       return [
         _suggestionChip(Icons.palette_rounded, '$style tarzda $roomLabel yenile', KoalaColors.accentDeep,
-          () => _sendToAI(text: '$roomLabel $style tarzda yeniden tasarla')),
+          () => _onChipTap('$roomLabel $style tarzda yeniden tasarla')),
         _suggestionChip(Icons.color_lens_rounded, '$roomLabel için 3 renk öner', KoalaColors.pink,
-          () => _sendToAI(text: '$roomLabel için $style tarzıma uygun 3 renk öner')),
+          () => _onChipTap('$roomLabel için $style tarzıma uygun renk paleti öner')),
         if (budget != null && budget.isNotEmpty)
           _suggestionChip(Icons.account_balance_wallet_rounded, '$budget bütçeyle plan', KoalaColors.greenAlt,
-            () => _sendToAI(text: '$roomLabel için $budget bütçeyle $style dekorasyon planı çıkar')),
+            () => _onChipTap('$roomLabel için $budget bütçeyle $style dekorasyon bütçe planı çıkar')),
         _suggestionChip(Icons.person_search_rounded, 'Bana uygun tasarımcı', KoalaColors.blue,
-          () => _sendToAI(text: '$style tarzda çalışan bir iç mimar öner')),
+          () => _onChipTap('$style tarzda çalışan bir iç mimar öner')),
       ];
     }
 
-    // Default starters (no profile)
+    // Default starters (no profile) — _onChipTap intent router'a gidiyor
     return [
       _suggestionChip(Icons.home_rounded, 'Odamı yenile', KoalaColors.accentDeep,
-        () => _sendToAI(text: 'Odamı yeniden tasarla')),
+        () => _onChipTap('Odamı yeniden tasarla')),
       _suggestionChip(Icons.color_lens_rounded, 'Renk öner', KoalaColors.pink,
-        () => _sendToAI(text: 'Odama renk öner')),
+        () => _onChipTap('Odama uygun renk paleti öner')),
       _suggestionChip(Icons.account_balance_wallet_rounded, 'Bütçe planla', KoalaColors.greenAlt,
-        () => _sendToAI(text: 'Bütçeme uygun dekorasyon planı')),
+        () => _onChipTap('Bütçe planı çıkar')),
       _suggestionChip(Icons.person_search_rounded, 'Tasarımcı bul', KoalaColors.blue,
-        () => _sendToAI(text: 'Bana uygun tasarımcı öner')),
+        () => _onChipTap('Bana uygun tasarımcı öner')),
     ];
   }
 
@@ -1575,7 +1611,10 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
               _fallbackChip(Icons.shopping_bag_rounded, 'Ürün bul',
                 () => _onPhotoChip('Bu oda ve stile uygun ürün öner')),
               _fallbackChip(Icons.person_rounded, 'Uzman bul', () {
-                final style = _photoAnalysisContext?['style'] ?? 'modern';
+                // Stil sırası: foto analizi > onboarding profili > varsayılan modern
+                final style = _photoAnalysisContext?['style'] ??
+                    _ai.userStyle ??
+                    'modern';
                 setState(() {
                   _msgs.add(_Msg(role: 'user', text: 'Bu tarz için uzman tasarımcı öner'));
                   _loading = true;

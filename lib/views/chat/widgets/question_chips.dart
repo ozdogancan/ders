@@ -11,6 +11,17 @@ class QuestionChips extends StatefulWidget {
   State<QuestionChips> createState() => QuestionChipsState();
 }
 
+/// Emoji, U+2600–U+27BF (misc symbols) ve varyasyon seçicilerini temizler.
+/// "💚 10-30K TL" → "10-30K TL"
+String _stripEmoji(String s) {
+  // Surrogate pair'ler, dingbats, misc symbols, emoticons, pictographs, flags
+  final emojiRegex = RegExp(
+    r'[\u{1F300}-\u{1FAFF}]|[\u{2600}-\u{27BF}]|[\u{FE00}-\u{FE0F}]|[\u{1F000}-\u{1F02F}]|[\u{1F0A0}-\u{1F0FF}]',
+    unicode: true,
+  );
+  return s.replaceAll(emojiRegex, '').trim().replaceAll(RegExp(r'\s+'), ' ');
+}
+
 class QuestionChipsState extends State<QuestionChips> {
   String? _selectedChip;
 
@@ -23,11 +34,13 @@ class QuestionChipsState extends State<QuestionChips> {
     final chips = <Map<String, String>>[];
     for (final item in raw) {
       if (item is String) {
-        chips.add({'label': item, 'value': item});
+        // String chip'lerde value = emoji temizlenmiş hali
+        chips.add({'label': item, 'value': _stripEmoji(item)});
       } else if (item is Map) {
         final label = (item['label'] ?? item['text'] ?? item.values.first ?? '')
             .toString();
-        final value = (item['value'] ?? item['label'] ?? label).toString();
+        final explicitValue = (item['value'] ?? '').toString();
+        final value = explicitValue.isNotEmpty ? explicitValue : _stripEmoji(label);
         chips.add({'label': label, 'value': value});
       }
     }
@@ -66,7 +79,9 @@ class QuestionChipsState extends State<QuestionChips> {
                     return GestureDetector(
                       onTap: answered ? null : () {
                         setState(() => _selectedChip = chip['label']);
-                        widget.onTap(chip['label']!);
+                        // AI'a emoji'siz value gönderilir; chat balonunda emoji'li label görünsün
+                        // diye onTap'e de label tarafını ekli bırakıyoruz (handler label değil value işliyor)
+                        widget.onTap(chip['value']!);
                       },
                       child: AnimatedContainer(
                         duration: const Duration(milliseconds: 200),
