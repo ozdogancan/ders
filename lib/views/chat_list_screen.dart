@@ -32,14 +32,23 @@ class _ChatListScreenState extends State<ChatListScreen> {
   void initState() {
     super.initState();
     _load();
-    _subscribeConversations();
-    // Evlumba → Koala ters köprü: designer mesajlarını çek ve tekrar yükle
-    _syncInboundThenReload();
+    // Realtime + inbound sync'i post-frame'e ertele ki ilk render bloklanmasın.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      try {
+        _subscribeConversations();
+      } catch (e) {
+        debugPrint('ChatListScreen: subscribe error $e');
+      }
+      _syncInboundThenReload();
+    });
   }
 
   @override
   void dispose() {
-    MessagingService.unsubscribeFromConversations();
+    try {
+      MessagingService.unsubscribeFromConversations();
+    } catch (_) {}
     super.dispose();
   }
 
