@@ -32,6 +32,15 @@ class _ChatListScreenState extends State<ChatListScreen> {
   void initState() {
     super.initState();
     _load();
+    _subscribeConversations();
+    // Evlumba → Koala ters köprü: designer mesajlarını çek ve tekrar yükle
+    _syncInboundThenReload();
+  }
+
+  @override
+  void dispose() {
+    MessagingService.unsubscribeFromConversations();
+    super.dispose();
   }
 
   Future<void> _load() async {
@@ -50,6 +59,28 @@ class _ChatListScreenState extends State<ChatListScreen> {
       }
     } catch (e) {
       if (mounted) setState(() { _loading = false; _hasError = true; });
+    }
+  }
+
+  /// ChatListScreen açılınca koala_conversations tablosundaki
+  /// last_message / unread_count değişikliklerini canlı dinle.
+  /// Designer mesajı geldiğinde (inbound endpoint'ten sonra realtime) listeyi
+  /// yenile — böylece unread badge ve sıralama otomatik güncellenir.
+  void _subscribeConversations() {
+    MessagingService.subscribeToConversations(
+      onUpdate: (_) {
+        // Detay tilenin kendisi full satır getirdi ama state'i yeniden
+        // çekmek dadesigner avatar cache + sıralama için daha güvenli.
+        if (mounted) _load();
+      },
+    );
+  }
+
+  /// Inbound sync'i arka planda çalıştır; başarılı olursa listeyi tazele.
+  Future<void> _syncInboundThenReload() async {
+    final synced = await MessagingService.pullInbound();
+    if (synced > 0 && mounted) {
+      await _load();
     }
   }
 

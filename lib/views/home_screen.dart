@@ -39,6 +39,8 @@ class _HomeScreenState extends State<HomeScreen>
   final ImagePicker _picker = ImagePicker();
   final GlobalKey<_TypewriterInputState> _inputKey = GlobalKey();
   int _notifCount = 0;
+  int _unreadMsgCount = 0;
+  Timer? _inboundPollTimer;
 
   late final AnimationController _staggerCtrl;
 
@@ -52,11 +54,31 @@ class _HomeScreenState extends State<HomeScreen>
       duration: const Duration(milliseconds: 1400),
     )..forward();
     _loadNotifCount();
+    _loadUnreadMsgCount();
     _migrateChatsOnce();
     _requestNotificationPermission();
+    _kickInboundSync();
+    // Her 30 sn'de bir arka planda inbound sync — designer mesajları için
+    _inboundPollTimer = Timer.periodic(
+      const Duration(seconds: 30),
+      (_) => _kickInboundSync(),
+    );
     WidgetsBinding.instance.addPostFrameCallback(
       (_) => _maybeOpenStyleDiscovery(),
     );
+  }
+
+  Future<void> _loadUnreadMsgCount() async {
+    final count = await MessagingService.getTotalUnreadCount();
+    if (mounted) setState(() => _unreadMsgCount = count);
+  }
+
+  /// Evlumba → Koala ters köprü: designer mesajlarını çek, sonra badge'i tazele.
+  Future<void> _kickInboundSync() async {
+    final synced = await MessagingService.pullInbound();
+    if (synced > 0 || mounted) {
+      _loadUnreadMsgCount();
+    }
   }
 
   Future<void> _maybeOpenStyleDiscovery() async {
@@ -124,12 +146,16 @@ class _HomeScreenState extends State<HomeScreen>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       setState(() {});
+      // App foreground'a gelince anında inbound sync + unread refresh
+      _kickInboundSync();
+      _loadNotifCount();
     }
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _inboundPollTimer?.cancel();
     _staggerCtrl.dispose();
     super.dispose();
   }
@@ -336,19 +362,55 @@ class _HomeScreenState extends State<HomeScreen>
                         MaterialPageRoute(
                           builder: (_) => const ChatListScreen(),
                         ),
-                      ).then((_) => _inputKey.currentState?.clearAndReset()),
-                      child: Container(
-                        width: 36,
-                        height: 36,
-                        decoration: const BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: KoalaColors.accentSoft,
-                        ),
-                        child: const Icon(
-                          LucideIcons.messageCircle,
-                          size: 18,
-                          color: KoalaColors.accentDeep,
-                        ),
+                      ).then((_) {
+                        _inputKey.currentState?.clearAndReset();
+                        _loadUnreadMsgCount();
+                      }),
+                      child: Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          Container(
+                            width: 36,
+                            height: 36,
+                            decoration: const BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: KoalaColors.accentSoft,
+                            ),
+                            child: const Icon(
+                              LucideIcons.messageCircle,
+                              size: 18,
+                              color: KoalaColors.accentDeep,
+                            ),
+                          ),
+                          if (_unreadMsgCount > 0)
+                            Positioned(
+                              top: -2,
+                              right: -2,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 4,
+                                  vertical: 1,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: KoalaColors.error,
+                                  borderRadius: BorderRadius.circular(99),
+                                ),
+                                constraints: const BoxConstraints(
+                                  minWidth: 14,
+                                  minHeight: 14,
+                                ),
+                                child: Text(
+                                  _unreadMsgCount > 9 ? '9+' : '$_unreadMsgCount',
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.w700,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ),
+                            ),
+                        ],
                       ),
                     ),
                     const SizedBox(width: 10),

@@ -270,6 +270,50 @@ class MessagingService {
   // EVLUMBA BRIDGE
   // ═══════════════════════════════════════════════════════
 
+  /// Evlumba → Koala ters köprü (client-pull).
+  /// Flutter app ChatListScreen açılınca / app foreground'a gelince çağırır.
+  /// Designer'ın evlumba.com'dan attığı mesajları Koala DB'sine çeker.
+  /// Dönüş: toplam yeni senkronize edilen mesaj sayısı (hata olursa 0).
+  static Future<int> pullInbound() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return 0;
+    final apiUrl = Env.koalaApiUrl;
+    if (apiUrl.isEmpty) return 0;
+
+    try {
+      final res = await http
+          .post(
+            Uri.parse('$apiUrl/api/messages/inbound'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({
+              'firebaseUid': user.uid,
+              'email': user.email,
+              'displayName': user.displayName,
+              'avatarUrl': user.photoURL,
+            }),
+          )
+          .timeout(const Duration(seconds: 15));
+
+      if (res.statusCode >= 200 && res.statusCode < 300) {
+        try {
+          final body = jsonDecode(res.body) as Map<String, dynamic>;
+          final n = (body['synced'] as int?) ?? 0;
+          if (n > 0) {
+            debugPrint('MessagingService: pullInbound synced $n messages');
+          }
+          return n;
+        } catch (_) {
+          return 0;
+        }
+      }
+      debugPrint('MessagingService: pullInbound failed ${res.statusCode} ${res.body}');
+      return 0;
+    } catch (e) {
+      debugPrint('MessagingService: pullInbound error $e');
+      return 0;
+    }
+  }
+
   /// Koala → Evlumba mesaj köprüsü (fire-and-forget).
   /// Koala kullanıcısının mesajını Evlumba DB'sine de yazar ki tasarımcı
   /// evlumba.com üzerinden görebilsin.
