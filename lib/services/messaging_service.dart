@@ -1,5 +1,9 @@
+import 'dart:async';
+import 'dart:convert';
+
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart' hide User;
 
 import '../core/config/env.dart';
@@ -173,6 +177,17 @@ class MessagingService {
         'updated_at': DateTime.now().toIso8601String(),
       }).eq('id', conversationId);
 
+      // 3. Evlumba bridge — fire-and-forget; client UX'ini bekletmez.
+      //    Kullanıcı → tasarımcı yönünde mesajları Evlumba DB'sine de yazar
+      //    ki tasarımcı evlumba.com/mesajlar'dan görebilsin.
+      if (isUser && type == MessageType.text) {
+        unawaited(_bridgeToEvlumba(
+          designerId: conv['designer_id'] as String,
+          body: content,
+          koalaConversationId: conversationId,
+        ));
+      }
+
       return msg;
     } catch (e) {
       debugPrint('MessagingService.sendMessage error: $e');
@@ -248,6 +263,51 @@ class MessagingService {
     } catch (e) {
       debugPrint('MessagingService.markAsRead error: $e');
       return false;
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════
+  // EVLUMBA BRIDGE
+  // ═══════════════════════════════════════════════════════
+
+  /// Koala → Evlumba mesaj köprüsü (fire-and-forget).
+  /// Koala kullanıcısının mesajını Evlumba DB'sine de yazar ki tasarımcı
+  /// evlumba.com üzerinden görebilsin.
+  static Future<void> _bridgeToEvlumba({
+    required String designerId,
+    required String body,
+    required String koalaConversationId,
+  }) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    final apiUrl = Env.koalaApiUrl;
+    if (apiUrl.isEmpty) return;
+
+    try {
+      final res = await http
+          .post(
+            Uri.parse('$apiUrl/api/messages/bridge'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({
+              'firebaseUid': user.uid,
+              'email': user.email,
+              'displayName': user.displayName,
+              'avatarUrl': user.photoURL,
+              'designerId': designerId,
+              'body': body,
+              'koalaConversationId': koalaConversationId,
+            }),
+          )
+          .timeout(const Duration(seconds: 10));
+
+      if (res.statusCode >= 200 && res.statusCode < 300) {
+        debugPrint('MessagingService: bridge ok ${res.body}');
+      } else {
+        debugPrint('MessagingService: bridge failed ${res.statusCode} ${res.body}');
+      }
+    } catch (e) {
+      // Non-fatal — bridge çalışmasa bile Koala tarafı düzgün çalışır.
+      debugPrint('MessagingService: bridge error $e');
     }
   }
 
