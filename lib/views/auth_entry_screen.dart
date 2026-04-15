@@ -219,23 +219,6 @@ class _AuthEntryScreenState extends State<AuthEntryScreen>
     return AuthScene(
       child: Stack(
         children: [
-          // Close button (sadece misafirken yönlendirilenlerde)
-          if (widget.showCloseButton)
-            Positioned(
-              top: 12,
-              right: 12,
-              child: SafeArea(
-                child: IconButton(
-                  onPressed: () => Navigator.of(context).pop(false),
-                  style: IconButton.styleFrom(
-                    backgroundColor: KoalaColors.surfaceCool,
-                    foregroundColor: KoalaColors.textMed,
-                    minimumSize: const Size(40, 40),
-                  ),
-                  icon: const Icon(Icons.close_rounded, size: 20),
-                ),
-              ),
-            ),
           LayoutBuilder(
         builder: (BuildContext context, BoxConstraints constraints) {
           return SingleChildScrollView(
@@ -250,7 +233,22 @@ class _AuthEntryScreenState extends State<AuthEntryScreen>
                     constraints: const BoxConstraints(maxWidth: 400),
                     child: Column(
                       children: <Widget>[
-                        const SizedBox(height: 32),
+                        // Close button — scroll content içinde, sağ üste hizalı
+                        if (widget.showCloseButton)
+                          Align(
+                            alignment: Alignment.topRight,
+                            child: IconButton(
+                              onPressed: () => Navigator.of(context).pop(false),
+                              style: IconButton.styleFrom(
+                                backgroundColor: KoalaColors.surfaceCool,
+                                foregroundColor: KoalaColors.textMed,
+                                minimumSize: const Size(40, 40),
+                              ),
+                              icon: const Icon(Icons.close_rounded, size: 20),
+                            ),
+                          )
+                        else
+                          const SizedBox(height: 32),
 
                         // Logo
                         FadeSlideIn(

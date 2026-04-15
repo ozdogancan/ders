@@ -25,6 +25,13 @@ class DesignerCards extends StatelessWidget {
     } else {
       designers = [];
     }
+    // Aynı ID veya isimli tasarımcıları filtrele (AI bazen duplike döner)
+    final seenIds = <String>{};
+    designers = designers.where((ds) {
+      final id = (ds['id'] ?? ds['name'] ?? '').toString().trim();
+      if (id.isEmpty) return true;
+      return seenIds.add(id); // add returns false if already exists
+    }).toList();
     if (designers.isEmpty) {
       return const Padding(
         padding: EdgeInsets.all(12),

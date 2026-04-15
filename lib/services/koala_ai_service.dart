@@ -389,6 +389,7 @@ class KoalaAIService {
       'contents': contents,
       'generationConfig': {
         'temperature': 0.7,
+        'maxOutputTokens': 2048,
       },
     };
 
@@ -454,7 +455,7 @@ class KoalaAIService {
         }
       ],
       'tools': _toolDeclarations,
-      'generationConfig': {'temperature': 0.7},
+      'generationConfig': {'temperature': 0.7, 'maxOutputTokens': 4096},
     };
 
     final jsonBody = jsonEncode(firstPayload);
@@ -516,6 +517,7 @@ class KoalaAIService {
       imageFunctionCards.addAll(_buildCardsFromFunctionResult(fnName, result));
 
       // 2. tur: image yok, sadece text context + function call sonucu
+      // Fix D: Turn-2'de NONE modu — Gemini sadece sentez yapsın, yeni function call açmasın
       final turn2Payload = {
         'contents': [
           // Orijinal kullanıcı mesajı (image olmadan, sadece text)
@@ -526,7 +528,8 @@ class KoalaAIService {
           {'role': 'user', 'parts': [{'functionResponse': {'name': fnName, 'response': result}}]},
         ],
         'tools': _toolDeclarations,
-        'generationConfig': {'temperature': 0.7},
+        'tool_config': {'function_calling_config': {'mode': 'NONE'}},
+        'generationConfig': {'temperature': 0.7, 'maxOutputTokens': 2048},
       };
 
       debugPrint('KoalaAI: Image turn2 (function result)...');
@@ -606,6 +609,8 @@ class KoalaAIService {
     final systemInstruction = {'parts': [{'text': prompt}]};
 
     // Mesaj geçmişi hazırla (max 8 mesaj, max 6000 karakter)
+    // Fix C: History'deki önceki functionCall/functionResponse part'larını temizle
+    // Bunlar yeni user mesajı için alakasız ve Gemini'yi yanıltır
     final contents = <Map<String, dynamic>>[];
     if (history != null) {
       final recent = history.length > 8 ? history.sublist(history.length - 8) : history;
@@ -615,6 +620,7 @@ class KoalaAIService {
         final text = msg['content'] ?? '';
         if (totalChars + text.length > maxHistoryChars) break;
         totalChars += text.length;
+        // Sadece text part'ı ekle — functionCall/functionResponse geçmişten çıkar
         contents.insert(0, {
           'role': msg['role'] == 'user' ? 'user' : 'model',
           'parts': [{'text': text}],
@@ -631,6 +637,55 @@ class KoalaAIService {
         ? (contents.last['parts'] as List?)?.firstWhere(
             (p) => (p as Map).containsKey('text'), orElse: () => {'text': ''})['text'] as String? ?? ''
         : '';
+
+    // Fix B: Casual-chat escape — kısa selamlama/dolgu sözcükleri için tool çağırma
+    final designKeywords = RegExp(
+      r'\b(oda|salon|banyo|mutfak|mobilya|renk|ürün|tasarım|tasarımcı|mimar|stil|boya|duvar|zemin|koltuk|kanepe|masa|sandalye|yatak|dolap|fotoğraf|foto|resim)\b',
+      caseSensitive: false,
+    );
+    final isCasualGreeting = RegExp(
+      r'^(naber|selam|merhaba|sa|hi|hey|teşekkürler|tşk|tamam|peki|hmm|evet|hayır|ok|okay)[\s\!\?\.]*$',
+      caseSensitive: false,
+    ).hasMatch(lastUserText.trim());
+    final isShortNonDesign = lastUserText.trim().split(RegExp(r'\s+')).length <= 3 &&
+        !designKeywords.hasMatch(lastUserText);
+    final isCasualMessage = (isCasualGreeting || isShortNonDesign) && !designKeywords.hasMatch(lastUserText);
+
+    if (isCasualMessage) {
+      debugPrint('KoalaAI: Casual message detected, skipping tools: "$lastUserText"');
+      return _callGemini(prompt: prompt, history: history);
+    }
+
+    // Fix E: Belirsiz ürün isteği → oda sorusu sor
+    final isVagueProductRequest = RegExp(
+      r'\b(odama|evime|bana|burama|şuraya)\s+(ürün|bir şey|öneri|tavsiye)\b',
+      caseSensitive: false,
+    ).hasMatch(lastUserText);
+    if (isVagueProductRequest) {
+      debugPrint('KoalaAI: Vague product request, asking for room type');
+      return KoalaResponse(
+        message: 'Hangi oda için öneri istiyorsun?',
+        cards: [KoalaCard(type: 'question_chips', data: {
+          'options': ['🛋️ Salon', '🛏️ Yatak odası', '🍳 Mutfak', '🚿 Banyo', '📚 Çalışma odası'],
+        })],
+      );
+    }
+
+    // Fix E: Belirsiz tasarımcı isteği (stil bilinmiyor) → stil sorusu sor
+    final isVagueDesignerRequest = RegExp(
+      r'(iç mimar|tasarımcı|mimar).*(bana göre|benim için|bana uygun)|bana göre.*(iç mimar|tasarımcı|mimar)',
+      caseSensitive: false,
+    ).hasMatch(lastUserText);
+    if (isVagueDesignerRequest && !_userPrefs.containsKey('style')) {
+      debugPrint('KoalaAI: Vague designer request, no style profile — asking for style');
+      return KoalaResponse(
+        message: 'Hangi stilde tasarımcı arıyorsun?',
+        cards: [KoalaCard(type: 'question_chips', data: {
+          'options': ['Modern', 'Minimal', 'Skandinav', 'Bohem', 'Klasik', 'Endüstriyel'],
+        })],
+      );
+    }
+
     final isDesignerRequest = RegExp(
       r'tasarımcı öner|tasarımcı bul|uzman öner|uzman bul|iç mimar|mimar bul|mimar öner|tasarımcı ara',
       caseSensitive: false,
@@ -663,12 +718,13 @@ class KoalaAIService {
         'tools': _toolDeclarations,
         'generationConfig': {
           'temperature': 0.7,
+          'maxOutputTokens': 2048,
         },
       };
       // İlk turda function call'ı zorla:
       // 1. allowedFunctions varsa → belirli fonksiyona kısıtla (designerMatch gibi)
       // 2. shouldForceTools → ürün/tasarımcı keyword'ü algılandı
-      // Sonraki turlarda AUTO moda dön (Gemini text response üretebilsin)
+      // Fix D: Sonraki turlarda NONE moda geç — Gemini sadece text sentezi yapsın, yeni function call açma
       if (turn == 0 && (allowedFunctions != null || shouldForceTools)) {
         final fcConfig = <String, dynamic>{'mode': 'ANY'};
         if (allowedFunctions != null) {
@@ -676,6 +732,10 @@ class KoalaAIService {
         }
         payload['tool_config'] = {'function_calling_config': fcConfig};
         debugPrint('KoalaAI: Forcing function call (allowed: ${allowedFunctions ?? "any"})');
+      } else if (turn > 0) {
+        // Sentez turu — yeni function call açılmasın
+        payload['tool_config'] = {'function_calling_config': {'mode': 'NONE'}};
+        debugPrint('KoalaAI: Turn $turn synthesis mode — function calls disabled');
       }
 
       debugPrint('KoalaAI: Tools request turn=$turn (${contents.length} messages)...');
@@ -729,6 +789,23 @@ class KoalaAIService {
         final builtCards = _buildCardsFromFunctionResult(fnName, result);
         if (builtCards.isNotEmpty) {
           functionResultCards.addAll(builtCards);
+        }
+
+        // Fix F: Boş sonuç durumunda (sadece question_chips döndü) sentez turuna gerek yok
+        final isEmpty = (fnName == 'search_products' && ((result['products'] as List?)?.isEmpty ?? true)) ||
+            (fnName == 'search_designers' && ((result['designers'] as List?)?.isEmpty ?? true)) ||
+            (fnName == 'search_projects' && ((result['projects'] as List?)?.isEmpty ?? true));
+        if (isEmpty && builtCards.isNotEmpty) {
+          String emptyMsg;
+          if (fnName == 'search_products') {
+            final roomType = (result['room_type'] as String? ?? 'oda').toLowerCase();
+            emptyMsg = '$roomType için hangi tür ürün? Seç, daha isabetli arayayım.';
+          } else if (fnName == 'search_designers') {
+            emptyMsg = 'Hangi stilde tasarımcı arıyorsun?';
+          } else {
+            emptyMsg = 'Farklı bir seçenek dene.';
+          }
+          return KoalaResponse(message: emptyMsg, cards: builtCards);
         }
 
         // Model response'u history'ye ekle
@@ -868,7 +945,26 @@ class KoalaAIService {
     switch (fnName) {
       case 'search_products':
         final products = result['products'] as List<dynamic>? ?? [];
-        if (products.isEmpty) return [];
+        // Fix F: Boş sonuç → daraltma chipleri göster
+        if (products.isEmpty) {
+          final roomType = (result['room_type'] as String? ?? '').toLowerCase();
+          List<String> narrowingOptions;
+          if (roomType.contains('salon') || roomType.contains('oturma')) {
+            narrowingOptions = ['Kanepe', 'Koltuk', 'Sehpa', 'TV ünitesi', 'Halı', 'Aydınlatma'];
+          } else if (roomType.contains('yatak')) {
+            narrowingOptions = ['Yatak', 'Başucu masası', 'Gardırop', 'Şifonyer', 'Ayna', 'Aydınlatma'];
+          } else if (roomType.contains('mutfak')) {
+            narrowingOptions = ['Bar sandalyesi', 'Mutfak masası', 'Depolama', 'Aydınlatma', 'Halı'];
+          } else if (roomType.contains('banyo')) {
+            narrowingOptions = ['Ayna', 'Raf', 'Havlu askısı', 'Aydınlatma', 'Aksesuar'];
+          } else {
+            narrowingOptions = ['Kanepe', 'Masa', 'Sandalye', 'Aydınlatma', 'Dekorasyon', 'Halı'];
+          }
+          debugPrint('KoalaAI: search_products empty — returning narrowing chips for room: $roomType');
+          return [KoalaCard(type: 'question_chips', data: {
+            'options': narrowingOptions,
+          })];
+        }
         return [KoalaCard(type: 'product_grid', data: {
           'title': 'Önerilen Ürünler',
           'products': products.map((p) {
@@ -885,7 +981,13 @@ class KoalaAIService {
 
       case 'search_designers':
         final designers = result['designers'] as List<dynamic>? ?? [];
-        if (designers.isEmpty) return [];
+        // Fix F: Boş tasarımcı sonucu → stil daraltma chipleri
+        if (designers.isEmpty) {
+          debugPrint('KoalaAI: search_designers empty — returning style chips');
+          return [KoalaCard(type: 'question_chips', data: {
+            'options': ['Modern', 'Minimal', 'Skandinav', 'Bohem', 'Klasik', 'Endüstriyel'],
+          })];
+        }
         // DesignerCards widget tek kart içinde designers[] array bekler
         return [KoalaCard(type: 'designer_card', data: {
           'designers': designers,
@@ -1068,6 +1170,7 @@ class KoalaAIService {
       'stream': true,
       'generationConfig': {
         'temperature': 0.7,
+        'maxOutputTokens': 2048,
       },
     });
 

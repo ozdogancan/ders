@@ -984,9 +984,10 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
               ],
             ),
           ),
-          if (_pendingPhoto != null) _buildPhotoPreview(),
           // Quick action chips — show when chat has messages and not loading
           if (_msgs.isNotEmpty && !_loading) _buildQuickActions(),
+          // Photo preview — shown directly above the input bar after picker
+          if (_pendingPhoto != null) _buildPhotoPreview(),
           _buildInputBar(btm),
         ],
           ),
@@ -1544,36 +1545,85 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
   );
 
   Widget _buildPhotoPreview() => Container(
-    margin: const EdgeInsets.fromLTRB(14, 0, 14, 4),
-    padding: const EdgeInsets.all(8),
+    margin: const EdgeInsets.fromLTRB(12, 0, 12, 4),
+    padding: const EdgeInsets.all(10),
     decoration: BoxDecoration(
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: BorderRadius.circular(16),
       color: Colors.white,
+      boxShadow: [
+        BoxShadow(
+          color: Colors.black.withValues(alpha: 0.06),
+          blurRadius: 8,
+          offset: const Offset(0, 2),
+        ),
+      ],
     ),
     child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        ClipRRect(
-          borderRadius: BorderRadius.circular(10),
-          child: Image.memory(
-            _pendingPhoto!,
-            width: 40,
-            height: 40,
-            fit: BoxFit.cover,
-          ),
+        // Thumbnail
+        Stack(
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: Image.memory(
+                _pendingPhoto!,
+                width: 80,
+                height: 80,
+                fit: BoxFit.cover,
+              ),
+            ),
+            // X button overlay on thumbnail
+            Positioned(
+              top: 4,
+              right: 4,
+              child: GestureDetector(
+                onTap: () => setState(() => _pendingPhoto = null),
+                child: Container(
+                  width: 22,
+                  height: 22,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.black.withValues(alpha: 0.55),
+                  ),
+                  child: const Icon(
+                    Icons.close_rounded,
+                    size: 14,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
-        const SizedBox(width: 10),
+        const SizedBox(width: 12),
+        // Caption hint
         Expanded(
-          child: Text(
-            'Fotoğraf hazır',
-            style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
-          ),
-        ),
-        GestureDetector(
-          onTap: () => setState(() => _pendingPhoto = null),
-          child: Icon(
-            Icons.close_rounded,
-            size: 18,
-            color: Colors.grey.shade400,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const SizedBox(height: 4),
+              Row(
+                children: [
+                  Icon(Icons.check_circle_rounded, size: 14, color: _accent),
+                  const SizedBox(width: 5),
+                  Text(
+                    'Fotoğraf seçildi',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: _accent,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Metin ekleyebilir veya doğrudan gönderebilirsin.',
+                style: TextStyle(fontSize: 11, color: Colors.grey.shade500, height: 1.35),
+              ),
+            ],
           ),
         ),
       ],
@@ -1617,7 +1667,11 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                 controller: _ctrl,
                 enabled: !_loading,
                 decoration: InputDecoration(
-                  hintText: _loading ? 'Koala düşünüyor...' : 'Koala\'ya sor...',
+                  hintText: _loading
+                      ? 'Koala düşünüyor...'
+                      : _pendingPhoto != null
+                          ? 'Fotoğrafa mesaj ekle (isteğe bağlı)...'
+                          : 'Koala\'ya sor...',
                   hintStyle: TextStyle(
                     fontSize: 14,
                     color: _loading ? Colors.grey.shade300 : Colors.grey.shade400,
