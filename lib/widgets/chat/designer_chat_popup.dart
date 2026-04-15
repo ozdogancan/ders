@@ -92,6 +92,7 @@ class _DesignerChatSheetState extends State<_DesignerChatSheet>
   // Designer detay bilgileri
   Map<String, dynamic>? _designerDetail;
   List<Map<String, dynamic>> _designerProjects = [];
+  Map<String, dynamic>? _contextProject;
 
   late AnimationController _pulseController;
 
@@ -125,8 +126,25 @@ class _DesignerChatSheetState extends State<_DesignerChatSheet>
       }
       if (!EvlumbaLiveService.isReady) return;
       final detail = await EvlumbaLiveService.getDesignerById(widget.designerId);
-      final projects = await EvlumbaLiveService.getDesignerProjects(widget.designerId, limit: 6);
-      if (mounted) setState(() { _designerDetail = detail; _designerProjects = projects; });
+      final projects = await EvlumbaLiveService.getDesignerProjects(widget.designerId, limit: 30);
+
+      // contextTitle eşleşen projeyi bul
+      Map<String, dynamic>? matched;
+      final ctxTitle = widget.contextTitle?.trim();
+      if (ctxTitle != null && ctxTitle.isNotEmpty && projects.isNotEmpty) {
+        for (final p in projects) {
+          if ((p['title'] ?? '').toString().trim() == ctxTitle) {
+            matched = p;
+            break;
+          }
+        }
+      }
+
+      if (mounted) setState(() {
+        _designerDetail = detail;
+        _designerProjects = projects;
+        _contextProject = matched;
+      });
     } catch (_) {}
   }
 
@@ -296,6 +314,10 @@ class _DesignerChatSheetState extends State<_DesignerChatSheet>
           // ── Header ──
           _buildHeader(),
 
+          // ── Context project card (spesifik tasarımdan gelindiyse) ──
+          if (_state == _SheetState.ready && _contextProject != null)
+            _buildContextProjectCard(),
+
           // ── Content ──
           Expanded(
             child: _state == _SheetState.connecting
@@ -361,32 +383,6 @@ class _DesignerChatSheetState extends State<_DesignerChatSheet>
                       Text(widget.designerName, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: KoalaColors.text)),
                       if (specialty.isNotEmpty)
                         Padding(padding: const EdgeInsets.only(top: 1), child: Text(specialty, style: const TextStyle(fontSize: 13, color: KoalaColors.textSec))),
-                      if (widget.contextTitle != null && widget.contextTitle!.trim().isNotEmpty) ...[
-                        const SizedBox(height: 5),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: KoalaColors.accentSoft,
-                            borderRadius: BorderRadius.circular(KoalaRadius.pill),
-                            border: Border.all(color: KoalaColors.accent.withValues(alpha: 0.2)),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Icon(Icons.folder_rounded, size: 12, color: KoalaColors.accent),
-                              const SizedBox(width: 5),
-                              Flexible(
-                                child: Text(
-                                  widget.contextTitle!,
-                                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: KoalaColors.accent),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
                       const SizedBox(height: 3),
                       Row(children: [
                         Container(width: 6, height: 6, decoration: const BoxDecoration(shape: BoxShape.circle, color: Color(0xFF4CAF50))),
@@ -404,29 +400,98 @@ class _DesignerChatSheetState extends State<_DesignerChatSheet>
           ),
         ),
 
-        // Portfolio — tıklanabilir
-        if (_designerProjects.isNotEmpty)
+        // Portfolio — tüm tasarımlar, başlık + görsel
+        if (_designerProjects.isNotEmpty) ...[
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 6),
+            child: Row(
+              children: [
+                const Icon(Icons.collections_rounded, size: 13, color: KoalaColors.textTer),
+                const SizedBox(width: 5),
+                Text(
+                  'Tüm Tasarımlar (${_designerProjects.length})',
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: KoalaColors.textTer,
+                    letterSpacing: 0.4,
+                  ),
+                ),
+              ],
+            ),
+          ),
           SizedBox(
-            height: 62,
+            height: 120,
             child: ListView.separated(
-              padding: const EdgeInsets.only(left: 20, right: 20, bottom: 8),
+              padding: const EdgeInsets.only(left: 20, right: 20, bottom: 10),
               scrollDirection: Axis.horizontal,
-              itemCount: _designerProjects.length.clamp(0, 6),
-              separatorBuilder: (_, __) => const SizedBox(width: 6),
+              itemCount: _designerProjects.length,
+              separatorBuilder: (_, __) => const SizedBox(width: 10),
               itemBuilder: (_, i) {
-                final img = (_designerProjects[i]['cover_image_url'] ?? _designerProjects[i]['cover_url'] ?? _designerProjects[i]['image_url'] ?? '').toString().trim();
-                if (img.isEmpty) return const SizedBox.shrink();
+                final project = _designerProjects[i];
+                final img = (project['cover_image_url'] ?? project['cover_url'] ?? project['image_url'] ?? '').toString().trim();
+                final title = (project['title'] ?? '').toString().trim();
+                final isContext = widget.contextTitle != null && widget.contextTitle!.trim() == title;
+
                 return GestureDetector(
-                  onTap: () => _openProjectViewer(_designerProjects[i], i),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(10),
-                    child: Image.network(img, width: 78, height: 54, fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => Container(width: 78, height: 54, color: KoalaColors.surfaceAlt)),
+                  onTap: () => _openProjectViewer(project, i),
+                  child: SizedBox(
+                    width: 128,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Stack(
+                          children: [
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(10),
+                              child: img.isNotEmpty
+                                  ? Image.network(img, width: 128, height: 84, fit: BoxFit.cover,
+                                      errorBuilder: (_, __, ___) => Container(
+                                        width: 128, height: 84,
+                                        color: KoalaColors.surfaceAlt,
+                                        child: const Icon(Icons.image_not_supported_outlined, size: 18, color: KoalaColors.textTer),
+                                      ))
+                                  : Container(
+                                      width: 128, height: 84,
+                                      color: KoalaColors.surfaceAlt,
+                                      child: const Icon(Icons.image_outlined, size: 18, color: KoalaColors.textTer),
+                                    ),
+                            ),
+                            if (isContext)
+                              Positioned(
+                                top: 6, left: 6,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: KoalaColors.accent,
+                                    borderRadius: BorderRadius.circular(KoalaRadius.pill),
+                                  ),
+                                  child: const Text(
+                                    'Bu Proje',
+                                    style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: Colors.white),
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                        if (title.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 5),
+                            child: Text(
+                              title,
+                              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: KoalaColors.text, height: 1.2),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                      ],
+                    ),
                   ),
                 );
               },
             ),
           ),
+        ],
 
         const Divider(height: 1, color: KoalaColors.borderSolid),
       ],
@@ -509,6 +574,107 @@ class _DesignerChatSheetState extends State<_DesignerChatSheet>
           }
           return _PopupMessageBubble(message: _messages[index], isMe: _messages[index]['sender_id'] == _uid);
         },
+      ),
+    );
+  }
+
+  Widget _buildContextProjectCard() {
+    final project = _contextProject!;
+    final img = (project['cover_image_url'] ??
+            project['cover_url'] ??
+            project['image_url'] ??
+            '')
+        .toString()
+        .trim();
+    final title = (project['title'] ?? '').toString().trim();
+    final room = (project['room_type'] ?? project['category'] ?? '').toString().trim();
+    final idx = _designerProjects.indexOf(project);
+
+    return GestureDetector(
+      onTap: idx >= 0 ? () => _openProjectViewer(project, idx) : null,
+      child: Container(
+        margin: const EdgeInsets.fromLTRB(KoalaSpacing.lg, KoalaSpacing.sm, KoalaSpacing.lg, 0),
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          color: KoalaColors.accentSoft,
+          borderRadius: BorderRadius.circular(KoalaRadius.md),
+          border: Border.all(color: KoalaColors.accent.withValues(alpha: 0.25)),
+        ),
+        child: Row(
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: img.isNotEmpty
+                  ? Image.network(
+                      img,
+                      width: 52,
+                      height: 52,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => Container(
+                        width: 52,
+                        height: 52,
+                        color: KoalaColors.surfaceAlt,
+                        child: const Icon(Icons.image_outlined, size: 18, color: KoalaColors.textTer),
+                      ),
+                    )
+                  : Container(
+                      width: 52,
+                      height: 52,
+                      color: KoalaColors.surfaceAlt,
+                      child: const Icon(Icons.image_outlined, size: 18, color: KoalaColors.textTer),
+                    ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Row(
+                    children: [
+                      Icon(Icons.push_pin_rounded, size: 11, color: KoalaColors.accent),
+                      SizedBox(width: 4),
+                      Text(
+                        'Mesajlaştığınız proje',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                          color: KoalaColors.accent,
+                          letterSpacing: 0.3,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    title.isNotEmpty ? title : 'Proje',
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: KoalaColors.text,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  if (room.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 1),
+                      child: Text(
+                        room,
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: KoalaColors.textSec,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            const Icon(Icons.chevron_right_rounded, size: 20, color: KoalaColors.accent),
+          ],
+        ),
       ),
     );
   }
