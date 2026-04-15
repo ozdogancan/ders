@@ -23,6 +23,25 @@ class MessagingService {
   /// Public getter — UI'da unread count hesabi icin
   static String? get currentUserId => _uid;
 
+  /// Firebase auth henüz restore edilmemiş olabilir (özellikle hard refresh
+  /// sonrası). currentUser null ise authStateChanges ile gelen ilk user'ı
+  /// kısa bir timeout ile bekler; yoksa null döner.
+  static Future<String?> _waitForUid({
+    Duration timeout = const Duration(seconds: 3),
+  }) async {
+    final direct = FirebaseAuth.instance.currentUser?.uid;
+    if (direct != null) return direct;
+    try {
+      final user = await FirebaseAuth.instance
+          .authStateChanges()
+          .firstWhere((u) => u != null)
+          .timeout(timeout);
+      return user?.uid;
+    } catch (_) {
+      return FirebaseAuth.instance.currentUser?.uid;
+    }
+  }
+
   // Aktif realtime subscription'lar
   static final Map<String, RealtimeChannel> _channels = {};
 
@@ -77,12 +96,14 @@ class MessagingService {
     int limit = 50,
     int offset = 0,
   }) async {
-    if (_uid == null || !Env.hasSupabaseConfig) return [];
+    if (!Env.hasSupabaseConfig) return [];
+    final uid = await _waitForUid();
+    if (uid == null) return [];
     try {
       final res = await _db
           .from('koala_conversations')
           .select('id, user_id, designer_id, title, last_message, last_message_at, unread_count_user, unread_count_designer, status')
-          .or('user_id.eq.$_uid,designer_id.eq.$_uid')
+          .or('user_id.eq.$uid,designer_id.eq.$uid')
           .eq('status', 'active')
           .order('last_message_at', ascending: false)
           .range(offset, offset + limit - 1);
@@ -275,6 +296,8 @@ class MessagingService {
   /// Designer'ın evlumba.com'dan attığı mesajları Koala DB'sine çeker.
   /// Dönüş: toplam yeni senkronize edilen mesaj sayısı (hata olursa 0).
   static Future<int> pullInbound() async {
+    final uid = await _waitForUid();
+    if (uid == null) return 0;
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return 0;
     final apiUrl = Env.koalaApiUrl;
@@ -459,18 +482,20 @@ class MessagingService {
 
   /// Toplam okunmamis mesaj sayisi (bildirim badge icin)
   static Future<int> getUnreadCount() async {
-    if (_uid == null || !Env.hasSupabaseConfig) return 0;
+    if (!Env.hasSupabaseConfig) return 0;
+    final uid = await _waitForUid();
+    if (uid == null) return 0;
     try {
       final res = await _db
           .from('koala_conversations')
           .select('user_id, designer_id, unread_count_user, unread_count_designer')
-          .or('user_id.eq.$_uid,designer_id.eq.$_uid')
+          .or('user_id.eq.$uid,designer_id.eq.$uid')
           .eq('status', 'active');
 
       final list = List<Map<String, dynamic>>.from(res);
       int total = 0;
       for (final conv in list) {
-        if (conv['user_id'] == _uid) {
+        if (conv['user_id'] == uid) {
           total += (conv['unread_count_user'] as int?) ?? 0;
         } else {
           total += (conv['unread_count_designer'] as int?) ?? 0;
