@@ -366,6 +366,10 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
         return 'Fotoğraf Analizi';
       case KoalaIntent.freeChat:
         return 'Sohbet';
+      case KoalaIntent.colorPaletteFromPhoto:
+        return 'Renk Paleti';
+      case KoalaIntent.styleAnalysisFromPhoto:
+        return 'Stil Analizi';
     }
   }
 
@@ -1056,7 +1060,11 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
   /// "Renk öner", "Ürün bul", "Stil analizi" gibi foto-bağımlı chip'ler.
   /// Her tıklamada en son fotoyu vision ile yeniden yorumlar — stale text
   /// context'e güvenmez. Foto yoksa picker açılır.
-  void _onPhotoChip(String text) {
+  ///
+  /// [intent] parametresi verilirse dar-amaçlı intent (colorPaletteFromPhoto,
+  /// styleAnalysisFromPhoto) üzerinden çağırır. null ise photoAnalysis (ürün/tasarımcı
+  /// tool'lu genel vision).
+  void _onPhotoChip(String text, {KoalaIntent? intent}) {
     final latest = _latestUserPhoto();
     if (latest == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1068,7 +1076,57 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
       _showPicker();
       return;
     }
-    _sendToAI(text: text, referencePhoto: latest);
+    if (intent != null) {
+      _sendPhotoIntent(text: text, photo: latest, intent: intent);
+    } else {
+      _sendToAI(text: text, referencePhoto: latest);
+    }
+  }
+
+  /// Dar-amaçlı foto intent'i gönder (renk paleti, stil analizi — tool'suz).
+  /// Kullanıcı balonuna yalnızca text yazılır; foto zaten geçmişte var.
+  Future<void> _sendPhotoIntent({
+    required String text,
+    required Uint8List photo,
+    required KoalaIntent intent,
+  }) async {
+    if (_loading) return;
+    setState(() {
+      _msgs.add(_Msg(role: 'user', text: text));
+      _loading = true;
+    });
+    _history.add({'role': 'user', 'content': text});
+    _scrollDown();
+
+    try {
+      final resp = await _ai.askWithIntent(
+        intent: intent,
+        freeText: text,
+        photo: photo,
+        history: _history,
+      );
+      _history.add({'role': 'model', 'content': resp.message});
+      _extractPhotoContext(resp);
+      if (!mounted) return;
+      setState(() {
+        _msgs.add(_Msg(role: 'koala', text: resp.message, cards: resp.cards));
+        _loading = false;
+      });
+    } catch (e) {
+      debugPrint('AI photo-intent error: $e');
+      Analytics.aiErrorOccurred(e.toString().substring(0, 200.clamp(0, e.toString().length)));
+      setState(() {
+        _msgs.add(_Msg(
+          role: 'koala',
+          text: null,
+          isError: true,
+          errorMsg: _friendlyError(e),
+        ));
+        _loading = false;
+      });
+    }
+    _scrollDown();
+    _persist();
   }
 
   // ── Hidden context builder — AI'a gönderilir ama kullanıcıya gösterilmez ──
@@ -1103,7 +1161,8 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
         child: Row(
           children: [
             _quickChip(Icons.color_lens_rounded, colorLabel,
-              () => _onPhotoChip('Bu odaya uygun renk paleti öner')),
+              () => _onPhotoChip('Bu odaya uygun renk paleti öner',
+                  intent: KoalaIntent.colorPaletteFromPhoto)),
             _quickChip(Icons.shopping_bag_rounded, productLabel,
               () => _onPhotoChip('Bu oda ve stile uygun ürün öner')),
             _quickChip(Icons.person_rounded, 'Uzman öner', () {
@@ -1121,7 +1180,8 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
               );
             }),
             _quickChip(Icons.auto_awesome_rounded, 'Stil analizi',
-              () => _onPhotoChip('Bu odanın stilini detaylı analiz et')),
+              () => _onPhotoChip('Bu odanın stilini detaylı analiz et',
+                  intent: KoalaIntent.styleAnalysisFromPhoto)),
           ],
         ),
       ),
@@ -1510,7 +1570,8 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
             children: [
               _fallbackChip(Icons.refresh_rounded, 'Tekrar dene', _retry),
               _fallbackChip(Icons.color_lens_rounded, 'Renk öner',
-                () => _onPhotoChip('Bu odaya uygun renk paleti öner')),
+                () => _onPhotoChip('Bu odaya uygun renk paleti öner',
+                    intent: KoalaIntent.colorPaletteFromPhoto)),
               _fallbackChip(Icons.shopping_bag_rounded, 'Ürün bul',
                 () => _onPhotoChip('Bu oda ve stile uygun ürün öner')),
               _fallbackChip(Icons.person_rounded, 'Uzman bul', () {

@@ -37,6 +37,9 @@ enum KoalaIntent {
   pollResult,
   photoAnalysis,
   freeChat,
+  // Foto-bazlı dar-amaçlı intent'ler — tool çağırmaz, sadece ilgili kart üretir
+  colorPaletteFromPhoto,
+  styleAnalysisFromPhoto,
 }
 
 class KoalaAIService {
@@ -288,16 +291,32 @@ class KoalaAIService {
         prompt = KoalaPrompts.photoAnalysis(freeText);
       case KoalaIntent.freeChat:
         prompt = KoalaPrompts.freeChat(freeText ?? 'Merhaba');
+      case KoalaIntent.colorPaletteFromPhoto:
+        prompt = KoalaPrompts.colorPaletteFromPhoto();
+      case KoalaIntent.styleAnalysisFromPhoto:
+        prompt = KoalaPrompts.styleAnalysisFromPhoto();
     }
 
     // Inject user profile — fotoğraf analizinde profil ekleme (bias yaratır)
-    // photoAnalysis'de AI odanın gerçek stilini tespit etmeli, kullanıcı tercihine göre değil
-    if (intent != KoalaIntent.photoAnalysis) {
+    // photoAnalysis ve foto-bazlı dar intent'lerde AI odanın gerçek halini yorumlamalı
+    const noProfileIntents = {
+      KoalaIntent.photoAnalysis,
+      KoalaIntent.colorPaletteFromPhoto,
+      KoalaIntent.styleAnalysisFromPhoto,
+    };
+    if (!noProfileIntents.contains(intent)) {
       prompt = _withProfile(prompt);
     }
 
     if (photo != null) {
-      return _callGeminiWithImage(prompt: prompt, imageBytes: photo);
+      // Dar-amaçlı foto intent'lerde tool'ları kapat — yalnız ilgili kart üretilsin
+      final disableTools = intent == KoalaIntent.colorPaletteFromPhoto ||
+          intent == KoalaIntent.styleAnalysisFromPhoto;
+      return _callGeminiWithImage(
+        prompt: prompt,
+        imageBytes: photo,
+        disableTools: disableTools,
+      );
     }
 
     // Ürün/tasarımcı/proje içerebilecek intent'lerde function calling kullan
@@ -433,7 +452,11 @@ class KoalaAIService {
     }
   }
 
-  Future<KoalaResponse> _callGeminiWithImage({required String prompt, required Uint8List imageBytes}) async {
+  Future<KoalaResponse> _callGeminiWithImage({
+    required String prompt,
+    required Uint8List imageBytes,
+    bool disableTools = false,
+  }) async {
     // Moondream devre dışı — API key 401 veriyor, 8s boşa bekleme yapıyordu
     // final preAnalysis = await _moondreamPreAnalyze(imageBytes);
     final mimeType = _detectMimeType(imageBytes);
@@ -444,7 +467,7 @@ class KoalaAIService {
 
     // ── Tur 1: Görsel + tools ile Gemini çağır ──
     final imageB64 = base64Encode(imageBytes);
-    final firstPayload = {
+    final firstPayload = <String, dynamic>{
       'contents': [
         {
           'role': 'user',
@@ -454,9 +477,13 @@ class KoalaAIService {
           ]
         }
       ],
-      'tools': _toolDeclarations,
       'generationConfig': {'temperature': 0.7, 'maxOutputTokens': 4096},
     };
+    if (!disableTools) {
+      firstPayload['tools'] = _toolDeclarations;
+    } else {
+      debugPrint('KoalaAI: Image call with tools DISABLED (narrow-intent)');
+    }
 
     final jsonBody = jsonEncode(firstPayload);
     final payloadSizeKB = (jsonBody.length / 1024).round();
@@ -652,16 +679,28 @@ class KoalaAIService {
     final isCasualMessage = (isCasualGreeting || isShortNonDesign) && !designKeywords.hasMatch(lastUserText);
 
     if (isCasualMessage) {
-      debugPrint('KoalaAI: Casual message detected, skipping tools: "$lastUserText"');
-      // Fix B-fix: Tool-odaklı sistem prompt'unu değil, kısa/dostça bir casual prompt kullan.
-      // Aksi halde Gemini "bu tool'ları kullan" diyen prompt alır ama tool yoktur → boş yanıt.
-      const casualPrompt =
-          'Sen Koala\'sın — samimi bir iç mimari asistan. Kullanıcı kısa bir '
-          'selamlama veya dolgu sözcüğü gönderdi ("naber", "selam", "tamam" gibi). '
-          'Çok kısa, dostça, 1-2 cümlelik bir cevap ver. İstersen hafifçe yönlendirici '
-          'olabilirsin (örn: "Selam! Bir oda fotoğrafı paylaşırsan birlikte bakalım 🐨"). '
-          'Tool, kart, liste, başlık verme. Sadece sohbet.';
-      return _callGemini(prompt: casualPrompt, history: history);
+      debugPrint('KoalaAI: Casual message detected (v2) — plain text path: "$lastUserText"');
+      // Fix B-v2: JSON parser'a hiç gitmeden plain text yanıt al. Casual prompt JSON
+      // üretmiyor; eski yol _parseResponse'a düşüyordu → "aksilik oldu" fallback'i.
+      final casualPrompt =
+          'Sen Koala\'sın — samimi bir iç mimari asistan. Kullanıcı: "$lastUserText". '
+          'Çok kısa, dostça, 1-2 cümlelik TÜRKÇE bir cevap ver. '
+          'Örn: "Selam! Bir oda fotoğrafı paylaşırsan birlikte bakalım 🐨". '
+          'Kart, liste, JSON, başlık verme. Sadece düz metin.';
+      try {
+        final text = await askPlainText(casualPrompt);
+        final clean = text.trim();
+        if (clean.isNotEmpty) {
+          return KoalaResponse(message: _sanitizeMessage(clean), cards: const []);
+        }
+      } catch (e) {
+        debugPrint('KoalaAI: Casual plain-text failed: $e — using static fallback');
+      }
+      // Son çare: Gemini cevap vermediyse sabit samimi yanıt
+      return const KoalaResponse(
+        message: 'Selam! 🐨 Bir oda fotoğrafı paylaşırsan sana renk, stil ve ürün önerileri yapabilirim.',
+        cards: [],
+      );
     }
 
     // Fix E: Belirsiz ürün isteği → oda sorusu sor
@@ -1136,6 +1175,14 @@ class KoalaAIService {
           .replaceAll(r'\\', r'\')
           .trim();
       if (decoded.isNotEmpty) return _sanitizeMessage(decoded);
+    }
+    // JSON değilse (casual prompt → plain text yanıt) ham text'i mesaj olarak kullan
+    // Örn: "naber" → "Selam! Nasılsın? 🐨"
+    final trimmed = raw.trim();
+    final looksLikeJson = trimmed.startsWith('{') || trimmed.startsWith('[') ||
+        trimmed.startsWith('```');
+    if (!looksLikeJson && trimmed.isNotEmpty && trimmed.length < 500) {
+      return _sanitizeMessage(trimmed);
     }
     // Hiçbir şey bulamazsa genel mesaj
     return 'Yanıtımı hazırlarken bir aksilik oldu. Tekrar dener misin? 🐨';

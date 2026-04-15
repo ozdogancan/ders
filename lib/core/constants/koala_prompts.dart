@@ -393,6 +393,66 @@ FARKLI SONUÇ İSTEĞİ:
 SADECE JSON.
 ''';
 
+  /// Foto + "renk paleti öner" chip'i — sadece color_palette kartı
+  /// Tool kullanmaz, ürün önerisi yapmaz
+  static String colorPaletteFromPhoto() => '''
+$_systemBase
+
+Kullanıcı bir oda fotoğrafı paylaştı ve "renk paleti" istiyor.
+
+SADECE FOTOĞRAFA BAK, fotoğrafı doğrudan yorumla. ASLA ürün arama fonksiyonu çağırma.
+
+ŞU KARTLARI ÜRET (başka kart yok):
+1. "color_palette" — Fotoğraftaki odaya uygun ANA renk paleti: 5 renk
+   - Her renk: {"name": "Türkçe isim", "hex": "#RRGGBB", "usage": "nerede kullanılır (duvar / zemin / ana mobilya / aksan / tekstil)"}
+   - title: "Odana özel renk paleti"
+2. "color_palette" — ALTERNATİF palet: 3 farklı renk, aynı format
+   - title: "Alternatif palet"
+3. "quick_tips" — 3 uygulama ipucu (emoji + text): hangi rengi nerede, oran kuralı, aydınlatma etkisi
+
+message: Max 1 cümle. Örn: "Fotoğrafına göre renk palet önerilerim 🎨"
+
+KRİTİK:
+- Hex kodları MUTLAKA gerçek hex olsun (#RRGGBB formatı).
+- Ürün adı, fiyat, link, mağaza YAZMA. search_products ÇAĞIRMA.
+- "product_grid", "designer_card", "project_card" ÜRETME.
+- Sadece JSON dön.
+''';
+
+  /// Foto + "stil analizi" chip'i — sadece style_analysis kartı
+  /// Tool kullanmaz, ürün önerisi yapmaz
+  static String styleAnalysisFromPhoto() => '''
+$_systemBase
+
+Kullanıcı bir oda fotoğrafı paylaştı ve "stil analizi" istiyor.
+
+SADECE FOTOĞRAFA BAK. ASLA ürün arama fonksiyonu çağırma.
+
+KRİTİK STİL TESPİT KURALLARI:
+- Stili MUTLAKA fotoğraftaki somut görsel ipuçlarından tespit et.
+- ASLA varsayılan bir stil atama. Belirsizse confidence düşük ver ve "eklektik" veya "karma" de.
+- İpuçları:
+  * Modern: düz çizgiler, metal/cam, nötr renkler
+  * Minimalist: çok az eşya, boş alan, monokrom
+  * Skandinav: açık ahşap, beyaz/bej, tekstil
+  * Japandi: japon+iskandinav, koyu/açık ahşap kontrast, wabi-sabi
+  * Endüstriyel: tuğla, metal, beton, koyu tonlar
+  * Klasik: süslü profiller, simetri, kadife
+  * Bohem: renkli tekstil, kilim, bitki
+  * Rustik: doğal taş, kütük ahşap, toprak tonları
+
+ŞU KARTLARI ÜRET (başka kart yok):
+1. "style_analysis" — {"style_name": "...", "confidence": 0-100, "description": "2-3 cümle neden bu stil", "color_palette": [4 renk {name, hex}], "mood": "...", "tags": ["..."]}
+2. "quick_tips" — 3 ipucu: bu stili nasıl güçlendirebilirsin (emoji + text)
+
+message: Max 1 cümle. Örn: "Fotoğraftaki stil analizi 👇"
+
+KRİTİK:
+- Ürün adı, fiyat, link YAZMA. search_products ÇAĞIRMA.
+- "product_grid", "designer_card", "color_palette" (ayrı) ÜRETME — renk paleti zaten style_analysis içinde.
+- Sadece JSON dön.
+''';
+
   /// question_chips kart formatı açıklaması (AI'ın bilmesi için)
   static const String questionChipsFormat = '''
 "question_chips" kartı formatı:
