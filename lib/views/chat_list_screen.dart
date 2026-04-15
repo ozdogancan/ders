@@ -25,8 +25,8 @@ class _ChatListScreenState extends State<ChatListScreen> {
   bool _hasError = false;
   bool _showAllAi = false;
 
-  // Designer avatar cache
-  final Map<String, String?> _avatarCache = {};
+  // Designer profil cache: id → { 'name': ..., 'avatar': ... }
+  final Map<String, Map<String, String?>> _designerCache = {};
 
   @override
   void initState() {
@@ -53,7 +53,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
     }
   }
 
-  /// Tüm tasarımcıların avatarlarını tek sorguda yükle (N+1 → 1)
+  /// Tüm tasarımcıların profil bilgilerini tek sorguda yükle (N+1 → 1)
   Future<void> _loadDesignerAvatars() async {
     if (_conversations.isEmpty) return;
     try {
@@ -62,11 +62,11 @@ class _ChatListScreenState extends State<ChatListScreen> {
       }
       if (!EvlumbaLiveService.isReady) return;
 
-      // Eksik avatar'ları topla
+      // Eksik profilleri topla
       final missingIds = <String>[];
       for (final conv in _conversations) {
         final designerId = (conv['designer_id'] ?? '').toString();
-        if (designerId.isNotEmpty && !_avatarCache.containsKey(designerId)) {
+        if (designerId.isNotEmpty && !_designerCache.containsKey(designerId)) {
           missingIds.add(designerId);
         }
       }
@@ -76,11 +76,16 @@ class _ChatListScreenState extends State<ChatListScreen> {
       final profiles = await EvlumbaLiveService.getDesignersByIds(missingIds);
       for (final p in profiles) {
         final id = p['id'].toString();
-        _avatarCache[id] = (p['avatar_url'] ?? '').toString().trim();
+        final name = (p['full_name'] ?? p['business_name'] ?? '').toString().trim();
+        final avatar = (p['avatar_url'] ?? '').toString().trim();
+        _designerCache[id] = {
+          'name': name.isEmpty ? null : name,
+          'avatar': avatar.isEmpty ? null : avatar,
+        };
       }
       // Bulunamayan ID'ler için null set et
       for (final id in missingIds) {
-        _avatarCache.putIfAbsent(id, () => null);
+        _designerCache.putIfAbsent(id, () => {'name': null, 'avatar': null});
       }
       if (mounted) setState(() {});
     } catch (_) {}
@@ -570,7 +575,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
   // ═══════════════════════════════════════════════════════
   Widget _buildConversationTile(Map<String, dynamic> conv) {
     final lastMessage = conv['last_message'] as String? ?? '';
-    final title = conv['title'] as String? ?? 'Tasarımcı';
+    final projectTitle = (conv['title'] as String? ?? '').trim();
     final lastAt = DateTime.tryParse(conv['last_message_at']?.toString() ?? '');
 
     // Unread count (current user perspective)
@@ -580,22 +585,27 @@ class _ChatListScreenState extends State<ChatListScreen> {
         ? (conv['unread_count_user'] as int?) ?? 0
         : (conv['unread_count_designer'] as int?) ?? 0;
 
-    final initials = title
+    final designerId = (conv['designer_id'] ?? '').toString();
+    final cached = _designerCache[designerId];
+    final designerName = (cached?['name'] ?? '').toString().trim().isEmpty
+        ? 'Tasarımcı'
+        : cached!['name']!;
+    final avatarUrl = cached?['avatar'];
+
+    final initials = designerName
         .split(' ')
         .map((w) => w.isNotEmpty ? w[0] : '')
         .take(2)
         .join()
         .toUpperCase();
 
-    final designerId = (conv['designer_id'] ?? '').toString();
-    final avatarUrl = _avatarCache[designerId];
-
     return GestureDetector(
       onTap: () async {
         await context.push('/chat/dm/${conv['id']}', extra: {
           'designerId': designerId,
-          'designerName': title,
+          'designerName': designerName,
           'designerAvatarUrl': avatarUrl,
+          'projectTitle': projectTitle.isNotEmpty ? projectTitle : null,
         });
         _load(); // Refresh unread counts
       },
@@ -631,14 +641,43 @@ class _ChatListScreenState extends State<ChatListScreen> {
             ),
             const SizedBox(width: KoalaSpacing.md),
 
-            // Name + last message
+            // Name + project context pill + last message
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(title, style: KoalaText.h4),
+                  Text(designerName, style: KoalaText.h4),
+                  if (projectTitle.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: KoalaColors.accentSoft,
+                        borderRadius: BorderRadius.circular(KoalaRadius.pill),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.folder_rounded, size: 11, color: KoalaColors.accent),
+                          const SizedBox(width: 4),
+                          Flexible(
+                            child: Text(
+                              projectTitle,
+                              style: const TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: KoalaColors.accent,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                   if (lastMessage.isNotEmpty) ...[
-                    const SizedBox(height: 2),
+                    const SizedBox(height: 4),
                     Text(
                       lastMessage,
                       style: unread > 0

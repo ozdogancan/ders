@@ -361,6 +361,32 @@ class _DesignerChatSheetState extends State<_DesignerChatSheet>
                       Text(widget.designerName, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: KoalaColors.text)),
                       if (specialty.isNotEmpty)
                         Padding(padding: const EdgeInsets.only(top: 1), child: Text(specialty, style: const TextStyle(fontSize: 13, color: KoalaColors.textSec))),
+                      if (widget.contextTitle != null && widget.contextTitle!.trim().isNotEmpty) ...[
+                        const SizedBox(height: 5),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: KoalaColors.accentSoft,
+                            borderRadius: BorderRadius.circular(KoalaRadius.pill),
+                            border: Border.all(color: KoalaColors.accent.withValues(alpha: 0.2)),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.folder_rounded, size: 12, color: KoalaColors.accent),
+                              const SizedBox(width: 5),
+                              Flexible(
+                                child: Text(
+                                  widget.contextTitle!,
+                                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: KoalaColors.accent),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                       const SizedBox(height: 3),
                       Row(children: [
                         Container(width: 6, height: 6, decoration: const BoxDecoration(shape: BoxShape.circle, color: Color(0xFF4CAF50))),

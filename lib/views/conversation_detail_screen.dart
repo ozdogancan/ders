@@ -19,12 +19,14 @@ class ConversationDetailScreen extends StatefulWidget {
     this.designerId,
     this.designerName = 'Tasarımcı',
     this.designerAvatarUrl,
+    this.projectTitle,
   });
 
   final String conversationId;
   final String? designerId;
   final String designerName;
   final String? designerAvatarUrl;
+  final String? projectTitle;
 
   @override
   State<ConversationDetailScreen> createState() =>
@@ -491,6 +493,39 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
                               ),
                             ),
                           ),
+                        if (widget.projectTitle != null &&
+                            widget.projectTitle!.trim().isNotEmpty) ...[
+                          const SizedBox(height: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: KoalaColors.accentSoft,
+                              borderRadius: BorderRadius.circular(KoalaRadius.pill),
+                              border: Border.all(
+                                color: KoalaColors.accent.withValues(alpha: 0.2),
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.folder_rounded, size: 12, color: KoalaColors.accent),
+                                const SizedBox(width: 5),
+                                Flexible(
+                                  child: Text(
+                                    widget.projectTitle!,
+                                    style: const TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w700,
+                                      color: KoalaColors.accent,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                         const SizedBox(height: 4),
                         Row(
                           children: [

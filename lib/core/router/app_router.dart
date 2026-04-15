@@ -126,6 +126,7 @@ final GoRouter appRouter = GoRouter(
           designerId: extra?['designerId'] as String?,
           designerName: extra?['designerName'] as String? ?? 'Tasarımcı',
           designerAvatarUrl: extra?['designerAvatarUrl'] as String?,
+          projectTitle: extra?['projectTitle'] as String?,
         );
       },
     ),
