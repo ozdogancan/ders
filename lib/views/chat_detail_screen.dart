@@ -398,17 +398,21 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
   }
 
   // ── AI ──
-  Future<void> _sendToAI({String? text, Uint8List? photo, String? hiddenContext}) async {
-    if (text == null && photo == null) return;
+  // [photo]           → kullanıcı yeni foto yükledi, balonu foto ile göster
+  // [referencePhoto]  → önceki fotoya referans, balonu SADECE text olarak göster
+  //                     ama API'ye vision ile gönder ("renk öner", "stil analizi" için)
+  Future<void> _sendToAI({String? text, Uint8List? photo, Uint8List? referencePhoto, String? hiddenContext}) async {
+    if (text == null && photo == null && referencePhoto == null) return;
     if (_loading) return; // Önceki istek bitmeden yeni istek gönderme
     if (_msgs.isEmpty) {
-      Analytics.aiChatStarted(photo != null ? 'photo' : 'text');
+      Analytics.aiChatStarted((photo ?? referencePhoto) != null ? 'photo' : 'text');
       if (text != null && text.length > 3) {
         _chatTitle = text.length > 30 ? '${text.substring(0, 30)}...' : text;
       }
     }
 
-    // Kullanıcı balonunda sadece temiz text göster
+    // Kullanıcı balonu: referencePhoto DEĞİL, sadece photo görünür (aksi halde foto
+    // her chip tıklandığında tekrar tekrar görünür)
     setState(() {
       _msgs.add(_Msg(role: 'user', text: text, photo: photo));
       _loading = true;
@@ -421,10 +425,13 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
         : text;
     if (aiText != null) _history.add({'role': 'user', 'content': aiText});
 
+    // Vision çağrısında kullanılacak foto: yeni yüklenen > referans
+    final visionPhoto = photo ?? referencePhoto;
+
     try {
-      if (photo != null) {
+      if (visionPhoto != null) {
         // Fotoğraf analizi → non-stream (image payload)
-        final resp = await _ai.askWithPhoto(photo, text: text, history: _history);
+        final resp = await _ai.askWithPhoto(visionPhoto, text: text, history: _history);
         _history.add({'role': 'model', 'content': resp.message});
         // Fotoğraf analiz bağlamını sakla — follow-up chip'ler için
         _extractPhotoContext(resp);
@@ -1037,12 +1044,21 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     );
   }
 
-  // ── Foto gereken chip'ler için koruma ──
-  // "Bu odaya uygun…", "Bu odanın stilini…" gibi ifadeleri chat'te foto yokken
-  // göndermek AI'ı eski/stale context'e zorluyor. Önce foto yükletiyoruz.
-  bool _guardRequiresPhoto() {
-    final hasPhoto = _msgs.any((m) => m.role == 'user' && m.photo != null);
-    if (!hasPhoto) {
+  /// Chat'teki en son kullanıcı fotoğrafını bul (yoksa null).
+  Uint8List? _latestUserPhoto() {
+    for (int i = _msgs.length - 1; i >= 0; i--) {
+      final m = _msgs[i];
+      if (m.role == 'user' && m.photo != null) return m.photo;
+    }
+    return null;
+  }
+
+  /// "Renk öner", "Ürün bul", "Stil analizi" gibi foto-bağımlı chip'ler.
+  /// Her tıklamada en son fotoyu vision ile yeniden yorumlar — stale text
+  /// context'e güvenmez. Foto yoksa picker açılır.
+  void _onPhotoChip(String text) {
+    final latest = _latestUserPhoto();
+    if (latest == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Önce odanın fotoğrafını paylaşırsan sana özel öneri yapabilirim'),
@@ -1050,14 +1066,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
         ),
       );
       _showPicker();
-      return false;
+      return;
     }
-    return true;
-  }
-
-  void _onPhotoChip(String text) {
-    if (!_guardRequiresPhoto()) return;
-    _sendToAI(text: text, hiddenContext: _buildHiddenContext());
+    _sendToAI(text: text, referencePhoto: latest);
   }
 
   // ── Hidden context builder — AI'a gönderilir ama kullanıcıya gösterilmez ──
