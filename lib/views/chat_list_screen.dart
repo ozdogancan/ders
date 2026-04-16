@@ -164,46 +164,9 @@ class _ChatListScreenState extends State<ChatListScreen> {
     }
   }
 
-  /// Her conv için koala_direct_messages'tan read_at IS NULL + karşı taraf
-  /// gönderici olanları say, sonucu conv['unread_count_user|designer']
-  /// alanına yaz. Böylece backend unread_count_user stale olsa bile UI'da
-  /// doğru badge + unread-first sort gözükür.
-  Future<void> _injectComputedUnread(List<Map<String, dynamic>> convs) async {
-    try {
-      final uid = MessagingService.currentUserId;
-      if (uid == null || convs.isEmpty) return;
-      final ids = convs
-          .map((c) => c['id']?.toString())
-          .whereType<String>()
-          .toList();
-      if (ids.isEmpty) return;
-      final rows = await Supabase.instance.client
-          .from('koala_direct_messages')
-          .select('conversation_id, sender_id, read_at')
-          .inFilter('conversation_id', ids)
-          .isFilter('read_at', null)
-          .neq('sender_id', uid);
-      final counts = <String, int>{};
-      for (final r in List<Map<String, dynamic>>.from(rows)) {
-        final cid = r['conversation_id']?.toString();
-        if (cid == null) continue;
-        counts[cid] = (counts[cid] ?? 0) + 1;
-      }
-      for (final c in convs) {
-        final cid = c['id']?.toString();
-        if (cid == null) continue;
-        final n = counts[cid] ?? 0;
-        final isUser = c['user_id'] == uid;
-        if (isUser) {
-          c['unread_count_user'] = n;
-        } else {
-          c['unread_count_designer'] = n;
-        }
-      }
-    } catch (e) {
-      debugPrint('_injectComputedUnread error: $e');
-    }
-  }
+  /// No-op: unread artik getConversations sonucundaki unread_count_user /
+  /// unread_count_designer kolonlarindan geliyor. (read_at kolonu yok.)
+  Future<void> _injectComputedUnread(List<Map<String, dynamic>> _) async {}
 
   /// Sıralama: önce OKUNMAMIŞ mesajı olan conversation'lar (unread > 0),
   /// sonra last_message_at DESC. Kullanıcı okunmamış olanları en üstte görür,

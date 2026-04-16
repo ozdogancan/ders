@@ -301,19 +301,9 @@ class MessagingService {
       _db.rest.headers['x-user-id'] = uid;
     } catch (_) {}
 
-    // 1) Mesajları okundu yap (RLS: msg_update — conv participant kontrolü)
-    try {
-      await _db
-          .from('koala_direct_messages')
-          .update({'read_at': DateTime.now().toIso8601String()})
-          .eq('conversation_id', conversationId)
-          .neq('sender_id', uid)
-          .isFilter('read_at', null);
-    } catch (e) {
-      debugPrint('markAsRead step1 (msgs update) failed: $e');
-      lastMarkAsReadError = 'Mesajlar: $e';
-      // Devam et — belki conversation sayacı gene düşer.
-    }
+    // NOTE: koala_direct_messages.read_at kolonu production DB'de yok
+    // (migration 004 eksik). Read state conversation seviyesinde tutuluyor.
+    // Step 1 (msg row update) bu yüzden kaldırıldı.
 
     // 2) Unread sayacını SELECT yapmadan doğrudan sıfırla.
     //    Önceden SELECT + branch yapıyorduk; ancak RLS race veya id aramasında
@@ -594,42 +584,28 @@ class MessagingService {
   // ═══════════════════════════════════════════════════════
 
   /// Toplam okunmamis mesaj sayisi (bildirim badge icin).
-  ///
-  /// unread_count_user kolonuna güvenmek yerine koala_direct_messages'ta
-  /// read_at IS NULL olan mesajları doğrudan say — backend update race'leri
-  /// veya eski null-status conv'lar sorun çıkarmasın.
+  /// unread_count_user / unread_count_designer kolonlarindan hesaplar.
   static Future<int> getUnreadCount() async {
     if (!Env.hasSupabaseConfig) return 0;
     final uid = await _waitForUid();
     if (uid == null) return 0;
     try {
-      // 1) Kullanıcının conv ID'lerini al (archived hariç)
-      final convs = await _db
+      final res = await _db
           .from('koala_conversations')
-          .select('id, user_id, designer_id, status')
+          .select('user_id, designer_id, unread_count_user, unread_count_designer, status')
           .or('user_id.eq.$uid,designer_id.eq.$uid');
-      final convList = List<Map<String, dynamic>>.from(convs);
-      final activeConvIds = <String>[];
-      for (final c in convList) {
-        if (c['status'] == 'archived') continue;
-        final id = c['id']?.toString();
-        if (id != null) activeConvIds.add(id);
+      final list = List<Map<String, dynamic>>.from(res);
+      int total = 0;
+      for (final conv in list) {
+        if (conv['status'] == 'archived') continue;
+        if (conv['user_id'] == uid) {
+          total += (conv['unread_count_user'] as int?) ?? 0;
+        } else {
+          total += (conv['unread_count_designer'] as int?) ?? 0;
+        }
       }
-      if (activeConvIds.isEmpty) {
-        debugPrint('getUnreadCount: 0 active conv → total=0');
-        return 0;
-      }
-      // 2) Bu conv'larda benden GELMEYEN (ben göndermedim) ve read_at IS NULL
-      //    olan mesajları say.
-      final msgs = await _db
-          .from('koala_direct_messages')
-          .select('id, conversation_id, sender_id, read_at')
-          .inFilter('conversation_id', activeConvIds)
-          .isFilter('read_at', null)
-          .neq('sender_id', uid);
-      final count = List<Map<String, dynamic>>.from(msgs).length;
-      debugPrint('getUnreadCount: ${activeConvIds.length} conv(s) → unread=$count');
-      return count;
+      debugPrint('getUnreadCount: ${list.length} conv(s) → total=$total');
+      return total;
     } catch (e) {
       debugPrint('MessagingService.getUnreadCount error: $e');
       return 0;
