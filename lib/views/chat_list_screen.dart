@@ -227,17 +227,25 @@ class _ChatListScreenState extends State<ChatListScreen> {
       await _load();
       if (!mounted) return;
       messenger?.hideCurrentSnackBar();
+      final convCount = MessagingService.lastInboundConversations;
+      final diag = MessagingService.lastInboundDiag;
+      final shortId = (diag?['homeownerId']?.toString() ?? '').split('-').first;
+      // Eğer hiç conversation yoksa kullanıcıya sebebini net söyle —
+      // shadow user Evlumba'daki conversation'larla eşleşmiyor demektir.
+      final message = synced > 0
+          ? '$synced yeni mesaj geldi (conv=$convCount)'
+          : convCount == 0
+              ? 'Evlumba\'da konuşma bulunamadı. shadow=$shortId'
+              : 'Yeni mesaj yok (conv=$convCount, shadow=$shortId)';
       messenger?.showSnackBar(
         SnackBar(
           behavior: SnackBarBehavior.floating,
-          duration: const Duration(seconds: 2),
+          duration: const Duration(seconds: 5),
           backgroundColor: synced > 0
               ? const Color(0xFF4CAF50)
               : KoalaColors.textSec,
           content: Text(
-            synced > 0
-                ? '$synced yeni mesaj geldi'
-                : 'Yeni mesaj yok',
+            message,
             style: const TextStyle(color: Colors.white),
           ),
         ),

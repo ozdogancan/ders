@@ -43,6 +43,12 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
   bool _uploadingImage = false;
   String? _uid;
 
+  /// Oldest unread message ID on entry. "Yeni mesajlar" divider bunun üstünde
+  /// gözükür ve ilk frame'de ekran buraya pozisyonlanır. markAsRead UI'ı
+  /// bozmasın diye bu değer session boyunca sabit kalır — divider kaybolmaz.
+  String? _firstUnreadId;
+  final _firstUnreadKey = GlobalKey();
+
   // Portfolio header collapse state — varsayılan KAPALI, yer kaplamasın.
   bool _portfolioExpanded = false;
 
@@ -119,7 +125,49 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
     final data = await MessagingService.getMessages(
       conversationId: widget.conversationId,
     );
-    if (mounted) setState(() { _messages = data; _loading = false; });
+    if (!mounted) return;
+
+    // Entry'de, diğer tarafın gönderdiği ve okunmamış ilk mesajı tespit et.
+    // Liste reverse (newest first), o yüzden en ESKİ unread = listedeki EN SONRA
+    // gelen unread record. WhatsApp mantığı: divider'ı bunun üstüne koy ve
+    // ilk açılışta scroll'u o divider'a kilitle.
+    String? firstUnreadId;
+    if (_firstUnreadId == null) {
+      for (final m in data) {
+        final sender = m['sender_id']?.toString();
+        final readAt = m['read_at'];
+        if (sender != null && sender != _uid && readAt == null) {
+          // data DESC sıralı; her iterasyonda daha eski unread bulursak güncel tut.
+          firstUnreadId = m['id']?.toString();
+        }
+      }
+    }
+
+    setState(() {
+      _messages = data;
+      _loading = false;
+      _firstUnreadId ??= firstUnreadId;
+    });
+
+    // Divider'a scroll — sadece bu oturumda ilk açılışta.
+    if (_firstUnreadId != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _scrollToFirstUnread();
+      });
+    }
+  }
+
+  void _scrollToFirstUnread() {
+    final ctx = _firstUnreadKey.currentContext;
+    if (ctx == null) return;
+    try {
+      Scrollable.ensureVisible(
+        ctx,
+        alignment: 0.3, // divider ekranın üst 1/3 kısmında
+        duration: const Duration(milliseconds: 250),
+        curve: Curves.easeOut,
+      );
+    } catch (_) {}
   }
 
   Future<void> _loadOlderMessages() async {
@@ -330,10 +378,36 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
                                 ),
                               );
                             }
-                            return _MessageBubble(
-                              message: _messages[index],
-                              isMe: _messages[index]['sender_id'] == _uid,
-                            );
+                            final m = _messages[index];
+                            final isMe = m['sender_id'] == _uid;
+                            final msgId = m['id']?.toString();
+                            // Divider: bu mesaj ilk unread ise üstüne (reverse
+                            // list'te "üst" = daha sonra gelen index) yerleştir.
+                            // reverse:true → görsel sıra: eski alta, yeni üste
+                            // aslında tersi: reverse list 0=bottom visual, so
+                            // yeni mesajlar GÖRSEL olarak alt. Divider ilk
+                            // unread'ın üzerinde gözükmesi için bu message
+                            // widget'ı altına divider eklemek lazım (reverse'te
+                            // altına = visual üstüne).
+                            final isFirstUnread =
+                                _firstUnreadId != null && msgId == _firstUnreadId;
+                            if (isFirstUnread) {
+                              // reverse:true → Column çocukları normal yukarı-
+                              // aşağı akar ama TÜM liste alttan üste akar.
+                              // Divider'ı Column'un üstüne koyarsak bubble'ın
+                              // GÖRSEL olarak ÜSTÜNDE gözükür — yani kullanıcı
+                              // aşağı kaydırdıkça önce "Yeni mesajlar" çizgisi,
+                              // sonra ilk unread bubble.
+                              return Column(
+                                key: _firstUnreadKey,
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  const _NewMessagesDivider(),
+                                  _MessageBubble(message: m, isMe: isMe),
+                                ],
+                              );
+                            }
+                            return _MessageBubble(message: m, isMe: isMe);
                           },
                         ),
             ),
@@ -1243,6 +1317,51 @@ class _MessageBubble extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// UNREAD DIVIDER (WhatsApp tarzı "Yeni mesajlar" çizgisi)
+// ═══════════════════════════════════════════════════════
+class _NewMessagesDivider extends StatelessWidget {
+  const _NewMessagesDivider();
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(
+        vertical: KoalaSpacing.sm,
+        horizontal: KoalaSpacing.xs,
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Container(
+              height: 1,
+              color: KoalaColors.accent.withValues(alpha: 0.35),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: KoalaSpacing.sm),
+            child: Text(
+              'Yeni mesajlar',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: KoalaColors.accent.withValues(alpha: 0.9),
+                letterSpacing: 0.2,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Container(
+              height: 1,
+              color: KoalaColors.accent.withValues(alpha: 0.35),
+            ),
+          ),
+        ],
       ),
     );
   }

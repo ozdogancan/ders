@@ -337,6 +337,10 @@ class MessagingService {
   // EVLUMBA BRIDGE
   // ═══════════════════════════════════════════════════════
 
+  /// Son pullInbound sonucunun diag bilgisi — UI "Sync" butonunda gösterilir.
+  static Map<String, dynamic>? lastInboundDiag;
+  static int lastInboundConversations = 0;
+
   /// Evlumba → Koala ters köprü (client-pull).
   /// Flutter app ChatListScreen açılınca / app foreground'a gelince çağırır.
   /// Designer'ın evlumba.com'dan attığı mesajları Koala DB'sine çeker.
@@ -367,6 +371,8 @@ class MessagingService {
         try {
           final body = jsonDecode(res.body) as Map<String, dynamic>;
           final n = (body['synced'] as int?) ?? 0;
+          lastInboundConversations = (body['conversations'] as int?) ?? 0;
+          lastInboundDiag = body['diag'] as Map<String, dynamic>?;
           if (n > 0) {
             debugPrint('MessagingService: pullInbound synced $n messages');
           }
