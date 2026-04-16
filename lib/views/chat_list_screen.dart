@@ -1,5 +1,7 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' hide User;
 import '../core/theme/koala_tokens.dart';
 import '../core/utils/format_utils.dart';
 import '../services/chat_persistence.dart';
@@ -27,6 +29,9 @@ class _ChatListScreenState extends State<ChatListScreen> {
 
   // Designer profil cache: id → { 'name': ..., 'avatar': ... }
   final Map<String, Map<String, String?>> _designerCache = {};
+
+  // Debug overlay (geçici — conversation listesi boş göründüğünde tanı için)
+  String _debugInfo = '';
 
   @override
   void initState() {
@@ -67,6 +72,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
         _loading = false;
       });
       _loadDesignerAvatars();
+      _updateDebugInfo(convs, null);
 
       // Auth restore henüz tamamlanmamış olabilir → conversations boş gelmiş
       // olabilir ama DB'de gerçekte var. 1.5s sonra sessizce bir kez daha dene.
@@ -80,12 +86,50 @@ class _ChatListScreenState extends State<ChatListScreen> {
               setState(() => _conversations = retry);
               _loadDesignerAvatars();
             }
-          } catch (_) {}
+            _updateDebugInfo(retry, null);
+          } catch (e) {
+            _updateDebugInfo(const [], e);
+          }
         });
       }
     } catch (e) {
       if (mounted) setState(() { _loading = false; _hasError = true; });
+      _updateDebugInfo(const [], e);
     }
+  }
+
+  /// Geçici teşhis: conv listesi boşsa ekrana uid + sorgu sonucu + hata bas.
+  Future<void> _updateDebugInfo(
+    List<Map<String, dynamic>> convs,
+    Object? err,
+  ) async {
+    try {
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      int? rawCount;
+      String? rawErr;
+      if (uid != null) {
+        try {
+          final res = await Supabase.instance.client
+              .from('koala_conversations')
+              .select('id')
+              .or('user_id.eq.$uid,designer_id.eq.$uid')
+              .eq('status', 'active');
+          rawCount = (res as List).length;
+        } catch (e) {
+          rawErr = e.toString();
+        }
+      }
+      final info = StringBuffer();
+      info.write('uid=${uid ?? 'NULL'} ');
+      info.write('convs=${convs.length} ');
+      info.write('raw=${rawCount ?? '-'} ');
+      if (rawErr != null) info.write('rawErr=${rawErr.substring(0, rawErr.length > 80 ? 80 : rawErr.length)} ');
+      if (err != null) {
+        final s = err.toString();
+        info.write('err=${s.substring(0, s.length > 80 ? 80 : s.length)}');
+      }
+      if (mounted) setState(() => _debugInfo = info.toString());
+    } catch (_) {}
   }
 
   /// ChatListScreen açılınca koala_conversations tablosundaki
@@ -196,6 +240,34 @@ class _ChatListScreenState extends State<ChatListScreen> {
                           ),
                         ),
                         ..._conversations.map(_buildConversationTile),
+                      ] else if (_debugInfo.isNotEmpty) ...[
+                        // Geçici debug banner — conversation listesi boş gelirse
+                        // teşhis için sorgu parametrelerini ve sonucunu göster.
+                        Padding(
+                          padding: const EdgeInsets.only(top: KoalaSpacing.xl),
+                          child: Container(
+                            padding: const EdgeInsets.all(KoalaSpacing.md),
+                            decoration: BoxDecoration(
+                              color: Colors.orange.withValues(alpha: 0.08),
+                              border: Border.all(color: Colors.orange.withValues(alpha: 0.3)),
+                              borderRadius: BorderRadius.circular(KoalaRadius.sm),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'Debug (geçici)',
+                                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Colors.orange),
+                                ),
+                                const SizedBox(height: 4),
+                                SelectableText(
+                                  _debugInfo,
+                                  style: const TextStyle(fontSize: 11, fontFamily: 'monospace', color: KoalaColors.textSec),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
                       ],
 
                       const SizedBox(height: KoalaSpacing.xxxl),
