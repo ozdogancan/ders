@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' hide User;
 import '../../core/theme/koala_tokens.dart';
+import '../../core/utils/format_utils.dart';
 import '../../widgets/koala_widgets.dart';
 
 /// Admin — Kullanıcı yönetimi
@@ -135,7 +136,7 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
     if (val == null) return '-';
     final dt = DateTime.tryParse(val.toString());
     if (dt == null) return '-';
-    return '${dt.day}/${dt.month}/${dt.year} ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+    return formatDMYHM(dt);
   }
 
   @override

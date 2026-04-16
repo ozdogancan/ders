@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' hide User;
 import '../../core/theme/koala_tokens.dart';
+import '../../core/utils/format_utils.dart';
 import '../../widgets/koala_widgets.dart';
 
 /// Admin — Mesaj moderasyonu
@@ -139,7 +140,7 @@ class _AdminMessagesScreenState extends State<AdminMessagesScreen> {
                             ),
                             if (createdAt != null)
                               Text(
-                                '${createdAt.day}/${createdAt.month} ${createdAt.hour}:${createdAt.minute.toString().padLeft(2, '0')}',
+                                formatDMHM(createdAt),
                                 style: KoalaText.labelSmall,
                               ),
                           ],

@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart' hide User;
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/theme/koala_tokens.dart';
+import '../../core/utils/format_utils.dart';
 import '../../services/evlumba_live_service.dart';
 import '../../services/koala_ai_service.dart';
 import '../../services/messaging_service.dart';
@@ -1119,9 +1120,8 @@ class _PopupMessageBubble extends StatelessWidget {
     final content = message['content'] as String? ?? '';
     final type = message['message_type'] as String? ?? 'text';
     final createdAt = DateTime.tryParse(message['created_at']?.toString() ?? '');
-    final timeStr = createdAt != null
-        ? '${createdAt.hour.toString().padLeft(2, '0')}:${createdAt.minute.toString().padLeft(2, '0')}'
-        : '';
+    // Supabase UTC döner; HH:MM lokale göre gösterilmeli.
+    final timeStr = createdAt != null ? formatHM(createdAt) : '';
 
     return Align(
       alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
