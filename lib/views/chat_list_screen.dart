@@ -315,13 +315,8 @@ class _ChatListScreenState extends State<ChatListScreen> {
           icon: const Icon(Icons.arrow_back_rounded),
         ),
         title: const Text('Mesajlar', style: KoalaText.h2),
-        actions: [
-          IconButton(
-            tooltip: 'Yeni mesajları çek',
-            onPressed: _manualSync,
-            icon: const Icon(Icons.refresh_rounded),
-          ),
-        ],
+        // Refresh butonu kaldırıldı — WhatsApp gibi anlık olmalı. Pull-to-refresh
+        // gizli yedek olarak duruyor (RefreshIndicator body'de).
       ),
       body: _loading
           ? const ShimmerList(itemCount: 6, cardHeight: 72)
