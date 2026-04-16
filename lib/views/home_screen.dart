@@ -58,13 +58,120 @@ class _HomeScreenState extends State<HomeScreen>
     _migrateChatsOnce();
     _requestNotificationPermission();
     _kickInboundSync();
-    // Her 30 sn'de bir arka planda inbound sync — designer mesajları için
+    // Her 3 sn'de bir arka planda inbound sync — designer mesajları için.
+    // (Realtime subscribe ile de dinliyoruz ama inbound yazım evlumba→koala
+    //  pull modeliyle çalıştığı için polling lag'i kullanıcıya doğrudan
+    //  yansıyor. 3s = "anında" hissini veriyor.)
     _inboundPollTimer = Timer.periodic(
-      const Duration(seconds: 30),
+      const Duration(seconds: 3),
       (_) => _kickInboundSync(),
     );
-    WidgetsBinding.instance.addPostFrameCallback(
-      (_) => _maybeOpenStyleDiscovery(),
+    // Realtime: koala_conversations update event'lerini dinle — yeni mesaj
+    // geldiğinde badge + toast anında.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _subscribeIncomingMessages();
+      _maybeOpenStyleDiscovery();
+    });
+  }
+
+  /// Yeni designer mesajı geldi mi tespit etmek için conv başına son
+  /// gördüğümüz unread count'u ve last_message_at'i tut. Artış → toast göster.
+  final Map<String, int> _lastSeenUnread = {};
+  final Map<String, String> _lastSeenMsgAt = {};
+
+  // Realtime listener referansı — dispose'da aynı referansla kapatılır.
+  void Function(Map<String, dynamic>)? _convListener;
+  StreamSubscription<User?>? _authSub;
+
+  void _subscribeIncomingMessages() {
+    _convListener = (record) {
+      if (!mounted) return;
+      final convId = record['id']?.toString();
+      if (convId == null) return;
+      final uid = MessagingService.currentUserId;
+      final isUser = record['user_id'] == uid;
+      final unreadNow = isUser
+          ? ((record['unread_count_user'] as int?) ?? 0)
+          : ((record['unread_count_designer'] as int?) ?? 0);
+      final prevUnread = _lastSeenUnread[convId] ?? 0;
+      _lastSeenUnread[convId] = unreadNow;
+
+      final msgAtStr = (record['last_message_at']?.toString() ?? '');
+      final prevAt = _lastSeenMsgAt[convId] ?? '';
+      _lastSeenMsgAt[convId] = msgAtStr;
+
+      // Badge'i daima tazele
+      _loadUnreadMsgCount();
+
+      // Yeni gelen mesaj tespiti: unread artışı VEYA last_message_at ilerlemesi.
+      // Backend bazen unread RPC yoksa sadece last_message_at'i günceller —
+      // o yüzden iki sinyal birden dinleniyor.
+      final bodyText = (record['last_message'] as String?)?.trim() ?? '';
+      final bumpedTime = prevAt.isNotEmpty && msgAtStr.isNotEmpty && msgAtStr.compareTo(prevAt) > 0;
+      final bumpedUnread = unreadNow > prevUnread;
+      if ((bumpedUnread || (bumpedTime && unreadNow > 0)) && bodyText.isNotEmpty) {
+        _showNewMessageToast(bodyText);
+      }
+    };
+    MessagingService.subscribeToConversations(onUpdate: _convListener!);
+
+    // Auth restore gecikmeli olursa (hard refresh vb.) ilk çağrı no-op olur.
+    // Firebase auth state hazırlanınca subscription'ı yeniden kur.
+    _authSub = FirebaseAuth.instance.authStateChanges().listen((user) {
+      if (user == null || _convListener == null) return;
+      MessagingService.subscribeToConversations(onUpdate: _convListener!);
+      _kickInboundSync();
+      _loadUnreadMsgCount();
+    });
+  }
+
+  void _showNewMessageToast(String body) {
+    if (!mounted) return;
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    if (messenger == null) return;
+    final preview = body.length > 60 ? '${body.substring(0, 60)}…' : body;
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(
+      SnackBar(
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: KoalaColors.accentDeep,
+        duration: const Duration(seconds: 4),
+        content: Row(
+          children: [
+            const Icon(Icons.chat_rounded, color: Colors.white, size: 18),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    'Yeni mesaj',
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.white),
+                  ),
+                  if (preview.isNotEmpty)
+                    Text(
+                      preview,
+                      style: const TextStyle(fontSize: 13, color: Colors.white),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        action: SnackBarAction(
+          label: 'Gör',
+          textColor: Colors.white,
+          onPressed: () {
+            if (!mounted) return;
+            Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const ChatListScreen()),
+            ).then((_) => _loadUnreadMsgCount());
+          },
+        ),
+      ),
     );
   }
 
@@ -156,6 +263,10 @@ class _HomeScreenState extends State<HomeScreen>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _inboundPollTimer?.cancel();
+    _authSub?.cancel();
+    try {
+      MessagingService.unsubscribeFromConversations(listener: _convListener);
+    } catch (_) {}
     _staggerCtrl.dispose();
     super.dispose();
   }

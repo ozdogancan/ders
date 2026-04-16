@@ -1,7 +1,7 @@
-import 'package:firebase_auth/firebase_auth.dart';
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:supabase_flutter/supabase_flutter.dart' hide User;
 import '../core/theme/koala_tokens.dart';
 import '../core/utils/format_utils.dart';
 import '../services/chat_persistence.dart';
@@ -30,8 +30,9 @@ class _ChatListScreenState extends State<ChatListScreen> {
   // Designer profil cache: id → { 'name': ..., 'avatar': ... }
   final Map<String, Map<String, String?>> _designerCache = {};
 
-  // Debug overlay (geçici — conversation listesi boş göründüğünde tanı için)
-  String _debugInfo = '';
+  // Realtime listener referansı — dispose'da aynı referansla kapatılır.
+  void Function(Map<String, dynamic>)? _convListener;
+  Timer? _inboundPollTimer;
 
   @override
   void initState() {
@@ -46,13 +47,20 @@ class _ChatListScreenState extends State<ChatListScreen> {
         debugPrint('ChatListScreen: subscribe error $e');
       }
       _syncInboundThenReload();
+      // Kullanıcı mesajlar sayfasındayken de 3 sn'de bir inbound sync et —
+      // designer'ın yeni mesajları polling ile çekilip realtime tetiklenir.
+      _inboundPollTimer = Timer.periodic(
+        const Duration(seconds: 3),
+        (_) => _syncInboundThenReload(),
+      );
     });
   }
 
   @override
   void dispose() {
+    _inboundPollTimer?.cancel();
     try {
-      MessagingService.unsubscribeFromConversations();
+      MessagingService.unsubscribeFromConversations(listener: _convListener);
     } catch (_) {}
     super.dispose();
   }
@@ -64,7 +72,9 @@ class _ChatListScreenState extends State<ChatListScreen> {
       final aiFuture = ChatPersistence.loadConversations();
       final results = await Future.wait([convFuture, aiFuture]);
       if (!mounted) return;
-      final convs = results[0] as List<Map<String, dynamic>>;
+      final convs = _sortConversations(
+        List<Map<String, dynamic>>.from(results[0] as List),
+      );
       final ais = results[1] as List<ChatSummary>;
       setState(() {
         _conversations = convs;
@@ -72,81 +82,99 @@ class _ChatListScreenState extends State<ChatListScreen> {
         _loading = false;
       });
       _loadDesignerAvatars();
-      _updateDebugInfo(convs, null);
 
       // Auth restore henüz tamamlanmamış olabilir → conversations boş gelmiş
       // olabilir ama DB'de gerçekte var. 1.5s sonra sessizce bir kez daha dene.
-      // AI chats local, dolu dönmüşse user login; conv boşsa auth race muhtemel.
       if (convs.isEmpty && ais.isNotEmpty) {
         Future<void>.delayed(const Duration(milliseconds: 1500), () async {
           if (!mounted) return;
           try {
             final retry = await MessagingService.getConversations();
             if (mounted && retry.isNotEmpty) {
-              setState(() => _conversations = retry);
+              setState(() => _conversations = _sortConversations(
+                List<Map<String, dynamic>>.from(retry),
+              ));
               _loadDesignerAvatars();
             }
-            _updateDebugInfo(retry, null);
-          } catch (e) {
-            _updateDebugInfo(const [], e);
-          }
+          } catch (_) {}
         });
       }
     } catch (e) {
       if (mounted) setState(() { _loading = false; _hasError = true; });
-      _updateDebugInfo(const [], e);
     }
   }
 
-  /// Geçici teşhis: conv listesi boşsa ekrana uid + sorgu sonucu + hata bas.
-  Future<void> _updateDebugInfo(
-    List<Map<String, dynamic>> convs,
-    Object? err,
-  ) async {
-    try {
-      final uid = FirebaseAuth.instance.currentUser?.uid;
-      int? rawCount;
-      String? rawErr;
-      if (uid != null) {
-        try {
-          final res = await Supabase.instance.client
-              .from('koala_conversations')
-              .select('id')
-              .or('user_id.eq.$uid,designer_id.eq.$uid')
-              .eq('status', 'active');
-          rawCount = (res as List).length;
-        } catch (e) {
-          rawErr = e.toString();
-        }
-      }
-      final info = StringBuffer();
-      info.write('uid=${uid ?? 'NULL'} ');
-      info.write('convs=${convs.length} ');
-      info.write('raw=${rawCount ?? '-'} ');
-      if (rawErr != null) info.write('rawErr=${rawErr.substring(0, rawErr.length > 80 ? 80 : rawErr.length)} ');
-      if (err != null) {
-        final s = err.toString();
-        info.write('err=${s.substring(0, s.length > 80 ? 80 : s.length)}');
-      }
-      if (mounted) setState(() => _debugInfo = info.toString());
-    } catch (_) {}
+  /// Sıralama: önce okunmamış mesajı olanlar (unread > 0), sonra son mesaj
+  /// zamanı azalan. Klasik chat app davranışı — unread conversation'lar en üstte.
+  List<Map<String, dynamic>> _sortConversations(
+    List<Map<String, dynamic>> list,
+  ) {
+    final uid = MessagingService.currentUserId;
+    int unreadOf(Map<String, dynamic> c) {
+      final isUser = c['user_id'] == uid;
+      return isUser
+          ? ((c['unread_count_user'] as int?) ?? 0)
+          : ((c['unread_count_designer'] as int?) ?? 0);
+    }
+    list.sort((a, b) {
+      final au = unreadOf(a);
+      final bu = unreadOf(b);
+      final aHas = au > 0;
+      final bHas = bu > 0;
+      if (aHas != bHas) return bHas ? 1 : -1;
+      final at = DateTime.tryParse(a['last_message_at']?.toString() ?? '')
+          ?.millisecondsSinceEpoch ?? 0;
+      final bt = DateTime.tryParse(b['last_message_at']?.toString() ?? '')
+          ?.millisecondsSinceEpoch ?? 0;
+      return bt.compareTo(at);
+    });
+    return list;
   }
 
   /// ChatListScreen açılınca koala_conversations tablosundaki
   /// last_message / unread_count değişikliklerini canlı dinle.
   /// Designer mesajı geldiğinde (inbound endpoint'ten sonra realtime) listeyi
-  /// yenile — böylece unread badge ve sıralama otomatik güncellenir.
+  /// ANINDA merge edip resort et — DB roundtrip yok, kullanıcı anında görür.
   void _subscribeConversations() {
-    MessagingService.subscribeToConversations(
-      onUpdate: (_) {
-        // Detay tilenin kendisi full satır getirdi ama state'i yeniden
-        // çekmek dadesigner avatar cache + sıralama için daha güvenli.
-        if (mounted) _load();
-      },
-    );
+    _convListener = (record) {
+      if (!mounted) return;
+      final uid = MessagingService.currentUserId;
+      final userId = record['user_id'];
+      final designerId = record['designer_id'];
+      if (userId != uid && designerId != uid) return;
+
+      final convId = record['id']?.toString();
+      if (convId == null) return;
+
+      // Archive edilmişse listeden kaldır
+      if ((record['status'] ?? 'active') != 'active') {
+        setState(() {
+          _conversations.removeWhere((c) => c['id']?.toString() == convId);
+        });
+        return;
+      }
+
+      setState(() {
+        final idx = _conversations.indexWhere((c) => c['id']?.toString() == convId);
+        if (idx >= 0) {
+          // Mevcut satırı yeni alanlarla merge et (avatar cache vs. korunsun)
+          _conversations[idx] = {..._conversations[idx], ...record};
+        } else {
+          _conversations.insert(0, Map<String, dynamic>.from(record));
+        }
+        _conversations = _sortConversations(_conversations);
+      });
+
+      // Designer avatar'ı henüz cache'lenmemişse getir (yeni conv için)
+      _loadDesignerAvatars();
+    };
+    MessagingService.subscribeToConversations(onUpdate: _convListener!);
   }
 
-  /// Inbound sync'i arka planda çalıştır; başarılı olursa listeyi tazele.
+  /// Inbound sync'i arka planda çalıştır. Başarı durumunda DB tetikleyeceği
+  /// realtime UPDATE listesi otomatik merge edecek; fakat realtime event'leri
+  /// bazen düşebiliyor — güvenli taraf olarak yeni senkron varsa hafif bir
+  /// reload yap.
   Future<void> _syncInboundThenReload() async {
     final synced = await MessagingService.pullInbound();
     if (synced > 0 && mounted) {
@@ -240,34 +268,6 @@ class _ChatListScreenState extends State<ChatListScreen> {
                           ),
                         ),
                         ..._conversations.map(_buildConversationTile),
-                      ] else if (_debugInfo.isNotEmpty) ...[
-                        // Geçici debug banner — conversation listesi boş gelirse
-                        // teşhis için sorgu parametrelerini ve sonucunu göster.
-                        Padding(
-                          padding: const EdgeInsets.only(top: KoalaSpacing.xl),
-                          child: Container(
-                            padding: const EdgeInsets.all(KoalaSpacing.md),
-                            decoration: BoxDecoration(
-                              color: Colors.orange.withValues(alpha: 0.08),
-                              border: Border.all(color: Colors.orange.withValues(alpha: 0.3)),
-                              borderRadius: BorderRadius.circular(KoalaRadius.sm),
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Text(
-                                  'Debug (geçici)',
-                                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Colors.orange),
-                                ),
-                                const SizedBox(height: 4),
-                                SelectableText(
-                                  _debugInfo,
-                                  style: const TextStyle(fontSize: 11, fontFamily: 'monospace', color: KoalaColors.textSec),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
                       ],
 
                       const SizedBox(height: KoalaSpacing.xxxl),
