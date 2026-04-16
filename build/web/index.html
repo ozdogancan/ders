@@ -54,6 +54,46 @@
   <title>Koala - AI İç Mimari Asistanı | koalatutor.com</title>
   <link rel="manifest" href="manifest.json">
 
+  <!--
+    Service worker + cache kill-switch (2026-04-16 release).
+    Eski Flutter service worker'ı bazı kullanıcılarda eski main.dart.js bundle'ını
+    cache-first serve ediyordu → auth fix + reverse bridge güncellemeleri
+    tarayıcıya inmiyor, konuşma listesi boş gözüküyordu.
+    Bu script ilk yüklemede:
+      1) Tüm service worker kayıtlarını iptal eder
+      2) Caches API'deki tüm cache'leri siler
+      3) sessionStorage flag'i ile bir kez otomatik reload tetikler
+    Firebase IndexedDB (auth session) dokunulmuyor — kullanıcı logout OLMAZ.
+  -->
+  <script>
+    (async function () {
+      try {
+        const FLAG = 'koala_sw_reset_v2';
+        if (sessionStorage.getItem(FLAG)) return;
+        let cleared = false;
+        if ('serviceWorker' in navigator) {
+          const regs = await navigator.serviceWorker.getRegistrations();
+          for (const reg of regs) {
+            try { await reg.unregister(); cleared = true; } catch (_) {}
+          }
+        }
+        if ('caches' in window) {
+          const names = await caches.keys();
+          if (names.length) {
+            await Promise.all(names.map((n) => caches.delete(n)));
+            cleared = true;
+          }
+        }
+        if (cleared) {
+          sessionStorage.setItem(FLAG, '1');
+          location.reload();
+        } else {
+          sessionStorage.setItem(FLAG, '1');
+        }
+      } catch (_) {}
+    })();
+  </script>
+
   <!-- Schema.org JSON-LD -->
   <script type="application/ld+json">
   {
