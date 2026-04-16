@@ -123,14 +123,16 @@ class MessagingService {
     final uid = await _waitForUid();
     if (uid == null) return [];
     try {
+      // SQL'de status filtresi YOK — null status'lu eski conv'lar da dahil
+      // edilsin diye. 'archived' filter Dart tarafında yapılıyor.
       final res = await _db
           .from('koala_conversations')
           .select('id, user_id, designer_id, title, last_message, last_message_at, unread_count_user, unread_count_designer, status')
           .or('user_id.eq.$uid,designer_id.eq.$uid')
-          .eq('status', 'active')
           .order('last_message_at', ascending: false)
           .range(offset, offset + limit - 1);
-      return List<Map<String, dynamic>>.from(res);
+      final all = List<Map<String, dynamic>>.from(res);
+      return all.where((c) => c['status'] != 'archived').toList();
     } catch (e) {
       debugPrint('MessagingService.getConversations error: $e');
       rethrow;
@@ -597,21 +599,24 @@ class MessagingService {
     final uid = await _waitForUid();
     if (uid == null) return 0;
     try {
+      // status filtresi SQL'den kaldırıldı — null-status eski conv'ları da dahil
+      // et. 'archived' filter Dart tarafında.
       final res = await _db
           .from('koala_conversations')
-          .select('user_id, designer_id, unread_count_user, unread_count_designer')
-          .or('user_id.eq.$uid,designer_id.eq.$uid')
-          .eq('status', 'active');
+          .select('user_id, designer_id, unread_count_user, unread_count_designer, status')
+          .or('user_id.eq.$uid,designer_id.eq.$uid');
 
       final list = List<Map<String, dynamic>>.from(res);
       int total = 0;
       for (final conv in list) {
+        if (conv['status'] == 'archived') continue;
         if (conv['user_id'] == uid) {
           total += (conv['unread_count_user'] as int?) ?? 0;
         } else {
           total += (conv['unread_count_designer'] as int?) ?? 0;
         }
       }
+      debugPrint('getUnreadCount: ${list.length} conv(s) → total=$total');
       return total;
     } catch (e) {
       debugPrint('MessagingService.getUnreadCount error: $e');

@@ -15,6 +15,7 @@ import '../core/theme/koala_tokens.dart';
 import '../services/chat_persistence.dart';
 import '../services/analytics_service.dart';
 import '../services/koala_ai_service.dart';
+import '../services/global_message_listener.dart';
 import '../services/messaging_service.dart';
 import '../services/notifications_service.dart';
 import '../services/push_token_service.dart';
@@ -72,6 +73,14 @@ class _HomeScreenState extends State<HomeScreen>
       _subscribeEvlumbaLive();
       _maybeOpenStyleDiscovery();
     });
+    // GlobalMessageListener her sync tick'inde notify eder —
+    // realtime event'e güvenmek yerine explicit refresh.
+    GlobalMessageListener.syncTick.addListener(_onGlobalSyncTick);
+  }
+
+  void _onGlobalSyncTick() {
+    if (!mounted) return;
+    _loadUnreadMsgCount();
   }
 
   // Evlumba'daki `messages` tablosuna DOĞRUDAN realtime abone olur.
@@ -254,6 +263,7 @@ class _HomeScreenState extends State<HomeScreen>
     WidgetsBinding.instance.removeObserver(this);
     _inboundPollTimer?.cancel();
     _authSub?.cancel();
+    GlobalMessageListener.syncTick.removeListener(_onGlobalSyncTick);
     try {
       MessagingService.unsubscribeFromConversations(listener: _convListener);
     } catch (_) {}

@@ -7,6 +7,7 @@ import '../core/theme/koala_tokens.dart';
 import '../core/utils/format_utils.dart';
 import '../services/chat_persistence.dart';
 import '../services/evlumba_live_service.dart';
+import '../services/global_message_listener.dart';
 import '../services/messaging_service.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/error_state.dart';
@@ -58,6 +59,13 @@ class _ChatListScreenState extends State<ChatListScreen> {
         (_) => _syncInboundThenReload(),
       );
     });
+    // GlobalMessageListener her pullInbound sonrası tick — liste sessiz reload.
+    GlobalMessageListener.syncTick.addListener(_onGlobalSyncTick);
+  }
+
+  void _onGlobalSyncTick() {
+    if (!mounted) return;
+    _load(silent: true);
   }
 
   /// Evlumba DB'sine direkt realtime abone ol — messages INSERT event'i
@@ -89,6 +97,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
   @override
   void dispose() {
     _inboundPollTimer?.cancel();
+    GlobalMessageListener.syncTick.removeListener(_onGlobalSyncTick);
     try {
       MessagingService.unsubscribeFromConversations(listener: _convListener);
     } catch (_) {}

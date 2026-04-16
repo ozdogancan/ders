@@ -40,6 +40,11 @@ class GlobalMessageListener {
   /// ekranındaysa toast göstermek yersiz.
   static String? suppressConvId;
 
+  /// Her başarılı inbound sync sonrası (yeni mesaj geldi mi geldi) tetiklenir.
+  /// UI widget'ları buna abone olarak badge/ListView'larını tazeleyebilir.
+  /// Realtime subscription'a güvenmek yerine explicit notify — sync → refresh.
+  static final ValueNotifier<int> syncTick = ValueNotifier<int>(0);
+
   static void start() {
     if (_started) return;
     _started = true;
@@ -59,6 +64,9 @@ class GlobalMessageListener {
       // İlk tick'te backfill — eski NULL-status conv'ları 'active' yap.
       unawaited(MessagingService.backfillNullStatusConversations());
       final synced = await MessagingService.pullInbound();
+      // Her tick sonrası notify — "yeni yok" bile olsa badge consistent olsun
+      // (server başka sekmede read_at attıysa vs.)
+      syncTick.value = syncTick.value + 1;
       if (synced <= 0) return;
       final details = List<Map<String, dynamic>>.from(
         MessagingService.lastInboundDetails,
