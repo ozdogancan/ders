@@ -255,43 +255,82 @@ class MessagingService {
     }
   }
 
+  /// markAsRead için ayrıntılı sonuç — hangi adımda fail ettiğini UI'a
+  /// göstermek için. null hata = success.
+  static String? lastMarkAsReadError;
+
   /// Mesajlari okundu olarak isaretle — auth restore race'ine karsi dayanikli.
+  /// Silent failures yerine detaylı hata dönen [lastMarkAsReadError] set eder.
   static Future<bool> markAsRead(String conversationId) async {
-    if (!Env.hasSupabaseConfig) return false;
+    lastMarkAsReadError = null;
+    if (!Env.hasSupabaseConfig) {
+      lastMarkAsReadError = 'Supabase config yok';
+      return false;
+    }
     final uid = await _waitForUid();
-    if (uid == null) return false;
+    if (uid == null) {
+      lastMarkAsReadError = 'Oturum uid yok';
+      return false;
+    }
+    // Request bazlı x-user-id'yi garanti altına al — kimi senaryolarda
+    // main.dart'taki listener set edemeden ilk UPDATE gidebiliyor.
     try {
-      // Karsi tarafin gonderdigi okunmamis mesajlari isaretle
+      _db.rest.headers['x-user-id'] = uid;
+    } catch (_) {}
+
+    // 1) Mesajları okundu yap (RLS: msg_update — conv participant kontrolü)
+    try {
       await _db
           .from('koala_direct_messages')
           .update({'read_at': DateTime.now().toIso8601String()})
           .eq('conversation_id', conversationId)
           .neq('sender_id', uid)
           .isFilter('read_at', null);
-
-      // Unread count'u sifirla — hem user hem designer alaninda, hangisi
-      // bize aitse onu sifirlayacak; digerini de sifirda tutmak zarar vermez
-      // cunku 0 kalir. Tek sorgu, iki alani da 0 yapmak daha hizli/idempotent.
-      final conv = await _db
-          .from('koala_conversations')
-          .select('user_id, designer_id')
-          .eq('id', conversationId)
-          .maybeSingle();
-      if (conv == null) return false;
-
-      final isUser = conv['user_id'] == uid;
-      final unreadField = isUser ? 'unread_count_user' : 'unread_count_designer';
-
-      await _db.from('koala_conversations').update({
-        unreadField: 0,
-        'updated_at': DateTime.now().toIso8601String(),
-      }).eq('id', conversationId);
-
-      return true;
     } catch (e) {
-      debugPrint('MessagingService.markAsRead error: $e');
+      debugPrint('markAsRead step1 (msgs update) failed: $e');
+      lastMarkAsReadError = 'Mesajlar: $e';
+      // Devam et — belki conversation sayacı gene düşer.
+    }
+
+    // 2) Unread sayacını SELECT yapmadan doğrudan sıfırla.
+    //    Önceden SELECT + branch yapıyorduk; ancak RLS race veya id aramasında
+    //    tek satırın dönmemesi `conv == null` → sessiz false yol açıyordu.
+    //    İki ayrı UPDATE: biri user perspektifinden, biri designer perspektifinden.
+    //    Hangisi kullanıcıya aitse eşleşir; diğeri 0 satırı etkiler, zarar yok.
+    //    UPDATE ardından .select() çağırıyoruz — PostgREST RLS reddettiğinde
+    //    0 satır döner, yoksa "success ama hiçbir şey güncellenmedi" durumu
+    //    bize true dönmez.
+    final nowIso = DateTime.now().toIso8601String();
+    int rowsAffected = 0;
+    String? lastErr;
+    try {
+      final res = await _db.from('koala_conversations').update({
+        'unread_count_user': 0,
+        'updated_at': nowIso,
+      }).eq('id', conversationId).eq('user_id', uid).select('id');
+      rowsAffected += (res is List ? res.length : 0);
+    } catch (e) {
+      debugPrint('markAsRead step2a (user zero) failed: $e');
+      lastErr = 'UserUpd: $e';
+    }
+    try {
+      final res = await _db.from('koala_conversations').update({
+        'unread_count_designer': 0,
+        'updated_at': nowIso,
+      }).eq('id', conversationId).eq('designer_id', uid).select('id');
+      rowsAffected += (res is List ? res.length : 0);
+    } catch (e) {
+      debugPrint('markAsRead step2b (designer zero) failed: $e');
+      lastErr = 'DesignerUpd: $e';
+    }
+
+    if (rowsAffected == 0) {
+      lastMarkAsReadError ??= lastErr ?? 'Conversation UPDATE 0 satır (RLS? uid=$uid)';
       return false;
     }
+    // Mesaj update fail etmiş olsa bile conv sayacı sıfırlanmış olabilir.
+    // Kullanıcıya optimistic'i bozmayalım — true dönelim.
+    return true;
   }
 
   // ═══════════════════════════════════════════════════════

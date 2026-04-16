@@ -831,14 +831,15 @@ class _ChatListScreenState extends State<ChatListScreen> {
           MessagingService.markAsRead(convId).then((ok) {
             if (!mounted || ok) return;
             final messenger = ScaffoldMessenger.maybeOf(context);
+            final err = MessagingService.lastMarkAsReadError ?? 'bilinmeyen hata';
             messenger?.showSnackBar(
-              const SnackBar(
+              SnackBar(
                 behavior: SnackBarBehavior.floating,
-                duration: Duration(seconds: 3),
-                backgroundColor: Color(0xFFB00020),
+                duration: const Duration(seconds: 5),
+                backgroundColor: const Color(0xFFB00020),
                 content: Text(
-                  'Okundu işaretleme başarısız (oturum yenileniyor olabilir)',
-                  style: TextStyle(color: Colors.white),
+                  'Okundu işaretleme başarısız: $err',
+                  style: const TextStyle(color: Colors.white),
                 ),
               ),
             );
