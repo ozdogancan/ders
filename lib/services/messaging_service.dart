@@ -23,6 +23,11 @@ class MessagingService {
   /// Public getter — UI'da unread count hesabi icin
   static String? get currentUserId => _uid;
 
+  /// sendMessage çağrısı null döndüğünde son hatayı bu değişkenden okuyabilir.
+  /// UI sticky toast'ta gerçek RLS/exception metnini göstermek için kullanır.
+  /// Her çağrı başında temizlenir.
+  static String? lastSendError;
+
   /// Firebase auth henüz restore edilmemiş olabilir (özellikle hard refresh
   /// sonrası). currentUser null ise authStateChanges ile gelen ilk user'ı
   /// kısa bir timeout ile bekler; yoksa null döner.
@@ -184,7 +189,13 @@ class MessagingService {
     String? attachmentUrl,
     Map<String, dynamic>? metadata,
   }) async {
-    if (_uid == null || !Env.hasSupabaseConfig) return null;
+    lastSendError = null;
+    if (_uid == null || !Env.hasSupabaseConfig) {
+      lastSendError = _uid == null
+          ? 'Firebase auth yok (currentUser null)'
+          : 'Supabase env config yok';
+      return null;
+    }
     try {
       // Request bazlı x-user-id'yi garanti altına al.
       // 050_security_hardening sonrası koala_conversations UPDATE policy'si
@@ -280,6 +291,7 @@ class MessagingService {
       return msg;
     } catch (e) {
       debugPrint('MessagingService.sendMessage error: $e');
+      lastSendError = e.toString();
       return null;
     }
   }

@@ -365,7 +365,8 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
             attachmentUrl: imageUrl,
           );
           if (sentMsg == null) {
-            errorMsg = 'Mesaj kaydedilemedi (RLS/insert reddi olabilir)';
+            errorMsg = 'Mesaj kaydedilemedi: '
+                '${MessagingService.lastSendError ?? "bilinmeyen hata"}';
           }
         } catch (e) {
           debugPrint('[DM upload] error: $e');
@@ -378,7 +379,8 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
           content: text,
         );
         if (sentMsg == null) {
-          errorMsg = 'Mesaj gönderilemedi';
+          errorMsg = 'Mesaj gönderilemedi: '
+              '${MessagingService.lastSendError ?? "bilinmeyen hata"}';
         }
       }
 
