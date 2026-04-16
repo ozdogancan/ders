@@ -238,10 +238,16 @@ class MessagingService {
         // okuyunca "gelecek zaman" cikip timeAgo "Simdi" donduruyor.
         // .toUtc() ile dogru UTC ISO (Z suffix'li) yaz.
         final nowIso = DateTime.now().toUtc().toIso8601String();
+        // Image mesajlari icin last_message'a "[image]" marker ekle.
+        // Chat list bu marker'i parse edip foto ikonu + caption gosterir.
+        // Caption (content) bos olabilir → sadece "[image]".
+        final lastMessageStr = type == MessageType.image
+            ? (content.trim().isEmpty ? '[image]' : '[image] $content')
+            : content;
         final upd = await _db
             .from('koala_conversations')
             .update({
-              'last_message': content,
+              'last_message': lastMessageStr,
               'last_message_at': nowIso,
               'updated_at': nowIso,
             })
@@ -259,11 +265,15 @@ class MessagingService {
       // 3. Evlumba bridge — fire-and-forget; client UX'ini bekletmez.
       //    Kullanıcı → tasarımcı yönünde mesajları Evlumba DB'sine de yazar
       //    ki tasarımcı evlumba.com/mesajlar'dan görebilsin.
-      if (isUser && type == MessageType.text) {
+      //    Hem text hem image type'i bridge edilir; image'da attachmentUrl da
+      //    iletilir, body caption (boş olabilir).
+      if (isUser &&
+          (type == MessageType.text || type == MessageType.image)) {
         unawaited(_bridgeToEvlumba(
           designerId: conv['designer_id'] as String,
           body: content,
           koalaConversationId: conversationId,
+          attachmentUrl: type == MessageType.image ? attachmentUrl : null,
         ));
       }
 
@@ -455,6 +465,7 @@ class MessagingService {
     required String designerId,
     required String body,
     required String koalaConversationId,
+    String? attachmentUrl,
   }) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
@@ -474,6 +485,7 @@ class MessagingService {
               'designerId': designerId,
               'body': body,
               'koalaConversationId': koalaConversationId,
+              if (attachmentUrl != null) 'attachmentUrl': attachmentUrl,
             }),
           )
           .timeout(const Duration(seconds: 10));

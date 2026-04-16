@@ -2141,13 +2141,9 @@ class _ChatListScreenV1State extends State<ChatListScreenV1> {
                   ],
                   if (lastMessage.isNotEmpty) ...[
                     const SizedBox(height: 4),
-                    Text(
-                      lastMessage,
-                      style: unread > 0
-                          ? KoalaText.bodyMedium
-                          : KoalaText.bodySec,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                    _LastMessagePreview(
+                      raw: lastMessage,
+                      unread: unread > 0,
                     ),
                   ],
                 ],
@@ -2647,6 +2643,50 @@ class _AiHistorySheetState extends State<_AiHistorySheet> {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Conversation tile'da son mesaj satırı.
+/// `[image]` marker'i icin foto ikonu + caption ("Fotograf" fallback) gosterir,
+/// diger durumda sadece text. Marker MessagingService.sendMessage tarafindan
+/// koala_conversations.last_message'a yaziliyor.
+class _LastMessagePreview extends StatelessWidget {
+  const _LastMessagePreview({required this.raw, required this.unread});
+  final String raw;
+  final bool unread;
+
+  @override
+  Widget build(BuildContext context) {
+    const imgMarker = '[image]';
+    if (raw.startsWith(imgMarker)) {
+      // "[image]" veya "[image] caption" formati
+      final caption = raw.substring(imgMarker.length).trim();
+      final label = caption.isEmpty ? 'Fotoğraf' : caption;
+      return Row(
+        children: [
+          Icon(
+            LucideIcons.image,
+            size: 13,
+            color: unread ? KoalaColors.text : KoalaColors.textSec,
+          ),
+          const SizedBox(width: 5),
+          Expanded(
+            child: Text(
+              label,
+              style: unread ? KoalaText.bodyMedium : KoalaText.bodySec,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      );
+    }
+    return Text(
+      raw,
+      style: unread ? KoalaText.bodyMedium : KoalaText.bodySec,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
     );
   }
 }

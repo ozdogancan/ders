@@ -1,16 +1,16 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:lucide_icons/lucide_icons.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' hide User;
-import 'package:url_launcher/url_launcher.dart';
 import '../core/theme/koala_tokens.dart';
 import '../core/utils/format_utils.dart';
 import '../services/evlumba_live_service.dart';
 import '../services/global_message_listener.dart';
 import '../services/koala_ai_service.dart';
 import '../services/messaging_service.dart';
-import '../services/saved_items_service.dart';
 import '../widgets/koala_widgets.dart';
-import '../widgets/save_button.dart';
 import 'chat_detail_screen.dart';
 
 /// Tasarımcı ile mesaj detay ekranı — gerçek zamanlı
@@ -46,12 +46,17 @@ class ConversationDetailScreen extends StatefulWidget {
 class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
   final _textController = TextEditingController();
   final _scrollController = ScrollController();
+  final _picker = ImagePicker();
   List<Map<String, dynamic>> _messages = [];
   bool _loading = true;
   bool _sending = false;
   bool _loadingMore = false;
-  bool _uploadingImage = false;
   String? _uid;
+
+  /// Picker'dan seçilen ama henüz gönderilmemiş foto (bytes).
+  /// Input'un üstünde preview kartı gösterilir; opsiyonel metinle send'e basınca
+  /// optimize edilip Storage'a yüklenir ve mesaj olarak gönderilir.
+  Uint8List? _pendingPhoto;
 
   /// Oldest unread message ID on entry. "Yeni mesajlar" divider bunun üstünde
   /// gözükür ve ilk frame'de ekran buraya pozisyonlanır. markAsRead UI'ı
@@ -321,88 +326,163 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
     }
   }
 
+  /// Send button: text + opsiyonel _pendingPhoto'yu birlikte gönderir.
+  /// _pendingPhoto varsa: optimize → Storage upload → image type message
+  /// (caption = text). Sadece text varsa: text type message.
   Future<void> _sendMessage() async {
+    if (_sending) return;
     final text = _textController.text.trim();
-    if (text.isEmpty || _sending) return;
+    final photo = _pendingPhoto;
+    if (text.isEmpty && photo == null) return;
 
     _textController.clear();
-    setState(() => _sending = true);
-
-    await MessagingService.sendMessage(
-      conversationId: widget.conversationId,
-      content: text,
-    );
-
-    // Chat list'in sıralamayı güncellemesi için zorla tetikle
-    // (Realtime UPDATE event'i bazen Firebase-auth'lu client'a düşmüyor)
-    try {
-      GlobalMessageListener.syncTick.value++;
-    } catch (_) {}
-
-    if (mounted) setState(() => _sending = false);
-  }
-
-  Future<void> _pickAndSendImage() async {
-    final picker = ImagePicker();
-    final picked = await picker.pickImage(
-      source: ImageSource.gallery,
-      maxWidth: 1200,
-      imageQuality: 80,
-    );
-    if (picked == null) return;
-
-    setState(() => _uploadingImage = true);
+    setState(() {
+      _sending = true;
+      _pendingPhoto = null;
+    });
 
     try {
-      final bytes = await picked.readAsBytes();
-      final ext = picked.path.split('.').last.toLowerCase();
-      const allowedExt = {'jpg', 'jpeg', 'png', 'gif', 'webp', 'heic'};
-      if (!allowedExt.contains(ext)) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Desteklenmeyen dosya türü')),
+      if (photo != null) {
+        // Foto var → upload + image message (caption = text)
+        final fileName =
+            '${_uid ?? 'anon'}/${DateTime.now().millisecondsSinceEpoch}.jpg';
+        try {
+          await Supabase.instance.client.storage
+              .from('message-images')
+              .uploadBinary(
+                fileName,
+                photo,
+                fileOptions: const FileOptions(contentType: 'image/jpeg'),
+              );
+          final imageUrl = Supabase.instance.client.storage
+              .from('message-images')
+              .getPublicUrl(fileName);
+
+          await MessagingService.sendMessage(
+            conversationId: widget.conversationId,
+            content: text, // caption (boş olabilir)
+            type: MessageType.image,
+            attachmentUrl: imageUrl,
           );
+        } catch (e) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Görsel yüklenemedi')),
+            );
+          }
         }
-        setState(() => _uploadingImage = false);
-        return;
+      } else {
+        // Sadece text
+        await MessagingService.sendMessage(
+          conversationId: widget.conversationId,
+          content: text,
+        );
       }
-      final fileName = '${_uid ?? 'anon'}/${DateTime.now().millisecondsSinceEpoch}.$ext';
 
-      await Supabase.instance.client.storage
-          .from('message-images')
-          .uploadBinary(fileName, bytes);
-
-      final imageUrl = Supabase.instance.client.storage
-          .from('message-images')
-          .getPublicUrl(fileName);
-
-      await MessagingService.sendMessage(
-        conversationId: widget.conversationId,
-        content: '\u{1F4F7} Fotoğraf',
-        type: MessageType.image,
-        attachmentUrl: imageUrl,
-      );
-
-      // Chat list sıralamasını zorla tetikle
+      // Chat list'in sıralamayı güncellemesi için zorla tetikle
+      // (Realtime UPDATE event'i bazen Firebase-auth'lu client'a düşmüyor)
       try {
         GlobalMessageListener.syncTick.value++;
       } catch (_) {}
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Görsel yüklenemedi')),
-        );
-      }
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
+  }
+
+  /// Picker bottom sheet: web'de doğrudan galeri, mobilde kamera/galeri seçimi.
+  void _showPicker() {
+    HapticFeedback.lightImpact();
+
+    if (kIsWeb) {
+      _doPick(ImageSource.gallery);
+      return;
     }
 
-    if (mounted) setState(() => _uploadingImage = false);
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (_) => Container(
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 36),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 36,
+              height: 4,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(2),
+                color: Colors.grey.shade300,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: _pickBtn(Icons.camera_alt_rounded, 'Kamera', () {
+                    Navigator.pop(context);
+                    _doPick(ImageSource.camera);
+                  }),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _pickBtn(Icons.photo_library_rounded, 'Galeri', () {
+                    Navigator.pop(context);
+                    _doPick(ImageSource.gallery);
+                  }),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
-  void _openDesignerProfile() {
-    if (widget.designerId == null) return;
-    final url = 'https://www.evlumba.com/tasarimci/${widget.designerId}';
-    launchUrl(Uri.parse(url), mode: LaunchMode.inAppBrowserView);
+  Future<void> _doPick(ImageSource src) async {
+    // image_picker built-in compression: long edge ~1280px, JPEG quality 70
+    // Web'de zaten browser canvas ile yapılır; mobile'da plugin'in native
+    // resize'ı çalışır. Ekstra image package decode/encode overhead yok.
+    final f = await _picker.pickImage(
+      source: src,
+      maxWidth: 1280,
+      maxHeight: 1280,
+      imageQuality: 70,
+    );
+    if (f == null) return;
+    final bytes = await f.readAsBytes();
+    if (!mounted) return;
+    setState(() => _pendingPhoto = bytes);
   }
+
+  Widget _pickBtn(IconData icon, String label, VoidCallback onTap) =>
+      GestureDetector(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 20),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            color: KoalaColors.accentLight,
+          ),
+          child: Column(
+            children: [
+              Icon(icon, size: 28, color: KoalaColors.accent),
+              const SizedBox(height: 8),
+              Text(
+                label,
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: KoalaColors.text,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
 
   /// Portfolio görseline tıklanınca proje detay overlay aç
   void _openProjectViewer(Map<String, dynamic> project, int startIndex) {
@@ -517,95 +597,193 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
                         ),
             ),
 
-            // Input bar
-            Container(
-              padding: EdgeInsets.only(
-                left: KoalaSpacing.lg,
-                right: KoalaSpacing.sm,
-                top: KoalaSpacing.sm,
-                bottom: keyboardUp
-                    ? media.viewInsets.bottom + KoalaSpacing.sm
-                    : media.padding.bottom + KoalaSpacing.sm,
-              ),
-              decoration: const BoxDecoration(
-                color: KoalaColors.surface,
-                border: Border(
-                  top: BorderSide(color: KoalaColors.border, width: 0.5),
+            // Photo preview — picker'dan seçilen foto, send'e basana kadar burada
+            if (_pendingPhoto != null) _buildPhotoPreview(),
+
+            // Input bar — anasayfadaki TypewriterInput stiliyle aynı
+            _buildInputBar(
+              bottomPadding: keyboardUp
+                  ? media.viewInsets.bottom
+                  : media.padding.bottom,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPhotoPreview() => Container(
+        margin: const EdgeInsets.fromLTRB(16, 0, 16, 6),
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          color: Colors.white,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.06),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Stack(
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: Image.memory(
+                    _pendingPhoto!,
+                    width: 64,
+                    height: 64,
+                    fit: BoxFit.cover,
+                  ),
+                ),
+                Positioned(
+                  top: 4,
+                  right: 4,
+                  child: GestureDetector(
+                    onTap: () => setState(() => _pendingPhoto = null),
+                    child: Container(
+                      width: 22,
+                      height: 22,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: Colors.black.withValues(alpha: 0.55),
+                      ),
+                      child: const Icon(
+                        Icons.close_rounded,
+                        size: 14,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                'Foto eklendi · isteğe bağlı bir not yazıp gönder',
+                style: const TextStyle(
+                  fontSize: 12.5,
+                  color: KoalaColors.textSec,
+                  fontWeight: FontWeight.w500,
+                  height: 1.3,
                 ),
               ),
-              child: Row(
-                children: [
-                  // Image picker
-                  GestureDetector(
-                    onTap: _uploadingImage ? null : _pickAndSendImage,
-                    child: Padding(
-                      padding: const EdgeInsets.only(right: KoalaSpacing.sm),
-                      child: _uploadingImage
-                          ? const SizedBox(
-                              width: 24,
-                              height: 24,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: KoalaColors.accent,
-                              ),
-                            )
-                          : const Icon(
-                              Icons.camera_alt_rounded,
-                              color: KoalaColors.textSec,
-                              size: 24,
-                            ),
-                    ),
+            ),
+          ],
+        ),
+      );
+
+  Widget _buildInputBar({required double bottomPadding}) {
+    final hasText = _textController.text.trim().isNotEmpty;
+    final canSend = hasText || _pendingPhoto != null;
+    return Padding(
+      padding: EdgeInsets.fromLTRB(16, 2, 16, bottomPadding + 16),
+      child: Container(
+        height: 54,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(28),
+          color: Colors.white.withValues(alpha: 0.8),
+          border: Border.all(
+            color: Colors.black.withValues(alpha: 0.06),
+            width: 0.5,
+          ),
+        ),
+        child: Row(
+          children: [
+            GestureDetector(
+              onTap: _sending ? null : _showPicker,
+              child: Padding(
+                padding: const EdgeInsets.only(left: 8),
+                child: Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.black.withValues(alpha: 0.04),
                   ),
-                  Expanded(
-                    child: TextField(
-                      controller: _textController,
-                      style: KoalaText.body,
-                      maxLines: 4,
-                      minLines: 1,
-                      textInputAction: TextInputAction.send,
-                      onSubmitted: (_) => _sendMessage(),
-                      decoration: InputDecoration(
-                        hintText: '${widget.designerName} ile mesajlaş...',
-                        hintStyle: KoalaText.hint,
-                        filled: true,
-                        fillColor: KoalaColors.bg,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(KoalaRadius.xl),
-                          borderSide: BorderSide.none,
+                  child: const Icon(
+                    LucideIcons.image,
+                    size: 18,
+                    color: KoalaColors.textSec,
+                  ),
+                ),
+              ),
+            ),
+            Expanded(
+              child: TextField(
+                controller: _textController,
+                textInputAction: TextInputAction.send,
+                onSubmitted: (_) => _sendMessage(),
+                onChanged: (_) => setState(() {}),
+                maxLines: 4,
+                minLines: 1,
+                decoration: const InputDecoration(
+                  hintText: 'Mesaj yaz...',
+                  hintStyle: TextStyle(
+                    fontSize: 14,
+                    color: KoalaColors.textTer,
+                    fontWeight: FontWeight.w400,
+                  ),
+                  border: InputBorder.none,
+                  focusedBorder: InputBorder.none,
+                  enabledBorder: InputBorder.none,
+                  errorBorder: InputBorder.none,
+                  disabledBorder: InputBorder.none,
+                  contentPadding: EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 14,
+                  ),
+                ),
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  color: KoalaColors.text,
+                ),
+              ),
+            ),
+            GestureDetector(
+              onTap: canSend && !_sending ? _sendMessage : null,
+              child: Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: canSend && !_sending
+                        ? const LinearGradient(
+                            colors: [
+                              KoalaColors.accent,
+                              KoalaColors.accentDark,
+                            ],
+                          )
+                        : null,
+                    color: canSend && !_sending
+                        ? null
+                        : Colors.black.withValues(alpha: 0.04),
+                  ),
+                  child: _sending
+                      ? const Padding(
+                          padding: EdgeInsets.all(10),
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : Icon(
+                          LucideIcons.arrowUp,
+                          size: 18,
+                          color: canSend
+                              ? Colors.white
+                              : KoalaColors.textSec,
                         ),
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: KoalaSpacing.lg,
-                          vertical: KoalaSpacing.md,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: KoalaSpacing.sm),
-                  GestureDetector(
-                    onTap: _sendMessage,
-                    child: Container(
-                      width: 44,
-                      height: 44,
-                      decoration: BoxDecoration(
-                        color: _sending ? KoalaColors.accentLight : KoalaColors.accent,
-                        shape: BoxShape.circle,
-                      ),
-                      child: _sending
-                          ? const Padding(
-                              padding: EdgeInsets.all(12),
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Colors.white,
-                              ),
-                            )
-                          : const Icon(
-                              Icons.send_rounded,
-                              color: Colors.white,
-                              size: 20,
-                            ),
-                    ),
-                  ),
-                ],
+                ),
               ),
             ),
           ],
@@ -624,14 +802,19 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
 
     final specialty = (_designerDetail?['specialty'] ?? '').toString().trim();
     final city = (_designerDetail?['city'] ?? '').toString().trim();
+    final subParts = <String>[
+      if (specialty.isNotEmpty) specialty,
+      if (city.isNotEmpty) city,
+    ];
+    final subLine = subParts.join(' \u00b7 ');
 
     return Container(
       color: KoalaColors.surface,
       child: Column(
         children: [
-          // Top row: back + actions
+          // Tek satır kompakt header — back + 36px avatar + name/sub + aktif pulse
           Padding(
-            padding: const EdgeInsets.only(left: 4, right: 8, top: 4),
+            padding: const EdgeInsets.fromLTRB(4, 4, 16, 8),
             child: Row(
               children: [
                 IconButton(
@@ -639,121 +822,87 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
                   icon: const Icon(Icons.arrow_back_rounded,
                       color: KoalaColors.text, size: 22),
                 ),
-                const Spacer(),
-                if (widget.designerId != null)
-                  SaveButton(
-                    itemType: SavedItemType.designer,
-                    itemId: widget.designerId!,
-                    title: widget.designerName,
-                    subtitle: specialty.isNotEmpty ? specialty : 'İç Mimar',
-                    size: 20,
+                // Avatar
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: const BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: LinearGradient(
+                      colors: [KoalaColors.accent, KoalaColors.accentMuted],
+                    ),
                   ),
-                IconButton(
-                  onPressed: _openDesignerProfile,
-                  icon: const Icon(Icons.open_in_new_rounded,
-                      color: KoalaColors.textSec, size: 20),
-                  tooltip: 'Profili Gör',
-                  visualDensity: VisualDensity.compact,
+                  child: widget.designerAvatarUrl != null
+                      ? ClipOval(
+                          child: Image.network(
+                            widget.designerAvatarUrl!,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => Center(
+                              child: Text(initials,
+                                  style: const TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w700,
+                                      color: Colors.white)),
+                            ),
+                          ),
+                        )
+                      : Center(
+                          child: Text(initials,
+                              style: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                  color: Colors.white)),
+                        ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        widget.designerName,
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                          color: KoalaColors.text,
+                          height: 1.2,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      if (subLine.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 2),
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 6,
+                                height: 6,
+                                decoration: const BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: Color(0xFF4CAF50),
+                                ),
+                              ),
+                              const SizedBox(width: 5),
+                              Flexible(
+                                child: Text(
+                                  subLine,
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    color: KoalaColors.textTer,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                    ],
+                  ),
                 ),
               ],
-            ),
-          ),
-
-          // Designer info
-          GestureDetector(
-            onTap: _openDesignerProfile,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Avatar
-                  Container(
-                    width: 52,
-                    height: 52,
-                    decoration: const BoxDecoration(
-                      shape: BoxShape.circle,
-                      gradient: LinearGradient(
-                        colors: [KoalaColors.accent, KoalaColors.accentMuted],
-                      ),
-                    ),
-                    child: widget.designerAvatarUrl != null
-                        ? ClipOval(
-                            child: Image.network(
-                              widget.designerAvatarUrl!,
-                              fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) => Center(
-                                child: Text(initials,
-                                    style: const TextStyle(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.w700,
-                                        color: Colors.white)),
-                              ),
-                            ),
-                          )
-                        : Center(
-                            child: Text(initials,
-                                style: const TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w700,
-                                    color: Colors.white)),
-                          ),
-                  ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          widget.designerName,
-                          style: const TextStyle(
-                            fontSize: 17,
-                            fontWeight: FontWeight.w800,
-                            color: KoalaColors.text,
-                          ),
-                        ),
-                        if (specialty.isNotEmpty)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 2),
-                            child: Text(
-                              specialty,
-                              style: const TextStyle(
-                                fontSize: 13,
-                                color: KoalaColors.textSec,
-                              ),
-                            ),
-                          ),
-                        const SizedBox(height: 4),
-                        Row(
-                          children: [
-                            Container(
-                              width: 7,
-                              height: 7,
-                              decoration: const BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: Color(0xFF4CAF50),
-                              ),
-                            ),
-                            const SizedBox(width: 6),
-                            Expanded(
-                              child: Text(
-                                city.isNotEmpty
-                                    ? 'Genellikle 24 saat içinde yanıtlar \u00b7 $city'
-                                    : 'Genellikle 24 saat içinde yanıtlar',
-                                style: const TextStyle(
-                                  fontSize: 12,
-                                  color: KoalaColors.textTer,
-                                ),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
             ),
           ),
 

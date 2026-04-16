@@ -987,7 +987,10 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
               Expanded(
                 child: Stack(
                   children: [
-                    _msgs.isEmpty && !_loading
+                    // Welcome state: SADECE yeni sohbet (chatId yok) için.
+                    // Mevcut sohbete girerken _loadMessages() async çalışırken
+                    // welcome state flash etmesin diye chatId varsa boş bırak.
+                    _msgs.isEmpty && !_loading && widget.chatId == null
                         ? _buildEmptyState()
                         : ListView.builder(
                         controller: _scroll,
