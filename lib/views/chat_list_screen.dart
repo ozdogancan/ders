@@ -220,6 +220,89 @@ class _ChatListScreenState extends State<ChatListScreen> {
 
   /// Kullanıcı refresh butonuna / pull-to-refresh'e bastığında görünür
   /// feedback ver — senkronun başarılı mı, kaç mesaj geldi, hata mı gibi.
+  // Hidden debug: "Mesajlar" başlığına 5 kere ard arda tıklayınca diag dialog
+  // açılır. Release build'de de çalışır — user problem bildirimi için.
+  int _titleTapCount = 0;
+  DateTime? _firstTapAt;
+
+  void _maybeOpenDebug() {
+    final now = DateTime.now();
+    if (_firstTapAt == null ||
+        now.difference(_firstTapAt!) > const Duration(seconds: 3)) {
+      _firstTapAt = now;
+      _titleTapCount = 1;
+      return;
+    }
+    _titleTapCount++;
+    if (_titleTapCount >= 5) {
+      _titleTapCount = 0;
+      _firstTapAt = null;
+      _showInboundDiag();
+    }
+  }
+
+  Future<void> _showInboundDiag() async {
+    // Tazelenmiş diag için bir sync tetikle
+    await MessagingService.pullInbound();
+    if (!mounted) return;
+    final diag = MessagingService.lastInboundDiag;
+    final convCount = MessagingService.lastInboundConversations;
+    final firebaseUid = diag?['firebaseUid']?.toString() ?? '-';
+    final email = diag?['email']?.toString() ?? '-';
+    final homeownerId = diag?['homeownerId']?.toString() ?? '-';
+    final shadowIds =
+        (diag?['shadowIds'] as List?)?.map((e) => e.toString()).toList() ?? [];
+    final realEvlumbaIds =
+        (diag?['realEvlumbaIds'] as List?)?.map((e) => e.toString()).toList() ??
+        [];
+    final reason = diag?['reason']?.toString();
+
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Mesaj Senkron Debug'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('firebaseUid: $firebaseUid', style: const TextStyle(fontSize: 11)),
+              const SizedBox(height: 4),
+              Text('email: $email', style: const TextStyle(fontSize: 11)),
+              const SizedBox(height: 4),
+              Text('canonical shadow: $homeownerId',
+                  style: const TextStyle(fontSize: 11)),
+              const SizedBox(height: 8),
+              Text('shadowIds (${shadowIds.length}):',
+                  style: const TextStyle(fontWeight: FontWeight.w600)),
+              for (final id in shadowIds)
+                Text('• $id', style: const TextStyle(fontSize: 11)),
+              const SizedBox(height: 8),
+              Text('realEvlumbaIds (${realEvlumbaIds.length}):',
+                  style: const TextStyle(fontWeight: FontWeight.w600)),
+              for (final id in realEvlumbaIds)
+                Text('• $id', style: const TextStyle(fontSize: 11)),
+              const SizedBox(height: 8),
+              Text('Evlumba conversations: $convCount',
+                  style: const TextStyle(fontWeight: FontWeight.w600)),
+              if (reason != null) ...[
+                const SizedBox(height: 4),
+                Text('reason: $reason',
+                    style: const TextStyle(fontSize: 11, color: Color(0xFFB00020))),
+              ],
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Kapat'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _manualSync() async {
     final messenger = ScaffoldMessenger.maybeOf(context);
     try {
@@ -314,7 +397,11 @@ class _ChatListScreenState extends State<ChatListScreen> {
           onPressed: _goBackHome,
           icon: const Icon(Icons.arrow_back_rounded),
         ),
-        title: const Text('Mesajlar', style: KoalaText.h2),
+        title: GestureDetector(
+          // Title'a 5x tıklama → debug dialog (gizli — user'ı rahatsız etmez)
+          onTap: _maybeOpenDebug,
+          child: const Text('Mesajlar', style: KoalaText.h2),
+        ),
         // Refresh butonu kaldırıldı — WhatsApp gibi anlık olmalı. Pull-to-refresh
         // gizli yedek olarak duruyor (RefreshIndicator body'de).
       ),
