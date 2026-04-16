@@ -47,6 +47,27 @@ class MessagingService {
   // Aktif realtime subscription'lar
   static final Map<String, RealtimeChannel> _channels = {};
 
+  /// One-time backfill: eski inbound route'un status set etmediği için NULL
+  /// kalan koala_conversations row'larını 'active' yap. Idempotent.
+  static bool _statusBackfillDone = false;
+  static Future<void> backfillNullStatusConversations() async {
+    if (_statusBackfillDone) return;
+    if (!Env.hasSupabaseConfig) return;
+    final uid = await _waitForUid();
+    if (uid == null) return;
+    try {
+      await _db
+          .from('koala_conversations')
+          .update({'status': 'active'})
+          .or('user_id.eq.$uid,designer_id.eq.$uid')
+          .filter('status', 'is', null);
+      _statusBackfillDone = true;
+      debugPrint('MessagingService: null-status conversations backfilled');
+    } catch (e) {
+      debugPrint('MessagingService.backfillNullStatusConversations error: $e');
+    }
+  }
+
   // ═══════════════════════════════════════════════════════
   // CONVERSATIONS (sohbet odalari)
   // ═══════════════════════════════════════════════════════

@@ -56,6 +56,8 @@ class GlobalMessageListener {
     try {
       final uid = FirebaseAuth.instance.currentUser?.uid;
       if (uid == null) return;
+      // İlk tick'te backfill — eski NULL-status conv'ları 'active' yap.
+      unawaited(MessagingService.backfillNullStatusConversations());
       final synced = await MessagingService.pullInbound();
       if (synced <= 0) return;
       final details = List<Map<String, dynamic>>.from(
@@ -70,7 +72,13 @@ class GlobalMessageListener {
         if (suppressConvId == convId) continue;
 
         // Bu conv için aynı imzayı zaten gösterdiysek tekrar gösterme.
-        final sig = '$designerId|$count|${d['latestAt'] ?? ''}';
+        // latestEvlId evlumba mesaj ID'si — her mesaj unique, iki farklı mesaj
+        // gelse de count=1 tekrar aynı sig olmaz.
+        final latestId = (d['latestEvlId'] ?? '').toString();
+        final latestAt = (d['latestAt'] ?? '').toString();
+        final sig = latestId.isNotEmpty
+            ? latestId
+            : '$designerId|$count|$latestAt|${DateTime.now().millisecondsSinceEpoch}';
         if (_lastShownSig[convId] == sig) continue;
         _lastShownSig[convId] = sig;
 
