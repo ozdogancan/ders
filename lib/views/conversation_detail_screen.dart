@@ -335,12 +335,12 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
     final photo = _pendingPhoto;
     if (text.isEmpty && photo == null) return;
 
-    _textController.clear();
-    setState(() {
-      _sending = true;
-      _pendingPhoto = null;
-    });
+    // ÖNEMLİ: text/foto'yu HENÜZ silme. Başarısızsa restore et ki kullanıcı
+    // kayıp hissi yaşamasın. Sadece _sending true → input lock.
+    setState(() => _sending = true);
 
+    String? errorMsg;
+    Map<String, dynamic>? sentMsg;
     try {
       if (photo != null) {
         // Foto var → upload + image message (caption = text)
@@ -358,41 +358,64 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
               .from('message-images')
               .getPublicUrl(fileName);
 
-          await MessagingService.sendMessage(
+          sentMsg = await MessagingService.sendMessage(
             conversationId: widget.conversationId,
             content: text, // caption (boş olabilir)
             type: MessageType.image,
             attachmentUrl: imageUrl,
           );
-        } catch (e) {
-          // Hata detayını göster — bucket/RLS/network sorununu bilmemiz lazım.
-          debugPrint('[DM upload] error: $e');
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(
-                  'Görsel yüklenemedi: ${e.toString().split('\n').first}',
-                ),
-                duration: const Duration(seconds: 6),
-              ),
-            );
+          if (sentMsg == null) {
+            errorMsg = 'Mesaj kaydedilemedi (RLS/insert reddi olabilir)';
           }
+        } catch (e) {
+          debugPrint('[DM upload] error: $e');
+          errorMsg = 'Görsel yüklenemedi: ${e.toString().split('\n').first}';
         }
       } else {
         // Sadece text
-        await MessagingService.sendMessage(
+        sentMsg = await MessagingService.sendMessage(
           conversationId: widget.conversationId,
           content: text,
         );
+        if (sentMsg == null) {
+          errorMsg = 'Mesaj gönderilemedi';
+        }
       }
 
-      // Chat list'in sıralamayı güncellemesi için zorla tetikle
-      // (Realtime UPDATE event'i bazen Firebase-auth'lu client'a düşmüyor)
+      // Chat list sıralamasını tetikle (Realtime bazen Firebase auth'lu
+      // client'a düşmüyor).
       try {
         GlobalMessageListener.syncTick.value++;
       } catch (_) {}
     } finally {
-      if (mounted) setState(() => _sending = false);
+      if (!mounted) return;
+
+      if (sentMsg != null) {
+        // BAŞARI: input'u temizle.
+        _textController.clear();
+        setState(() {
+          _sending = false;
+          _pendingPhoto = null;
+        });
+      } else {
+        // BAŞARISIZ: text/foto kullanıcının elinde kalsın, sticky hata göster.
+        setState(() => _sending = false);
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(
+            SnackBar(
+              content: Text(errorMsg ?? 'Bilinmeyen hata'),
+              duration: const Duration(seconds: 10),
+              backgroundColor: Colors.red.shade700,
+              action: SnackBarAction(
+                label: 'Tamam',
+                textColor: Colors.white,
+                onPressed: () => ScaffoldMessenger.of(context)
+                    .hideCurrentSnackBar(),
+              ),
+            ),
+          );
+      }
     }
   }
 
