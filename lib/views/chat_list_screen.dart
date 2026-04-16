@@ -11,7 +11,7 @@ import 'chat_list_screen_v2.dart';
 //
 // Rollback için tek satır: aşağıdaki `kUseChatListV2` → false.
 // ═══════════════════════════════════════════════════════════════════
-const bool kUseChatListV2 = true;
+const bool kUseChatListV2 = false;
 
 class ChatListScreen extends StatelessWidget {
   const ChatListScreen({super.key});
