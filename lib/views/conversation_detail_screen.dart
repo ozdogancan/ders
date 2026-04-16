@@ -43,6 +43,14 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
   bool _uploadingImage = false;
   String? _uid;
 
+  // Portfolio header collapse state — varsayılan KAPALI, yer kaplamasın.
+  bool _portfolioExpanded = false;
+
+  // Conversation-level realtime listener — backend pullInbound her 3s unread'i
+  // yeniden hesapladığından, biz bu ekrana bakarken unread>0 bump olursa
+  // HEMEN markAsRead çağır. Aksi halde badge sürekli geri "1" olur.
+  void Function(Map<String, dynamic>)? _convListener;
+
   // Designer detay bilgileri
   Map<String, dynamic>? _designerDetail;
   List<Map<String, dynamic>> _designerProjects = [];
@@ -54,6 +62,7 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
     _uid = MessagingService.currentUserId;
     _loadMessages();
     _subscribeRealtime();
+    _subscribeConversationUpdates();
     _markRead();
     _scrollController.addListener(_onScroll);
     _loadDesignerDetail();
@@ -62,6 +71,9 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
   @override
   void dispose() {
     MessagingService.unsubscribeFromMessages(widget.conversationId);
+    try {
+      MessagingService.unsubscribeFromConversations(listener: _convListener);
+    } catch (_) {}
     _textController.dispose();
     _scrollController.dispose();
     super.dispose();
@@ -138,6 +150,27 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
         }
       },
     );
+  }
+
+  /// Konuşma UPDATE event'lerini dinle — unread_count_user sıfırdan büyük
+  /// bump olursa HEMEN tekrar markAsRead çağır. Backend inbound sync her 3s
+  /// unread sayısını recompute ediyor; bu ekran açıkken yeni mesaj geldiğinde
+  /// badge'in 1'e çıkıp kalmasını önlüyor.
+  void _subscribeConversationUpdates() {
+    _convListener = (record) {
+      if (!mounted) return;
+      final convId = record['id']?.toString();
+      if (convId != widget.conversationId) return;
+      final uid = MessagingService.currentUserId;
+      final isUser = record['user_id'] == uid;
+      final unreadNow = isUser
+          ? ((record['unread_count_user'] as int?) ?? 0)
+          : ((record['unread_count_designer'] as int?) ?? 0);
+      if (unreadNow > 0) {
+        MessagingService.markAsRead(widget.conversationId);
+      }
+    };
+    MessagingService.subscribeToConversations(onUpdate: _convListener!);
   }
 
   Future<void> _markRead() async {
@@ -545,128 +578,203 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
             ),
           ),
 
-          // Portfolio — tüm tasarımlar, başlık + görsel
-          if (_designerProjects.isNotEmpty) ...[
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
-              child: Row(
-                children: [
-                  const Icon(Icons.collections_rounded, size: 14, color: KoalaColors.textTer),
-                  const SizedBox(width: 6),
-                  Text(
-                    'Tüm Tasarımlar (${_designerProjects.length})',
-                    style: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                      color: KoalaColors.textTer,
-                      letterSpacing: 0.4,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            SizedBox(
-              height: 124,
-              child: ListView.separated(
-                padding: const EdgeInsets.only(left: 20, right: 20, bottom: 12),
-                scrollDirection: Axis.horizontal,
-                itemCount: _designerProjects.length,
-                separatorBuilder: (_, __) => const SizedBox(width: 10),
-                itemBuilder: (_, i) {
-                  final project = _designerProjects[i];
-                  final img = (project['cover_image_url'] ??
-                          project['cover_url'] ??
-                          project['image_url'] ??
-                          '')
-                      .toString()
-                      .trim();
-                  final title = (project['title'] ?? '').toString().trim();
-                  final isContext =
-                      widget.projectTitle != null &&
-                      widget.projectTitle!.trim() == title;
-
-                  return GestureDetector(
-                    onTap: () => _openProjectViewer(project, i),
-                    child: SizedBox(
-                      width: 130,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Stack(
-                            children: [
-                              ClipRRect(
-                                borderRadius: BorderRadius.circular(10),
-                                child: img.isNotEmpty
-                                    ? Image.network(
-                                        img,
-                                        width: 130,
-                                        height: 86,
-                                        fit: BoxFit.cover,
-                                        errorBuilder: (_, __, ___) => Container(
-                                          width: 130,
-                                          height: 86,
-                                          color: KoalaColors.surfaceAlt,
-                                          child: const Icon(Icons.image_not_supported_outlined,
-                                              size: 20, color: KoalaColors.textTer),
-                                        ),
-                                      )
-                                    : Container(
-                                        width: 130,
-                                        height: 86,
-                                        color: KoalaColors.surfaceAlt,
-                                        child: const Icon(Icons.image_outlined,
-                                            size: 20, color: KoalaColors.textTer),
-                                      ),
-                              ),
-                              if (isContext)
-                                Positioned(
-                                  top: 6,
-                                  left: 6,
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                    decoration: BoxDecoration(
-                                      color: KoalaColors.accent,
-                                      borderRadius: BorderRadius.circular(KoalaRadius.pill),
-                                    ),
-                                    child: const Text(
-                                      'Bu Proje',
-                                      style: TextStyle(
-                                        fontSize: 9,
-                                        fontWeight: FontWeight.w700,
-                                        color: Colors.white,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                            ],
-                          ),
-                          if (title.isNotEmpty)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 6),
-                              child: Text(
-                                title,
-                                style: const TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w600,
-                                  color: KoalaColors.text,
-                                  height: 1.25,
-                                ),
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ),
-          ],
+          // Portfolio — varsayılan KAPALI (yer kaplamasın), tıklanınca açılır.
+          if (_designerProjects.isNotEmpty) _buildPortfolioSection(),
 
           const Divider(height: 1, color: KoalaColors.borderSolid),
         ],
       ),
+    );
+  }
+
+  /// Tüm Tasarımlar header + collapse/expand — varsayılan kapalı.
+  /// Kapalıyken: tek satır başlık + ilk 4 mini thumbnail + genişlet ikonu.
+  /// Açıkken: mevcut 124px ListView görünümü.
+  Widget _buildPortfolioSection() {
+    final count = _designerProjects.length;
+    final previewCount = count < 4 ? count : 4;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        InkWell(
+          onTap: () => setState(() => _portfolioExpanded = !_portfolioExpanded),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 4, 14, 8),
+            child: Row(
+              children: [
+                const Icon(Icons.collections_rounded,
+                    size: 14, color: KoalaColors.textTer),
+                const SizedBox(width: 6),
+                Text(
+                  'Tüm Tasarımlar ($count)',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: KoalaColors.textTer,
+                    letterSpacing: 0.4,
+                  ),
+                ),
+                const Spacer(),
+                // Kapalıyken ilk 4 proje mini-avatar şerit olarak görünür
+                if (!_portfolioExpanded)
+                  SizedBox(
+                    height: 26,
+                    child: Stack(
+                      children: List.generate(previewCount, (i) {
+                        final p = _designerProjects[i];
+                        final img = (p['cover_image_url'] ??
+                                p['cover_url'] ??
+                                p['image_url'] ??
+                                '')
+                            .toString()
+                            .trim();
+                        return Positioned(
+                          left: i * 18.0,
+                          child: Container(
+                            width: 26,
+                            height: 26,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                  color: KoalaColors.surface, width: 1.5),
+                              color: KoalaColors.surfaceAlt,
+                            ),
+                            child: ClipOval(
+                              child: img.isNotEmpty
+                                  ? Image.network(img,
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (_, __, ___) => const SizedBox())
+                                  : const Icon(Icons.image_outlined,
+                                      size: 12, color: KoalaColors.textTer),
+                            ),
+                          ),
+                        );
+                      }),
+                    ),
+                  ),
+                if (!_portfolioExpanded)
+                  SizedBox(width: (previewCount * 18.0) + 6),
+                Icon(
+                  _portfolioExpanded
+                      ? Icons.keyboard_arrow_up_rounded
+                      : Icons.keyboard_arrow_down_rounded,
+                  size: 20,
+                  color: KoalaColors.textSec,
+                ),
+              ],
+            ),
+          ),
+        ),
+        AnimatedSize(
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeInOut,
+          child: _portfolioExpanded
+              ? SizedBox(
+                  height: 124,
+                  child: ListView.separated(
+                    padding: const EdgeInsets.only(
+                        left: 20, right: 20, bottom: 12),
+                    scrollDirection: Axis.horizontal,
+                    itemCount: _designerProjects.length,
+                    separatorBuilder: (_, __) => const SizedBox(width: 10),
+                    itemBuilder: (_, i) {
+                      final project = _designerProjects[i];
+                      final img = (project['cover_image_url'] ??
+                              project['cover_url'] ??
+                              project['image_url'] ??
+                              '')
+                          .toString()
+                          .trim();
+                      final title = (project['title'] ?? '').toString().trim();
+                      final isContext = widget.projectTitle != null &&
+                          widget.projectTitle!.trim() == title;
+
+                      return GestureDetector(
+                        onTap: () => _openProjectViewer(project, i),
+                        child: SizedBox(
+                          width: 130,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Stack(
+                                children: [
+                                  ClipRRect(
+                                    borderRadius: BorderRadius.circular(10),
+                                    child: img.isNotEmpty
+                                        ? Image.network(
+                                            img,
+                                            width: 130,
+                                            height: 86,
+                                            fit: BoxFit.cover,
+                                            errorBuilder: (_, __, ___) => Container(
+                                              width: 130,
+                                              height: 86,
+                                              color: KoalaColors.surfaceAlt,
+                                              child: const Icon(
+                                                  Icons.image_not_supported_outlined,
+                                                  size: 20,
+                                                  color: KoalaColors.textTer),
+                                            ),
+                                          )
+                                        : Container(
+                                            width: 130,
+                                            height: 86,
+                                            color: KoalaColors.surfaceAlt,
+                                            child: const Icon(Icons.image_outlined,
+                                                size: 20,
+                                                color: KoalaColors.textTer),
+                                          ),
+                                  ),
+                                  if (isContext)
+                                    Positioned(
+                                      top: 6,
+                                      left: 6,
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 6, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: KoalaColors.accent,
+                                          borderRadius: BorderRadius.circular(
+                                              KoalaRadius.pill),
+                                        ),
+                                        child: const Text(
+                                          'Bu Proje',
+                                          style: TextStyle(
+                                            fontSize: 9,
+                                            fontWeight: FontWeight.w700,
+                                            color: Colors.white,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                              if (title.isNotEmpty)
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 6),
+                                  child: Text(
+                                    title,
+                                    style: const TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
+                                      color: KoalaColors.text,
+                                      height: 1.25,
+                                    ),
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                )
+              : const SizedBox.shrink(),
+        ),
+      ],
     );
   }
 

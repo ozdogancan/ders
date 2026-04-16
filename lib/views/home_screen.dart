@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' hide User;
 
 import 'package:go_router/go_router.dart';
 import '../core/theme/koala_tokens.dart';
@@ -70,8 +71,43 @@ class _HomeScreenState extends State<HomeScreen>
     // geldiğinde badge + toast anında.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _subscribeIncomingMessages();
+      _subscribeEvlumbaLive();
       _maybeOpenStyleDiscovery();
     });
+  }
+
+  // Evlumba'daki `messages` tablosuna DOĞRUDAN realtime abone olur.
+  // Herhangi bir INSERT geldiğinde anında pullInbound tetiklenir — 3s polling
+  // lag'i yok, gerçek anlık teslimat.
+  RealtimeChannel? _evlumbaChannel;
+
+  Future<void> _subscribeEvlumbaLive() async {
+    try {
+      if (!EvlumbaLiveService.isReady) {
+        final ok = await EvlumbaLiveService.waitForReady(
+          timeout: const Duration(seconds: 8),
+        );
+        if (!ok) return;
+      }
+      // Aynı channel'i iki kere açmayalım
+      if (_evlumbaChannel != null) return;
+      final client = EvlumbaLiveService.client;
+      final ch = client.channel('koala_inbound_evlumba_messages');
+      ch.onPostgresChanges(
+        event: PostgresChangeEvent.insert,
+        schema: 'public',
+        table: 'messages',
+        callback: (payload) {
+          // Her yeni mesajda anında inbound sync — server tarafında kullanıcıya
+          // göre filtre zaten yapılıyor. Filtrelemeye gerek yok.
+          _kickInboundSync();
+        },
+      ).subscribe();
+      _evlumbaChannel = ch;
+      debugPrint('HomeScreen: subscribed to Evlumba.messages INSERT');
+    } catch (e) {
+      debugPrint('HomeScreen: Evlumba realtime subscribe failed: $e');
+    }
   }
 
   /// Yeni designer mesajı geldi mi tespit etmek için conv başına son
@@ -266,6 +302,12 @@ class _HomeScreenState extends State<HomeScreen>
     _authSub?.cancel();
     try {
       MessagingService.unsubscribeFromConversations(listener: _convListener);
+    } catch (_) {}
+    try {
+      if (_evlumbaChannel != null && EvlumbaLiveService.isReady) {
+        EvlumbaLiveService.client.removeChannel(_evlumbaChannel!);
+      }
+      _evlumbaChannel = null;
     } catch (_) {}
     _staggerCtrl.dispose();
     super.dispose();

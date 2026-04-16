@@ -255,26 +255,31 @@ class MessagingService {
     }
   }
 
-  /// Mesajlari okundu olarak isaretle
+  /// Mesajlari okundu olarak isaretle — auth restore race'ine karsi dayanikli.
   static Future<bool> markAsRead(String conversationId) async {
-    if (_uid == null || !Env.hasSupabaseConfig) return false;
+    if (!Env.hasSupabaseConfig) return false;
+    final uid = await _waitForUid();
+    if (uid == null) return false;
     try {
       // Karsi tarafin gonderdigi okunmamis mesajlari isaretle
       await _db
           .from('koala_direct_messages')
           .update({'read_at': DateTime.now().toIso8601String()})
           .eq('conversation_id', conversationId)
-          .neq('sender_id', _uid!)
+          .neq('sender_id', uid)
           .isFilter('read_at', null);
 
-      // Unread count'u sifirla
+      // Unread count'u sifirla — hem user hem designer alaninda, hangisi
+      // bize aitse onu sifirlayacak; digerini de sifirda tutmak zarar vermez
+      // cunku 0 kalir. Tek sorgu, iki alani da 0 yapmak daha hizli/idempotent.
       final conv = await _db
           .from('koala_conversations')
           .select('user_id, designer_id')
           .eq('id', conversationId)
-          .single();
+          .maybeSingle();
+      if (conv == null) return false;
 
-      final isUser = conv['user_id'] == _uid;
+      final isUser = conv['user_id'] == uid;
       final unreadField = isUser ? 'unread_count_user' : 'unread_count_designer';
 
       await _db.from('koala_conversations').update({
@@ -419,13 +424,22 @@ class MessagingService {
     debugPrint('MessagingService: subscribed to $channelName');
   }
 
-  /// Conversations listesini canli dinle (son mesaj degisiklikleri)
+  // Çoklu listener desteği — HomeScreen ve ChatListScreen aynı anda abone
+  // olabiliyor. Tek channel paylaşılır, her event tüm listener'lara fan-out.
+  static final Set<void Function(Map<String, dynamic>)> _convListeners = {};
+
+  /// Conversations listesini canli dinle (son mesaj degisiklikleri).
+  /// Aynı listener fonksiyonunu ikinci kez eklemek no-op. Aynı reference
+  /// dispose'da [unsubscribeFromConversations(listener: ...)] ile verilmeli.
   static void subscribeToConversations({
     required void Function(Map<String, dynamic> conversation) onUpdate,
   }) {
     if (_uid == null) return;
 
-    unsubscribeFromConversations();
+    _convListeners.add(onUpdate);
+
+    // Channel zaten kurulu mu? Kuruluysa sadece listener'ı ekle.
+    if (_channels.containsKey('_conversations')) return;
 
     final channel = _db.channel('conversations:$_uid');
 
@@ -436,13 +450,17 @@ class MessagingService {
           table: 'koala_conversations',
           callback: (payload) {
             final record = payload.newRecord;
-            if (record.isNotEmpty) {
-              // Sadece kendi sohbetlerimizi dinle
-              final userId = record['user_id'];
-              final designerId = record['designer_id'];
-              if (userId == _uid || designerId == _uid) {
-                onUpdate(Map<String, dynamic>.from(record));
-              }
+            if (record.isEmpty) return;
+            // Sadece kendi sohbetlerimizi dinle
+            final userId = record['user_id'];
+            final designerId = record['designer_id'];
+            if (userId != _uid && designerId != _uid) return;
+            // Tüm listener'lara fan-out (kopya liste — iter sırasında remove
+            // olabileceği için)
+            for (final l in List.of(_convListeners)) {
+              try {
+                l(Map<String, dynamic>.from(record));
+              } catch (_) {}
             }
           },
         )
@@ -461,11 +479,23 @@ class MessagingService {
     }
   }
 
-  /// Conversations subscription'i kapat
-  static void unsubscribeFromConversations() {
+  /// Conversations subscription'i kapat.
+  /// [listener] verilirse sadece o listener kaldırılır; başka listener kalmazsa
+  /// channel da tear down edilir. [listener] null ise tüm listener'lar silinir
+  /// ve channel kapatılır (geriye dönük uyumluluk için).
+  static void unsubscribeFromConversations({
+    void Function(Map<String, dynamic>)? listener,
+  }) {
+    if (listener != null) {
+      _convListeners.remove(listener);
+      if (_convListeners.isNotEmpty) return;
+    } else {
+      _convListeners.clear();
+    }
     final channel = _channels.remove('_conversations');
     if (channel != null) {
       _db.removeChannel(channel);
+      debugPrint('MessagingService: unsubscribed from conversations');
     }
   }
 
