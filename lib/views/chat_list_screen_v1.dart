@@ -443,33 +443,21 @@ class _ChatListScreenV1State extends State<ChatListScreenV1> {
                   onRefresh: _manualSync,
                   color: KoalaColors.accent,
                   child: ListView(
-                    padding: const EdgeInsets.symmetric(horizontal: KoalaSpacing.lg),
+                    padding: const EdgeInsets.fromLTRB(
+                      KoalaSpacing.lg,
+                      KoalaSpacing.sm,
+                      KoalaSpacing.lg,
+                      KoalaSpacing.xxxl,
+                    ),
                     children: [
-                      // ─── 1. Koala AI Asistan ───
-                      _buildAiSection(),
-
-                      // ─── 2. Evlumba Design (Premium) ───
-                      _buildEvlumbaDesignSection(),
-
-                      // ─── 3. Tasarımcı konuşmaları ───
-                      if (_conversations.isNotEmpty) ...[
-                        const Padding(
-                          padding: EdgeInsets.only(
-                            top: KoalaSpacing.xl,
-                            bottom: KoalaSpacing.sm,
-                          ),
-                          child: Row(
-                            children: [
-                              Icon(Icons.forum_rounded, size: 14, color: KoalaColors.textTer),
-                              SizedBox(width: 6),
-                              Text('Tasarımcılar', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: KoalaColors.textTer, letterSpacing: 0.5)),
-                            ],
-                          ),
-                        ),
-                        ..._conversations.map(_buildConversationTile),
-                      ],
-
-                      const SizedBox(height: KoalaSpacing.xxxl),
+                      // Unified conversation list — WhatsApp/Instagram DM mantığı:
+                      // her satır bir sohbet, aynı görsel dil. Section başlıkları
+                      // ve yığılı "AI history" alt-listesi yok; AI geçmişi altta
+                      // tek bir link olarak erişilebilir.
+                      _buildKoalaAiRow(),
+                      _buildEvlumbaDesignRow(),
+                      ..._conversations.map(_buildConversationTile),
+                      if (_aiChats.isNotEmpty) _buildAiHistoryLink(),
                     ],
                   ),
                 ),
@@ -648,8 +636,92 @@ class _ChatListScreenV1State extends State<ChatListScreenV1> {
   }
 
   // ═══════════════════════════════════════════════════════
-  // 1. AI ASISTAN SECTION
+  // 1. KOALA AI — tek satır (conversation tile ile aynı hizada)
   // ═══════════════════════════════════════════════════════
+  /// Koala AI sohbet satırı. Tap → en son AI sohbetine git (yoksa yeni başlat).
+  /// Preview: en son AI mesajı veya kısa açıklama.
+  Widget _buildKoalaAiRow() {
+    final hasHistory = _aiChats.isNotEmpty;
+    final latest = hasHistory ? _aiChats.first : null;
+    final previewText = latest?.lastMessage?.trim().isNotEmpty == true
+        ? latest!.lastMessage!
+        : 'Odanı fotoğrafla · stil bul · ürün öner';
+
+    return GestureDetector(
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ChatDetailScreen(chatId: latest?.id),
+        ),
+      ),
+      child: Container(
+        margin: const EdgeInsets.only(top: KoalaSpacing.sm),
+        padding: const EdgeInsets.all(KoalaSpacing.lg),
+        decoration: KoalaDeco.card,
+        child: Row(
+          children: [
+            // Avatar — mor gradient daire, koala asset içinde
+            Container(
+              width: 48,
+              height: 48,
+              decoration: const BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: KoalaColors.accentGradient,
+              ),
+              child: ClipOval(
+                child: Padding(
+                  padding: const EdgeInsets.all(8),
+                  child: Image.asset(
+                    'assets/images/koalas.png',
+                    fit: BoxFit.contain,
+                    errorBuilder: (_, _, _) => const Icon(
+                      Icons.auto_awesome_rounded,
+                      color: Colors.white,
+                      size: 22,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: KoalaSpacing.md),
+            // Name + preview
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: const [
+                      Text('Koala AI', style: KoalaText.h4),
+                      SizedBox(width: 6),
+                      Icon(Icons.auto_awesome_rounded,
+                          size: 13, color: KoalaColors.accent),
+                    ],
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    previewText,
+                    style: KoalaText.bodySec,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+            // Time (en son AI chat timestamp) — diğer satırlarla aynı format
+            if (latest != null)
+              Text(timeAgo(latest.updatedAt), style: KoalaText.labelSmall),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════
+  // [legacy] _buildAiSection — artık kullanılmıyor, build() içinde
+  // _buildKoalaAiRow() tek satır olarak çağrılıyor. Referans/rollback için
+  // korunuyor.
+  // ═══════════════════════════════════════════════════════
+  // ignore: unused_element
   Widget _buildAiSection() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -784,7 +856,141 @@ class _ChatListScreenV1State extends State<ChatListScreenV1> {
   }
 
   // ═══════════════════════════════════════════════════════
-  // 2. EVLUMBA DESIGN (Premium)
+  // 2. EVLUMBA DESIGN — tek satır (conversation tile ile aynı hizada)
+  // ═══════════════════════════════════════════════════════
+  Widget _buildEvlumbaDesignRow() {
+    const gold = Color(0xFFD4A853);
+    return GestureDetector(
+      onTap: _openEvlumbaDesign,
+      child: Container(
+        margin: const EdgeInsets.only(top: KoalaSpacing.sm),
+        padding: const EdgeInsets.all(KoalaSpacing.lg),
+        decoration: KoalaDeco.card,
+        child: Row(
+          children: [
+            // Avatar — altın gradient, diamond ikonu
+            Container(
+              width: 48,
+              height: 48,
+              decoration: const BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: LinearGradient(
+                  colors: [gold, Color(0xFFE8C76A)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+              ),
+              child: const Icon(Icons.diamond_rounded,
+                  color: Colors.white, size: 22),
+            ),
+            const SizedBox(width: KoalaSpacing.md),
+            // Name + description
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: const [
+                      Text('Evlumba Design', style: KoalaText.h4),
+                      SizedBox(width: 6),
+                      Icon(Icons.verified_rounded, size: 13, color: gold),
+                    ],
+                  ),
+                  const SizedBox(height: 2),
+                  const Text(
+                    'Uzman iç mimarlardan 1 saat içinde yanıt',
+                    style: KoalaText.bodySec,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+            // "1 saat" badge — küçük, conversation time ile aynı yerde
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFDF8EC),
+                borderRadius: BorderRadius.circular(KoalaRadius.pill),
+                border: Border.all(color: gold.withValues(alpha: 0.3)),
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.schedule_rounded, size: 10, color: gold),
+                  SizedBox(width: 3),
+                  Text('1 sa',
+                      style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                          color: gold)),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════
+  // AI SOHBET GEÇMİŞİ — altta ince link satırı (bottom sheet açar)
+  // ═══════════════════════════════════════════════════════
+  Widget _buildAiHistoryLink() {
+    final count = _aiChats.length;
+    return GestureDetector(
+      onTap: _openAiHistorySheet,
+      child: Container(
+        margin: const EdgeInsets.only(top: KoalaSpacing.md),
+        padding: const EdgeInsets.symmetric(
+            horizontal: KoalaSpacing.lg, vertical: KoalaSpacing.md),
+        child: Row(
+          children: [
+            const Icon(Icons.history_rounded,
+                size: 16, color: KoalaColors.textTer),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'AI sohbet geçmişi',
+                style: KoalaText.bodySec.copyWith(
+                  color: KoalaColors.textSec,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+            Text('$count',
+                style: KoalaText.labelSmall.copyWith(
+                    fontWeight: FontWeight.w600, color: KoalaColors.textSec)),
+            const SizedBox(width: 4),
+            const Icon(Icons.chevron_right_rounded,
+                size: 18, color: KoalaColors.textTer),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _openAiHistorySheet() {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _AiHistorySheet(
+        chats: _aiChats,
+        onSelect: (id) {
+          Navigator.pop(context);
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => ChatDetailScreen(chatId: id)),
+          );
+        },
+      ),
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════
+  // [legacy] _buildEvlumbaDesignSection — artık kullanılmıyor, build()
+  // içinde _buildEvlumbaDesignRow() çağrılıyor. Empty state için korunuyor.
   // ═══════════════════════════════════════════════════════
   Widget _buildEvlumbaDesignSection() {
     return Padding(
@@ -1220,6 +1426,122 @@ class _EvlumbaDesignSheet extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// AI SOHBET GEÇMİŞİ — bottom sheet (main listeden taşındı)
+// ═══════════════════════════════════════════════════════
+class _AiHistorySheet extends StatelessWidget {
+  final List<ChatSummary> chats;
+  final void Function(String chatId) onSelect;
+  const _AiHistorySheet({required this.chats, required this.onSelect});
+
+  @override
+  Widget build(BuildContext context) {
+    final bottomPad = MediaQuery.of(context).padding.bottom;
+    final maxHeight = MediaQuery.of(context).size.height * 0.75;
+
+    return Container(
+      constraints: BoxConstraints(maxHeight: maxHeight),
+      decoration: const BoxDecoration(
+        color: KoalaColors.surface,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Handle
+          Padding(
+            padding: const EdgeInsets.only(top: 12, bottom: 6),
+            child: Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: KoalaColors.borderSolid,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          // Header
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+                KoalaSpacing.lg, KoalaSpacing.md, KoalaSpacing.lg, KoalaSpacing.sm),
+            child: Row(
+              children: [
+                const Icon(Icons.history_rounded,
+                    size: 18, color: KoalaColors.accent),
+                const SizedBox(width: 8),
+                const Text('AI Sohbet Geçmişi', style: KoalaText.h3),
+                const Spacer(),
+                Text('${chats.length}',
+                    style: KoalaText.bodySec
+                        .copyWith(fontWeight: FontWeight.w600)),
+              ],
+            ),
+          ),
+          const Divider(height: 1, color: KoalaColors.border),
+          // List
+          Flexible(
+            child: ListView.separated(
+              shrinkWrap: true,
+              padding: EdgeInsets.fromLTRB(
+                  KoalaSpacing.sm, KoalaSpacing.sm, KoalaSpacing.sm, bottomPad + 16),
+              itemCount: chats.length,
+              separatorBuilder: (_, _) => const SizedBox(height: 2),
+              itemBuilder: (_, i) {
+                final chat = chats[i];
+                return InkWell(
+                  onTap: () => onSelect(chat.id),
+                  borderRadius: BorderRadius.circular(KoalaRadius.md),
+                  child: Padding(
+                    padding: const EdgeInsets.all(KoalaSpacing.md),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 36,
+                          height: 36,
+                          decoration: BoxDecoration(
+                            color: KoalaColors.accentSoft,
+                            borderRadius: BorderRadius.circular(KoalaRadius.sm),
+                          ),
+                          child: const Icon(Icons.chat_rounded,
+                              size: 16, color: KoalaColors.accent),
+                        ),
+                        const SizedBox(width: KoalaSpacing.md),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                chat.title,
+                                style: KoalaText.label,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              if (chat.lastMessage != null &&
+                                  chat.lastMessage!.isNotEmpty)
+                                Text(
+                                  chat.lastMessage!,
+                                  style: KoalaText.bodySmall,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                            ],
+                          ),
+                        ),
+                        Text(timeAgo(chat.updatedAt),
+                            style: KoalaText.labelSmall),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
