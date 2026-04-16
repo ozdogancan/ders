@@ -341,6 +341,11 @@ class MessagingService {
   static Map<String, dynamic>? lastInboundDiag;
   static int lastInboundConversations = 0;
 
+  /// Son pullInbound'da YENİ mesaj alan conversation detayları. Her entry:
+  ///   { 'designerId': '...', 'koalaConversationId': '...', 'newMessages': N }
+  /// Global toast listener bunu kullanır.
+  static List<Map<String, dynamic>> lastInboundDetails = const [];
+
   /// Evlumba → Koala ters köprü (client-pull).
   /// Flutter app ChatListScreen açılınca / app foreground'a gelince çağırır.
   /// Designer'ın evlumba.com'dan attığı mesajları Koala DB'sine çeker.
@@ -373,6 +378,14 @@ class MessagingService {
           final n = (body['synced'] as int?) ?? 0;
           lastInboundConversations = (body['conversations'] as int?) ?? 0;
           lastInboundDiag = body['diag'] as Map<String, dynamic>?;
+          final rawDetails = body['details'];
+          if (rawDetails is List) {
+            lastInboundDetails = rawDetails
+                .whereType<Map<String, dynamic>>()
+                .toList();
+          } else {
+            lastInboundDetails = const [];
+          }
           if (n > 0) {
             debugPrint('MessagingService: pullInbound synced $n messages');
           }

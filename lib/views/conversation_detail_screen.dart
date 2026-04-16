@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart' hide User;
 import 'package:url_launcher/url_launcher.dart';
 import '../core/theme/koala_tokens.dart';
 import '../services/evlumba_live_service.dart';
+import '../services/global_message_listener.dart';
 import '../services/koala_ai_service.dart';
 import '../services/messaging_service.dart';
 import '../services/saved_items_service.dart';
@@ -72,10 +73,16 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
     _markRead();
     _scrollController.addListener(_onScroll);
     _loadDesignerDetail();
+    // Global toast bu conv'un detay ekranındayken suppress edilsin —
+    // kullanıcı mesajı zaten görüyor, tekrar toast göstermeye gerek yok.
+    GlobalMessageListener.suppressConvId = widget.conversationId;
   }
 
   @override
   void dispose() {
+    if (GlobalMessageListener.suppressConvId == widget.conversationId) {
+      GlobalMessageListener.suppressConvId = null;
+    }
     MessagingService.unsubscribeFromMessages(widget.conversationId);
     try {
       MessagingService.unsubscribeFromConversations(listener: _convListener);

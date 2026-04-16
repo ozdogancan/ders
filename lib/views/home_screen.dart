@@ -24,7 +24,6 @@ import 'chat_detail_screen.dart';
 import 'chat_list_screen.dart';
 import 'style_discovery_screen.dart';
 import 'designers_screen.dart';
-import 'profile_screen.dart';
 import 'product_entry_screen.dart';
 import 'saved_screen.dart';
 
@@ -160,54 +159,10 @@ class _HomeScreenState extends State<HomeScreen>
     });
   }
 
+  // Deprecated: GlobalMessageListener artık tüm ekranlarda toast gösteriyor.
+  // Home screen lokal toast göstermez — çift toast olmasın diye no-op.
   void _showNewMessageToast(String body) {
-    if (!mounted) return;
-    final messenger = ScaffoldMessenger.maybeOf(context);
-    if (messenger == null) return;
-    final preview = body.length > 60 ? '${body.substring(0, 60)}…' : body;
-    messenger.hideCurrentSnackBar();
-    messenger.showSnackBar(
-      SnackBar(
-        behavior: SnackBarBehavior.floating,
-        backgroundColor: KoalaColors.accentDeep,
-        duration: const Duration(seconds: 4),
-        content: Row(
-          children: [
-            const Icon(Icons.chat_rounded, color: Colors.white, size: 18),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Text(
-                    'Yeni mesaj',
-                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.white),
-                  ),
-                  if (preview.isNotEmpty)
-                    Text(
-                      preview,
-                      style: const TextStyle(fontSize: 13, color: Colors.white),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                ],
-              ),
-            ),
-          ],
-        ),
-        action: SnackBarAction(
-          label: 'Gör',
-          textColor: Colors.white,
-          onPressed: () {
-            if (!mounted) return;
-            Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const ChatListScreen()),
-            ).then((_) => _loadUnreadMsgCount());
-          },
-        ),
-      ),
-    );
+    // no-op — bkz. GlobalMessageListener
   }
 
   Future<void> _loadUnreadMsgCount() async {

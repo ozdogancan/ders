@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'core/router/app_router.dart';
 import 'core/theme/app_theme.dart';
+import 'services/global_message_listener.dart';
+import 'services/notification_toast_service.dart';
 import 'services/push_handler_service.dart';
 
 class KoalaApp extends StatefulWidget {
@@ -11,13 +13,18 @@ class KoalaApp extends StatefulWidget {
 }
 
 class _KoalaAppState extends State<KoalaApp> {
-  final _messengerKey = GlobalKey<ScaffoldMessengerState>();
-
   @override
   void initState() {
     super.initState();
     // Push notification deep link handler with foreground SnackBar
-    PushHandlerService.initialize(appRouter, messengerKey: _messengerKey);
+    PushHandlerService.initialize(
+      appRouter,
+      messengerKey: NotificationToastService.messengerKey,
+    );
+    // Global incoming-message listener — app ilk açıldığında başlar, uygulama
+    // kapanana kadar yaşar. Her 1.5s Evlumba'yı pull eder ve yeni mesaj varsa
+    // NotificationToastService ile herhangi bir ekranda toast gösterir.
+    GlobalMessageListener.start();
   }
 
   @override
@@ -27,7 +34,7 @@ class _KoalaAppState extends State<KoalaApp> {
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
       routerConfig: appRouter,
-      scaffoldMessengerKey: _messengerKey,
+      scaffoldMessengerKey: NotificationToastService.messengerKey,
     );
   }
 }

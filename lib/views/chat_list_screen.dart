@@ -101,8 +101,16 @@ class _ChatListScreenState extends State<ChatListScreen> {
     super.dispose();
   }
 
-  Future<void> _load() async {
-    setState(() { _loading = true; _hasError = false; });
+  /// [silent] true ise shimmer/spinner gösterme — background refresh için.
+  /// WhatsApp gibi: gelen mesaj var diye ekran "yükleniyor"a flash atmaz,
+  /// sadece sessizce liste merge olur.
+  Future<void> _load({bool silent = false}) async {
+    if (!silent) {
+      setState(() {
+        _loading = true;
+        _hasError = false;
+      });
+    }
     try {
       final convFuture = MessagingService.getConversations();
       final aiFuture = ChatPersistence.loadConversations();
@@ -136,12 +144,18 @@ class _ChatListScreenState extends State<ChatListScreen> {
         });
       }
     } catch (e) {
-      if (mounted) setState(() { _loading = false; _hasError = true; });
+      if (mounted && !silent) {
+        setState(() {
+          _loading = false;
+          _hasError = true;
+        });
+      }
     }
   }
 
-  /// Sıralama: önce okunmamış mesajı olanlar (unread > 0), sonra son mesaj
-  /// zamanı azalan. Klasik chat app davranışı — unread conversation'lar en üstte.
+  /// Sıralama: önce OKUNMAMIŞ mesajı olan conversation'lar (unread > 0),
+  /// sonra last_message_at DESC. Kullanıcı okunmamış olanları en üstte görür,
+  /// okundu olanlar altta tarih sırasına göre dizilir.
   List<Map<String, dynamic>> _sortConversations(
     List<Map<String, dynamic>> list,
   ) {
@@ -152,17 +166,20 @@ class _ChatListScreenState extends State<ChatListScreen> {
           ? ((c['unread_count_user'] as int?) ?? 0)
           : ((c['unread_count_designer'] as int?) ?? 0);
     }
+
     list.sort((a, b) {
       final au = unreadOf(a);
       final bu = unreadOf(b);
       final aHas = au > 0;
       final bHas = bu > 0;
-      if (aHas != bHas) return bHas ? 1 : -1;
+      if (aHas != bHas) return bHas ? 1 : -1; // unread önce
       final at = DateTime.tryParse(a['last_message_at']?.toString() ?? '')
-          ?.millisecondsSinceEpoch ?? 0;
+              ?.millisecondsSinceEpoch ??
+          0;
       final bt = DateTime.tryParse(b['last_message_at']?.toString() ?? '')
-          ?.millisecondsSinceEpoch ?? 0;
-      return bt.compareTo(at);
+              ?.millisecondsSinceEpoch ??
+          0;
+      return bt.compareTo(at); // yeni önce
     });
     return list;
   }
@@ -190,10 +207,11 @@ class _ChatListScreenState extends State<ChatListScreen> {
         return;
       }
 
+      // Toast gösterimi için lokal kod YOK — GlobalMessageListener uygulama
+      // seviyesinde zaten toast gösteriyor (her ekranda çalışsın diye).
       setState(() {
         final idx = _conversations.indexWhere((c) => c['id']?.toString() == convId);
         if (idx >= 0) {
-          // Mevcut satırı yeni alanlarla merge et (avatar cache vs. korunsun)
           _conversations[idx] = {..._conversations[idx], ...record};
         } else {
           _conversations.insert(0, Map<String, dynamic>.from(record));
@@ -209,12 +227,12 @@ class _ChatListScreenState extends State<ChatListScreen> {
 
   /// Inbound sync'i arka planda çalıştır. Başarı durumunda DB tetikleyeceği
   /// realtime UPDATE listesi otomatik merge edecek; fakat realtime event'leri
-  /// bazen düşebiliyor — güvenli taraf olarak yeni senkron varsa hafif bir
-  /// reload yap.
+  /// bazen düşebiliyor — güvenli taraf olarak yeni senkron varsa SESSİZCE
+  /// (shimmer göstermeden) merge reload yap. WhatsApp gibi: ekran flashlamaz.
   Future<void> _syncInboundThenReload() async {
     final synced = await MessagingService.pullInbound();
     if (synced > 0 && mounted) {
-      await _load();
+      await _load(silent: true);
     }
   }
 
@@ -941,7 +959,8 @@ class _ChatListScreenState extends State<ChatListScreen> {
           'designerAvatarUrl': avatarUrl,
           'projectTitle': projectTitle.isNotEmpty ? projectTitle : null,
         });
-        _load(); // Refresh unread counts
+        // Refresh unread counts — sessiz, shimmer yok.
+        _load(silent: true);
       },
       child: Container(
         margin: const EdgeInsets.only(top: KoalaSpacing.sm),
