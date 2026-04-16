@@ -1013,7 +1013,6 @@ class _ChatListScreenV1State extends State<ChatListScreenV1> {
   // ═══════════════════════════════════════════════════════
   Widget _buildServicesGrid() {
     final latestAi = _aiChats.isNotEmpty ? _aiChats.first : null;
-    final aiCount = _aiChats.length;
 
     return IntrinsicHeight(
       child: Row(
@@ -1039,10 +1038,17 @@ class _ChatListScreenV1State extends State<ChatListScreenV1> {
               title: 'Koala AI',
               pill: 'asistan',
               pillBg: KoalaColors.accent,
-              subtitle: latestAi != null
-                  ? 'Son · ${timeAgo(latestAi.updatedAt)}'
+              // Sohbet varsa → son sohbetin başlığı (ne hakkında konuşulmuş).
+              // Yoksa → değer önerisi.
+              subtitle: latestAi?.title.trim().isNotEmpty == true
+                  ? latestAi!.title
                   : 'Odanı fotoğrafla · stil bul',
-              trailing: aiCount > 0 ? '$aiCount sohbet' : null,
+              // Alt satır: sadece zaman (clock ikonuyla, küçük). Sayı
+              // aşağıdaki "Koala AI sohbet geçmişi · 36" chip'inde zaten var.
+              trailing: latestAi != null ? timeAgo(latestAi.updatedAt) : null,
+              trailingIcon: latestAi != null
+                  ? Icons.schedule_rounded
+                  : null,
               highlightBg: KoalaColors.accentLight,
               borderColor: KoalaColors.accent.withValues(alpha: 0.18),
             ),
@@ -1084,6 +1090,7 @@ class _ChatListScreenV1State extends State<ChatListScreenV1> {
     required String subtitle,
     String? trailing,
     bool trailingDot = false,
+    IconData? trailingIcon, // solda küçük bilgi ikonu (örn. saat)
     required Color highlightBg,
     required Color borderColor,
   }) {
@@ -1160,22 +1167,32 @@ class _ChatListScreenV1State extends State<ChatListScreenV1> {
                       ),
                     ),
                     const SizedBox(width: 5),
+                  ] else if (trailingIcon != null) ...[
+                    Icon(trailingIcon,
+                        size: 11, color: KoalaColors.textTer),
+                    const SizedBox(width: 4),
                   ],
                   Flexible(
                     child: Text(
                       trailing,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        color: KoalaColors.textSec,
+                        fontWeight: FontWeight.w600,
+                        color: trailingIcon != null
+                            ? KoalaColors.textTer
+                            : KoalaColors.textSec,
                         letterSpacing: 0.2,
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                  const Icon(Icons.arrow_forward_rounded,
-                      size: 12, color: KoalaColors.textTer),
+                  // Sağdaki ok yalnızca CTA niteliğindeki trailing'ler için
+                  // (Evlumba "≤1 sa yanıt" gibi). Trailing sadece zaman
+                  // bilgisiyse (trailingIcon var) ok eklenmez.
+                  if (trailingIcon == null)
+                    const Icon(Icons.arrow_forward_rounded,
+                        size: 12, color: KoalaColors.textTer),
                 ],
               ),
             ],
