@@ -125,9 +125,11 @@ class _ChatListScreenState extends State<ChatListScreen> {
       final aiFuture = ChatPersistence.loadConversations();
       final results = await Future.wait([convFuture, aiFuture]);
       if (!mounted) return;
-      final convs = _sortConversations(
-        List<Map<String, dynamic>>.from(results[0] as List),
-      );
+      final rawConvs = List<Map<String, dynamic>>.from(results[0] as List);
+      // unread_count_user alanı backend bazen eksik/stale kalabiliyor.
+      // Doğrudan mesajları sayıp conv map'e enjekte et — sort+badge true value.
+      await _injectComputedUnread(rawConvs);
+      final convs = _sortConversations(rawConvs);
       final ais = results[1] as List<ChatSummary>;
       setState(() {
         _conversations = convs;
@@ -144,9 +146,9 @@ class _ChatListScreenState extends State<ChatListScreen> {
           try {
             final retry = await MessagingService.getConversations();
             if (mounted && retry.isNotEmpty) {
-              setState(() => _conversations = _sortConversations(
-                List<Map<String, dynamic>>.from(retry),
-              ));
+              final retryList = List<Map<String, dynamic>>.from(retry);
+              await _injectComputedUnread(retryList);
+              setState(() => _conversations = _sortConversations(retryList));
               _loadDesignerAvatars();
             }
           } catch (_) {}
@@ -159,6 +161,47 @@ class _ChatListScreenState extends State<ChatListScreen> {
           _hasError = true;
         });
       }
+    }
+  }
+
+  /// Her conv için koala_direct_messages'tan read_at IS NULL + karşı taraf
+  /// gönderici olanları say, sonucu conv['unread_count_user|designer']
+  /// alanına yaz. Böylece backend unread_count_user stale olsa bile UI'da
+  /// doğru badge + unread-first sort gözükür.
+  Future<void> _injectComputedUnread(List<Map<String, dynamic>> convs) async {
+    try {
+      final uid = MessagingService.currentUserId;
+      if (uid == null || convs.isEmpty) return;
+      final ids = convs
+          .map((c) => c['id']?.toString())
+          .whereType<String>()
+          .toList();
+      if (ids.isEmpty) return;
+      final rows = await Supabase.instance.client
+          .from('koala_direct_messages')
+          .select('conversation_id, sender_id, read_at')
+          .inFilter('conversation_id', ids)
+          .isFilter('read_at', null)
+          .neq('sender_id', uid);
+      final counts = <String, int>{};
+      for (final r in List<Map<String, dynamic>>.from(rows)) {
+        final cid = r['conversation_id']?.toString();
+        if (cid == null) continue;
+        counts[cid] = (counts[cid] ?? 0) + 1;
+      }
+      for (final c in convs) {
+        final cid = c['id']?.toString();
+        if (cid == null) continue;
+        final n = counts[cid] ?? 0;
+        final isUser = c['user_id'] == uid;
+        if (isUser) {
+          c['unread_count_user'] = n;
+        } else {
+          c['unread_count_designer'] = n;
+        }
+      }
+    } catch (e) {
+      debugPrint('_injectComputedUnread error: $e');
     }
   }
 
