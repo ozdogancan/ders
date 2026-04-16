@@ -31,7 +31,59 @@ void main() {
     return true; // prevents crash
   };
 
+  // Build-time config guard: fail loud if a release bundle was built without
+  // dart-defines (e.g. `flutter build web --release` run directly instead of
+  // .\build_web.ps1). Silent empty-config bundles have regressed 3+ times.
+  if (kReleaseMode && !Env.hasSupabaseConfig) {
+    runApp(const _MisconfiguredBuildApp());
+    return;
+  }
+
   runApp(const _BootstrapApp());
+}
+
+class _MisconfiguredBuildApp extends StatelessWidget {
+  const _MisconfiguredBuildApp();
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      home: Scaffold(
+        backgroundColor: const Color(0xFFB00020),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(32),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: const [
+                Icon(Icons.error_outline, color: Colors.white, size: 72),
+                SizedBox(height: 24),
+                Text(
+                  'Build misconfigured',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                SizedBox(height: 16),
+                Text(
+                  'SUPABASE_URL / SUPABASE_ANON_KEY were empty at build time.\n\n'
+                  'This release was built without --dart-define values. '
+                  'Rebuild with .\\build_web.ps1 instead of running '
+                  '`flutter build web --release` directly.',
+                  style: TextStyle(color: Colors.white, fontSize: 16, height: 1.4),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _BootstrapApp extends StatefulWidget {
@@ -71,6 +123,22 @@ class _BootstrapAppState extends State<_BootstrapApp> {
           anonKey: Env.supabaseAnonKey,
         );
         _supabaseReady = true;
+        // KRİTİK: x-user-id header'ını Firebase auth state'ine kilitle.
+        // Aksi halde hard refresh sonrası session restore olsa bile header
+        // boş kalır, RLS bütün UPDATE'leri sessizce reddeder (markAsRead,
+        // unread_count vs. çalışmaz).
+        final sb = Supabase.instance.client;
+        final initUid = FirebaseAuth.instance.currentUser?.uid;
+        if (initUid != null) {
+          sb.rest.headers['x-user-id'] = initUid;
+        }
+        FirebaseAuth.instance.authStateChanges().listen((user) {
+          if (user?.uid != null) {
+            sb.rest.headers['x-user-id'] = user!.uid;
+          } else {
+            sb.rest.headers.remove('x-user-id');
+          }
+        });
       } catch (error) {
         debugPrint('Supabase init skipped: $error');
       }

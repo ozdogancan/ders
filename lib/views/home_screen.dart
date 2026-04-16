@@ -59,12 +59,11 @@ class _HomeScreenState extends State<HomeScreen>
     _migrateChatsOnce();
     _requestNotificationPermission();
     _kickInboundSync();
-    // Her 3 sn'de bir arka planda inbound sync — designer mesajları için.
-    // (Realtime subscribe ile de dinliyoruz ama inbound yazım evlumba→koala
-    //  pull modeliyle çalıştığı için polling lag'i kullanıcıya doğrudan
-    //  yansıyor. 3s = "anında" hissini veriyor.)
+    // Her 1.5 sn'de bir arka planda inbound sync — designer mesajları için.
+    // (Realtime subscribe ile de dinliyoruz ama Evlumba RLS nedeniyle event
+    //  düşebiliyor; 1.5s polling güvenli fallback ve "anında" hissi veriyor.)
     _inboundPollTimer = Timer.periodic(
-      const Duration(seconds: 3),
+      const Duration(milliseconds: 1500),
       (_) => _kickInboundSync(),
     );
     // Realtime: koala_conversations update event'lerini dinle — yeni mesaj
