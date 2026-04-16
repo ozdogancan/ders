@@ -186,6 +186,15 @@ class MessagingService {
   }) async {
     if (_uid == null || !Env.hasSupabaseConfig) return null;
     try {
+      // Request bazlı x-user-id'yi garanti altına al.
+      // 050_security_hardening sonrası koala_conversations UPDATE policy'si
+      // get_user_id() = x-user-id header'ı bekliyor. main.dart'taki listener
+      // henüz set edememiş olabilir (hard refresh / auth restore race) —
+      // INSERT + UPDATE öncesi explicit set et ki RLS sessizce block etmesin.
+      try {
+        _db.rest.headers['x-user-id'] = _uid!;
+      } catch (_) {}
+
       // 1. Mesaji ekle
       final msg = await _db.from('koala_direct_messages').insert({
         'conversation_id': conversationId,
