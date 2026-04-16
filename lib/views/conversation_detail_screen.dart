@@ -365,9 +365,16 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
             attachmentUrl: imageUrl,
           );
         } catch (e) {
+          // Hata detayını göster — bucket/RLS/network sorununu bilmemiz lazım.
+          debugPrint('[DM upload] error: $e');
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Görsel yüklenemedi')),
+              SnackBar(
+                content: Text(
+                  'Görsel yüklenemedi: ${e.toString().split('\n').first}',
+                ),
+                duration: const Duration(seconds: 6),
+              ),
             );
           }
         }
@@ -513,7 +520,10 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final media = MediaQuery.of(context);
-    final keyboardUp = media.viewInsets.bottom > 0;
+    // Scaffold default `resizeToAvoidBottomInset: true` body'yi klavye yüksekliği
+    // kadar yukarı kaydırıyor → input bar otomatik klavye üstünde olur.
+    // Padding olarak SADECE safe-area'yı ekle, viewInsets.bottom'ı tekrar
+    // eklersen "çift sayım" yapıp input klavyeden çok uzakta kalır.
 
     return Scaffold(
       backgroundColor: KoalaColors.bg,
@@ -600,12 +610,10 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
             // Photo preview — picker'dan seçilen foto, send'e basana kadar burada
             if (_pendingPhoto != null) _buildPhotoPreview(),
 
-            // Input bar — anasayfadaki TypewriterInput stiliyle aynı
-            _buildInputBar(
-              bottomPadding: keyboardUp
-                  ? media.viewInsets.bottom
-                  : media.padding.bottom,
-            ),
+            // Input bar — anasayfadaki TypewriterInput stiliyle aynı.
+            // Scaffold body'yi klavye için zaten kaydırdı, biz yalnızca safe
+            // area padding'ini ekliyoruz (chat_detail_screen ile aynı pattern).
+            _buildInputBar(bottomPadding: media.padding.bottom),
           ],
         ),
       ),
