@@ -218,6 +218,44 @@ class _ChatListScreenState extends State<ChatListScreen> {
     }
   }
 
+  /// Kullanıcı refresh butonuna / pull-to-refresh'e bastığında görünür
+  /// feedback ver — senkronun başarılı mı, kaç mesaj geldi, hata mı gibi.
+  Future<void> _manualSync() async {
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    try {
+      final synced = await MessagingService.pullInbound();
+      await _load();
+      if (!mounted) return;
+      messenger?.hideCurrentSnackBar();
+      messenger?.showSnackBar(
+        SnackBar(
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 2),
+          backgroundColor: synced > 0
+              ? const Color(0xFF4CAF50)
+              : KoalaColors.textSec,
+          content: Text(
+            synced > 0
+                ? '$synced yeni mesaj geldi'
+                : 'Yeni mesaj yok',
+            style: const TextStyle(color: Colors.white),
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      messenger?.hideCurrentSnackBar();
+      messenger?.showSnackBar(
+        SnackBar(
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: const Color(0xFFB00020),
+          content: Text('Senkron hatası: $e',
+              style: const TextStyle(color: Colors.white)),
+        ),
+      );
+    }
+  }
+
   /// Tüm tasarımcıların profil bilgilerini tek sorguda yükle (N+1 → 1)
   Future<void> _loadDesignerAvatars() async {
     if (_conversations.isEmpty) return;
@@ -269,6 +307,13 @@ class _ChatListScreenState extends State<ChatListScreen> {
           icon: const Icon(Icons.arrow_back_rounded),
         ),
         title: const Text('Mesajlar', style: KoalaText.h2),
+        actions: [
+          IconButton(
+            tooltip: 'Yeni mesajları çek',
+            onPressed: _manualSync,
+            icon: const Icon(Icons.refresh_rounded),
+          ),
+        ],
       ),
       body: _loading
           ? const ShimmerList(itemCount: 6, cardHeight: 72)
@@ -277,7 +322,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
               : (_conversations.isEmpty && _aiChats.isEmpty)
               ? _buildEmpty()
               : RefreshIndicator(
-                  onRefresh: _load,
+                  onRefresh: _manualSync,
                   color: KoalaColors.accent,
                   child: ListView(
                     padding: const EdgeInsets.symmetric(horizontal: KoalaSpacing.lg),
@@ -780,8 +825,24 @@ class _ChatListScreenState extends State<ChatListScreen> {
               };
             }
           });
-          // Fire-and-forget — server'a da yaz
-          MessagingService.markAsRead(convId);
+          // Server'a yaz. Başarısız olursa (RLS vs.) optimistic değeri
+          // realtime güncellemesi eventually geri çevirebilir — bunu
+          // kullanıcıya göstermek için hata durumunda SnackBar.
+          MessagingService.markAsRead(convId).then((ok) {
+            if (!mounted || ok) return;
+            final messenger = ScaffoldMessenger.maybeOf(context);
+            messenger?.showSnackBar(
+              const SnackBar(
+                behavior: SnackBarBehavior.floating,
+                duration: Duration(seconds: 3),
+                backgroundColor: Color(0xFFB00020),
+                content: Text(
+                  'Okundu işaretleme başarısız (oturum yenileniyor olabilir)',
+                  style: TextStyle(color: Colors.white),
+                ),
+              ),
+            );
+          });
         }
         await context.push('/chat/dm/${conv['id']}', extra: {
           'designerId': designerId,
