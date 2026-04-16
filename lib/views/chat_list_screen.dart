@@ -966,6 +966,12 @@ class _ChatListScreenState extends State<ChatListScreen> {
           'designerName': designerName,
           'designerAvatarUrl': avatarUrl,
           'projectTitle': projectTitle.isNotEmpty ? projectTitle : null,
+          // markAsRead() yukarıda zaten tetiklendi — DB'de unread=0 olacak.
+          // Detail screen'de "Yeni mesajlar" divider'ı gösterebilmek için
+          // okunmamış sayısını navigation extra'sıyla gönderiyoruz. Aksi
+          // halde getConversation() race nedeniyle 0 görüp divider'ı
+          // göstermiyordu.
+          'unreadOnEntry': unread,
         });
         // Refresh unread counts — sessiz, shimmer yok.
         _load(silent: true);

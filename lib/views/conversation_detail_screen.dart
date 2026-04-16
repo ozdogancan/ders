@@ -21,6 +21,7 @@ class ConversationDetailScreen extends StatefulWidget {
     this.designerName = 'Tasarımcı',
     this.designerAvatarUrl,
     this.projectTitle,
+    this.unreadOnEntry,
   });
 
   final String conversationId;
@@ -28,6 +29,13 @@ class ConversationDetailScreen extends StatefulWidget {
   final String designerName;
   final String? designerAvatarUrl;
   final String? projectTitle;
+
+  /// Chat list ekranı tapta markAsRead fire-and-forget tetikliyor, o yüzden
+  /// detail açıldığında DB'den okuduğumuz unread_count zaten 0 olabiliyor.
+  /// "Yeni mesajlar" divider'ını doğru hesaplamak için chat list bu sayıyı
+  /// navigation extra ile aktarıyor. null ise detail screen DB'den fetch eder
+  /// (toast tap / deep link yolunda markAsRead henüz çağrılmamıştır).
+  final int? unreadOnEntry;
 
   @override
   State<ConversationDetailScreen> createState() =>
@@ -139,18 +147,27 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
   Future<void> _loadMessages() async {
     // 1) markAsRead'den ÖNCE unread sayısını oku — read flag indirildiğinde
     //    sayı 0'a düşüyor; divider hesabı kayboluyor.
+    // Chat list tap yolunda markAsRead navigation'dan önce fire ediliyor,
+    // bu yüzden getConversation race ile 0 dönebiliyor. widget.unreadOnEntry
+    // varsa (>=0) onu kullan — chat list'in tap anında yakaladığı gerçek
+    // sayı. Yoksa (toast / deep link) DB'den oku.
     int unreadOnEntry = 0;
     if (_firstUnreadId == null) {
-      try {
-        final conv =
-            await MessagingService.getConversation(widget.conversationId);
-        if (conv != null) {
-          final isUser = conv['user_id'] == _uid;
-          unreadOnEntry = isUser
-              ? ((conv['unread_count_user'] as int?) ?? 0)
-              : ((conv['unread_count_designer'] as int?) ?? 0);
-        }
-      } catch (_) {}
+      final hint = widget.unreadOnEntry;
+      if (hint != null && hint > 0) {
+        unreadOnEntry = hint;
+      } else {
+        try {
+          final conv =
+              await MessagingService.getConversation(widget.conversationId);
+          if (conv != null) {
+            final isUser = conv['user_id'] == _uid;
+            unreadOnEntry = isUser
+                ? ((conv['unread_count_user'] as int?) ?? 0)
+                : ((conv['unread_count_designer'] as int?) ?? 0);
+          }
+        } catch (_) {}
+      }
     }
 
     final data = await MessagingService.getMessages(
