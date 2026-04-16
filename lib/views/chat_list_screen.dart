@@ -168,33 +168,26 @@ class _ChatListScreenState extends State<ChatListScreen> {
   /// unread_count_designer kolonlarindan geliyor. (read_at kolonu yok.)
   Future<void> _injectComputedUnread(List<Map<String, dynamic>> _) async {}
 
-  /// Sıralama: önce OKUNMAMIŞ mesajı olan conversation'lar (unread > 0),
-  /// sonra last_message_at DESC. Kullanıcı okunmamış olanları en üstte görür,
-  /// okundu olanlar altta tarih sırasına göre dizilir.
+  /// Sıralama: sadece `last_message_at DESC` (WhatsApp mantığı).
+  ///
+  /// Neden unread-first DEĞİL: Unread-first sort yapılırsa kullanıcı bir
+  /// mesaj okuduğunda unread=0 olup conv aşağıya "düşüyor" (yerini değiştiriyor).
+  /// Time-based sort'ta:
+  ///   - Yeni mesaj gelir → last_message_at güncellenir → otomatik en üste.
+  ///   - Kullanıcı okur → last_message_at değişmez → conv yerinde kalır.
+  /// Unread badge'i zaten her tile'da gösteriliyor — sıralamayla karıştırmaya
+  /// gerek yok.
   List<Map<String, dynamic>> _sortConversations(
     List<Map<String, dynamic>> list,
   ) {
-    final uid = MessagingService.currentUserId;
-    int unreadOf(Map<String, dynamic> c) {
-      final isUser = c['user_id'] == uid;
-      return isUser
-          ? ((c['unread_count_user'] as int?) ?? 0)
-          : ((c['unread_count_designer'] as int?) ?? 0);
-    }
-
     list.sort((a, b) {
-      final au = unreadOf(a);
-      final bu = unreadOf(b);
-      final aHas = au > 0;
-      final bHas = bu > 0;
-      if (aHas != bHas) return bHas ? 1 : -1; // unread önce
       final at = DateTime.tryParse(a['last_message_at']?.toString() ?? '')
               ?.millisecondsSinceEpoch ??
           0;
       final bt = DateTime.tryParse(b['last_message_at']?.toString() ?? '')
               ?.millisecondsSinceEpoch ??
           0;
-      return bt.compareTo(at); // yeni önce
+      return bt.compareTo(at);
     });
     return list;
   }
