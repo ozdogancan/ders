@@ -214,14 +214,45 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
     });
   }
 
-  void _scrollToFirstUnread() {
+  /// İlk unread'e scroll — reverse:true list'te "üstte" göstermek için
+  /// `alignment: 1.0` kullanıyoruz. Neden 1.0?
+  ///   reverse:true → AxisDirection.up → leading = viewport BOTTOM,
+  ///   trailing = viewport TOP. Dolayısıyla alignment 1.0 = trailing =
+  ///   divider viewport'un TEPESİNE yerleşir. 0.3 kullanınca (eski kod)
+  ///   divider %70 alttan çıkıp "üstte" görünmüyordu.
+  ///
+  /// Ayrıca ListView.builder lazy, hedef bubble henüz render edilmemişse
+  /// `_firstUnreadKey.currentContext` null dönüyor; önce estimated offset'e
+  /// jump edip widget'ı tree'ye sokuyoruz, sonra precise alignment için
+  /// ensureVisible çağırıyoruz.
+  Future<void> _scrollToFirstUnread() async {
+    if (_firstUnreadId == null || !_scrollController.hasClients) return;
+    if (!mounted) return;
+
+    final idx = _messages.indexWhere(
+      (m) => m['id']?.toString() == _firstUnreadId,
+    );
+    if (idx < 0) return;
+
+    // Step 1: estimated pre-jump. Bubble ortalama ~80px; idx*80 → reverse
+    // list'te hedefin viewport'a yakın olduğu scroll offset'i. Küçük bir
+    // headroom ekleyip max'a clamp ediyoruz.
+    try {
+      final estimated = (idx * 80.0 - 120.0)
+          .clamp(0.0, _scrollController.position.maxScrollExtent);
+      _scrollController.jumpTo(estimated);
+    } catch (_) {}
+
+    // Step 2: layout pass için bir frame bekle, sonra precise ensureVisible.
+    await WidgetsBinding.instance.endOfFrame;
+    if (!mounted) return;
     final ctx = _firstUnreadKey.currentContext;
     if (ctx == null) return;
     try {
-      Scrollable.ensureVisible(
+      await Scrollable.ensureVisible(
         ctx,
-        alignment: 0.3, // divider ekranın üst 1/3 kısmında
-        duration: const Duration(milliseconds: 250),
+        alignment: 1.0, // reverse:true → 1.0 = viewport TOP
+        duration: const Duration(milliseconds: 300),
         curve: Curves.easeOut,
       );
     } catch (_) {}
@@ -418,6 +449,11 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
                       : ListView.builder(
                           controller: _scrollController,
                           reverse: true,
+                          // Lazy render hedef unread bubble'ı tree dışında
+                          // bırakıyordu → _firstUnreadKey.currentContext null
+                          // dönüp ensureVisible sessizce pas geçiyordu. 3000px
+                          // cache ile ~30 mesaj tamamı önden build edilir.
+                          cacheExtent: 3000,
                           padding: const EdgeInsets.symmetric(
                             horizontal: KoalaSpacing.lg,
                             vertical: KoalaSpacing.md,
