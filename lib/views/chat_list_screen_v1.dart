@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:lucide_icons/lucide_icons.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' hide User;
 import '../core/theme/koala_tokens.dart';
 import '../core/utils/format_utils.dart';
@@ -9,7 +10,6 @@ import '../services/chat_persistence.dart';
 import '../services/evlumba_live_service.dart';
 import '../services/global_message_listener.dart';
 import '../services/messaging_service.dart';
-import '../widgets/empty_state.dart';
 import '../widgets/error_state.dart';
 import '../services/koala_ai_service.dart';
 import '../widgets/shimmer_loading.dart';
@@ -30,6 +30,10 @@ class _ChatListScreenV1State extends State<ChatListScreenV1> {
   bool _loading = true;
   bool _hasError = false;
   bool _showAllAi = false;
+
+  // Arama — query boş değilse listeler filtrelenir, bölücüler gizlenir.
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
 
   // Designer profil cache: id → { 'name': ..., 'avatar': ... }
   final Map<String, Map<String, String?>> _designerCache = {};
@@ -98,6 +102,7 @@ class _ChatListScreenV1State extends State<ChatListScreenV1> {
 
   @override
   void dispose() {
+    _searchController.dispose();
     _inboundPollTimer?.cancel();
     GlobalMessageListener.syncTick.removeListener(_onGlobalSyncTick);
     try {
@@ -437,30 +442,189 @@ class _ChatListScreenV1State extends State<ChatListScreenV1> {
           ? const ShimmerList(itemCount: 6, cardHeight: 72)
           : _hasError
               ? ErrorState(onRetry: _load)
-              : (_conversations.isEmpty && _aiChats.isEmpty)
-              ? _buildEmpty()
-              : RefreshIndicator(
-                  onRefresh: _manualSync,
-                  color: KoalaColors.accent,
-                  child: ListView(
-                    padding: const EdgeInsets.fromLTRB(
-                      KoalaSpacing.lg,
-                      KoalaSpacing.sm,
-                      KoalaSpacing.lg,
-                      KoalaSpacing.xxxl,
+              : Column(
+                  children: [
+                    _buildSearchBar(),
+                    Expanded(
+                      child: (_conversations.isEmpty &&
+                              _aiChats.isEmpty &&
+                              _searchQuery.isEmpty)
+                          ? _buildEmpty()
+                          : RefreshIndicator(
+                              onRefresh: _manualSync,
+                              color: KoalaColors.accent,
+                              child: _buildListBody(),
+                            ),
                     ),
-                    children: [
-                      // Unified conversation list — WhatsApp/Instagram DM mantığı:
-                      // her satır bir sohbet, aynı görsel dil. Section başlıkları
-                      // ve yığılı "AI history" alt-listesi yok; AI geçmişi altta
-                      // tek bir link olarak erişilebilir.
-                      _buildKoalaAiRow(),
-                      _buildEvlumbaDesignRow(),
-                      ..._conversations.map(_buildConversationTile),
-                      if (_aiChats.isNotEmpty) _buildAiHistoryLink(),
-                    ],
-                  ),
+                  ],
                 ),
+    );
+  }
+
+  /// Ana liste gövdesi. Arama boşsa: Koala panel → bölücü → Evlumba →
+  /// bölücü → tasarımcılar. Arama doluysa: filtrelenmiş sonuçlar.
+  Widget _buildListBody() {
+    final q = _searchQuery.trim().toLowerCase();
+    final filteredConvs = q.isEmpty
+        ? _conversations
+        : _conversations.where((c) {
+            final designerId = (c['designer_id'] ?? '').toString();
+            final name = (_designerCache[designerId]?['name'] ?? '').toString().toLowerCase();
+            final last = (c['last_message'] as String? ?? '').toLowerCase();
+            final title = (c['title'] as String? ?? '').toLowerCase();
+            return name.contains(q) || last.contains(q) || title.contains(q);
+          }).toList();
+
+    final filteredAi = q.isEmpty
+        ? _aiChats
+        : _aiChats.where((a) {
+            final t = a.title.toLowerCase();
+            final m = (a.lastMessage ?? '').toLowerCase();
+            return t.contains(q) || m.contains(q);
+          }).toList();
+
+    if (q.isNotEmpty) {
+      // Search mode — filtered flat results
+      if (filteredConvs.isEmpty && filteredAi.isEmpty) {
+        return ListView(
+          padding: const EdgeInsets.all(KoalaSpacing.xxl),
+          children: [
+            const SizedBox(height: KoalaSpacing.xxl),
+            Center(
+              child: Column(
+                children: [
+                  Icon(Icons.search_off_rounded,
+                      size: 48, color: KoalaColors.textTer),
+                  const SizedBox(height: KoalaSpacing.md),
+                  Text('"$_searchQuery" için sonuç yok',
+                      style: KoalaText.bodySec),
+                ],
+              ),
+            ),
+          ],
+        );
+      }
+      return ListView(
+        padding: const EdgeInsets.fromLTRB(
+          KoalaSpacing.lg,
+          KoalaSpacing.sm,
+          KoalaSpacing.lg,
+          KoalaSpacing.xxxl,
+        ),
+        children: [
+          if (filteredConvs.isNotEmpty) ...[
+            _buildSectionDivider('Tasarımcılar'),
+            ...filteredConvs.map(_buildConversationTile),
+          ],
+          if (filteredAi.isNotEmpty) ...[
+            _buildSectionDivider('AI Sohbet Geçmişi'),
+            ...filteredAi.map(_buildAiChatResultTile),
+          ],
+        ],
+      );
+    }
+
+    // Normal mode — structured sections
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(
+        KoalaSpacing.lg,
+        KoalaSpacing.sm,
+        KoalaSpacing.lg,
+        KoalaSpacing.xxxl,
+      ),
+      children: [
+        _buildKoalaAiPanel(),
+        _buildSectionDivider('Profesyonel Destek'),
+        _buildEvlumbaDesignRow(),
+        if (_conversations.isNotEmpty) ...[
+          _buildSectionDivider('Tasarımcılar'),
+          ..._conversations.map(_buildConversationTile),
+        ],
+      ],
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════
+  // ARAMA KUTUSU — AppBar altında, her zaman görünür
+  // ═══════════════════════════════════════════════════════
+  Widget _buildSearchBar() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+          KoalaSpacing.lg, 0, KoalaSpacing.lg, KoalaSpacing.sm),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+        decoration: BoxDecoration(
+          color: KoalaColors.surface,
+          borderRadius: BorderRadius.circular(KoalaRadius.md),
+          border: Border.all(color: KoalaColors.border, width: 0.5),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.search_rounded,
+                size: 18, color: KoalaColors.textTer),
+            const SizedBox(width: 8),
+            Expanded(
+              child: TextField(
+                controller: _searchController,
+                style: KoalaText.body.copyWith(fontSize: 14),
+                cursorColor: KoalaColors.accent,
+                decoration: InputDecoration(
+                  hintText: 'Ara — tasarımcı, sohbet, mesaj...',
+                  hintStyle: KoalaText.hint.copyWith(fontSize: 13.5),
+                  border: InputBorder.none,
+                  isDense: true,
+                  contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                ),
+                onChanged: (v) => setState(() => _searchQuery = v),
+              ),
+            ),
+            if (_searchQuery.isNotEmpty)
+              GestureDetector(
+                onTap: () {
+                  _searchController.clear();
+                  setState(() => _searchQuery = '');
+                },
+                child: const Padding(
+                  padding: EdgeInsets.all(4),
+                  child: Icon(Icons.close_rounded,
+                      size: 16, color: KoalaColors.textTer),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════
+  // MODERN BÖLÜCÜ — ince çizgi + ortada küçük etiket
+  // ═══════════════════════════════════════════════════════
+  Widget _buildSectionDivider(String label) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(
+          vertical: KoalaSpacing.xl, horizontal: KoalaSpacing.sm),
+      child: Row(
+        children: [
+          Expanded(
+            child: Container(height: 0.5, color: KoalaColors.borderSolid),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: KoalaSpacing.md),
+            child: Text(
+              label.toUpperCase(),
+              style: const TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                color: KoalaColors.textTer,
+                letterSpacing: 1.4,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Container(height: 0.5, color: KoalaColors.borderSolid),
+          ),
+        ],
+      ),
     );
   }
 
@@ -636,10 +800,383 @@ class _ChatListScreenV1State extends State<ChatListScreenV1> {
   }
 
   // ═══════════════════════════════════════════════════════
-  // 1. KOALA AI — tek satır (conversation tile ile aynı hizada)
+  // 1. KOALA AI PANEL — hafif accent zeminde avatar + preview + 2 aksiyon
   // ═══════════════════════════════════════════════════════
-  /// Koala AI sohbet satırı. Tap → en son AI sohbetine git (yoksa yeni başlat).
-  /// Preview: en son AI mesajı veya kısa açıklama.
+  /// Koala AI özel paneli:
+  /// - Üst: sparkle avatar + isim + en son AI chat preview + timestamp
+  /// - Alt: "Yeni soru sor" (primary mor) + "Geçmiş · N" (secondary)
+  /// Tap ana tile → en son AI sohbetine (yoksa yeni). Buton: her zaman yeni.
+  Widget _buildKoalaAiPanel() {
+    final hasHistory = _aiChats.isNotEmpty;
+    final latest = hasHistory ? _aiChats.first : null;
+    final previewText = latest?.lastMessage?.trim().isNotEmpty == true
+        ? latest!.lastMessage!
+        : 'Odanı fotoğrafla · stil bul · ürün öner';
+
+    return Container(
+      margin: const EdgeInsets.only(top: KoalaSpacing.sm),
+      padding: const EdgeInsets.all(KoalaSpacing.lg),
+      decoration: BoxDecoration(
+        color: KoalaColors.accentLight, // very light purple wash
+        borderRadius: BorderRadius.circular(KoalaRadius.lg),
+        border: Border.all(
+          color: KoalaColors.accent.withValues(alpha: 0.18),
+          width: 0.8,
+        ),
+      ),
+      child: Column(
+        children: [
+          // ── Üst satır: avatar, isim, preview, timestamp ──
+          InkWell(
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => ChatDetailScreen(chatId: latest?.id),
+              ),
+            ),
+            borderRadius: BorderRadius.circular(KoalaRadius.sm),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Row(
+                children: [
+                  // Sparkle avatar — mor gradient daire, beyaz ikon, hafif glow
+                  Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: KoalaColors.accentGradient,
+                      boxShadow: [
+                        BoxShadow(
+                          color: KoalaColors.accent.withValues(alpha: 0.25),
+                          blurRadius: 12,
+                          offset: const Offset(0, 3),
+                        ),
+                      ],
+                    ),
+                    child: const Center(
+                      child: Icon(
+                        LucideIcons.sparkles,
+                        color: Colors.white,
+                        size: 22,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: KoalaSpacing.md),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            const Text('Koala AI', style: KoalaText.h4),
+                            const SizedBox(width: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 6, vertical: 1.5),
+                              decoration: BoxDecoration(
+                                color: KoalaColors.accent,
+                                borderRadius:
+                                    BorderRadius.circular(KoalaRadius.pill),
+                              ),
+                              child: const Text(
+                                'asistan',
+                                style: TextStyle(
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.w700,
+                                  color: Colors.white,
+                                  letterSpacing: 0.3,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          previewText,
+                          style: KoalaText.bodySec,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (latest != null)
+                    Text(timeAgo(latest.updatedAt),
+                        style: KoalaText.labelSmall),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: KoalaSpacing.md),
+          // Divider — panelin içinde ince çizgi
+          Container(
+            height: 0.6,
+            color: KoalaColors.accent.withValues(alpha: 0.15),
+          ),
+          const SizedBox(height: KoalaSpacing.md),
+          // ── Alt aksiyon şeridi: 2 buton ──
+          Row(
+            children: [
+              Expanded(
+                child: _koalaActionButton(
+                  icon: LucideIcons.sparkles,
+                  label: 'Yeni soru sor',
+                  primary: true,
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const ChatDetailScreen(),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: KoalaSpacing.sm),
+              Expanded(
+                child: _koalaActionButton(
+                  icon: Icons.history_rounded,
+                  label: hasHistory ? 'Geçmiş · ${_aiChats.length}' : 'Geçmiş',
+                  primary: false,
+                  onTap: hasHistory ? _openAiHistorySheet : null,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Koala panel içindeki aksiyon butonu — primary mor, secondary beyaz.
+  Widget _koalaActionButton({
+    required IconData icon,
+    required String label,
+    required bool primary,
+    required VoidCallback? onTap,
+  }) {
+    final disabled = onTap == null;
+    final bg = primary
+        ? KoalaColors.accent
+        : KoalaColors.surface;
+    final fg = primary
+        ? Colors.white
+        : (disabled ? KoalaColors.textTer : KoalaColors.accent);
+    return GestureDetector(
+      onTap: onTap,
+      child: Opacity(
+        opacity: disabled ? 0.6 : 1.0,
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 10),
+          decoration: BoxDecoration(
+            color: bg,
+            borderRadius: BorderRadius.circular(KoalaRadius.md),
+            border: primary
+                ? null
+                : Border.all(
+                    color: KoalaColors.accent.withValues(alpha: 0.2),
+                    width: 0.8,
+                  ),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, size: 14, color: fg),
+              const SizedBox(width: 6),
+              Flexible(
+                child: Text(
+                  label,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w700,
+                    color: fg,
+                    letterSpacing: 0.1,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Arama modunda AI chat match satırı — küçük, ikinci sınıf
+  Widget _buildAiChatResultTile(ChatSummary chat) {
+    return GestureDetector(
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => ChatDetailScreen(chatId: chat.id)),
+      ),
+      child: Container(
+        margin: const EdgeInsets.only(top: KoalaSpacing.sm),
+        padding: const EdgeInsets.all(KoalaSpacing.md),
+        decoration: KoalaDeco.card,
+        child: Row(
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: KoalaColors.accentSoft,
+                borderRadius: BorderRadius.circular(KoalaRadius.sm),
+              ),
+              child: const Icon(LucideIcons.sparkles,
+                  size: 14, color: KoalaColors.accent),
+            ),
+            const SizedBox(width: KoalaSpacing.md),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(chat.title,
+                      style: KoalaText.label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis),
+                  if (chat.lastMessage != null && chat.lastMessage!.isNotEmpty)
+                    Text(chat.lastMessage!,
+                        style: KoalaText.bodySmall,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis),
+                ],
+              ),
+            ),
+            Text(timeAgo(chat.updatedAt), style: KoalaText.labelSmall),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Sohbet arşivle (soft delete) — status='archived'. Realtime event
+  /// zaten listeden kaldıracak ama optimistic için burada da çıkıyoruz.
+  /// Soft-delete koala_conversations row. Caller (Dismissible.onDismissed)
+  /// handles the list removal → burada setState YOK, aksi halde Dismissible
+  /// animasyonu child'ı kaybedip assertion fırlatır.
+  Future<bool> _archiveConversation(String convId) async {
+    try {
+      await Supabase.instance.client
+          .from('koala_conversations')
+          .update({'status': 'archived'}).eq('id', convId);
+      return true;
+    } catch (e) {
+      debugPrint('archive failed: $e');
+      return false;
+    }
+  }
+
+  void _removeConversationLocal(String convId) {
+    if (!mounted) return;
+    setState(() {
+      _conversations.removeWhere((c) => c['id']?.toString() == convId);
+    });
+  }
+
+  /// Silme onay bottom sheet — modern action sheet
+  Future<bool> _confirmDelete({required String title}) async {
+    final result = await showModalBottomSheet<bool>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        padding: EdgeInsets.fromLTRB(
+            KoalaSpacing.xl,
+            KoalaSpacing.lg,
+            KoalaSpacing.xl,
+            MediaQuery.of(ctx).padding.bottom + KoalaSpacing.lg),
+        decoration: const BoxDecoration(
+          color: KoalaColors.surface,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: KoalaColors.borderSolid,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: KoalaSpacing.lg),
+            Container(
+              width: 56,
+              height: 56,
+              decoration: BoxDecoration(
+                color: KoalaColors.error.withValues(alpha: 0.1),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.delete_outline_rounded,
+                  color: KoalaColors.error, size: 28),
+            ),
+            const SizedBox(height: KoalaSpacing.md),
+            const Text('Sohbeti sil', style: KoalaText.h3),
+            const SizedBox(height: 6),
+            Text(
+              '"$title" sohbeti listeden kalkacak.',
+              textAlign: TextAlign.center,
+              style: KoalaText.bodySec,
+            ),
+            const SizedBox(height: KoalaSpacing.xl),
+            Row(
+              children: [
+                Expanded(
+                  child: GestureDetector(
+                    onTap: () => Navigator.pop(ctx, false),
+                    child: Container(
+                      padding:
+                          const EdgeInsets.symmetric(vertical: KoalaSpacing.md),
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: KoalaColors.surfaceAlt,
+                        borderRadius: BorderRadius.circular(KoalaRadius.md),
+                      ),
+                      child: Text(
+                        'İptal',
+                        style: KoalaText.label.copyWith(
+                            color: KoalaColors.text,
+                            fontWeight: FontWeight.w700),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: KoalaSpacing.md),
+                Expanded(
+                  child: GestureDetector(
+                    onTap: () => Navigator.pop(ctx, true),
+                    child: Container(
+                      padding:
+                          const EdgeInsets.symmetric(vertical: KoalaSpacing.md),
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: KoalaColors.error,
+                        borderRadius: BorderRadius.circular(KoalaRadius.md),
+                      ),
+                      child: const Text(
+                        'Sil',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+    return result ?? false;
+  }
+
+  // ═══════════════════════════════════════════════════════
+  // [legacy] _buildKoalaAiRow — artık _buildKoalaAiPanel kullanılıyor.
+  // Eski tek-satır versiyonu, referans/rollback için kalıyor.
+  // ═══════════════════════════════════════════════════════
+  // ignore: unused_element
   Widget _buildKoalaAiRow() {
     final hasHistory = _aiChats.isNotEmpty;
     final latest = hasHistory ? _aiChats.first : null;
@@ -935,7 +1472,10 @@ class _ChatListScreenV1State extends State<ChatListScreenV1> {
 
   // ═══════════════════════════════════════════════════════
   // AI SOHBET GEÇMİŞİ — altta ince link satırı (bottom sheet açar)
+  // Artık _buildKoalaAiPanel içindeki "Geçmiş" butonu kullanılıyor,
+  // bu fn rollback referansı için duruyor.
   // ═══════════════════════════════════════════════════════
+  // ignore: unused_element
   Widget _buildAiHistoryLink() {
     final count = _aiChats.length;
     return GestureDetector(
@@ -1133,7 +1673,52 @@ class _ChatListScreenV1State extends State<ChatListScreenV1> {
         .join()
         .toUpperCase();
 
-    return GestureDetector(
+    final convIdForKey = (conv['id'] ?? '').toString();
+
+    return Dismissible(
+      key: ValueKey('conv-$convIdForKey'),
+      direction: DismissDirection.endToStart,
+      confirmDismiss: (_) async {
+        if (convIdForKey.isEmpty) return false;
+        final ok = await _confirmDelete(title: designerName);
+        if (!ok) return false;
+        // Server archive (soft-delete). setState'i onDismissed içinde
+        // yapıyoruz — confirmDismiss true dönerse Dismissible child'ı
+        // önce animate-out edecek, sonra onDismissed tetiklenecek.
+        return await _archiveConversation(convIdForKey);
+      },
+      onDismissed: (_) {
+        if (convIdForKey.isNotEmpty) {
+          _removeConversationLocal(convIdForKey);
+        }
+      },
+      background: Container(
+        margin: const EdgeInsets.only(top: KoalaSpacing.sm),
+        alignment: Alignment.centerRight,
+        padding: const EdgeInsets.symmetric(horizontal: KoalaSpacing.xl),
+        decoration: BoxDecoration(
+          color: KoalaColors.error,
+          borderRadius: BorderRadius.circular(KoalaRadius.lg),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.end,
+          mainAxisSize: MainAxisSize.min,
+          children: const [
+            Icon(Icons.delete_outline_rounded, color: Colors.white, size: 22),
+            SizedBox(width: 8),
+            Text(
+              'Sil',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.3,
+              ),
+            ),
+          ],
+        ),
+      ),
+      child: GestureDetector(
       onTap: () async {
         // Optimistic: tıklanır tıklanmaz rozet sıfıra insin — DB update
         // geç kalırsa bile kullanıcı 0 görsün.
@@ -1205,7 +1790,7 @@ class _ChatListScreenV1State extends State<ChatListScreenV1> {
                       child: Image.network(
                         avatarUrl,
                         fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => Center(
+                        errorBuilder: (_, _, _) => Center(
                           child: Text(initials, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.white)),
                         ),
                       ),
@@ -1294,6 +1879,7 @@ class _ChatListScreenV1State extends State<ChatListScreenV1> {
             ),
           ],
         ),
+      ),
       ),
     );
   }
