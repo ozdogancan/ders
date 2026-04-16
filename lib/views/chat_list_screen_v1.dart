@@ -438,26 +438,25 @@ class _ChatListScreenV1State extends State<ChatListScreenV1> {
         // Refresh butonu kaldırıldı — WhatsApp gibi anlık olmalı. Pull-to-refresh
         // gizli yedek olarak duruyor (RefreshIndicator body'de).
       ),
+      // ── FAB: her yerden erişilebilir "Yeni AI sorusu" — Koala AI panelinin
+      // yerini tutan öne çıkan aksiyon. Bu sayede servis kartları compact
+      // kalabiliyor, primary action gözden kaçmıyor.
+      floatingActionButton: (_loading || _hasError)
+          ? null
+          : _buildAiFab(),
       body: _loading
           ? const ShimmerList(itemCount: 6, cardHeight: 72)
           : _hasError
               ? ErrorState(onRetry: _load)
-              : Column(
-                  children: [
-                    _buildSearchBar(),
-                    Expanded(
-                      child: (_conversations.isEmpty &&
-                              _aiChats.isEmpty &&
-                              _searchQuery.isEmpty)
-                          ? _buildEmpty()
-                          : RefreshIndicator(
-                              onRefresh: _manualSync,
-                              color: KoalaColors.accent,
-                              child: _buildListBody(),
-                            ),
+              : (_conversations.isEmpty &&
+                      _aiChats.isEmpty &&
+                      _searchQuery.isEmpty)
+                  ? _buildEmpty()
+                  : RefreshIndicator(
+                      onRefresh: _manualSync,
+                      color: KoalaColors.accent,
+                      child: _buildListBody(),
                     ),
-                  ],
-                ),
     );
   }
 
@@ -484,11 +483,17 @@ class _ChatListScreenV1State extends State<ChatListScreenV1> {
           }).toList();
 
     if (q.isNotEmpty) {
-      // Search mode — filtered flat results
+      // Search mode — filtered flat results (search bar always at top)
       if (filteredConvs.isEmpty && filteredAi.isEmpty) {
         return ListView(
-          padding: const EdgeInsets.all(KoalaSpacing.xxl),
+          padding: const EdgeInsets.fromLTRB(
+            KoalaSpacing.lg,
+            KoalaSpacing.sm,
+            KoalaSpacing.lg,
+            KoalaSpacing.xxxl,
+          ),
           children: [
+            _buildSearchBar(),
             const SizedBox(height: KoalaSpacing.xxl),
             Center(
               child: Column(
@@ -512,6 +517,7 @@ class _ChatListScreenV1State extends State<ChatListScreenV1> {
           KoalaSpacing.xxxl,
         ),
         children: [
+          _buildSearchBar(),
           if (filteredConvs.isNotEmpty) ...[
             _buildSectionDivider('Tasarımcılar'),
             ...filteredConvs.map(_buildConversationTile),
@@ -524,7 +530,8 @@ class _ChatListScreenV1State extends State<ChatListScreenV1> {
       );
     }
 
-    // Normal mode — structured sections
+    // Normal mode — compact "hızlı erişim" services + sohbetler
+    // (Koala AI panelinin büyük CTA'sı → bottom FAB'a taşındı)
     return ListView(
       padding: const EdgeInsets.fromLTRB(
         KoalaSpacing.lg,
@@ -533,9 +540,12 @@ class _ChatListScreenV1State extends State<ChatListScreenV1> {
         KoalaSpacing.xxxl,
       ),
       children: [
-        _buildKoalaAiPanel(),
-        _buildSectionDivider('Profesyonel Destek'),
-        _buildEvlumbaDesignRow(),
+        _buildSearchBar(),
+        _buildServicesGrid(),
+        if (_aiChats.isNotEmpty) ...[
+          const SizedBox(height: KoalaSpacing.sm),
+          _buildAiHistoryChip(),
+        ],
         if (_conversations.isNotEmpty) ...[
           _buildSectionDivider('Tasarımcılar'),
           ..._conversations.map(_buildConversationTile),
@@ -545,52 +555,60 @@ class _ChatListScreenV1State extends State<ChatListScreenV1> {
   }
 
   // ═══════════════════════════════════════════════════════
-  // ARAMA KUTUSU — AppBar altında, her zaman görünür
+  // ARAMA KUTUSU — home input ile aynı görünüm (focus border yok),
+  // ListView'in ilk elemanı olarak içeri taşındı → scroll ile beraber gider.
   // ═══════════════════════════════════════════════════════
   Widget _buildSearchBar() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(
-          KoalaSpacing.lg, 0, KoalaSpacing.lg, KoalaSpacing.sm),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
-        decoration: BoxDecoration(
-          color: KoalaColors.surface,
+    OutlineInputBorder flatBorder() => OutlineInputBorder(
           borderRadius: BorderRadius.circular(KoalaRadius.md),
-          border: Border.all(color: KoalaColors.border, width: 0.5),
-        ),
-        child: Row(
-          children: [
-            const Icon(Icons.search_rounded,
-                size: 18, color: KoalaColors.textTer),
-            const SizedBox(width: 8),
-            Expanded(
-              child: TextField(
-                controller: _searchController,
-                style: KoalaText.body.copyWith(fontSize: 14),
-                cursorColor: KoalaColors.accent,
-                decoration: InputDecoration(
-                  hintText: 'Ara — tasarımcı, sohbet, mesaj...',
-                  hintStyle: KoalaText.hint.copyWith(fontSize: 13.5),
-                  border: InputBorder.none,
-                  isDense: true,
-                  contentPadding: const EdgeInsets.symmetric(vertical: 10),
+          borderSide: const BorderSide(
+            color: KoalaColors.border,
+            width: 0.5,
+          ),
+        );
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: KoalaSpacing.md),
+      child: TextField(
+        controller: _searchController,
+        style: KoalaText.body.copyWith(fontSize: 14),
+        cursorColor: KoalaColors.accent,
+        onChanged: (v) => setState(() => _searchQuery = v),
+        decoration: InputDecoration(
+          filled: true,
+          fillColor: KoalaColors.surface,
+          hintText: 'Ara — tasarımcı, sohbet, mesaj...',
+          hintStyle: KoalaText.hint.copyWith(fontSize: 13.5),
+          prefixIcon: const Icon(
+            Icons.search_rounded,
+            size: 18,
+            color: KoalaColors.textTer,
+          ),
+          prefixIconConstraints:
+              const BoxConstraints(minWidth: 38, minHeight: 38),
+          suffixIcon: _searchQuery.isEmpty
+              ? null
+              : GestureDetector(
+                  onTap: () {
+                    _searchController.clear();
+                    setState(() => _searchQuery = '');
+                  },
+                  child: const Icon(
+                    Icons.close_rounded,
+                    size: 16,
+                    color: KoalaColors.textTer,
+                  ),
                 ),
-                onChanged: (v) => setState(() => _searchQuery = v),
-              ),
-            ),
-            if (_searchQuery.isNotEmpty)
-              GestureDetector(
-                onTap: () {
-                  _searchController.clear();
-                  setState(() => _searchQuery = '');
-                },
-                child: const Padding(
-                  padding: EdgeInsets.all(4),
-                  child: Icon(Icons.close_rounded,
-                      size: 16, color: KoalaColors.textTer),
-                ),
-              ),
-          ],
+          suffixIconConstraints:
+              const BoxConstraints(minWidth: 38, minHeight: 38),
+          isDense: true,
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 4, vertical: 12),
+          // Tüm state'lerde aynı ince gri border → focus'ta mor çerçeve YOK
+          border: flatBorder(),
+          enabledBorder: flatBorder(),
+          focusedBorder: flatBorder(),
+          disabledBorder: flatBorder(),
         ),
       ),
     );
@@ -800,12 +818,11 @@ class _ChatListScreenV1State extends State<ChatListScreenV1> {
   }
 
   // ═══════════════════════════════════════════════════════
-  // 1. KOALA AI PANEL — hafif accent zeminde avatar + preview + 2 aksiyon
+  // [legacy] KOALA AI PANEL — full-width büyük CTA'lı panel.
+  // Compact 2-up services grid'e taşındı (_buildServicesGrid). Rollback için
+  // korunuyor, şuan çağrılmıyor.
   // ═══════════════════════════════════════════════════════
-  /// Koala AI özel paneli:
-  /// - Üst: sparkle avatar + isim + en son AI chat preview + timestamp
-  /// - Alt: "Yeni soru sor" (primary mor) + "Geçmiş · N" (secondary)
-  /// Tap ana tile → en son AI sohbetine (yoksa yeni). Buton: her zaman yeni.
+  // ignore: unused_element
   Widget _buildKoalaAiPanel() {
     final hasHistory = _aiChats.isNotEmpty;
     final latest = hasHistory ? _aiChats.first : null;
@@ -948,6 +965,8 @@ class _ChatListScreenV1State extends State<ChatListScreenV1> {
   }
 
   /// Koala panel içindeki aksiyon butonu — primary mor, secondary beyaz.
+  /// Legacy — compact services grid'e geçildi, bu buton kullanılmıyor.
+  // ignore: unused_element
   Widget _koalaActionButton({
     required IconData icon,
     required String label,
@@ -996,6 +1015,258 @@ class _ChatListScreenV1State extends State<ChatListScreenV1> {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════
+  // HIZLI ERİŞİM — Koala AI + Evlumba Design compact 50/50 kart
+  // (eski full-width panel + Evlumba row'un yerini alıyor)
+  // ═══════════════════════════════════════════════════════
+  Widget _buildServicesGrid() {
+    final latestAi = _aiChats.isNotEmpty ? _aiChats.first : null;
+    final aiCount = _aiChats.length;
+    final koalaSubtitle = latestAi != null
+        ? 'Son · ${timeAgo(latestAi.updatedAt)}'
+        : 'Odanı fotoğrafla · stil bul';
+
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Expanded(
+            child: _buildServiceCard(
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => ChatDetailScreen(chatId: latestAi?.id),
+                ),
+              ),
+              gradient: KoalaColors.accentGradient,
+              icon: LucideIcons.sparkles,
+              title: 'Koala AI',
+              pill: 'asistan',
+              pillBg: KoalaColors.accent,
+              subtitle: koalaSubtitle,
+              trailing: aiCount > 0 ? '$aiCount sohbet' : null,
+              highlightBg: KoalaColors.accentLight,
+              borderColor: KoalaColors.accent.withValues(alpha: 0.18),
+            ),
+          ),
+          const SizedBox(width: KoalaSpacing.sm),
+          Expanded(
+            child: _buildServiceCard(
+              onTap: _openEvlumbaDesign,
+              gradient: const LinearGradient(
+                colors: [Color(0xFFD4A853), Color(0xFFB8874A)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              icon: LucideIcons.home,
+              title: 'Evlumba Design',
+              pill: 'uzman',
+              pillBg: const Color(0xFFB8874A),
+              subtitle: 'İç mimardan destek',
+              trailing: '≤ 1 sa yanıt',
+              trailingDot: true, // küçük yeşil pulse — "müsait"
+              highlightBg: const Color(0xFFFDF8EC),
+              borderColor: const Color(0xFFD4A853).withValues(alpha: 0.25),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Tek bir hızlı erişim kartı. Koala AI ve Evlumba Design bu widget'ı
+  /// paylaşıyor → tutarlı hiyerarşi, compact layout.
+  Widget _buildServiceCard({
+    required VoidCallback onTap,
+    required Gradient gradient,
+    required IconData icon,
+    required String title,
+    required String pill,
+    required Color pillBg,
+    required String subtitle,
+    String? trailing,
+    bool trailingDot = false,
+    required Color highlightBg,
+    required Color borderColor,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(KoalaSpacing.md),
+        decoration: BoxDecoration(
+          color: highlightBg,
+          borderRadius: BorderRadius.circular(KoalaRadius.lg),
+          border: Border.all(color: borderColor, width: 0.8),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Üst: avatar + pill
+            Row(
+              children: [
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: gradient,
+                  ),
+                  child: Center(
+                    child: Icon(icon, size: 18, color: Colors.white),
+                  ),
+                ),
+                const Spacer(),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                  decoration: BoxDecoration(
+                    color: pillBg,
+                    borderRadius: BorderRadius.circular(KoalaRadius.pill),
+                  ),
+                  child: Text(
+                    pill,
+                    style: const TextStyle(
+                      fontSize: 9,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white,
+                      letterSpacing: 0.3,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Text(title,
+                style: KoalaText.h4.copyWith(fontSize: 14),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis),
+            const SizedBox(height: 2),
+            Text(
+              subtitle,
+              style: KoalaText.bodySec.copyWith(fontSize: 12),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            if (trailing != null) ...[
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  if (trailingDot) ...[
+                    Container(
+                      width: 6,
+                      height: 6,
+                      decoration: const BoxDecoration(
+                        color: Color(0xFF22C55E),
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 5),
+                  ],
+                  Flexible(
+                    child: Text(
+                      trailing,
+                      style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: KoalaColors.textSec,
+                        letterSpacing: 0.2,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  const Icon(Icons.arrow_forward_rounded,
+                      size: 12, color: KoalaColors.textTer),
+                ],
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// AI sohbet geçmişi — ince tek-satır şerit, Koala AI kartının altında.
+  /// Kullanıcı "36 sohbeti" görüp tıklayabilir.
+  Widget _buildAiHistoryChip() {
+    return GestureDetector(
+      onTap: _openAiHistorySheet,
+      child: Container(
+        padding: const EdgeInsets.symmetric(
+            horizontal: KoalaSpacing.md, vertical: 10),
+        decoration: BoxDecoration(
+          color: KoalaColors.surface,
+          borderRadius: BorderRadius.circular(KoalaRadius.md),
+          border: Border.all(color: KoalaColors.border, width: 0.5),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 22,
+              height: 22,
+              decoration: BoxDecoration(
+                color: KoalaColors.accentSoft,
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: const Icon(LucideIcons.sparkles,
+                  size: 12, color: KoalaColors.accent),
+            ),
+            const SizedBox(width: 10),
+            const Expanded(
+              child: Text(
+                'Koala AI sohbet geçmişi',
+                style: TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w700,
+                  color: KoalaColors.text,
+                  letterSpacing: 0.1,
+                ),
+              ),
+            ),
+            Text(
+              '${_aiChats.length}',
+              style: const TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                color: KoalaColors.accent,
+                letterSpacing: 0.3,
+              ),
+            ),
+            const SizedBox(width: 8),
+            const Icon(Icons.chevron_right_rounded,
+                size: 18, color: KoalaColors.textTer),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Bottom-right FAB: "Yeni AI sorusu" — panel içindeki primary CTA buradan
+  /// erişiliyor. Koala AI kartı tap'i son sohbete götürürken FAB her zaman
+  /// boş ekran açar.
+  Widget _buildAiFab() {
+    return FloatingActionButton.extended(
+      onPressed: () => Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const ChatDetailScreen()),
+      ),
+      backgroundColor: KoalaColors.accent,
+      foregroundColor: Colors.white,
+      elevation: 4,
+      highlightElevation: 6,
+      icon: const Icon(LucideIcons.sparkles, size: 18),
+      label: const Text(
+        'Yeni soru',
+        style: TextStyle(
+          fontSize: 13,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 0.3,
         ),
       ),
     );
@@ -1393,8 +1664,11 @@ class _ChatListScreenV1State extends State<ChatListScreenV1> {
   }
 
   // ═══════════════════════════════════════════════════════
-  // 2. EVLUMBA DESIGN — tek satır (conversation tile ile aynı hizada)
+  // [legacy] EVLUMBA DESIGN — eski tek-satır full-width card. Artık
+  // _buildServicesGrid içinde Koala AI yanında compact kart olarak duruyor.
+  // Empty state geriye dönük olarak bunu kullanabiliyor.
   // ═══════════════════════════════════════════════════════
+  // ignore: unused_element
   Widget _buildEvlumbaDesignRow() {
     const gold = Color(0xFFD4A853);
     return GestureDetector(
