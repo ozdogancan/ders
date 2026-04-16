@@ -342,30 +342,22 @@ class _ChatListScreenV1State extends State<ChatListScreenV1> {
       final synced = await MessagingService.pullInbound();
       await _load();
       if (!mounted) return;
-      messenger?.hideCurrentSnackBar();
-      final convCount = MessagingService.lastInboundConversations;
-      final diag = MessagingService.lastInboundDiag;
-      final shortId = (diag?['homeownerId']?.toString() ?? '').split('-').first;
-      // Eğer hiç conversation yoksa kullanıcıya sebebini net söyle —
-      // shadow user Evlumba'daki conversation'larla eşleşmiyor demektir.
-      final message = synced > 0
-          ? '$synced yeni mesaj geldi (conv=$convCount)'
-          : convCount == 0
-              ? 'Evlumba\'da konuşma bulunamadı. shadow=$shortId'
-              : 'Yeni mesaj yok (conv=$convCount, shadow=$shortId)';
-      messenger?.showSnackBar(
-        SnackBar(
-          behavior: SnackBarBehavior.floating,
-          duration: const Duration(seconds: 5),
-          backgroundColor: synced > 0
-              ? const Color(0xFF4CAF50)
-              : KoalaColors.textSec,
-          content: Text(
-            message,
-            style: const TextStyle(color: Colors.white),
+      // Yeni mesaj yoksa sessiz ol — SnackBar açma, liste yenilenmesi
+      // zaten yeterli feedback. Sadece gerçekten YENİ mesaj geldiyse bildir.
+      if (synced > 0) {
+        messenger?.hideCurrentSnackBar();
+        messenger?.showSnackBar(
+          SnackBar(
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 3),
+            backgroundColor: const Color(0xFF4CAF50),
+            content: Text(
+              synced == 1 ? '1 yeni mesaj' : '$synced yeni mesaj',
+              style: const TextStyle(color: Colors.white),
+            ),
           ),
-        ),
-      );
+        );
+      }
     } catch (e) {
       if (!mounted) return;
       messenger?.hideCurrentSnackBar();
@@ -435,15 +427,13 @@ class _ChatListScreenV1State extends State<ChatListScreenV1> {
           onTap: _maybeOpenDebug,
           child: const Text('Mesajlar', style: KoalaText.h2),
         ),
+        actions: [
+          if (!_loading && !_hasError) _buildNewAiAction(),
+          const SizedBox(width: 6),
+        ],
         // Refresh butonu kaldırıldı — WhatsApp gibi anlık olmalı. Pull-to-refresh
         // gizli yedek olarak duruyor (RefreshIndicator body'de).
       ),
-      // ── FAB: her yerden erişilebilir "Yeni AI sorusu" — Koala AI panelinin
-      // yerini tutan öne çıkan aksiyon. Bu sayede servis kartları compact
-      // kalabiliyor, primary action gözden kaçmıyor.
-      floatingActionButton: (_loading || _hasError)
-          ? null
-          : _buildAiFab(),
       body: _loading
           ? const ShimmerList(itemCount: 6, cardHeight: 72)
           : _hasError
@@ -1025,11 +1015,7 @@ class _ChatListScreenV1State extends State<ChatListScreenV1> {
   // (eski full-width panel + Evlumba row'un yerini alıyor)
   // ═══════════════════════════════════════════════════════
   Widget _buildServicesGrid() {
-    final latestAi = _aiChats.isNotEmpty ? _aiChats.first : null;
     final aiCount = _aiChats.length;
-    final koalaSubtitle = latestAi != null
-        ? 'Son · ${timeAgo(latestAi.updatedAt)}'
-        : 'Odanı fotoğrafla · stil bul';
 
     return IntrinsicHeight(
       child: Row(
@@ -1037,10 +1023,11 @@ class _ChatListScreenV1State extends State<ChatListScreenV1> {
         children: [
           Expanded(
             child: _buildServiceCard(
+              // Card tap = YENİ sohbet (FAB kaldırıldı, card primary action)
               onTap: () => Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (_) => ChatDetailScreen(chatId: latestAi?.id),
+                  builder: (_) => const ChatDetailScreen(),
                 ),
               ),
               gradient: KoalaColors.accentGradient,
@@ -1048,8 +1035,8 @@ class _ChatListScreenV1State extends State<ChatListScreenV1> {
               title: 'Koala AI',
               pill: 'asistan',
               pillBg: KoalaColors.accent,
-              subtitle: koalaSubtitle,
-              trailing: aiCount > 0 ? '$aiCount sohbet' : null,
+              subtitle: 'Odanı fotoğrafla · stil bul',
+              trailing: aiCount > 0 ? 'Soru sor' : 'Başla',
               highlightBg: KoalaColors.accentLight,
               borderColor: KoalaColors.accent.withValues(alpha: 0.18),
             ),
@@ -1247,9 +1234,56 @@ class _ChatListScreenV1State extends State<ChatListScreenV1> {
     );
   }
 
-  /// Bottom-right FAB: "Yeni AI sorusu" — panel içindeki primary CTA buradan
-  /// erişiliyor. Koala AI kartı tap'i son sohbete götürürken FAB her zaman
-  /// boş ekran açar.
+  /// Sağ üst AppBar aksiyonu — "Yeni AI sorusu" için ince compose butonu.
+  /// FAB yerine sessiz bir noktada duruyor, iconography compose/sparkles.
+  /// Tap → yeni ChatDetailScreen (boş).
+  Widget _buildNewAiAction() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const ChatDetailScreen()),
+          ),
+          borderRadius: BorderRadius.circular(KoalaRadius.pill),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+            decoration: BoxDecoration(
+              color: KoalaColors.accentSoft,
+              borderRadius: BorderRadius.circular(KoalaRadius.pill),
+              border: Border.all(
+                color: KoalaColors.accent.withValues(alpha: 0.18),
+                width: 0.7,
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: const [
+                Icon(Icons.edit_note_rounded, size: 16, color: KoalaColors.accent),
+                SizedBox(width: 5),
+                Text(
+                  'Yeni',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: KoalaColors.accent,
+                    letterSpacing: 0.2,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// [legacy] Bottom-right FAB: "Yeni AI sorusu" — kaldırıldı (kullanıcı
+  /// kafa karıştırıcı buldu, Koala AI kartı zaten tap → yeni/son sohbet).
+  /// Rollback için korunuyor.
+  // ignore: unused_element
   Widget _buildAiFab() {
     return FloatingActionButton.extended(
       onPressed: () => Navigator.push(
@@ -1790,7 +1824,7 @@ class _ChatListScreenV1State extends State<ChatListScreenV1> {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => _AiHistorySheet(
-        chats: _aiChats,
+        initialChats: _aiChats,
         onSelect: (id) {
           Navigator.pop(context);
           Navigator.push(
@@ -1798,8 +1832,26 @@ class _ChatListScreenV1State extends State<ChatListScreenV1> {
             MaterialPageRoute(builder: (_) => ChatDetailScreen(chatId: id)),
           );
         },
+        onDelete: _deleteAiChat,
       ),
     );
+  }
+
+  /// AI sohbet sil → hem SharedPreferences hem Supabase'den kaldır.
+  /// Parent listeyi senkron tutmak için setState ile _aiChats'ten de çıkarıyoruz.
+  Future<bool> _deleteAiChat(String chatId) async {
+    try {
+      await ChatPersistence.deleteConversation(chatId);
+      if (mounted) {
+        setState(() {
+          _aiChats.removeWhere((c) => c.id == chatId);
+        });
+      }
+      return true;
+    } catch (e) {
+      debugPrint('AI chat delete failed: $e');
+      return false;
+    }
   }
 
   // ═══════════════════════════════════════════════════════
@@ -2291,12 +2343,132 @@ class _EvlumbaDesignSheet extends StatelessWidget {
 }
 
 // ═══════════════════════════════════════════════════════
-// AI SOHBET GEÇMİŞİ — bottom sheet (main listeden taşındı)
+// AI SOHBET GEÇMİŞİ — bottom sheet
+// Stateful: sheet açıkken swipe-to-delete yapıldığında listeyi
+// optimistik olarak günceller, parent'tan silme callback'ini çağırır.
 // ═══════════════════════════════════════════════════════
-class _AiHistorySheet extends StatelessWidget {
-  final List<ChatSummary> chats;
+class _AiHistorySheet extends StatefulWidget {
+  final List<ChatSummary> initialChats;
   final void Function(String chatId) onSelect;
-  const _AiHistorySheet({required this.chats, required this.onSelect});
+  final Future<bool> Function(String chatId) onDelete;
+
+  const _AiHistorySheet({
+    required this.initialChats,
+    required this.onSelect,
+    required this.onDelete,
+  });
+
+  @override
+  State<_AiHistorySheet> createState() => _AiHistorySheetState();
+}
+
+class _AiHistorySheetState extends State<_AiHistorySheet> {
+  late List<ChatSummary> _chats;
+
+  @override
+  void initState() {
+    super.initState();
+    _chats = List.of(widget.initialChats);
+  }
+
+  Future<bool> _confirmDelete(String title) async {
+    final result = await showModalBottomSheet<bool>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        padding: EdgeInsets.fromLTRB(
+            KoalaSpacing.xl,
+            KoalaSpacing.lg,
+            KoalaSpacing.xl,
+            MediaQuery.of(ctx).padding.bottom + KoalaSpacing.lg),
+        decoration: const BoxDecoration(
+          color: KoalaColors.surface,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: KoalaColors.borderSolid,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: KoalaSpacing.lg),
+            Container(
+              width: 56,
+              height: 56,
+              decoration: BoxDecoration(
+                color: KoalaColors.error.withValues(alpha: 0.1),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.delete_outline_rounded,
+                  color: KoalaColors.error, size: 28),
+            ),
+            const SizedBox(height: KoalaSpacing.md),
+            const Text('AI sohbetini sil', style: KoalaText.h3),
+            const SizedBox(height: 6),
+            Text(
+              '"$title" sohbeti kalıcı olarak silinecek.',
+              textAlign: TextAlign.center,
+              style: KoalaText.bodySec,
+            ),
+            const SizedBox(height: KoalaSpacing.xl),
+            Row(
+              children: [
+                Expanded(
+                  child: GestureDetector(
+                    onTap: () => Navigator.pop(ctx, false),
+                    child: Container(
+                      padding:
+                          const EdgeInsets.symmetric(vertical: KoalaSpacing.md),
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: KoalaColors.surfaceAlt,
+                        borderRadius: BorderRadius.circular(KoalaRadius.md),
+                      ),
+                      child: Text(
+                        'İptal',
+                        style: KoalaText.label.copyWith(
+                            color: KoalaColors.text,
+                            fontWeight: FontWeight.w700),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: KoalaSpacing.md),
+                Expanded(
+                  child: GestureDetector(
+                    onTap: () => Navigator.pop(ctx, true),
+                    child: Container(
+                      padding:
+                          const EdgeInsets.symmetric(vertical: KoalaSpacing.md),
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: KoalaColors.error,
+                        borderRadius: BorderRadius.circular(KoalaRadius.md),
+                      ),
+                      child: const Text(
+                        'Sil',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+    return result ?? false;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -2335,70 +2507,160 @@ class _AiHistorySheet extends StatelessWidget {
                 const SizedBox(width: 8),
                 const Text('AI Sohbet Geçmişi', style: KoalaText.h3),
                 const Spacer(),
-                Text('${chats.length}',
+                Text('${_chats.length}',
                     style: KoalaText.bodySec
                         .copyWith(fontWeight: FontWeight.w600)),
+              ],
+            ),
+          ),
+          // Küçük yardım metni — silme ipucu
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+                KoalaSpacing.lg, 0, KoalaSpacing.lg, KoalaSpacing.sm),
+            child: Row(
+              children: const [
+                Icon(Icons.swipe_left_rounded,
+                    size: 13, color: KoalaColors.textTer),
+                SizedBox(width: 6),
+                Text(
+                  'Silmek için sola kaydır',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: KoalaColors.textTer,
+                    letterSpacing: 0.2,
+                  ),
+                ),
               ],
             ),
           ),
           const Divider(height: 1, color: KoalaColors.border),
           // List
           Flexible(
-            child: ListView.separated(
-              shrinkWrap: true,
-              padding: EdgeInsets.fromLTRB(
-                  KoalaSpacing.sm, KoalaSpacing.sm, KoalaSpacing.sm, bottomPad + 16),
-              itemCount: chats.length,
-              separatorBuilder: (_, _) => const SizedBox(height: 2),
-              itemBuilder: (_, i) {
-                final chat = chats[i];
-                return InkWell(
-                  onTap: () => onSelect(chat.id),
-                  borderRadius: BorderRadius.circular(KoalaRadius.md),
-                  child: Padding(
-                    padding: const EdgeInsets.all(KoalaSpacing.md),
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 36,
-                          height: 36,
+            child: _chats.isEmpty
+                ? Padding(
+                    padding: const EdgeInsets.symmetric(
+                        vertical: KoalaSpacing.xxl),
+                    child: Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.chat_bubble_outline_rounded,
+                              size: 40, color: KoalaColors.textTer),
+                          const SizedBox(height: KoalaSpacing.sm),
+                          Text('Kayıtlı sohbet yok',
+                              style: KoalaText.bodySec),
+                        ],
+                      ),
+                    ),
+                  )
+                : ListView.separated(
+                    shrinkWrap: true,
+                    padding: EdgeInsets.fromLTRB(KoalaSpacing.sm,
+                        KoalaSpacing.sm, KoalaSpacing.sm, bottomPad + 16),
+                    itemCount: _chats.length,
+                    separatorBuilder: (_, _) => const SizedBox(height: 2),
+                    itemBuilder: (_, i) {
+                      final chat = _chats[i];
+                      return Dismissible(
+                        key: ValueKey('ai-${chat.id}'),
+                        direction: DismissDirection.endToStart,
+                        confirmDismiss: (_) async {
+                          final ok = await _confirmDelete(chat.title);
+                          if (!ok) return false;
+                          final success = await widget.onDelete(chat.id);
+                          return success;
+                        },
+                        onDismissed: (_) {
+                          setState(() {
+                            _chats.removeWhere((c) => c.id == chat.id);
+                          });
+                        },
+                        background: Container(
+                          alignment: Alignment.centerRight,
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: KoalaSpacing.xl),
                           decoration: BoxDecoration(
-                            color: KoalaColors.accentSoft,
-                            borderRadius: BorderRadius.circular(KoalaRadius.sm),
+                            color: KoalaColors.error,
+                            borderRadius:
+                                BorderRadius.circular(KoalaRadius.md),
                           ),
-                          child: const Icon(Icons.chat_rounded,
-                              size: 16, color: KoalaColors.accent),
-                        ),
-                        const SizedBox(width: KoalaSpacing.md),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.end,
+                            mainAxisSize: MainAxisSize.min,
+                            children: const [
+                              Icon(Icons.delete_outline_rounded,
+                                  color: Colors.white, size: 20),
+                              SizedBox(width: 6),
                               Text(
-                                chat.title,
-                                style: KoalaText.label,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              if (chat.lastMessage != null &&
-                                  chat.lastMessage!.isNotEmpty)
-                                Text(
-                                  chat.lastMessage!,
-                                  style: KoalaText.bodySmall,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
+                                'Sil',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w700,
+                                  letterSpacing: 0.3,
                                 ),
+                              ),
                             ],
                           ),
                         ),
-                        Text(timeAgo(chat.updatedAt),
-                            style: KoalaText.labelSmall),
-                      ],
-                    ),
+                        child: Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            onTap: () => widget.onSelect(chat.id),
+                            borderRadius:
+                                BorderRadius.circular(KoalaRadius.md),
+                            child: Padding(
+                              padding:
+                                  const EdgeInsets.all(KoalaSpacing.md),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    width: 36,
+                                    height: 36,
+                                    decoration: BoxDecoration(
+                                      color: KoalaColors.accentSoft,
+                                      borderRadius: BorderRadius.circular(
+                                          KoalaRadius.sm),
+                                    ),
+                                    child: const Icon(
+                                        LucideIcons.sparkles,
+                                        size: 14,
+                                        color: KoalaColors.accent),
+                                  ),
+                                  const SizedBox(width: KoalaSpacing.md),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          chat.title,
+                                          style: KoalaText.label,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                        if (chat.lastMessage != null &&
+                                            chat.lastMessage!.isNotEmpty)
+                                          Text(
+                                            chat.lastMessage!,
+                                            style: KoalaText.bodySmall,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                      ],
+                                    ),
+                                  ),
+                                  Text(timeAgo(chat.updatedAt),
+                                      style: KoalaText.labelSmall),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      );
+                    },
                   ),
-                );
-              },
-            ),
           ),
         ],
       ),
