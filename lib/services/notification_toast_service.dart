@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 
+import '../core/router/app_router.dart';
 import '../core/theme/koala_tokens.dart';
 
 /// Uygulamanın herhangi bir yerinden SnackBar toast göstermek için global
@@ -20,14 +20,15 @@ class NotificationToastService {
   static final GlobalKey<ScaffoldMessengerState> messengerKey =
       GlobalKey<ScaffoldMessengerState>();
 
-  /// Router global key (main.dart'ta MaterialApp.router'a verilir). Toast'a
-  /// tıklayınca navigate etmek için kullanılır.
-  static BuildContext? get _activeContext =>
-      messengerKey.currentContext;
-
   /// Şu an aktif toast'un konuşma id'si — aynı sohbete ikinci mesaj geldiğinde
   /// önceki kapatılır.
   static String? _activeConvId;
+
+  /// Aktif toast'un hedef navigation verileri — tap edildiğinde
+  /// ConversationDetailScreen'i anlamlı header ile aç.
+  static String? _activeDesignerId;
+  static String? _activeDesignerName;
+  static String? _activeDesignerAvatar;
 
   /// WhatsApp-tarzı in-app bildirim. Her ekranda çalışır.
   static void showIncomingMessage({
@@ -35,6 +36,7 @@ class NotificationToastService {
     required String designerName,
     String? avatarUrl,
     required String preview,
+    String? designerId,
   }) {
     final messenger = messengerKey.currentState;
     if (messenger == null) return;
@@ -42,6 +44,9 @@ class NotificationToastService {
     // Aynı conv için önceki'yi kapat, yenisini göster.
     messenger.hideCurrentSnackBar();
     _activeConvId = conversationId;
+    _activeDesignerId = designerId;
+    _activeDesignerName = designerName;
+    _activeDesignerAvatar = avatarUrl;
 
     final initials = designerName
         .split(' ')
@@ -145,11 +150,22 @@ class NotificationToastService {
   }
 
   static void _openConversation(String convId) {
-    final ctx = _activeContext;
-    if (ctx == null) return;
+    // ScaffoldMessenger context'i GoRouter'ı ancestor olarak bulamayabilir
+    // (messenger MaterialApp.router'dan once build oluyor). Global appRouter
+    // referansını direkt kullan — her koşulda çalışır.
     try {
-      ctx.push('/chat/dm/$convId');
-    } catch (_) {}
+      appRouter.push(
+        '/chat/dm/$convId',
+        extra: {
+          if (_activeDesignerId != null) 'designerId': _activeDesignerId,
+          if (_activeDesignerName != null) 'designerName': _activeDesignerName,
+          if (_activeDesignerAvatar != null)
+            'designerAvatarUrl': _activeDesignerAvatar,
+        },
+      );
+    } catch (e) {
+      debugPrint('NotificationToastService._openConversation error: $e');
+    }
   }
 
   /// Aktif conv id'sini döner — çağıran ekran (detail) zaten açıkken aynı

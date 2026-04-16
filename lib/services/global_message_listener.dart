@@ -142,6 +142,7 @@ class GlobalMessageListener {
 
       NotificationToastService.showIncomingMessage(
         conversationId: convId,
+        designerId: designerId,
         designerName: designerName,
         avatarUrl: avatarUrl,
         preview: content,

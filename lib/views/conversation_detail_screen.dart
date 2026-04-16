@@ -47,6 +47,12 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
   /// Oldest unread message ID on entry. "Yeni mesajlar" divider bunun üstünde
   /// gözükür ve ilk frame'de ekran buraya pozisyonlanır. markAsRead UI'ı
   /// bozmasın diye bu değer session boyunca sabit kalır — divider kaybolmaz.
+  ///
+  /// NOT: production DB'de koala_direct_messages.read_at kolonu yok; unread
+  /// sayısı koala_conversations.unread_count_user/designer'dan geliyor. Giriş
+  /// anında bu sayıyı bir kere okuyup N en yeni designer mesajını "unread"
+  /// olarak işaretliyoruz; divider N'inci (en eski unread) bubble'ın üstünde
+  /// duruyor.
   String? _firstUnreadId;
   final _firstUnreadKey = GlobalKey();
 
@@ -67,10 +73,12 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
   void initState() {
     super.initState();
     _uid = MessagingService.currentUserId;
+    // _loadMessages() kendi sonunda markAsRead çağırıyor — önce unread sayısını
+    // oku, divider'ı hesapla, sonra read flag'ini indir. Eski init'te _markRead
+    // paralel çalışıp unread sayısını sıfırlayabiliyordu ve divider kayboluyordu.
     _loadMessages();
     _subscribeRealtime();
     _subscribeConversationUpdates();
-    _markRead();
     _scrollController.addListener(_onScroll);
     _loadDesignerDetail();
     // Global toast bu conv'un detay ekranındayken suppress edilsin —
@@ -129,23 +137,40 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
   }
 
   Future<void> _loadMessages() async {
+    // 1) markAsRead'den ÖNCE unread sayısını oku — read flag indirildiğinde
+    //    sayı 0'a düşüyor; divider hesabı kayboluyor.
+    int unreadOnEntry = 0;
+    if (_firstUnreadId == null) {
+      try {
+        final conv =
+            await MessagingService.getConversation(widget.conversationId);
+        if (conv != null) {
+          final isUser = conv['user_id'] == _uid;
+          unreadOnEntry = isUser
+              ? ((conv['unread_count_user'] as int?) ?? 0)
+              : ((conv['unread_count_designer'] as int?) ?? 0);
+        }
+      } catch (_) {}
+    }
+
     final data = await MessagingService.getMessages(
       conversationId: widget.conversationId,
     );
     if (!mounted) return;
 
-    // Entry'de, diğer tarafın gönderdiği ve okunmamış ilk mesajı tespit et.
-    // Liste reverse (newest first), o yüzden en ESKİ unread = listedeki EN SONRA
-    // gelen unread record. WhatsApp mantığı: divider'ı bunun üstüne koy ve
-    // ilk açılışta scroll'u o divider'a kilitle.
+    // Entry'de, diğer tarafın attığı son N mesajı "unread" kabul et (N =
+    // conversation seviyesi unread_count). data DESC sıralı (newest first):
+    // sırayla karşıdan gelen mesajları say, N'inciyi (en eski unread) divider
+    // konumu olarak işaretle.
     String? firstUnreadId;
-    if (_firstUnreadId == null) {
+    if (_firstUnreadId == null && unreadOnEntry > 0) {
+      int seen = 0;
       for (final m in data) {
         final sender = m['sender_id']?.toString();
-        final readAt = m['read_at'];
-        if (sender != null && sender != _uid && readAt == null) {
-          // data DESC sıralı; her iterasyonda daha eski unread bulursak güncel tut.
+        if (sender != null && sender != _uid) {
+          seen++;
           firstUnreadId = m['id']?.toString();
+          if (seen >= unreadOnEntry) break;
         }
       }
     }
@@ -162,6 +187,14 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
         _scrollToFirstUnread();
       });
     }
+
+    // Son adım: mesajlar ve divider konumlandıktan sonra read flag indir.
+    // İlk frame render olsun diye kısa gecikme — divider post-frame scroll'u
+    // atılmadan önce unread sayacı sıfırlanırsa UI'da flicker olabilir.
+    Future<void>.delayed(const Duration(milliseconds: 60), () {
+      if (!mounted) return;
+      _markRead();
+    });
   }
 
   void _scrollToFirstUnread() {
