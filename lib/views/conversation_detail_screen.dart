@@ -1566,19 +1566,12 @@ class _MessageBubble extends StatelessWidget {
           crossAxisAlignment:
               isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
           children: [
-            // Image message
+            // Image message — tıklayınca fullscreen viewer açılır
             if (type == 'image' && message['attachment_url'] != null)
-              ClipRRect(
-                borderRadius: BorderRadius.circular(KoalaRadius.sm),
-                child: Image.network(
-                  message['attachment_url'] as String,
-                  width: 200,
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => const Icon(
-                    Icons.broken_image_rounded,
-                    color: KoalaColors.textTer,
-                  ),
-                ),
+              _BubbleImage(
+                url: message['attachment_url'] as String,
+                heroTag: 'msg-img-${message['id'] ?? message['attachment_url']}',
+                caption: content,
               ),
 
             // Text content
@@ -1603,6 +1596,193 @@ class _MessageBubble extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// MESSAGE IMAGE — bubble içinde küçük preview, tıklayınca fullscreen viewer
+// ═══════════════════════════════════════════════════════
+class _BubbleImage extends StatelessWidget {
+  const _BubbleImage({
+    required this.url,
+    required this.heroTag,
+    required this.caption,
+  });
+
+  final String url;
+  final String heroTag;
+  final String caption;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () {
+        HapticFeedback.lightImpact();
+        Navigator.of(context).push(
+          PageRouteBuilder<void>(
+            opaque: false,
+            barrierColor: Colors.black,
+            transitionDuration: const Duration(milliseconds: 220),
+            reverseTransitionDuration: const Duration(milliseconds: 180),
+            pageBuilder: (_, __, ___) => _PhotoViewerScreen(
+              url: url,
+              heroTag: heroTag,
+              caption: caption,
+            ),
+          ),
+        );
+      },
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(KoalaRadius.sm),
+        child: Hero(
+          tag: heroTag,
+          child: Image.network(
+            url,
+            width: 200,
+            fit: BoxFit.cover,
+            errorBuilder: (_, _, _) => const Icon(
+              Icons.broken_image_rounded,
+              color: KoalaColors.textTer,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// PHOTO VIEWER — fullscreen, pinch-zoom, swipe-down to dismiss
+// ═══════════════════════════════════════════════════════
+class _PhotoViewerScreen extends StatefulWidget {
+  const _PhotoViewerScreen({
+    required this.url,
+    required this.heroTag,
+    required this.caption,
+  });
+
+  final String url;
+  final String heroTag;
+  final String caption;
+
+  @override
+  State<_PhotoViewerScreen> createState() => _PhotoViewerScreenState();
+}
+
+class _PhotoViewerScreenState extends State<_PhotoViewerScreen> {
+  // Drag-to-dismiss durumu
+  double _dragOffset = 0;
+  double _dragOpacity = 1.0;
+
+  void _onDragUpdate(DragUpdateDetails d) {
+    setState(() {
+      _dragOffset += d.delta.dy;
+      // Aşağı kaydırma → opacity azalt; sınırı belli tut
+      _dragOpacity = (1 - (_dragOffset.abs() / 400)).clamp(0.0, 1.0);
+    });
+  }
+
+  void _onDragEnd(DragEndDetails d) {
+    // Yeterince çekildi veya hızlı flick → kapat
+    if (_dragOffset.abs() > 120 || d.velocity.pixelsPerSecond.dy.abs() > 700) {
+      Navigator.of(context).pop();
+    } else {
+      // Geri yerine otur — animasyon
+      setState(() {
+        _dragOffset = 0;
+        _dragOpacity = 1.0;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black.withValues(alpha: _dragOpacity),
+      extendBodyBehindAppBar: true,
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.close_rounded, color: Colors.white, size: 28),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+      ),
+      body: Stack(
+        children: [
+          // Foto — vertical drag dismiss + pinch zoom
+          GestureDetector(
+            onVerticalDragUpdate: _onDragUpdate,
+            onVerticalDragEnd: _onDragEnd,
+            child: Center(
+              child: Transform.translate(
+                offset: Offset(0, _dragOffset),
+                child: Hero(
+                  tag: widget.heroTag,
+                  child: InteractiveViewer(
+                    minScale: 1.0,
+                    maxScale: 4.0,
+                    child: Image.network(
+                      widget.url,
+                      fit: BoxFit.contain,
+                      loadingBuilder: (_, child, progress) {
+                        if (progress == null) return child;
+                        return const Center(
+                          child: CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 2,
+                          ),
+                        );
+                      },
+                      errorBuilder: (_, _, _) => const Icon(
+                        Icons.broken_image_rounded,
+                        color: Colors.white54,
+                        size: 64,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+
+          // Caption (varsa) — alt overlay, drag sırasında soluk
+          if (widget.caption.isNotEmpty)
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: AnimatedOpacity(
+                duration: const Duration(milliseconds: 120),
+                opacity: _dragOpacity,
+                child: Container(
+                  padding: EdgeInsets.fromLTRB(
+                    20,
+                    16,
+                    20,
+                    16 + MediaQuery.of(context).padding.bottom,
+                  ),
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [Colors.transparent, Colors.black87],
+                    ),
+                  ),
+                  child: Text(
+                    widget.caption,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 15,
+                      height: 1.35,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }
