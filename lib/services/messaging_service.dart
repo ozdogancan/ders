@@ -216,12 +216,36 @@ class MessagingService {
         // RPC henuz kurulu degil — devam et
       }
 
-      // last_message guncelle
-      await _db.from('koala_conversations').update({
-        'last_message': content,
-        'last_message_at': DateTime.now().toIso8601String(),
-        'updated_at': DateTime.now().toIso8601String(),
-      }).eq('id', conversationId);
+      // last_message guncelle.
+      // RLS policy: user_id = get_user_id() OR designer_id = get_user_id().
+      // .eq('id', ...) tek basina yeterli gorunse de bazi edge case'lerde
+      // RLS ile 0 satir etkileyip sessizce gecebiliyor — WHERE'e or() ekliyoruz
+      // ki filtre policy ile birebir ayni olsun. Ayrica .select('id') ile
+      // satirin guncellenip guncellenmedigini dogruluyoruz; 0 satir donerse
+      // chat_list sort bozuluyor, debug log biraksin.
+      try {
+        // NOT: DateTime.now().toIso8601String() offset suffix'i YOK,
+        // Supabase TIMESTAMPTZ'ye UTC olarak yaziyor -> istemci geri
+        // okuyunca "gelecek zaman" cikip timeAgo "Simdi" donduruyor.
+        // .toUtc() ile dogru UTC ISO (Z suffix'li) yaz.
+        final nowIso = DateTime.now().toUtc().toIso8601String();
+        final upd = await _db
+            .from('koala_conversations')
+            .update({
+              'last_message': content,
+              'last_message_at': nowIso,
+              'updated_at': nowIso,
+            })
+            .eq('id', conversationId)
+            .or('user_id.eq.$_uid,designer_id.eq.$_uid')
+            .select('id, last_message_at');
+        if ((upd as List).isEmpty) {
+          debugPrint(
+              'sendMessage: koala_conversations UPDATE 0 rows (conv=$conversationId, uid=$_uid) — RLS block?');
+        }
+      } catch (e) {
+        debugPrint('sendMessage: conv UPDATE failed: $e');
+      }
 
       // 3. Evlumba bridge — fire-and-forget; client UX'ini bekletmez.
       //    Kullanıcı → tasarımcı yönünde mesajları Evlumba DB'sine de yazar

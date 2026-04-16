@@ -332,6 +332,12 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
       content: text,
     );
 
+    // Chat list'in sıralamayı güncellemesi için zorla tetikle
+    // (Realtime UPDATE event'i bazen Firebase-auth'lu client'a düşmüyor)
+    try {
+      GlobalMessageListener.syncTick.value++;
+    } catch (_) {}
+
     if (mounted) setState(() => _sending = false);
   }
 
@@ -375,6 +381,11 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
         type: MessageType.image,
         attachmentUrl: imageUrl,
       );
+
+      // Chat list sıralamasını zorla tetikle
+      try {
+        GlobalMessageListener.syncTick.value++;
+      } catch (_) {}
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
