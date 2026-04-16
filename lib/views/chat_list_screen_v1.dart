@@ -427,12 +427,9 @@ class _ChatListScreenV1State extends State<ChatListScreenV1> {
           onTap: _maybeOpenDebug,
           child: const Text('Mesajlar', style: KoalaText.h2),
         ),
-        actions: [
-          if (!_loading && !_hasError) _buildNewAiAction(),
-          const SizedBox(width: 6),
-        ],
         // Refresh butonu kaldırıldı — WhatsApp gibi anlık olmalı. Pull-to-refresh
         // gizli yedek olarak duruyor (RefreshIndicator body'de).
+        // "Yeni" butonu kaldırıldı — yeni AI sorusu anasayfadan başlatılıyor.
       ),
       body: _loading
           ? const ShimmerList(itemCount: 6, cardHeight: 72)
@@ -1015,6 +1012,7 @@ class _ChatListScreenV1State extends State<ChatListScreenV1> {
   // (eski full-width panel + Evlumba row'un yerini alıyor)
   // ═══════════════════════════════════════════════════════
   Widget _buildServicesGrid() {
+    final latestAi = _aiChats.isNotEmpty ? _aiChats.first : null;
     final aiCount = _aiChats.length;
 
     return IntrinsicHeight(
@@ -1023,20 +1021,28 @@ class _ChatListScreenV1State extends State<ChatListScreenV1> {
         children: [
           Expanded(
             child: _buildServiceCard(
-              // Card tap = YENİ sohbet (FAB kaldırıldı, card primary action)
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => const ChatDetailScreen(),
-                ),
-              ),
+              // Card tap:
+              //   - Geçmiş varsa → son AI sohbetini aç
+              //   - Yoksa → history sheet (empty state guidance gösterir)
+              // Yeni sohbet oluşturma burada YAPILMIYOR — user anasayfadan yapıyor.
+              onTap: latestAi != null
+                  ? () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) =>
+                              ChatDetailScreen(chatId: latestAi.id),
+                        ),
+                      )
+                  : _openAiHistorySheet,
               gradient: KoalaColors.accentGradient,
               icon: LucideIcons.sparkles,
               title: 'Koala AI',
               pill: 'asistan',
               pillBg: KoalaColors.accent,
-              subtitle: 'Odanı fotoğrafla · stil bul',
-              trailing: aiCount > 0 ? 'Soru sor' : 'Başla',
+              subtitle: latestAi != null
+                  ? 'Son · ${timeAgo(latestAi.updatedAt)}'
+                  : 'Odanı fotoğrafla · stil bul',
+              trailing: aiCount > 0 ? '$aiCount sohbet' : null,
               highlightBg: KoalaColors.accentLight,
               borderColor: KoalaColors.accent.withValues(alpha: 0.18),
             ),
@@ -1229,52 +1235,6 @@ class _ChatListScreenV1State extends State<ChatListScreenV1> {
             const Icon(Icons.chevron_right_rounded,
                 size: 18, color: KoalaColors.textTer),
           ],
-        ),
-      ),
-    );
-  }
-
-  /// Sağ üst AppBar aksiyonu — "Yeni AI sorusu" için ince compose butonu.
-  /// FAB yerine sessiz bir noktada duruyor, iconography compose/sparkles.
-  /// Tap → yeni ChatDetailScreen (boş).
-  Widget _buildNewAiAction() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: () => Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => const ChatDetailScreen()),
-          ),
-          borderRadius: BorderRadius.circular(KoalaRadius.pill),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-            decoration: BoxDecoration(
-              color: KoalaColors.accentSoft,
-              borderRadius: BorderRadius.circular(KoalaRadius.pill),
-              border: Border.all(
-                color: KoalaColors.accent.withValues(alpha: 0.18),
-                width: 0.7,
-              ),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: const [
-                Icon(Icons.edit_note_rounded, size: 16, color: KoalaColors.accent),
-                SizedBox(width: 5),
-                Text(
-                  'Yeni',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    color: KoalaColors.accent,
-                    letterSpacing: 0.2,
-                  ),
-                ),
-              ],
-            ),
-          ),
         ),
       ),
     );
@@ -2548,8 +2508,14 @@ class _AiHistorySheetState extends State<_AiHistorySheet> {
                           const Icon(Icons.chat_bubble_outline_rounded,
                               size: 40, color: KoalaColors.textTer),
                           const SizedBox(height: KoalaSpacing.sm),
-                          Text('Kayıtlı sohbet yok',
+                          Text('Henüz sohbet yok',
                               style: KoalaText.bodySec),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Ana sayfadan Koala AI\'ya soru sorabilirsin',
+                            style: KoalaText.labelSmall,
+                            textAlign: TextAlign.center,
+                          ),
                         ],
                       ),
                     ),
