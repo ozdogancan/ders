@@ -1064,7 +1064,8 @@ class _ChatListScreenV1State extends State<ChatListScreenV1> {
               ),
               icon: LucideIcons.home,
               title: 'Evlumba Design',
-              pill: 'uzman',
+              pill: '',                       // pillIcon varken metin boş
+              pillIcon: LucideIcons.gem,      // premium hissi — elmas
               pillBg: const Color(0xFFB8874A),
               subtitle: 'İç mimardan destek',
               trailing: '≤ 1 sa yanıt',
@@ -1086,6 +1087,7 @@ class _ChatListScreenV1State extends State<ChatListScreenV1> {
     required IconData icon,
     required String title,
     required String pill,
+    IconData? pillIcon, // verilirse 'pill' text yerine bu ikon (premium feel)
     required Color pillBg,
     required String subtitle,
     String? trailing,
@@ -1123,21 +1125,24 @@ class _ChatListScreenV1State extends State<ChatListScreenV1> {
                 ),
                 const Spacer(),
                 Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                  padding: pillIcon != null
+                      ? const EdgeInsets.all(4)
+                      : const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
                   decoration: BoxDecoration(
                     color: pillBg,
                     borderRadius: BorderRadius.circular(KoalaRadius.pill),
                   ),
-                  child: Text(
-                    pill,
-                    style: const TextStyle(
-                      fontSize: 9,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.white,
-                      letterSpacing: 0.3,
-                    ),
-                  ),
+                  child: pillIcon != null
+                      ? Icon(pillIcon, size: 11, color: Colors.white)
+                      : Text(
+                          pill,
+                          style: const TextStyle(
+                            fontSize: 9,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white,
+                            letterSpacing: 0.3,
+                          ),
+                        ),
                 ),
               ],
             ),
@@ -2245,12 +2250,12 @@ class _EvlumbaDesignSheet extends StatelessWidget {
           ),
           const SizedBox(height: 28),
 
-          // Feature list
-          _buildFeatureRow(Icons.schedule_rounded, '1 Saat İçinde Yanıt', 'Uzmanlarımız hızlıca döner'),
+          // Feature list — Lucide ikonlar premium feel + tree-shake güvenli
+          _buildFeatureRow(LucideIcons.zap, '1 Saat İçinde Yanıt', 'Uzmanlarımız hızlıca döner'),
           const SizedBox(height: 16),
-          _buildFeatureRow(Icons.verified_rounded, 'Sertifikalı Uzmanlar', 'Deneyimli iç mimarlar'),
+          _buildFeatureRow(LucideIcons.badgeCheck, 'Sertifikalı Uzmanlar', 'Deneyimli iç mimarlar'),
           const SizedBox(height: 16),
-          _buildFeatureRow(Icons.design_services_rounded, 'Kişiye Özel Çözüm', 'Projenize göre tasarlanmış öneriler'),
+          _buildFeatureRow(LucideIcons.sparkles, 'Kişiye Özel Çözüm', 'Projenize göre tasarlanmış öneriler'),
           const SizedBox(height: 28),
 
           // CTA Button

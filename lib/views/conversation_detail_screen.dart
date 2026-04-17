@@ -8,10 +8,9 @@ import '../core/theme/koala_tokens.dart';
 import '../core/utils/format_utils.dart';
 import '../services/evlumba_live_service.dart';
 import '../services/global_message_listener.dart';
-import '../services/koala_ai_service.dart';
 import '../services/messaging_service.dart';
+import '../services/saved_items_service.dart';
 import '../widgets/koala_widgets.dart';
-import 'chat_detail_screen.dart';
 
 /// Tasarımcı ile mesaj detay ekranı — gerçek zamanlı
 class ConversationDetailScreen extends StatefulWidget {
@@ -529,14 +528,14 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
         startIndex: startIndex,
         designerName: widget.designerName,
         designerId: widget.designerId ?? '',
-        onAskAI: (question, {String? hiddenContext}) {
+        onAskDesigner: (prefill) {
           Navigator.of(context).pop(); // viewer kapat
-          Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => ChatDetailScreen(
-              initialText: question,
-              hiddenContext: hiddenContext,
-            )),
+          if (!mounted) return;
+          _textController.text = prefill;
+          _textController.selection = TextSelection.fromPosition(
+            TextPosition(offset: _textController.text.length),
           );
+          setState(() {}); // send butonunun aktif olması için
         },
       ),
     );
@@ -1254,14 +1253,14 @@ class _ProjectViewerSheet extends StatefulWidget {
     required this.startIndex,
     required this.designerName,
     required this.designerId,
-    required this.onAskAI,
+    required this.onAskDesigner,
   });
   final Map<String, dynamic> project;
   final List<Map<String, dynamic>> allProjects;
   final int startIndex;
   final String designerName;
   final String designerId;
-  final void Function(String question, {String? hiddenContext}) onAskAI;
+  final void Function(String prefillText) onAskDesigner;
 
   @override
   State<_ProjectViewerSheet> createState() => _ProjectViewerSheetState();
@@ -1271,24 +1270,70 @@ class _ProjectViewerSheetState extends State<_ProjectViewerSheet> {
   late PageController _pageCtrl;
   late int _currentIndex;
 
-  // Inline info state
-  String? _styleAnswer;
-  bool _styleLoading = false;
-  bool _styleTapped = false;
-  Map<String, dynamic>? _designerInfo;
-  bool _designerTapped = false;
+  // Kaydedildi durumu — proje değişince yenilenir
+  bool _saved = false;
+  bool _savingBusy = false;
 
   @override
   void initState() {
     super.initState();
     _currentIndex = widget.startIndex;
     _pageCtrl = PageController(initialPage: widget.startIndex);
+    _refreshSavedState();
   }
 
   @override
   void dispose() { _pageCtrl.dispose(); super.dispose(); }
 
   Map<String, dynamic> get _current => widget.allProjects[_currentIndex];
+
+  String _currentId() {
+    final v = (_current['id'] ?? _current['project_id'] ?? '').toString();
+    return v;
+  }
+
+  Future<void> _refreshSavedState() async {
+    final id = _currentId();
+    if (id.isEmpty) { if (mounted) setState(() => _saved = false); return; }
+    final s = await SavedItemsService.isSaved(type: SavedItemType.design, itemId: id);
+    if (!mounted) return;
+    setState(() => _saved = s);
+  }
+
+  Future<void> _toggleSave() async {
+    if (_savingBusy) return;
+    final id = _currentId();
+    if (id.isEmpty) return;
+    setState(() => _savingBusy = true);
+    final title = (_current['title'] ?? 'Tasarım').toString();
+    final imageUrl = _coverUrl(_current);
+    bool ok;
+    if (_saved) {
+      ok = await SavedItemsService.removeItem(type: SavedItemType.design, itemId: id);
+    } else {
+      ok = await SavedItemsService.saveItem(
+        type: SavedItemType.design,
+        itemId: id,
+        title: title,
+        imageUrl: imageUrl.isNotEmpty ? imageUrl : null,
+        subtitle: widget.designerName,
+      );
+    }
+    if (!mounted) return;
+    setState(() {
+      _savingBusy = false;
+      if (ok) _saved = !_saved;
+    });
+    if (ok) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 2),
+          content: Text(_saved ? 'Tasarım kaydedildi' : 'Kayıt kaldırıldı'),
+        ));
+    }
+  }
 
   String _coverUrl(Map<String, dynamic> p) {
     for (final k in ['cover_image_url', 'cover_url', 'image_url']) {
@@ -1298,47 +1343,15 @@ class _ProjectViewerSheetState extends State<_ProjectViewerSheet> {
     return '';
   }
 
-  Future<void> _askStyleInline() async {
-    if (_styleTapped) return;
-    setState(() { _styleTapped = true; _styleLoading = true; });
-    try {
-      final title = (_current['title'] ?? 'Proje').toString();
-      final description = (_current['description'] ?? '').toString();
-      final ai = KoalaAIService();
-      final prompt = 'Kullanıcı "$title" adlı bir iç mimari tasarıma bakıyor. '
-          '${description.isNotEmpty ? "Proje açıklaması: $description. " : ""}'
-          'Tasarımcı: ${widget.designerName}. '
-          'Bu tasarımın stilini kısaca analiz et. Sadece düz metin olarak 2-3 cümle yaz. '
-          'Hangi tasarım akımına ait olabileceğini, muhtemel renk paletini ve malzeme seçimlerini belirt. '
-          'JSON formatı kullanma, sadece düz Türkçe metin yaz.';
-      final answer = await ai.askPlainText(prompt);
-      if (mounted) setState(() { _styleAnswer = answer; _styleLoading = false; });
-    } catch (e) {
-      if (mounted) setState(() { _styleAnswer = 'Stil analizi şu an yapılamadı.'; _styleLoading = false; });
-    }
-  }
-
-  Future<void> _showDesignerInfo() async {
-    if (_designerTapped) return;
-    setState(() => _designerTapped = true);
-    try {
-      if (!EvlumbaLiveService.isReady) {
-        await EvlumbaLiveService.waitForReady(timeout: const Duration(seconds: 3));
-      }
-      final detail = await EvlumbaLiveService.getDesignerById(widget.designerId);
-      final reviews = await EvlumbaLiveService.getDesignerReviews(widget.designerId);
-      if (mounted) setState(() {
-        _designerInfo = { ...?detail, '_review_count': reviews.length };
-      });
-    } catch (_) {
-      if (mounted) setState(() { _designerInfo = {'_error': true}; });
-    }
+  void _askDesigner() {
+    final title = (_current['title'] ?? 'Proje').toString();
+    final prefill = '"$title" tasarımını çok beğendim — bununla ilgili bilgi verebilir misin?';
+    widget.onAskDesigner(prefill);
   }
 
   @override
   Widget build(BuildContext context) {
     final title = (_current['title'] ?? 'Proje').toString();
-    final currentImageUrl = _coverUrl(_current);
 
     return Container(
       height: MediaQuery.of(context).size.height * 0.85,
@@ -1361,11 +1374,10 @@ class _ProjectViewerSheetState extends State<_ProjectViewerSheet> {
           Expanded(
             child: PageView.builder(
               controller: _pageCtrl, itemCount: widget.allProjects.length,
-              onPageChanged: (i) => setState(() {
-                _currentIndex = i;
-                _styleAnswer = null; _styleLoading = false; _styleTapped = false;
-                _designerInfo = null; _designerTapped = false;
-              }),
+              onPageChanged: (i) {
+                setState(() => _currentIndex = i);
+                _refreshSavedState();
+              },
               itemBuilder: (_, i) {
                 final url = _coverUrl(widget.allProjects[i]);
                 if (url.isEmpty) return Container(color: KoalaColors.surfaceAlt, alignment: Alignment.center, child: const Icon(Icons.image_rounded, size: 48, color: KoalaColors.textTer));
@@ -1373,153 +1385,61 @@ class _ProjectViewerSheetState extends State<_ProjectViewerSheet> {
               },
             ),
           ),
-          const SizedBox(height: 12),
-          // AI smart chips + inline answers
-          Expanded(
-            flex: 0,
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text("Koala AI'a Sor", style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: KoalaColors.textTer, letterSpacing: 0.5)),
-                  const SizedBox(height: 8),
-                  Wrap(spacing: 8, runSpacing: 8, children: [
-                    _SmartChip(
-                      icon: Icons.search_rounded,
-                      label: 'Bu tasarımdaki ürünleri bul',
-                      onTap: () {
-                        final ctx = currentImageUrl.isNotEmpty
-                            ? 'Tasarım: "$title", Tasarımcı: ${widget.designerName}, Görsel URL: $currentImageUrl. Bu görseldeki mobilya ve dekorasyon ürünlerini analiz et ve search_products ile Türkiye marketlerinden benzerlerini bul.'
-                            : null;
-                        widget.onAskAI('$title tasarımındaki ürünleri bul', hiddenContext: ctx);
-                      },
+          // Alt aksiyonlar: tasarımcıya sor (primary) + kaydet (secondary)
+          Padding(
+            padding: EdgeInsets.fromLTRB(16, 12, 16, MediaQuery.of(context).padding.bottom + 12),
+            child: Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: _askDesigner,
+                    icon: const Icon(LucideIcons.messageCircle, size: 18),
+                    label: Text(
+                      'Bu tasarım hakkında sor',
+                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+                      overflow: TextOverflow.ellipsis,
                     ),
-                    _SmartChip(
-                      icon: Icons.palette_rounded,
-                      label: 'Benzer tasarımlar göster',
-                      onTap: () {
-                        final ctx = currentImageUrl.isNotEmpty
-                            ? 'Tasarım: "$title", Tasarımcı: ${widget.designerName}, Görsel URL: $currentImageUrl. Bu tasarıma benzer projeleri search_projects ile bul.'
-                            : null;
-                        widget.onAskAI('$title tasarımına benzer projeler göster', hiddenContext: ctx);
-                      },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: KoalaColors.accent,
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                     ),
-                    _SmartChip(icon: Icons.style_rounded, label: 'Bu tarz nedir?', disabled: _styleTapped, loading: _styleLoading, onTap: _askStyleInline),
-                    _SmartChip(icon: Icons.person_search_rounded, label: '${widget.designerName} hakkında', disabled: _designerTapped, onTap: _showDesignerInfo),
-                  ]),
-
-                  // Inline: Stil analizi
-                  if (_styleLoading)
-                    const Padding(
-                      padding: EdgeInsets.only(top: 12),
-                      child: Row(children: [
-                        SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: KoalaColors.accent)),
-                        SizedBox(width: 8),
-                        Text('Stil analiz ediliyor...', style: TextStyle(fontSize: 12, color: KoalaColors.textSec)),
-                      ]),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                // Kaydet — ikon butonu (filled/unfilled)
+                SizedBox(
+                  width: 52, height: 48,
+                  child: Material(
+                    color: _saved ? KoalaColors.accentSoft : KoalaColors.surfaceAlt,
+                    borderRadius: BorderRadius.circular(14),
+                    child: InkWell(
+                      onTap: _savingBusy ? null : _toggleSave,
+                      borderRadius: BorderRadius.circular(14),
+                      child: Container(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: _saved ? KoalaColors.accent.withValues(alpha: 0.4) : KoalaColors.border),
+                        ),
+                        child: Center(
+                          child: _savingBusy
+                              ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: KoalaColors.accent))
+                              : Icon(
+                                  _saved ? LucideIcons.bookmark : LucideIcons.bookmark,
+                                  size: 20,
+                                  color: _saved ? KoalaColors.accent : KoalaColors.textSec,
+                                ),
+                        ),
+                      ),
                     ),
-                  if (_styleAnswer != null)
-                    Container(
-                      margin: const EdgeInsets.only(top: 12),
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(color: KoalaColors.accentSoft, borderRadius: BorderRadius.circular(12), border: Border.all(color: KoalaColors.accent.withValues(alpha: 0.15))),
-                      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        const Icon(Icons.style_rounded, size: 16, color: KoalaColors.accent),
-                        const SizedBox(width: 8),
-                        Expanded(child: Text(_styleAnswer!, style: const TextStyle(fontSize: 13, color: KoalaColors.text, height: 1.4))),
-                      ]),
-                    ),
-
-                  // Inline: Tasarımcı bilgisi
-                  if (_designerTapped && _designerInfo == null)
-                    const Padding(
-                      padding: EdgeInsets.only(top: 12),
-                      child: Row(children: [
-                        SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: KoalaColors.accent)),
-                        SizedBox(width: 8),
-                        Text('Bilgiler yükleniyor...', style: TextStyle(fontSize: 12, color: KoalaColors.textSec)),
-                      ]),
-                    ),
-                  if (_designerInfo != null) _buildDesignerInfoCard(),
-                ],
-              ),
+                  ),
+                ),
+              ],
             ),
           ),
-          SizedBox(height: MediaQuery.of(context).padding.bottom + 8),
         ],
-      ),
-    );
-  }
-
-  Widget _buildDesignerInfoCard() {
-    if (_designerInfo?['_error'] == true) {
-      return Container(
-        margin: const EdgeInsets.only(top: 12), padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(color: KoalaColors.surfaceAlt, borderRadius: BorderRadius.circular(12)),
-        child: const Text('Tasarımcı bilgisi yüklenemedi.', style: TextStyle(fontSize: 13, color: KoalaColors.textSec)),
-      );
-    }
-    final d = _designerInfo!;
-    final name = (d['full_name'] ?? widget.designerName).toString();
-    final specialty = (d['specialty'] ?? '').toString();
-    final city = (d['city'] ?? '').toString();
-    final reviewCount = (d['_review_count'] ?? 0) as int;
-    final avatarUrl = (d['avatar_url'] ?? '').toString().trim();
-
-    return Container(
-      margin: const EdgeInsets.only(top: 12), padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(color: KoalaColors.accentSoft, borderRadius: BorderRadius.circular(12), border: Border.all(color: KoalaColors.accent.withValues(alpha: 0.15))),
-      child: Row(children: [
-        Container(
-          width: 40, height: 40,
-          decoration: const BoxDecoration(shape: BoxShape.circle, gradient: LinearGradient(colors: [KoalaColors.accent, KoalaColors.accentMuted])),
-          child: avatarUrl.isNotEmpty
-              ? ClipOval(child: Image.network(avatarUrl, fit: BoxFit.cover, errorBuilder: (_, __, ___) => Center(child: Text(name.isNotEmpty ? name[0] : '?', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700)))))
-              : Center(child: Text(name.isNotEmpty ? name[0] : '?', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700))),
-        ),
-        const SizedBox(width: 10),
-        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(name, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: KoalaColors.text)),
-          if (specialty.isNotEmpty || city.isNotEmpty)
-            Text([if (specialty.isNotEmpty) specialty, if (city.isNotEmpty) city].join(' · '), style: const TextStyle(fontSize: 12, color: KoalaColors.textSec)),
-          if (reviewCount > 0)
-            Text('$reviewCount değerlendirme', style: const TextStyle(fontSize: 11, color: KoalaColors.textTer)),
-        ])),
-      ]),
-    );
-  }
-}
-
-class _SmartChip extends StatelessWidget {
-  const _SmartChip({required this.icon, required this.label, required this.onTap, this.disabled = false, this.loading = false});
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-  final bool disabled;
-  final bool loading;
-
-  @override
-  Widget build(BuildContext context) {
-    final color = disabled ? KoalaColors.textTer : KoalaColors.accent;
-    return GestureDetector(
-      onTap: disabled ? null : onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
-          color: disabled ? KoalaColors.surfaceAlt : KoalaColors.accentSoft,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: disabled ? KoalaColors.border : KoalaColors.accent.withValues(alpha: 0.2)),
-        ),
-        child: Row(mainAxisSize: MainAxisSize.min, children: [
-          if (loading)
-            const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: KoalaColors.accent))
-          else
-            Icon(disabled ? Icons.check_circle_rounded : icon, size: 15, color: color),
-          const SizedBox(width: 6),
-          Flexible(child: Text(label, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: color))),
-        ]),
       ),
     );
   }
