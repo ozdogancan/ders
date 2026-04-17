@@ -2066,7 +2066,23 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
           title: card.data['title'] as String? ?? 'Önerilen Ürünler',
           products: carouselItems,
           onAskAI: (product, question) {
-            _sendToAI(text: '"${product.name}" hakkında: $question');
+            // Ürün context'i hiddenContext olarak geçsin, AI yeni ürün aramasın
+            // sadece kullanıcının sorduğu şeye bilgilendirici cevap versin.
+            final ctx = StringBuffer()
+              ..writeln('BAĞLAM: Kullanıcı aşağıdaki ürün hakkında bilgi soruyor.')
+              ..writeln('- Ürün: ${product.name}')
+              ..writeln('- Mağaza: ${product.shopName}')
+              ..writeln('- Fiyat: ${product.price}')
+              ..writeln('- URL: ${product.url}')
+              ..writeln('')
+              ..writeln('KURAL: search_products TOOL\'UNU KULLANMA. '
+                  'Yeni ürün arama yapma. Benzer ürün öneri çıkarma. '
+                  'Sadece kullanıcının sorduğu soruya bu ürün özelinde '
+                  'bilgilendirici, pratik ve kısa bir cevap ver.');
+            _sendToAI(
+              text: '"${product.name}" hakkında: $question',
+              hiddenContext: ctx.toString(),
+            );
           },
         );
       case 'color_palette':

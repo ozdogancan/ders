@@ -1,11 +1,12 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:go_router/go_router.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
 import '../core/theme/koala_tokens.dart';
+import '../services/messaging_service.dart';
 import '../services/saved_items_service.dart';
-import 'chat/designer_chat_popup.dart';
 import 'share_sheet.dart';
 
 /// Çoklu proje galeri modalı — tasarım kartlarından, designer portfoliosundan,
@@ -60,12 +61,27 @@ class _ProjectsGalleryBody extends StatefulWidget {
 class _ProjectsGalleryBodyState extends State<_ProjectsGalleryBody> {
   late PageController _pageCtrl;
   late int _currentIndex;
+  final Map<String, bool> _savedCache = {};
+  bool _savingInFlight = false;
+  bool _askingInFlight = false;
 
   @override
   void initState() {
     super.initState();
     _currentIndex = widget.initialIndex;
     _pageCtrl = PageController(initialPage: widget.initialIndex);
+    _refreshSavedState();
+  }
+
+  Future<void> _refreshSavedState() async {
+    final id = (_current['id'] ?? '').toString();
+    if (id.isEmpty || _savedCache.containsKey(id)) return;
+    final saved = await SavedItemsService.isSaved(
+      type: SavedItemType.design,
+      itemId: id,
+    );
+    if (!mounted) return;
+    setState(() => _savedCache[id] = saved);
   }
 
   @override
@@ -161,7 +177,8 @@ class _ProjectsGalleryBodyState extends State<_ProjectsGalleryBody> {
     return null;
   }
 
-  void _askDesigner() {
+  Future<void> _askDesigner() async {
+    if (_askingInFlight) return;
     HapticFeedback.lightImpact();
     final designerId = _designerId();
     if (designerId.isEmpty) {
@@ -170,38 +187,78 @@ class _ProjectsGalleryBodyState extends State<_ProjectsGalleryBody> {
       );
       return;
     }
+    setState(() => _askingInFlight = true);
     final cat = _currentCategory();
     final projectId = (_current['id'] ?? '').toString();
-    Navigator.of(context).pop();
-    DesignerChatPopup.show(
-      context,
+    final coverUrl = _coverUrl(_current);
+    // Conversation'ı getir/aç (lazy create — sadece metadata, mesaj yok)
+    final conv = await MessagingService.getOrCreateConversation(
       designerId: designerId,
-      designerName: _designerName(),
-      designerAvatarUrl: _designerAvatar(),
       contextType: 'project',
       contextId: projectId,
       contextTitle: cat,
     );
+    if (!mounted) return;
+    setState(() => _askingInFlight = false);
+    if (conv == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Sohbet başlatılamadı, tekrar dene')),
+      );
+      return;
+    }
+    final conversationId = (conv['id'] ?? '').toString();
+    if (conversationId.isEmpty) return;
+    Navigator.of(context).pop();
+    // Chat ekranı: input üstünde design preview + text entry
+    context.push('/chat/dm/$conversationId', extra: {
+      'designerId': designerId,
+      'pendingDesign': {
+        'id': projectId,
+        'title': cat,
+        'imageUrl': coverUrl,
+        'designerId': designerId,
+      },
+    });
   }
 
   Future<void> _save() async {
+    if (_savingInFlight) return;
     HapticFeedback.lightImpact();
     final projectId = (_current['id'] ?? '').toString();
     if (projectId.isEmpty) return;
+    setState(() => _savingInFlight = true);
+    final currentlySaved = _savedCache[projectId] ?? false;
     final cat = _currentCategory();
-    final ok = await SavedItemsService.saveItem(
-      type: SavedItemType.design,
-      itemId: projectId,
-      title: cat,
-      imageUrl: _coverUrl(_current),
-      subtitle: _designerName(),
-      extraData: {'designer_id': _designerId()},
-    );
+    bool ok;
+    if (currentlySaved) {
+      ok = await SavedItemsService.removeItem(
+        type: SavedItemType.design,
+        itemId: projectId,
+      );
+    } else {
+      ok = await SavedItemsService.saveItem(
+        type: SavedItemType.design,
+        itemId: projectId,
+        title: cat,
+        imageUrl: _coverUrl(_current),
+        subtitle: _designerName(),
+        extraData: {'designer_id': _designerId()},
+      );
+    }
     if (!mounted) return;
+    setState(() {
+      _savingInFlight = false;
+      if (ok) _savedCache[projectId] = !currentlySaved;
+    });
+    final msg = !ok
+        ? (currentlySaved
+            ? 'Kaldırılamadı, tekrar dene'
+            : 'Kaydedilemedi — giriş yapman gerekebilir')
+        : (currentlySaved ? 'Kayıtlardan çıkarıldı' : 'Kaydedildi');
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(SnackBar(
-        content: Text(ok ? 'Kaydedildi' : 'Kaydedilemedi, tekrar dene'),
+        content: Text(msg),
         backgroundColor: ok ? KoalaColors.greenAlt : Colors.red.shade700,
         duration: const Duration(seconds: 2),
       ));
@@ -242,7 +299,10 @@ class _ProjectsGalleryBodyState extends State<_ProjectsGalleryBody> {
                 child: PageView.builder(
                   controller: _pageCtrl,
                   itemCount: widget.projects.length,
-                  onPageChanged: (i) => setState(() => _currentIndex = i),
+                  onPageChanged: (i) {
+                    setState(() => _currentIndex = i);
+                    _refreshSavedState();
+                  },
                   itemBuilder: (_, i) {
                     final url = _coverUrl(widget.projects[i]);
                     return Padding(
@@ -393,34 +453,33 @@ class _ProjectsGalleryBodyState extends State<_ProjectsGalleryBody> {
   }
 
   Widget _buildActions() {
+    final projectId = (_current['id'] ?? '').toString();
+    final isSaved = _savedCache[projectId] ?? false;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Row(
         children: [
           Expanded(
-            flex: 2,
             child: _PrimaryActionButton(
               icon: LucideIcons.messageCircle,
               label: 'Tasarımcıya sor',
               onTap: _askDesigner,
+              loading: _askingInFlight,
             ),
           ),
           const SizedBox(width: 10),
-          Expanded(
-            child: _OutlineActionButton(
-              icon: LucideIcons.bookmark,
-              label: 'Kaydet',
-              onTap: _save,
-            ),
+          _IconActionButton(
+            icon: isSaved ? LucideIcons.bookmarkMinus : LucideIcons.bookmark,
+            tooltip: isSaved ? 'Kayıtlı' : 'Kaydet',
+            active: isSaved,
+            onTap: _save,
           ),
           if (widget.showShare) ...[
             const SizedBox(width: 10),
-            Expanded(
-              child: _OutlineActionButton(
-                icon: LucideIcons.share2,
-                label: 'Paylaş',
-                onTap: _share,
-              ),
+            _IconActionButton(
+              icon: LucideIcons.share2,
+              tooltip: 'Paylaş',
+              onTap: _share,
             ),
           ],
         ],
@@ -434,11 +493,13 @@ class _PrimaryActionButton extends StatelessWidget {
     required this.icon,
     required this.label,
     required this.onTap,
+    this.loading = false,
   });
 
   final IconData icon;
   final String label;
   final VoidCallback onTap;
+  final bool loading;
 
   @override
   Widget build(BuildContext context) {
@@ -447,81 +508,80 @@ class _PrimaryActionButton extends StatelessWidget {
       borderRadius: BorderRadius.circular(14),
       child: InkWell(
         borderRadius: BorderRadius.circular(14),
-        onTap: onTap,
+        onTap: loading ? null : onTap,
         child: Container(
           height: 48,
           alignment: Alignment.center,
           padding: const EdgeInsets.symmetric(horizontal: 10),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(icon, size: 16, color: Colors.white),
-              const SizedBox(width: 8),
-              Flexible(
-                child: Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.white,
+          child: loading
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2.2,
+                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                   ),
+                )
+              : Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(icon, size: 16, color: Colors.white),
+                    const SizedBox(width: 8),
+                    Flexible(
+                      child: Text(
+                        label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-              ),
-            ],
-          ),
         ),
       ),
     );
   }
 }
 
-class _OutlineActionButton extends StatelessWidget {
-  const _OutlineActionButton({
+class _IconActionButton extends StatelessWidget {
+  const _IconActionButton({
     required this.icon,
-    required this.label,
+    required this.tooltip,
     required this.onTap,
+    this.active = false,
   });
 
   final IconData icon;
-  final String label;
+  final String tooltip;
   final VoidCallback onTap;
+  final bool active;
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: KoalaColors.surface,
-      borderRadius: BorderRadius.circular(14),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(14),
-        onTap: onTap,
-        child: Container(
-          height: 48,
-          alignment: Alignment.center,
-          padding: const EdgeInsets.symmetric(horizontal: 8),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: KoalaColors.border),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(icon, size: 16, color: KoalaColors.textMed),
-              const SizedBox(width: 6),
-              Flexible(
-                child: Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: KoalaColors.textMed,
-                  ),
-                ),
-              ),
-            ],
+    final bg = active ? KoalaColors.accentSoft : KoalaColors.surface;
+    final fg = active ? KoalaColors.accentDeep : KoalaColors.textMed;
+    final border = active ? KoalaColors.accentDeep : KoalaColors.border;
+    return Tooltip(
+      message: tooltip,
+      child: Material(
+        color: bg,
+        shape: const CircleBorder(),
+        child: InkWell(
+          customBorder: const CircleBorder(),
+          onTap: onTap,
+          child: Container(
+            width: 48,
+            height: 48,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(color: border),
+            ),
+            child: Icon(icon, size: 20, color: fg),
           ),
         ),
       ),

@@ -78,6 +78,7 @@ class _HomeScreenState extends State<HomeScreen>
       _subscribeIncomingMessages();
       _subscribeEvlumbaLive();
       _maybeOpenStyleDiscovery();
+      _maybeShowPullHint();
     });
     // GlobalMessageListener her sync tick'inde notify eder —
     // realtime event'e güvenmek yerine explicit refresh.
@@ -197,26 +198,28 @@ class _HomeScreenState extends State<HomeScreen>
     // Style discovery is now triggered on first chat interaction, not on home load.
   }
 
+  /// İlk açılışta pull gesture'ı kullanıcıya tanıtmak için tek seferlik
+  /// hint animasyonu oynatır. SharedPreferences ile tekrarlanmaz.
+  Future<void> _maybeShowPullHint() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      const key = 'home_pull_hint_shown';
+      if (prefs.getBool(key) == true) return;
+      // Kullanıcı ekranı görsün diye küçük bir gecikme
+      await Future.delayed(const Duration(seconds: 2));
+      if (!mounted) return;
+      await _pullKey.currentState?.playOnboardingHint();
+      await prefs.setBool(key, true);
+    } catch (_) {}
+  }
+
   /// Shows style discovery if not completed yet.
   /// Returns true only if user skipped (caller should abort navigation).
   /// Returns false if completed or already done (caller should continue).
   Future<bool> _showStyleDiscoveryIfNeeded() async {
-    final prefs = await SharedPreferences.getInstance();
-    final completed = prefs.getBool('style_discovery_completed') ?? false;
-    if (completed) return false;
-    if (!mounted) return false;
-    final result = await Navigator.of(context).push<String>(
-      MaterialPageRoute(
-        builder: (_) => const StyleDiscoveryScreen(entryPoint: 'first_chat'),
-      ),
-    );
-    if (!mounted) return true;
-    if (result == 'skipped') {
-      // Atla'ya basıldığında da chat'e devam et, engelleme
-      return false;
-    }
-    // completed — continue to original destination
-    _justCompletedDiscovery = true;
+    // DEVRE DIŞI: Chat'e ilk girişte eski sahte swipe discovery artık
+    // tetiklenmiyor. Bunun yerine kullanıcı ana sayfadan "Tarzını Keşfet"
+    // pull gesture'ı ile canlı evlumba tasarımları arasında swipe yapıyor.
     return false;
   }
 

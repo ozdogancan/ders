@@ -309,6 +309,32 @@ class _DesignersScreenState extends State<DesignersScreen> {
     }
   }
 
+  /// Türkçe akküzatif eklerini token sonundan kırp.
+  /// "gökhanı" → "gökhan", "bilgehani" → "bilgehan", "ayşeyi" → "ayşe".
+  /// Input zaten normalize edilmiş (lowercase ASCII) olmalı.
+  static String _stripTrSuffix(String t) {
+    // 2-harfli ekler önce (daha uzun maç)
+    for (final suf in ['nin', 'nun', 'nun', 'nün', 'yla', 'yle']) {
+      if (t.length > suf.length + 2 && t.endsWith(suf)) {
+        return t.substring(0, t.length - suf.length);
+      }
+    }
+    for (final suf in ['yi', 'yu', 'yü', 'ya', 'ye', 'nı', 'ni', 'nu']) {
+      if (t.length > suf.length + 2 && t.endsWith(suf)) {
+        return t.substring(0, t.length - suf.length);
+      }
+    }
+    // Tek-harfli akküzatif — sadece sesli harfle biten isimlere anlamsız;
+    // konsonanttan sonraki sesli ise kırp (örn: gokhani → gokhan)
+    if (t.length > 3 && RegExp(r'[aeiou]$').hasMatch(t)) {
+      final prev = t[t.length - 2];
+      if (!RegExp(r'[aeiou]').hasMatch(prev)) {
+        return t.substring(0, t.length - 1);
+      }
+    }
+    return t;
+  }
+
   static String _normalize(String raw) {
     const source = 'çğıöşüÇĞİÖŞÜ';
     const target = 'cgiosuCGIOSU';
@@ -417,16 +443,61 @@ class _DesignersScreenState extends State<DesignersScreen> {
         });
       }).toList();
     } else {
-      // Serbest metin araması
+      // Serbest metin araması — token-based matching with name-priority.
+      // "Gökhan'ı bul" gibi sorgular çalışsın diye:
+      //   1. önce tüm intent full_name içinde aranır (direkt isim eşleşmesi)
+      //   2. sonra intent token'lara bölünür; stopwords atılır; Türkçe
+      //      akküzatif eki (ı/i/u/ü/yı/yi/yu/yü/nı/ni/nu/nü) kırpılır
+      //   3. herhangi bir token searchText içindeyse eşleşme sayılır
       final normalized = _normalize(intent);
-      candidates = _allExperts.where((e) {
+      const stopwords = {
+        'bul', 'bulur', 'bulabilir', 'bulabilirim', 'bulalim', 'bulalım',
+        'goster', 'göster', 'gosterir', 'ara', 'bana', 'bize',
+        'bir', 'birini', 'biri', 'biraz', 'icin', 'için',
+        'lutfen', 'lütfen', 've', 'ile', 'veya', 'ya', 'da', 'de',
+        'ki', 'misin', 'olan', 'olur', 'var', 'mı', 'mi',
+      };
+      final rawTokens = normalized
+          .split(RegExp(r'''[\s,;:'".!?]+'''))
+          .where((t) => t.isNotEmpty)
+          .map(_stripTrSuffix)
+          .where((t) => t.length >= 3 && !stopwords.contains(t))
+          .toSet()
+          .toList();
+
+      // Her expert için (nameHit, tokenHits) say, skorla
+      final scored = <MapEntry<_ExpertPreview, double>>[];
+      for (final e in _allExperts) {
+        final name = _normalize((e.designer['full_name'] ?? '').toString());
         final searchText = _normalize(
           '${e.designer['specialty'] ?? ''} ${e.designer['about'] ?? ''} '
-          '${e.designer['city'] ?? ''} ${e.designer['full_name'] ?? ''}',
+          '${e.designer['city'] ?? ''} ${e.designer['full_name'] ?? ''} '
+          '${e.designer['business_name'] ?? ''}',
         );
-        return searchText.contains(normalized);
-      }).toList();
-      if (candidates.isEmpty) candidates = List.from(_allExperts);
+        double score = 0;
+        // direkt isim eşleşmesi — en güçlü sinyal
+        if (normalized.isNotEmpty && name.contains(normalized)) score += 100;
+        for (final t in rawTokens) {
+          if (name.contains(t)) {
+            score += 50; // isim içinde token = güçlü
+          } else if (searchText.contains(t)) {
+            score += 5; // diğer alanlar = zayıf
+          }
+        }
+        if (score > 0) scored.add(MapEntry(e, score));
+      }
+      if (scored.isNotEmpty) {
+        scored.sort((a, b) => b.value.compareTo(a.value));
+        // İsim eşleşmesi varsa (score >= 50), sonradan gelen proje-sayısı
+        // skoruyla geçilmesin diye direkt isim eşleşenleri döndür.
+        final strong = scored.where((m) => m.value >= 50).toList();
+        if (strong.isNotEmpty) {
+          return strong.take(4).map((m) => m.key).toList();
+        }
+        candidates = scored.map((m) => m.key).toList();
+      } else {
+        candidates = List.from(_allExperts);
+      }
     }
 
     if (candidates.isEmpty) candidates = List.from(_allExperts);

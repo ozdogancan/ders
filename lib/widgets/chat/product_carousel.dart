@@ -484,7 +484,7 @@ class _ProductCardState extends State<_ProductCard> {
                         GestureDetector(
                           onTap: _showAskAISheet,
                           child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
                             decoration: BoxDecoration(
                               color: KoalaColors.accentSoft,
                               borderRadius: BorderRadius.circular(8),
@@ -495,6 +495,45 @@ class _ProductCardState extends State<_ProductCard> {
                                 Icon(Icons.auto_awesome, size: 12, color: KoalaColors.accent),
                                 SizedBox(width: 3),
                                 Text('Sor', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: KoalaColors.accent)),
+                              ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        GestureDetector(
+                          onTap: _toggleSave,
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 180),
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: _isSaved
+                                  ? KoalaColors.error.withValues(alpha: 0.12)
+                                  : KoalaColors.accentSoft,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  _isSaved
+                                      ? Icons.bookmark_rounded
+                                      : Icons.bookmark_outline_rounded,
+                                  size: 12,
+                                  color: _isSaved
+                                      ? KoalaColors.error
+                                      : KoalaColors.accent,
+                                ),
+                                const SizedBox(width: 3),
+                                Text(
+                                  _isSaved ? 'Kayıtlı' : 'Kaydet',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: _isSaved
+                                        ? KoalaColors.error
+                                        : KoalaColors.accent,
+                                  ),
+                                ),
                               ],
                             ),
                           ),

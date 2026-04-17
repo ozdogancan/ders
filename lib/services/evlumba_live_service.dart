@@ -135,20 +135,73 @@ class EvlumbaLiveService {
     }
   }
 
-  /// Tasarımcı ara (isim veya uzmanlık)
+  /// Tasarımcı ara (isim veya uzmanlık).
+  /// Çoklu kelime/token desteği: "Gökhan'ı bul" gibi sorgular için
+  /// her token ayrı ilike'a dönüşür; boş stopwords (bul, göster, bana, ...)
+  /// atılır; Türkçe akküzatif eki (ı/i/yı/yi/nı/ni) kırpılır.
   static Future<List<Map<String, dynamic>>> searchDesigners(
     String query,
   ) async {
+    final raw = query.trim();
+    if (raw.isEmpty) return [];
+    const stopwords = {
+      'bul', 'bulur', 'bulabilir', 'goster', 'göster', 'ara', 'bana', 'bize',
+      'bir', 'biraz', 'bi', 'icin', 'için', 'lutfen', 'lütfen', 've', 'ile',
+      'veya', 'mi', 'mı', 'misin', 'olan', 'var',
+    };
+    final tokens = raw
+        .toLowerCase()
+        .split(RegExp(r'''[\s,;:'".!?]+'''))
+        .where((t) => t.isNotEmpty && !stopwords.contains(t))
+        .map((t) {
+      // kısa akküzatif eki kırp
+      for (final suf in ['yi', 'yu', 'yü', 'ya', 'ye', 'nı', 'ni', 'nu']) {
+        if (t.length > suf.length + 2 && t.endsWith(suf)) {
+          return t.substring(0, t.length - suf.length);
+        }
+      }
+      if (t.length > 3 && RegExp(r'[aeıioöuü]$').hasMatch(t)) {
+        final prev = t[t.length - 2];
+        if (!RegExp(r'[aeıioöuü]').hasMatch(prev)) {
+          return t.substring(0, t.length - 1);
+        }
+      }
+      return t;
+    }).toList();
+
+    // Hiç anlamlı token yoksa orijinal query ile tek atış yap
+    final effective = tokens.isEmpty ? [raw] : tokens;
+    // Tüm token'ları birleştiren OR sorgusu — herhangi bir alan herhangi bir
+    // token'ı içeren tasarımcıları döndürür.
+    final orClauses = <String>[];
+    for (final t in effective) {
+      final safe = t.replaceAll(',', ' ').replaceAll('(', '').replaceAll(')', '');
+      orClauses.add('full_name.ilike.%$safe%');
+      orClauses.add('specialty.ilike.%$safe%');
+      orClauses.add('business_name.ilike.%$safe%');
+    }
     final data = await client
         .from('profiles')
         .select()
         .eq('role', 'designer')
-        .or(
-          'full_name.ilike.%$query%,specialty.ilike.%$query%,business_name.ilike.%$query%',
-        )
+        .or(orClauses.join(','))
         .order('created_at', ascending: false)
         .limit(20);
-    return List<Map<String, dynamic>>.from(data);
+    final results = List<Map<String, dynamic>>.from(data);
+
+    // Name-priority: isim token'ı eşleşenleri öne al
+    results.sort((a, b) {
+      final an = (a['full_name'] ?? '').toString().toLowerCase();
+      final bn = (b['full_name'] ?? '').toString().toLowerCase();
+      int scoreA = 0;
+      int scoreB = 0;
+      for (final t in effective) {
+        if (an.contains(t)) scoreA += 10;
+        if (bn.contains(t)) scoreB += 10;
+      }
+      return scoreB.compareTo(scoreA);
+    });
+    return results;
   }
 
   // ═══════════════════════════════════════

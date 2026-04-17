@@ -1,8 +1,8 @@
 // ═══════════════════════════════════════════════════════════
 // STYLE DISCOVERY LIVE — tüm evlumba projeleri arasında
-// sonsuz swipe deck. Batch'ler halinde (10 kart) streaming
-// fetch. Liked projeler SavedItems.design olarak kaydedilir.
-// Pass edilenler lokal session memory'de tutulur (dedup için).
+// sonsuz, karıştırılmış (shuffled) swipe deck. Kullanıcı
+// tasarım sayısını GÖRMEZ. Liked projeler SavedItems.design
+// olarak kaydedilir. Wrap-around ile sonsuz akış.
 //
 // Home'daki pull-to-reveal handle'dan açılır.
 // ═══════════════════════════════════════════════════════════
@@ -13,12 +13,15 @@ import 'dart:math' as math;
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:go_router/go_router.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
 import '../core/theme/koala_tokens.dart';
 import '../services/evlumba_live_service.dart';
 import '../services/saved_items_service.dart';
 import '../services/analytics_service.dart';
+import '../widgets/chat/designer_chat_popup.dart';
+import '../widgets/share_sheet.dart';
 
 class StyleDiscoveryLiveScreen extends StatefulWidget {
   const StyleDiscoveryLiveScreen({super.key});
@@ -35,14 +38,12 @@ class _StyleDiscoveryLiveScreenState extends State<StyleDiscoveryLiveScreen>
 
   final List<Map<String, dynamic>> _deck = [];
   final Set<String> _seenIds = <String>{};
+  final math.Random _rng = math.Random();
   int _offset = 0;
   bool _loading = true;
   bool _fetchingMore = false;
-  bool _reachedEnd = false;
   int _totalCount = 0;
   int _index = 0;
-  int _likeCount = 0;
-  int _passCount = 0;
 
   double _dragDx = 0;
   double _dragDy = 0;
@@ -67,7 +68,6 @@ class _StyleDiscoveryLiveScreenState extends State<StyleDiscoveryLiveScreen>
   }
 
   Future<void> _bootstrap() async {
-    // Evlumba client hazır mı — bekle
     final ready = await EvlumbaLiveService.waitForReady(
         timeout: const Duration(seconds: 6));
     if (!ready) {
@@ -76,15 +76,16 @@ class _StyleDiscoveryLiveScreenState extends State<StyleDiscoveryLiveScreen>
       return;
     }
     try {
-      final results = await Future.wait([
-        _fetchCount(),
-        _fetchBatch(),
-      ]);
+      _totalCount = await _fetchCount();
+      // Her oturumda rastgele offset — aynı sıra tekrarlanmasın
+      if (_totalCount > _batchSize) {
+        _offset = _rng.nextInt(math.max(1, _totalCount - _batchSize));
+      } else {
+        _offset = 0;
+      }
+      await _fetchBatch();
       if (!mounted) return;
-      setState(() {
-        _totalCount = results[0] as int;
-        _loading = false;
-      });
+      setState(() => _loading = false);
     } catch (e) {
       debugPrint('StyleDiscoveryLive: bootstrap failed → $e');
       if (mounted) setState(() => _loading = false);
@@ -106,7 +107,7 @@ class _StyleDiscoveryLiveScreenState extends State<StyleDiscoveryLiveScreen>
   }
 
   Future<void> _fetchBatch() async {
-    if (_fetchingMore || _reachedEnd) return;
+    if (_fetchingMore) return;
     _fetchingMore = true;
     try {
       final batch = await EvlumbaLiveService.getProjects(
@@ -114,20 +115,32 @@ class _StyleDiscoveryLiveScreenState extends State<StyleDiscoveryLiveScreen>
         offset: _offset,
       );
       _offset += _batchSize;
-      if (batch.length < _batchSize) _reachedEnd = true;
-      // Dedup + görseli OLAN projeleri al (cover_url fallback chain dahil)
+      // Wrap-around: bir tur tamamlandıysa başa dön ve seenIds temizle
+      if (batch.isEmpty) {
+        _offset = 0;
+        _seenIds.clear();
+        final retry = await EvlumbaLiveService.getProjects(
+          limit: _batchSize,
+          offset: 0,
+        );
+        _offset = _batchSize;
+        batch.addAll(retry);
+      }
+      // Batch'i karıştır — random sıra
+      batch.shuffle(_rng);
+      // Dedup + görsel filtrele
       final filtered = <Map<String, dynamic>>[];
       for (final p in batch) {
         final id = p['id']?.toString() ?? '';
         if (id.isEmpty || _seenIds.contains(id)) continue;
-        if (_coverOf(p).isEmpty) continue; // herhangi bir image field yoksa at
+        if (_coverOf(p).isEmpty) continue;
         _seenIds.add(id);
         filtered.add(p);
       }
-      debugPrint('StyleDiscoveryLive: batch=${batch.length} filtered=${filtered.length} deck=${_deck.length + filtered.length}');
+      debugPrint(
+          'StyleDiscoveryLive: batch=${batch.length} filtered=${filtered.length} deck=${_deck.length + filtered.length} offset=$_offset');
       if (!mounted) return;
       setState(() => _deck.addAll(filtered));
-      // Sıradaki 2 kartın cover image'ını precache
       _precacheNext();
     } catch (e) {
       debugPrint('StyleDiscoveryLive: fetchBatch failed → $e');
@@ -213,8 +226,6 @@ class _StyleDiscoveryLiveScreenState extends State<StyleDiscoveryLiveScreen>
     _exitCtrl.forward(from: 0);
 
     if (liked) {
-      _likeCount++;
-      // Save as design — arka planda fire-and-forget
       unawaited(SavedItemsService.saveItem(
         type: SavedItemType.design,
         itemId: card['id']?.toString() ?? '',
@@ -231,7 +242,6 @@ class _StyleDiscoveryLiveScreenState extends State<StyleDiscoveryLiveScreen>
         'category': card['project_type'],
       }));
     } else {
-      _passCount++;
       unawaited(Analytics.log('style_pass', {
         'project_id': card['id'],
       }));
@@ -246,11 +256,9 @@ class _StyleDiscoveryLiveScreenState extends State<StyleDiscoveryLiveScreen>
       _animatingExit = false;
     });
     _exitCtrl.reset();
-    // Preload sıradakiler
     _precacheNext();
-    // Eşiğin altına indiysek yeni batch fetch et
     final remaining = _deck.length - _index;
-    if (remaining <= _prefetchThreshold && !_reachedEnd) {
+    if (remaining <= _prefetchThreshold) {
       _fetchBatch();
     }
   }
@@ -260,6 +268,42 @@ class _StyleDiscoveryLiveScreenState extends State<StyleDiscoveryLiveScreen>
 
   Map<String, dynamic>? get _nextCard =>
       _index + 1 < _deck.length ? _deck[_index + 1] : null;
+
+  void _onBack() {
+    if (Navigator.canPop(context)) {
+      Navigator.pop(context);
+    } else {
+      context.go('/');
+    }
+  }
+
+  void _onShare() {
+    final card = _currentCard;
+    if (card == null) return;
+    ShareSheet.show(
+      context,
+      itemType: SavedItemType.design,
+      itemId: card['id']?.toString() ?? '',
+      title: _prettyCategory((card['project_type'] ?? '').toString()),
+      imageUrl: _coverOf(card),
+    );
+  }
+
+  void _onAskDesigner() {
+    final card = _currentCard;
+    if (card == null) return;
+    final designerId = (card['designer_id'] ?? '').toString();
+    if (designerId.isEmpty) return;
+    DesignerChatPopup.show(
+      context,
+      designerId: designerId,
+      designerName: '',
+      designerAvatarUrl: '',
+      contextType: 'project',
+      contextId: card['id']?.toString(),
+      contextTitle: _prettyCategory((card['project_type'] ?? '').toString()),
+    );
+  }
 
   @override
   void dispose() {
@@ -281,7 +325,7 @@ class _StyleDiscoveryLiveScreenState extends State<StyleDiscoveryLiveScreen>
                       _header(),
                       Expanded(child: _deckStack()),
                       _buttons(),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 20),
                     ],
                   ),
       ),
@@ -304,7 +348,7 @@ class _StyleDiscoveryLiveScreenState extends State<StyleDiscoveryLiveScreen>
             ),
             const SizedBox(height: 16),
             TextButton(
-              onPressed: () => Navigator.pop(context),
+              onPressed: _onBack,
               child: const Text('Kapat'),
             ),
           ],
@@ -314,67 +358,24 @@ class _StyleDiscoveryLiveScreenState extends State<StyleDiscoveryLiveScreen>
   }
 
   Widget _header() {
-    final shown = math.min(_index + 1, _deck.length);
+    final hasCard = _currentCard != null;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+      padding: const EdgeInsets.fromLTRB(8, 6, 8, 4),
       child: Row(
         children: [
-          IconButton(
-            icon: const Icon(LucideIcons.x, size: 22),
-            color: KoalaColors.ink,
-            onPressed: () => Navigator.pop(context),
+          _IconBtn(
+            icon: LucideIcons.chevronLeft,
+            onTap: _onBack,
           ),
-          Expanded(
-            child: Column(
-              children: [
-                const Text(
-                  'Tarzını Keşfedelim',
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700,
-                    color: KoalaColors.ink,
-                    letterSpacing: -0.2,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  _totalCount > 0
-                      ? '$shown / $_totalCount'
-                      : '$shown gösterildi',
-                  style: const TextStyle(
-                    fontSize: 11.5,
-                    color: KoalaColors.textSec,
-                  ),
-                ),
-              ],
-            ),
+          const Spacer(),
+          _IconBtn(
+            icon: LucideIcons.share2,
+            onTap: hasCard ? _onShare : null,
           ),
-          _likesPill(),
-        ],
-      ),
-    );
-  }
-
-  Widget _likesPill() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: KoalaColors.accentSoft,
-        borderRadius: BorderRadius.circular(99),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(Icons.favorite_rounded,
-              size: 14, color: Color(0xFFEF4444)),
           const SizedBox(width: 4),
-          Text(
-            '$_likeCount',
-            style: const TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-              color: KoalaColors.accentDeep,
-            ),
+          _IconBtn(
+            icon: LucideIcons.userCircle,
+            onTap: hasCard ? _onAskDesigner : null,
           ),
         ],
       ),
@@ -398,8 +399,7 @@ class _StyleDiscoveryLiveScreenState extends State<StyleDiscoveryLiveScreen>
               double dy = _dragDy;
               if (_animatingExit) {
                 final t = Curves.easeOutCubic.transform(_exitCtrl.value);
-                dx = _exitStartDx +
-                    (_exitTargetDx - _exitStartDx) * t;
+                dx = _exitStartDx + (_exitTargetDx - _exitStartDx) * t;
                 dy = _dragDy + (_exitTargetDy - _dragDy) * t;
               }
               final rot = (dx / cs.maxWidth) * 0.22;
@@ -410,7 +410,6 @@ class _StyleDiscoveryLiveScreenState extends State<StyleDiscoveryLiveScreen>
 
               return Stack(
                 children: [
-                  // Arka kart (next) — hafif küçük + altta
                   if (next != null)
                     Positioned.fill(
                       child: Transform.scale(
@@ -419,11 +418,13 @@ class _StyleDiscoveryLiveScreenState extends State<StyleDiscoveryLiveScreen>
                         child: Opacity(
                           opacity: 0.6 +
                               (dx.abs() / cs.maxWidth).clamp(0.0, 1.0) * 0.4,
-                          child: _Card(project: next, coverOf: _coverOf, prettyCategory: _prettyCategory),
+                          child: _Card(
+                              project: next,
+                              coverOf: _coverOf,
+                              prettyCategory: _prettyCategory),
                         ),
                       ),
                     ),
-                  // Ön kart + drag
                   Positioned.fill(
                     child: Transform.translate(
                       offset: Offset(dx, dy),
@@ -434,8 +435,10 @@ class _StyleDiscoveryLiveScreenState extends State<StyleDiscoveryLiveScreen>
                           onPanEnd: _onPanEnd,
                           child: Stack(
                             children: [
-                              _Card(project: current, coverOf: _coverOf, prettyCategory: _prettyCategory),
-                              // SEVERIM damgası
+                              _Card(
+                                  project: current,
+                                  coverOf: _coverOf,
+                                  prettyCategory: _prettyCategory),
                               Positioned(
                                 top: 28,
                                 left: 20,
@@ -446,7 +449,6 @@ class _StyleDiscoveryLiveScreenState extends State<StyleDiscoveryLiveScreen>
                                   rotate: -0.25,
                                 ),
                               ),
-                              // PAS damgası
                               Positioned(
                                 top: 28,
                                 right: 20,
@@ -482,45 +484,21 @@ class _StyleDiscoveryLiveScreenState extends State<StyleDiscoveryLiveScreen>
             const Icon(LucideIcons.sparkles,
                 size: 48, color: KoalaColors.accentDeep),
             const SizedBox(height: 14),
-            Text(
-              _reachedEnd
-                  ? 'Tüm tasarımları gördün!'
-                  : 'Birazdan devam...',
-              style: const TextStyle(
+            const Text(
+              'Biraz dinlenelim, sonra yenileri gelsin ✨',
+              textAlign: TextAlign.center,
+              style: TextStyle(
                 fontSize: 17,
                 fontWeight: FontWeight.w700,
                 color: KoalaColors.ink,
               ),
             ),
-            const SizedBox(height: 8),
-            Text(
-              '$_likeCount beğeni · $_passCount pas',
-              style: const TextStyle(
-                fontSize: 13,
-                color: KoalaColors.textSec,
-              ),
-            ),
             const SizedBox(height: 20),
-            if (_reachedEnd)
-              ElevatedButton(
-                onPressed: () => Navigator.pop(context),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: KoalaColors.accentDeep,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 20, vertical: 12),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(99),
-                  ),
-                ),
-                child: const Text('Kapat'),
-              )
-            else
-              const SizedBox(
-                width: 24,
-                height: 24,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
+            const SizedBox(
+              width: 24,
+              height: 24,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
           ],
         ),
       ),
@@ -530,9 +508,9 @@ class _StyleDiscoveryLiveScreenState extends State<StyleDiscoveryLiveScreen>
   Widget _buttons() {
     final disabled = _currentCard == null || _animatingExit;
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24),
+      padding: const EdgeInsets.symmetric(horizontal: 48),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           _RoundBtn(
             icon: LucideIcons.x,
@@ -546,12 +524,6 @@ class _StyleDiscoveryLiveScreenState extends State<StyleDiscoveryLiveScreen>
             size: 64,
             filled: true,
             onTap: disabled ? null : () => _swipe(liked: true),
-          ),
-          _RoundBtn(
-            icon: LucideIcons.rotateCcw,
-            color: KoalaColors.textMed,
-            size: 52,
-            onTap: null, // MVP: undo yok
           ),
         ],
       ),
@@ -593,22 +565,6 @@ class _Card extends StatelessWidget {
     }
   }
 
-  String _budgetLabel() {
-    final min = (project['budget_min'] as num?)?.toInt();
-    final max = (project['budget_max'] as num?)?.toInt();
-    String fmt(int v) {
-      if (v >= 1000000) return '${(v / 1000000).toStringAsFixed(1)}M';
-      if (v >= 1000) return '${(v / 1000).round()}K';
-      return v.toString();
-    }
-    if (min != null && max != null && min > 0 && max > 0) {
-      return '${fmt(min)}-${fmt(max)}₺';
-    }
-    if (max != null && max > 0) return '<${fmt(max)}₺';
-    if (min != null && min > 0) return '>${fmt(min)}₺';
-    return '';
-  }
-
   String _styleLabel() {
     final style = (project['style'] ?? '').toString().trim();
     if (style.isNotEmpty) return style;
@@ -637,20 +593,23 @@ class _Card extends StatelessWidget {
     return const [];
   }
 
+  String _firstSentence(String s) {
+    final t = s.trim();
+    if (t.isEmpty) return '';
+    // İlk nokta/ünlem/soru işaretine kadar
+    final idx = t.indexOf(RegExp(r'[.!?]'));
+    if (idx > 0 && idx < t.length - 1) return t.substring(0, idx + 1);
+    return t;
+  }
+
   @override
   Widget build(BuildContext context) {
     final url = coverOf(project);
     final title = (project['title'] ?? '').toString().trim();
     final rawType = (project['project_type'] ?? '').toString().trim();
     final cat = prettyCategory(rawType);
-    final designer = project['profiles'] as Map<String, dynamic>?;
-    final designerName =
-        (designer?['full_name'] ?? '').toString().trim();
     final description = (project['description'] ?? '').toString().trim();
-    final subtitle = description.isNotEmpty
-        ? description
-        : (designerName.isNotEmpty ? '$designerName tasarımı' : '');
-    final budget = _budgetLabel();
+    final subtitle = _firstSentence(description);
     final style = _styleLabel();
     final palette = _paletteColors();
 
@@ -687,18 +646,18 @@ class _Card extends StatelessWidget {
               child: Icon(Icons.image_outlined,
                   color: KoalaColors.textTer, size: 48),
             ),
-          // Gradient overlay - top + bottom
+          // Gradient overlay - alttan üste (merkez 60% görsel kalsın)
           Positioned.fill(
             child: DecoratedBox(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
-                  stops: const [0.0, 0.35, 0.65, 1.0],
+                  stops: const [0.0, 0.2, 0.7, 1.0],
                   colors: [
-                    Colors.black.withValues(alpha: 0.18),
+                    Colors.black.withValues(alpha: 0.12),
                     Colors.transparent,
-                    Colors.black.withValues(alpha: 0.15),
+                    Colors.transparent,
                     Colors.black.withValues(alpha: 0.78),
                   ],
                 ),
@@ -706,7 +665,7 @@ class _Card extends StatelessWidget {
             ),
           ),
 
-          // Top pills
+          // Top pills — SADECE oda pill + (opsiyonel) stil
           Positioned(
             top: 16,
             left: 16,
@@ -715,9 +674,6 @@ class _Card extends StatelessWidget {
               children: [
                 if (cat.isNotEmpty)
                   _GlassPill(icon: _roomIcon(rawType), text: cat),
-                if (cat.isNotEmpty && budget.isNotEmpty)
-                  const SizedBox(width: 8),
-                if (budget.isNotEmpty) _GlassPill(text: budget),
                 const Spacer(),
                 if (style.isNotEmpty)
                   _GlassPill(text: style, accent: true),
@@ -725,7 +681,7 @@ class _Card extends StatelessWidget {
             ),
           ),
 
-          // Bottom content
+          // Bottom content — en alt ~25%
           Positioned(
             bottom: 0,
             left: 0,
@@ -737,13 +693,13 @@ class _Card extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
-                    title.isEmpty ? '$cat Projesi' : title,
+                    title.isEmpty ? (cat.isEmpty ? 'Tasarım' : '$cat Projesi') : title,
                     style: const TextStyle(
-                      fontSize: 26,
+                      fontSize: 24,
                       fontWeight: FontWeight.w800,
                       color: Colors.white,
                       letterSpacing: -0.5,
-                      height: 1.1,
+                      height: 1.15,
                     ),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
@@ -753,17 +709,17 @@ class _Card extends StatelessWidget {
                     Text(
                       subtitle,
                       style: TextStyle(
-                        fontSize: 14,
-                        height: 1.4,
-                        color: Colors.white.withValues(alpha: 0.85),
+                        fontSize: 13,
+                        height: 1.35,
+                        color: Colors.white.withValues(alpha: 0.75),
                         fontWeight: FontWeight.w400,
                       ),
-                      maxLines: 2,
+                      maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
                   ],
                   if (palette.isNotEmpty) ...[
-                    const SizedBox(height: 14),
+                    const SizedBox(height: 12),
                     Row(
                       children: [
                         for (int i = 0;
@@ -889,6 +845,40 @@ class _Stamp extends StatelessWidget {
               color: color,
               letterSpacing: 1,
             ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Header ikon butonu — frameless, 40x40 hit area ───
+class _IconBtn extends StatelessWidget {
+  const _IconBtn({required this.icon, this.onTap});
+  final IconData icon;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final disabled = onTap == null;
+    return GestureDetector(
+      onTap: onTap == null
+          ? null
+          : () {
+              HapticFeedback.selectionClick();
+              onTap!();
+            },
+      behavior: HitTestBehavior.opaque,
+      child: SizedBox(
+        width: 40,
+        height: 40,
+        child: Center(
+          child: Icon(
+            icon,
+            size: 22,
+            color: disabled
+                ? KoalaColors.textTer
+                : KoalaColors.ink,
           ),
         ),
       ),
