@@ -9,6 +9,7 @@ import '../services/messaging_service.dart';
 import '../services/saved_items_service.dart';
 import '../widgets/chat/designer_chat_popup.dart';
 import '../widgets/koala_widgets.dart';
+import '../widgets/like_button.dart';
 import '../widgets/save_button.dart';
 
 class ProjectDetailScreen extends StatefulWidget {
@@ -25,26 +26,80 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
   List<Map<String, dynamic>> _shopLinks = [];
   bool _loading = true;
   int _currentImage = 0;
+  late Map<String, dynamic> _project;
 
-  Map<String, dynamic> get project => widget.project;
+  Map<String, dynamic> get project => _project;
+
+  // Generic/empty title tespiti: "İsimsiz proje", kategori adı, boş vb.
+  bool _isWeakTitle(String t) {
+    final x = t.trim().toLowerCase();
+    if (x.isEmpty) return true;
+    const weak = {
+      'isimsiz proje', 'i̇simsiz proje', 'isimsiz', 'proje',
+      'salon', 'mutfak', 'banyo', 'yatak odası', 'yatak odasi',
+      'çocuk odası', 'cocuk odasi', 'oturma odası', 'oturma odasi',
+      'çalışma odası', 'calisma odasi', 'antre', 'hol',
+    };
+    return weak.contains(x);
+  }
+
+  String _prettyCategory(String raw) {
+    final r = raw.trim().toLowerCase();
+    const map = {
+      'living_room': 'Oturma Odası',
+      'bedroom': 'Yatak Odası',
+      'kitchen': 'Mutfak',
+      'bathroom': 'Banyo',
+      'kids_room': 'Çocuk Odası',
+      'office': 'Çalışma Odası',
+      'dining_room': 'Yemek Odası',
+      'hallway': 'Antre',
+    };
+    return map[r] ?? raw;
+  }
 
   @override
   void initState() {
     super.initState();
+    _project = Map<String, dynamic>.from(widget.project);
     _loadDetails();
   }
 
   Future<void> _loadDetails() async {
-    final id = (project['id'] ?? '').toString();
+    final id = (_project['id'] ?? '').toString();
     if (id.isEmpty || !EvlumbaLiveService.isReady) {
       setState(() => _loading = false);
       return;
     }
     try {
-      final images = await EvlumbaLiveService.getProjectImages(id);
-      final links = await EvlumbaLiveService.getProjectShopLinks(id);
+      // Paralel: full project + images + shop links
+      final needsFull = _isWeakTitle((_project['title'] ?? '').toString()) ||
+          (_project['description'] == null) ||
+          (_project['profiles'] is! Map) ||
+          ((_project['profiles'] as Map?)?['full_name'] == null);
+
+      final results = await Future.wait([
+        needsFull
+            ? EvlumbaLiveService.getProjectById(id)
+            : Future<Map<String, dynamic>?>.value(null),
+        EvlumbaLiveService.getProjectImages(id),
+        EvlumbaLiveService.getProjectShopLinks(id),
+      ]);
       if (!mounted) return;
+      final full = results[0] as Map<String, dynamic>?;
+      final images = results[1] as List<Map<String, dynamic>>;
+      final links = results[2] as List<Map<String, dynamic>>;
       setState(() {
+        if (full != null) {
+          // Mevcut extra verilerle birleştir, DB'den gelen boş alanları ezmesin.
+          final merged = Map<String, dynamic>.from(full);
+          _project.forEach((k, v) {
+            if (v != null && v.toString().isNotEmpty && merged[k] == null) {
+              merged[k] = v;
+            }
+          });
+          _project = merged;
+        }
         _images = images;
         _shopLinks = links;
         _loading = false;
@@ -54,6 +109,30 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
         setState(() => _loading = false);
       }
     }
+  }
+
+  Future<void> _askDesignerAboutProject() async {
+    final designer = project['profiles'] as Map<String, dynamic>?;
+    final designerId =
+        (designer?['id'] ?? project['designer_id'] ?? '').toString();
+    if (designerId.isEmpty) return;
+    if (!await ensureAuthenticated(context)) return;
+    if (!mounted) return;
+    final dName = (designer?['full_name'] ?? 'Tasarımcı').toString();
+    final title = (project['title'] ?? '').toString();
+    final category =
+        _prettyCategory((project['project_type'] ?? '').toString());
+    final ctxTitle =
+        title.isNotEmpty ? title : (category.isNotEmpty ? category : 'Proje');
+    DesignerChatPopup.show(
+      context,
+      designerId: designerId,
+      designerName: dName,
+      designerAvatarUrl: designer?['avatar_url']?.toString(),
+      contextType: 'project',
+      contextId: project['id']?.toString(),
+      contextTitle: ctxTitle,
+    );
   }
 
   String get _coverUrl {
@@ -88,10 +167,16 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final title = (project['title'] ?? 'İsimsiz proje').toString();
+    final rawTitle = (project['title'] ?? '').toString().trim();
+    final rawType = (project['project_type'] ?? '').toString().trim();
+    final projectType =
+        rawType.isEmpty ? '' : _prettyCategory(rawType);
+    // Başlık zayıfsa kategoriye fallback (salon / oturma odası vb.)
+    final title = _isWeakTitle(rawTitle)
+        ? (projectType.isNotEmpty ? '$projectType Projesi' : 'Proje')
+        : rawTitle;
     final location = (project['location'] ?? '').toString().trim();
     final description = (project['description'] ?? '').toString().trim();
-    final projectType = (project['project_type'] ?? '').toString().trim();
     final designer = project['profiles'] as Map<String, dynamic>?;
     final designerName = (designer?['full_name'] ?? '').toString().trim();
     final designerAvatar = (designer?['avatar_url'] ?? '').toString().trim();
@@ -109,18 +194,32 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
             surfaceTintColor: KoalaColors.bg,
             actions: [
               Container(
-                margin: const EdgeInsets.all(8),
+                margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.9),
+                  shape: BoxShape.circle,
+                ),
+                child: LikeButton(
+                  itemType: SavedItemType.design,
+                  itemId: (project['id'] ?? '').toString(),
+                  title: title,
+                  imageUrl: _coverUrl,
+                  subtitle: projectType,
+                  size: 20,
+                ),
+              ),
+              Container(
+                margin: const EdgeInsets.fromLTRB(4, 8, 8, 8),
                 decoration: BoxDecoration(
                   color: Colors.white.withValues(alpha: 0.9),
                   shape: BoxShape.circle,
                 ),
                 child: SaveButton(
                   itemType: SavedItemType.design,
-                  itemId: widget.project['id']?.toString() ?? '',
-                  title: widget.project['title']?.toString(),
-                  imageUrl: (widget.project['designer_project_images'] as List?)
-                      ?.firstOrNull?['image_url']?.toString(),
-                  subtitle: widget.project['description']?.toString(),
+                  itemId: (project['id'] ?? '').toString(),
+                  title: title,
+                  imageUrl: _coverUrl,
+                  subtitle: projectType,
                   size: 20,
                 ),
               ),
@@ -263,8 +362,38 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                       ],
                     ),
                   ],
+                  // ── Prominent CTA: bu projedeki tasarımcıya direkt sor ──
+                  const SizedBox(height: 18),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      onPressed: _askDesignerAboutProject,
+                      icon: const Icon(Icons.chat_bubble_rounded,
+                          size: 18, color: Colors.white),
+                      label: Text(
+                        designerName.isNotEmpty
+                            ? '$designerName\'a bu proje hakkında sor'
+                            : 'Tasarımcıya bu proje hakkında sor',
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: KoalaColors.accentDeep,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        elevation: 0,
+                      ),
+                    ),
+                  ),
                   if (designerName.isNotEmpty) ...[
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 16),
                     Container(
                       padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(

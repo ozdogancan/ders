@@ -2219,7 +2219,18 @@ class _ProjectCardInline extends StatelessWidget {
     return GestureDetector(
       onTap: projectId.isEmpty
           ? null
-          : () => context.push('/project/$projectId'),
+          : () => context.push('/project/$projectId', extra: {
+                'id': projectId,
+                'title': title,
+                'cover_image_url': imageUrl,
+                'image_url': imageUrl,
+                'project_type': category,
+                'designer_id': designerId,
+                'profiles': {
+                  'id': designerId,
+                  'full_name': designerName,
+                },
+              }),
       child: Container(
         margin: const EdgeInsets.only(bottom: 8),
         decoration: BoxDecoration(

@@ -188,6 +188,23 @@ class EvlumbaLiveService {
     return List<Map<String, dynamic>>.from(data);
   }
 
+  /// Tek proje bilgisi (detay ekranı için) — tasarımcı profili ile join'li
+  static Future<Map<String, dynamic>?> getProjectById(String projectId) async {
+    if (projectId.isEmpty) return null;
+    try {
+      final data = await client
+          .from('designer_projects')
+          .select('*, designer_project_images(image_url, sort_order), '
+              'profiles:designer_id(id, full_name, avatar_url, city, profession)')
+          .eq('id', projectId)
+          .maybeSingle();
+      return data == null ? null : Map<String, dynamic>.from(data);
+    } catch (e) {
+      debugPrint('EvlumbaLive: getProjectById($projectId) failed: $e');
+      return null;
+    }
+  }
+
   /// Bir projenin tüm görselleri
   static Future<List<Map<String, dynamic>>> getProjectImages(
     String projectId,

@@ -27,6 +27,7 @@ import 'style_discovery_screen.dart';
 import 'designers_screen.dart';
 import 'product_entry_screen.dart';
 import 'saved_screen.dart';
+import '../widgets/style_discovery_pull.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -771,14 +772,30 @@ class _HomeScreenState extends State<HomeScreen>
               ),
             ),
 
-            // ─── Input bar (sabit, scroll dışında) ───
+            // ─── Input bar + Tarzını Keşfet pull handle (sabit) ───
             _staggered(
               7,
-              _TypewriterInput(
-                key: _inputKey,
-                bottomPadding: btm,
-                onSubmit: (text) => _openChat(text: text.isEmpty ? null : text),
-                onPickPhoto: _showPicker,
+              StyleDiscoveryPull(
+                totalCountBuilder: () async {
+                  try {
+                    if (!EvlumbaLiveService.isReady) return 0;
+                    final res = await EvlumbaLiveService.client
+                        .from('designer_projects')
+                        .select()
+                        .eq('is_published', true)
+                        .count();
+                    return res.count;
+                  } catch (_) {
+                    return 0;
+                  }
+                },
+                child: _TypewriterInput(
+                  key: _inputKey,
+                  bottomPadding: btm,
+                  onSubmit: (text) =>
+                      _openChat(text: text.isEmpty ? null : text),
+                  onPickPhoto: _showPicker,
+                ),
               ),
             ),
           ],
