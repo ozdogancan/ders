@@ -1,0 +1,9 @@
+{
+  "name": "koalatutor-web",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Pre-built Flutter web artifacts in build/web (no JS build step on Vercel).",
+  "scripts": {
+    "build": "echo 'Using pre-built build/web artifacts — no build step required.'"
+  }
+}

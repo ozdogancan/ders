@@ -1,6 +1,5 @@
 {
-  "buildCommand": "echo 'Using pre-built build/web artifacts'",
-  "installCommand": "echo 'No install step'",
+  "buildCommand": "npm run build",
   "outputDirectory": "build/web",
   "framework": null,
   "rewrites": [
