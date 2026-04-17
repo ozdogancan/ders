@@ -56,6 +56,10 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
   /// Input'un üstünde preview kartı gösterilir; opsiyonel metinle send'e basınca
   /// optimize edilip Storage'a yüklenir ve mesaj olarak gönderilir.
   Uint8List? _pendingPhoto;
+  // Proje viewer'dan "tasarım hakkında sor" ile gelen hazır görsel URL.
+  // _pendingPhoto'dan farkı: bytes yok, upload yapılmaz — direkt attachment_url
+  // olarak gönderilir (görsel zaten Evlumba CDN'inde).
+  String? _pendingDesignUrl;
 
   /// Oldest unread message ID on entry. "Yeni mesajlar" divider bunun üstünde
   /// gözükür ve ilk frame'de ekran buraya pozisyonlanır. markAsRead UI'ı
@@ -332,7 +336,8 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
     if (_sending) return;
     final text = _textController.text.trim();
     final photo = _pendingPhoto;
-    if (text.isEmpty && photo == null) return;
+    final designUrl = _pendingDesignUrl;
+    if (text.isEmpty && photo == null && designUrl == null) return;
 
     // ÖNEMLİ: text/foto'yu HENÜZ silme. Başarısızsa restore et ki kullanıcı
     // kayıp hissi yaşamasın. Sadece _sending true → input lock.
@@ -341,7 +346,19 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
     String? errorMsg;
     Map<String, dynamic>? sentMsg;
     try {
-      if (photo != null) {
+      if (designUrl != null && photo == null) {
+        // Proje viewer'dan gelen hazır görsel: upload yok, direkt attach.
+        sentMsg = await MessagingService.sendMessage(
+          conversationId: widget.conversationId,
+          content: text, // caption (boş olabilir)
+          type: MessageType.image,
+          attachmentUrl: designUrl,
+        );
+        if (sentMsg == null) {
+          errorMsg = 'Mesaj kaydedilemedi: '
+              '${MessagingService.lastSendError ?? "bilinmeyen hata"}';
+        }
+      } else if (photo != null) {
         // Foto var → upload + image message (caption = text)
         final fileName =
             '${_uid ?? 'anon'}/${DateTime.now().millisecondsSinceEpoch}.jpg';
@@ -397,6 +414,7 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
         setState(() {
           _sending = false;
           _pendingPhoto = null;
+          _pendingDesignUrl = null;
         });
       } else {
         // BAŞARISIZ: text/foto kullanıcının elinde kalsın, sticky hata göster.
@@ -528,14 +546,16 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
         startIndex: startIndex,
         designerName: widget.designerName,
         designerId: widget.designerId ?? '',
-        onAskDesigner: (prefill) {
+        onAskDesigner: (imageUrl) {
           Navigator.of(context).pop(); // viewer kapat
           if (!mounted) return;
-          _textController.text = prefill;
-          _textController.selection = TextSelection.fromPosition(
-            TextPosition(offset: _textController.text.length),
-          );
-          setState(() {}); // send butonunun aktif olması için
+          // Text boş kalır → kullanıcı ne soracağını kendisi yazsın.
+          // Preview olarak tasarımın görseli input'un üstüne eklenir.
+          _textController.clear();
+          setState(() {
+            _pendingPhoto = null;
+            _pendingDesignUrl = imageUrl;
+          });
         },
       ),
     );
@@ -631,8 +651,10 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
                         ),
             ),
 
-            // Photo preview — picker'dan seçilen foto, send'e basana kadar burada
-            if (_pendingPhoto != null) _buildPhotoPreview(),
+            // Photo preview — picker'dan seçilen foto VEYA proje viewer'dan
+            // attach edilen hazır görsel, send'e basana kadar burada durur.
+            if (_pendingPhoto != null || _pendingDesignUrl != null)
+              _buildPhotoPreview(),
 
             // Input bar — anasayfadaki TypewriterInput stiliyle aynı.
             // Scaffold body'yi klavye için zaten kaydırdı, biz yalnızca safe
@@ -665,18 +687,35 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
               children: [
                 ClipRRect(
                   borderRadius: BorderRadius.circular(12),
-                  child: Image.memory(
-                    _pendingPhoto!,
-                    width: 64,
-                    height: 64,
-                    fit: BoxFit.cover,
-                  ),
+                  child: _pendingPhoto != null
+                      ? Image.memory(
+                          _pendingPhoto!,
+                          width: 64,
+                          height: 64,
+                          fit: BoxFit.cover,
+                        )
+                      : Image.network(
+                          _pendingDesignUrl!,
+                          width: 64,
+                          height: 64,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => Container(
+                            width: 64,
+                            height: 64,
+                            color: KoalaColors.surfaceAlt,
+                            child: const Icon(Icons.image_rounded,
+                                size: 24, color: KoalaColors.textTer),
+                          ),
+                        ),
                 ),
                 Positioned(
                   top: 4,
                   right: 4,
                   child: GestureDetector(
-                    onTap: () => setState(() => _pendingPhoto = null),
+                    onTap: () => setState(() {
+                      _pendingPhoto = null;
+                      _pendingDesignUrl = null;
+                    }),
                     child: Container(
                       width: 22,
                       height: 22,
@@ -712,7 +751,7 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
 
   Widget _buildInputBar({required double bottomPadding}) {
     final hasText = _textController.text.trim().isNotEmpty;
-    final canSend = hasText || _pendingPhoto != null;
+    final canSend = hasText || _pendingPhoto != null || _pendingDesignUrl != null;
     return Padding(
       padding: EdgeInsets.fromLTRB(16, 2, 16, bottomPadding + 16),
       child: Container(
@@ -1260,7 +1299,7 @@ class _ProjectViewerSheet extends StatefulWidget {
   final int startIndex;
   final String designerName;
   final String designerId;
-  final void Function(String prefillText) onAskDesigner;
+  final void Function(String imageUrl) onAskDesigner;
 
   @override
   State<_ProjectViewerSheet> createState() => _ProjectViewerSheetState();
@@ -1344,9 +1383,17 @@ class _ProjectViewerSheetState extends State<_ProjectViewerSheet> {
   }
 
   void _askDesigner() {
-    final title = (_current['title'] ?? 'Proje').toString();
-    final prefill = '"$title" tasarımını çok beğendim — bununla ilgili bilgi verebilir misin?';
-    widget.onAskDesigner(prefill);
+    final imageUrl = _coverUrl(_current);
+    if (imageUrl.isEmpty) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(const SnackBar(
+          behavior: SnackBarBehavior.floating,
+          content: Text('Bu tasarımın görseli bulunamadı.'),
+        ));
+      return;
+    }
+    widget.onAskDesigner(imageUrl);
   }
 
   @override

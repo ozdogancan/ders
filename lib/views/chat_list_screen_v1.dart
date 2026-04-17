@@ -1124,26 +1124,27 @@ class _ChatListScreenV1State extends State<ChatListScreenV1> {
                   ),
                 ),
                 const Spacer(),
-                Container(
-                  padding: pillIcon != null
-                      ? const EdgeInsets.all(4)
-                      : const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
-                  decoration: BoxDecoration(
-                    color: pillBg,
-                    borderRadius: BorderRadius.circular(KoalaRadius.pill),
+                // pillIcon verildiyse: arka plan/yuvarlak YOK — sadece ikon
+                // (premium & minimal). Aksi halde klasik dolgulu text pill.
+                if (pillIcon != null)
+                  Icon(pillIcon, size: 14, color: pillBg)
+                else
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                    decoration: BoxDecoration(
+                      color: pillBg,
+                      borderRadius: BorderRadius.circular(KoalaRadius.pill),
+                    ),
+                    child: Text(
+                      pill,
+                      style: const TextStyle(
+                        fontSize: 9,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.white,
+                        letterSpacing: 0.3,
+                      ),
+                    ),
                   ),
-                  child: pillIcon != null
-                      ? Icon(pillIcon, size: 11, color: Colors.white)
-                      : Text(
-                          pill,
-                          style: const TextStyle(
-                            fontSize: 9,
-                            fontWeight: FontWeight.w700,
-                            color: Colors.white,
-                            letterSpacing: 0.3,
-                          ),
-                        ),
-                ),
               ],
             ),
             const SizedBox(height: 10),
@@ -2233,7 +2234,7 @@ class _EvlumbaDesignSheet extends StatelessWidget {
                 ),
               ],
             ),
-            child: const Icon(Icons.diamond_rounded, color: Colors.white, size: 32),
+            child: const Icon(LucideIcons.home, color: Colors.white, size: 30),
           ),
           const SizedBox(height: 20),
 
