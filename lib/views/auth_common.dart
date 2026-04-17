@@ -1,9 +1,6 @@
 import 'dart:async';
 import 'dart:ui';
-import 'dart:convert';
-import 'dart:math';
 
-import 'package:crypto/crypto.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -326,18 +323,6 @@ class AuthCoordinator {
     return fallback;
   }
 
-  static String _generateNonce([int length = 32]) {
-    const String charset =
-        '0123456789ABCDEFGHIJKLMNOPQRSTUVXYZabcdefghijklmnopqrstuvwxyz-._';
-    final Random random = Random.secure();
-    return List<String>.generate(
-      length,
-      (_) => charset[random.nextInt(charset.length)],
-    ).join();
-  }
-
-  static String _sha256ofString(String input) =>
-      sha256.convert(utf8.encode(input)).toString();
 }
 
 // ═══════════════════════════════════════════════════

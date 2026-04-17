@@ -29,7 +29,6 @@ class _AdminDashboardState extends State<AdminDashboard> {
     try {
       final now = DateTime.now();
       final todayStart = DateTime(now.year, now.month, now.day).toIso8601String();
-      final weekAgo = now.subtract(const Duration(days: 7)).toIso8601String();
 
       // Count queries — supabase_flutter ^2 kullanır .select('id') sonra length
       final results = await Future.wait([

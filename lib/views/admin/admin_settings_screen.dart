@@ -70,11 +70,13 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
     try {
       final thirtyDaysAgo = DateTime.now().subtract(const Duration(days: 30)).toIso8601String();
       await _db.from('koala_notifications').delete().eq('is_read', true).lt('created_at', thirtyDaysAgo);
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Okunmuş bildirimler temizlendi')),
       );
       _load();
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Hata: $e')));
     }
   }
@@ -83,11 +85,13 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
     try {
       final ninetyDaysAgo = DateTime.now().subtract(const Duration(days: 90)).toIso8601String();
       await _db.from('analytics_events').delete().lt('created_at', ninetyDaysAgo);
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Eski analytics verileri temizlendi')),
       );
       _load();
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Hata: $e')));
     }
   }

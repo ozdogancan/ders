@@ -10,13 +10,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../core/theme/koala_tokens.dart';
 import '../helpers/auth_guard.dart';
 import '../services/evlumba_live_service.dart';
-import '../services/messaging_service.dart';
 import '../services/saved_items_service.dart';
 import '../widgets/chat/designer_chat_popup.dart';
 import '../widgets/projects_gallery_popup.dart';
 import '../widgets/koala_widgets.dart';
-import '../widgets/save_button.dart';
-import 'chat_detail_screen.dart';
 
 // Alias — KoalaTokens source of truth
 class _ExpertK {
@@ -93,32 +90,13 @@ class _DesignersScreenState extends State<DesignersScreen> {
   // User's style preferences from style discovery
   String? _userStyle;
   String? _userRoom;
-  String? _userBudget;
-  List<String> _userColors = [];
 
   bool _loading = true;
   String? _error;
   String? _activeIntent;
   int _replyKey = 0;
 
-  String _designerInquiryText(_ExpertPreview expert, {String? customMessage}) {
-    final name = (expert.designer['full_name'] ?? 'uzman').toString().trim();
-    final projectTitles = expert.projects
-        .take(2)
-        .map((project) => (project['title'] ?? '').toString().trim())
-        .where((title) => title.isNotEmpty)
-        .toList();
-    final projectContext = projectTitles.isEmpty
-        ? ''
-        : ' Portfolyosunda özellikle ${projectTitles.join(' ve ')} projeleri dikkatimi çekti.';
-    final note = customMessage?.trim() ?? '';
-    final base =
-        '$name ile çalışmak istiyorum.$projectContext Bu uzmanla iletişim kurmam ve süreci başlatmam için beni yönlendir.';
-    if (note.isEmpty) return base;
-    return '$base Kullanıcının notu: $note';
-  }
-
-  Future<void> _openExpertChat(_ExpertPreview expert, {String? customMessage}) async {
+  Future<void> _openExpertChat(_ExpertPreview expert) async {
     final designerId = expert.designer['id']?.toString() ?? '';
     final name = (expert.designer['full_name'] ?? 'Tasarımcı').toString();
 
@@ -149,8 +127,6 @@ class _DesignersScreenState extends State<DesignersScreen> {
     final prefs = await SharedPreferences.getInstance();
     _userStyle = prefs.getString('onb_style');
     _userRoom = prefs.getString('onb_room');
-    _userBudget = prefs.getString('onb_budget');
-    _userColors = prefs.getStringList('onb_colors') ?? [];
   }
 
   @override
@@ -612,7 +588,6 @@ class _DesignersScreenState extends State<DesignersScreen> {
     final parts = intent.split('|');
     final baseIntent = parts.first;
     final isRoom = baseIntent.startsWith('room:');
-    final filterValue = baseIntent.contains(':') ? baseIntent.split(':').last : baseIntent;
     final hasProjects = experts.any((e) => e.projects.isNotEmpty);
     final alreadyExcluded = parts.contains('exclude_prev');
     final alreadyPortfolio = parts.contains('top_portfolio');

@@ -23,7 +23,6 @@ import '../services/saved_items_service.dart';
 import '../services/evlumba_live_service.dart';
 import 'chat_detail_screen.dart';
 import 'chat_list_screen.dart';
-import 'style_discovery_screen.dart';
 import 'designers_screen.dart';
 import 'product_entry_screen.dart';
 import 'saved_screen.dart';
@@ -765,6 +764,7 @@ class _HomeScreenState extends State<HomeScreen>
                                 final intercepted =
                                     await _showStyleDiscoveryIfNeeded();
                                 if (intercepted || !mounted) return;
+                                if (!context.mounted) return;
                                 Navigator.of(context).push(
                                   MaterialPageRoute(
                                     builder: (_) => const ProductEntryScreen(),
@@ -783,6 +783,7 @@ class _HomeScreenState extends State<HomeScreen>
                                 final intercepted =
                                     await _showStyleDiscoveryIfNeeded();
                                 if (intercepted || !mounted) return;
+                                if (!context.mounted) return;
                                 Navigator.of(context).push(
                                   MaterialPageRoute(
                                     builder: (_) => const DesignersScreen(),

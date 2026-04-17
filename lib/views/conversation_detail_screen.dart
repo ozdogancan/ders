@@ -343,7 +343,7 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
     await WidgetsBinding.instance.endOfFrame;
     if (!mounted) return;
     final ctx = _firstUnreadKey.currentContext;
-    if (ctx == null) return;
+    if (ctx == null || !ctx.mounted) return;
     try {
       await Scrollable.ensureVisible(
         ctx,

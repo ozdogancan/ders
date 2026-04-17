@@ -398,7 +398,7 @@ class MessagingService {
         'unread_count_user': 0,
         'updated_at': nowIso,
       }).eq('id', conversationId).eq('user_id', uid).select('id');
-      rowsAffected += (res is List ? res.length : 0);
+      rowsAffected += res.length;
     } catch (e) {
       debugPrint('markAsRead step2a (user zero) failed: $e');
       lastErr = 'UserUpd: $e';
@@ -408,7 +408,7 @@ class MessagingService {
         'unread_count_designer': 0,
         'updated_at': nowIso,
       }).eq('id', conversationId).eq('designer_id', uid).select('id');
-      rowsAffected += (res is List ? res.length : 0);
+      rowsAffected += res.length;
     } catch (e) {
       debugPrint('markAsRead step2b (designer zero) failed: $e');
       lastErr = 'DesignerUpd: $e';

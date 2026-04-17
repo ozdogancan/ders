@@ -108,8 +108,6 @@ class _ProductEntryScreenState extends State<ProductEntryScreen> {
   // Kullanıcının stil profili (style discovery'den)
   String? _userStyle;
   String? _userRoom;
-  String? _userBudget;
-  List<String> _userColors = [];
 
   bool _loading = true;
   final bool _fetchingReply = false;
@@ -187,8 +185,6 @@ class _ProductEntryScreenState extends State<ProductEntryScreen> {
     final prefs = await SharedPreferences.getInstance();
     _userStyle = prefs.getString('onb_style');
     _userRoom = prefs.getString('onb_room');
-    _userBudget = prefs.getString('onb_budget');
-    _userColors = prefs.getStringList('onb_colors') ?? [];
   }
 
   @override

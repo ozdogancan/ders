@@ -157,7 +157,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
               separatorBuilder: (_, __) => const SizedBox(width: KoalaSpacing.sm),
               itemBuilder: (context, index) {
                 final room = _rooms[index];
-                final key = room['key'] as String?;
+                final key = room['key'];
                 final active = _selectedRoom == key;
                 return GestureDetector(
                   onTap: () {
