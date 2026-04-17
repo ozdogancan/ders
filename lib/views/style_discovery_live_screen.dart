@@ -67,7 +67,14 @@ class _StyleDiscoveryLiveScreenState extends State<StyleDiscoveryLiveScreen>
   }
 
   Future<void> _bootstrap() async {
-    // Paralel: count + ilk batch
+    // Evlumba client hazır mı — bekle
+    final ready = await EvlumbaLiveService.waitForReady(
+        timeout: const Duration(seconds: 6));
+    if (!ready) {
+      debugPrint('StyleDiscoveryLive: EvlumbaLiveService NOT ready');
+      if (mounted) setState(() => _loading = false);
+      return;
+    }
     try {
       final results = await Future.wait([
         _fetchCount(),
@@ -78,7 +85,8 @@ class _StyleDiscoveryLiveScreenState extends State<StyleDiscoveryLiveScreen>
         _totalCount = results[0] as int;
         _loading = false;
       });
-    } catch (_) {
+    } catch (e) {
+      debugPrint('StyleDiscoveryLive: bootstrap failed → $e');
       if (mounted) setState(() => _loading = false);
     }
   }
@@ -107,22 +115,22 @@ class _StyleDiscoveryLiveScreenState extends State<StyleDiscoveryLiveScreen>
       );
       _offset += _batchSize;
       if (batch.length < _batchSize) _reachedEnd = true;
-      // Dedup + görseli olmayan projeleri at
+      // Dedup + görseli OLAN projeleri al (cover_url fallback chain dahil)
       final filtered = <Map<String, dynamic>>[];
       for (final p in batch) {
         final id = p['id']?.toString() ?? '';
         if (id.isEmpty || _seenIds.contains(id)) continue;
-        final imgs = p['designer_project_images'] as List?;
-        if (imgs == null || imgs.isEmpty) continue;
+        if (_coverOf(p).isEmpty) continue; // herhangi bir image field yoksa at
         _seenIds.add(id);
         filtered.add(p);
       }
+      debugPrint('StyleDiscoveryLive: batch=${batch.length} filtered=${filtered.length} deck=${_deck.length + filtered.length}');
       if (!mounted) return;
       setState(() => _deck.addAll(filtered));
       // Sıradaki 2 kartın cover image'ını precache
       _precacheNext();
-    } catch (_) {
-      // sessizce yut — swipe devam eder
+    } catch (e) {
+      debugPrint('StyleDiscoveryLive: fetchBatch failed → $e');
     } finally {
       _fetchingMore = false;
     }
