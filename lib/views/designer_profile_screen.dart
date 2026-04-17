@@ -3,7 +3,11 @@ import 'package:flutter/material.dart';
 import '../core/theme/koala_tokens.dart';
 import '../helpers/auth_guard.dart';
 import '../services/evlumba_live_service.dart';
+import '../services/saved_items_service.dart';
 import '../widgets/chat/designer_chat_popup.dart';
+import '../widgets/like_button.dart';
+import '../widgets/save_button.dart';
+import '../widgets/share_sheet.dart';
 
 class DesignerProfileScreen extends StatefulWidget {
   final String designerId;
@@ -185,6 +189,49 @@ class _DesignerProfileScreenState extends State<DesignerProfileScreen> {
                             ),
                           ),
                         ),
+                        const SizedBox(height: KoalaSpacing.md),
+                        // ── Like / Save / Share row ──
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            _ActionIcon(
+                              child: LikeButton(
+                                itemType: SavedItemType.designer,
+                                itemId: widget.designerId,
+                                title: name,
+                                imageUrl: _designer?['avatar_url'] as String?,
+                                subtitle: specialty,
+                                size: 22,
+                              ),
+                              label: 'Beğen',
+                            ),
+                            const SizedBox(width: KoalaSpacing.xl),
+                            _ActionIcon(
+                              child: SaveButton(
+                                itemType: SavedItemType.designer,
+                                itemId: widget.designerId,
+                                title: name,
+                                imageUrl: _designer?['avatar_url'] as String?,
+                                subtitle: specialty,
+                                size: 22,
+                              ),
+                              label: 'Kaydet',
+                            ),
+                            const SizedBox(width: KoalaSpacing.xl),
+                            _ActionIcon(
+                              onTap: () => ShareSheet.show(
+                                context,
+                                itemType: SavedItemType.designer,
+                                itemId: widget.designerId,
+                                title: name,
+                                imageUrl: _designer?['avatar_url'] as String?,
+                              ),
+                              child: const Icon(Icons.ios_share_rounded,
+                                  size: 22, color: KoalaColors.text),
+                              label: 'Paylaş',
+                            ),
+                          ],
+                        ),
                       ],
                     ),
                   ),
@@ -202,6 +249,44 @@ class _DesignerProfileScreenState extends State<DesignerProfileScreen> {
                 ],
               ),
             ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// ACTION ICON (like/save/share with label)
+// ═══════════════════════════════════════════════════════
+class _ActionIcon extends StatelessWidget {
+  const _ActionIcon({
+    required this.child,
+    required this.label,
+    this.onTap,
+  });
+
+  final Widget child;
+  final String label;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final column = Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SizedBox(height: 28, child: Center(child: child)),
+        const SizedBox(height: 4),
+        Text(label,
+            style: KoalaText.caption
+                .copyWith(color: KoalaColors.textMuted, fontSize: 11)),
+      ],
+    );
+    if (onTap == null) return column;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(KoalaRadius.sm),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+        child: column,
+      ),
     );
   }
 }
