@@ -18,9 +18,9 @@ import 'package:lucide_icons/lucide_icons.dart';
 
 import '../core/theme/koala_tokens.dart';
 import '../services/evlumba_live_service.dart';
+import '../services/messaging_service.dart';
 import '../services/saved_items_service.dart';
 import '../services/analytics_service.dart';
-import '../widgets/chat/designer_chat_popup.dart';
 import '../widgets/share_sheet.dart';
 
 class StyleDiscoveryLiveScreen extends StatefulWidget {
@@ -39,9 +39,13 @@ class _StyleDiscoveryLiveScreenState extends State<StyleDiscoveryLiveScreen>
   final List<Map<String, dynamic>> _deck = [];
   final Set<String> _seenIds = <String>{};
   final math.Random _rng = math.Random();
+  // designer_id → profile. Lazy cache — card için küçük avatar+isim chip'i.
+  final Map<String, Map<String, dynamic>> _designerCache = {};
+  final Set<String> _designerInFlight = <String>{};
   int _offset = 0;
   bool _loading = true;
   bool _fetchingMore = false;
+  bool _askingInFlight = false;
   int _totalCount = 0;
   int _index = 0;
 
@@ -86,6 +90,7 @@ class _StyleDiscoveryLiveScreenState extends State<StyleDiscoveryLiveScreen>
       await _fetchBatch();
       if (!mounted) return;
       setState(() => _loading = false);
+      _prefetchCurrentDesigner();
     } catch (e) {
       debugPrint('StyleDiscoveryLive: bootstrap failed → $e');
       if (mounted) setState(() => _loading = false);
@@ -257,9 +262,23 @@ class _StyleDiscoveryLiveScreenState extends State<StyleDiscoveryLiveScreen>
     });
     _exitCtrl.reset();
     _precacheNext();
+    _prefetchCurrentDesigner();
     final remaining = _deck.length - _index;
     if (remaining <= _prefetchThreshold) {
       _fetchBatch();
+    }
+  }
+
+  void _prefetchCurrentDesigner() {
+    final c = _currentCard;
+    if (c == null) return;
+    final did = (c['designer_id'] ?? '').toString();
+    if (did.isNotEmpty) unawaited(_loadDesigner(did));
+    // Sonraki kart için de önceden yükle
+    final n = _nextCard;
+    if (n != null) {
+      final nid = (n['designer_id'] ?? '').toString();
+      if (nid.isNotEmpty) unawaited(_loadDesigner(nid));
     }
   }
 
@@ -289,20 +308,55 @@ class _StyleDiscoveryLiveScreenState extends State<StyleDiscoveryLiveScreen>
     );
   }
 
-  void _onAskDesigner() {
+  Future<void> _onAskDesigner() async {
+    if (_askingInFlight) return;
     final card = _currentCard;
     if (card == null) return;
     final designerId = (card['designer_id'] ?? '').toString();
     if (designerId.isEmpty) return;
-    DesignerChatPopup.show(
-      context,
+    setState(() => _askingInFlight = true);
+    final projectId = card['id']?.toString() ?? '';
+    final cat = _prettyCategory((card['project_type'] ?? '').toString());
+    final coverUrl = _coverOf(card);
+    final conv = await MessagingService.getOrCreateConversation(
       designerId: designerId,
-      designerName: '',
-      designerAvatarUrl: '',
       contextType: 'project',
-      contextId: card['id']?.toString(),
-      contextTitle: _prettyCategory((card['project_type'] ?? '').toString()),
+      contextId: projectId,
+      contextTitle: cat,
     );
+    if (!mounted) return;
+    setState(() => _askingInFlight = false);
+    if (conv == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Sohbet başlatılamadı, tekrar dene')),
+      );
+      return;
+    }
+    final convId = (conv['id'] ?? '').toString();
+    if (convId.isEmpty) return;
+    // /chat/dm'e push — swipe ekranı stack'te kalır, native back ile geri dönülür
+    context.push('/chat/dm/$convId', extra: {
+      'designerId': designerId,
+      'pendingDesign': {
+        'id': projectId,
+        'title': cat,
+        'imageUrl': coverUrl,
+        'designerId': designerId,
+      },
+    });
+  }
+
+  /// Lazy fetch designer info for the card's designer_id.
+  /// Cache'li → tekrarlı çağrı ucuz. setState sadece cache değişirse.
+  Future<void> _loadDesigner(String designerId) async {
+    if (designerId.isEmpty) return;
+    if (_designerCache.containsKey(designerId)) return;
+    if (_designerInFlight.contains(designerId)) return;
+    _designerInFlight.add(designerId);
+    final d = await EvlumbaLiveService.getDesigner(designerId);
+    _designerInFlight.remove(designerId);
+    if (!mounted || d == null) return;
+    setState(() => _designerCache[designerId] = d);
   }
 
   @override
@@ -360,22 +414,30 @@ class _StyleDiscoveryLiveScreenState extends State<StyleDiscoveryLiveScreen>
   Widget _header() {
     final hasCard = _currentCard != null;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(8, 6, 8, 4),
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
       child: Row(
         children: [
-          _IconBtn(
+          _GlassIconBtn(
             icon: LucideIcons.chevronLeft,
             onTap: _onBack,
+            tooltip: 'Geri',
           ),
           const Spacer(),
-          _IconBtn(
+          // İnce başlık — kullanıcıya ne ekranda olduğunu hatırlatan zarif detay
+          Text(
+            'Tarzını Keşfet',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+              color: KoalaColors.ink.withValues(alpha: 0.72),
+              letterSpacing: -0.2,
+            ),
+          ),
+          const Spacer(),
+          _GlassIconBtn(
             icon: LucideIcons.share2,
             onTap: hasCard ? _onShare : null,
-          ),
-          const SizedBox(width: 4),
-          _IconBtn(
-            icon: LucideIcons.userCircle,
-            onTap: hasCard ? _onAskDesigner : null,
+            tooltip: 'Paylaş',
           ),
         ],
       ),
@@ -419,9 +481,12 @@ class _StyleDiscoveryLiveScreenState extends State<StyleDiscoveryLiveScreen>
                           opacity: 0.6 +
                               (dx.abs() / cs.maxWidth).clamp(0.0, 1.0) * 0.4,
                           child: _Card(
-                              project: next,
-                              coverOf: _coverOf,
-                              prettyCategory: _prettyCategory),
+                            project: next,
+                            coverOf: _coverOf,
+                            prettyCategory: _prettyCategory,
+                            designer: _designerCache[
+                                (next['designer_id'] ?? '').toString()],
+                          ),
                         ),
                       ),
                     ),
@@ -436,9 +501,12 @@ class _StyleDiscoveryLiveScreenState extends State<StyleDiscoveryLiveScreen>
                           child: Stack(
                             children: [
                               _Card(
-                                  project: current,
-                                  coverOf: _coverOf,
-                                  prettyCategory: _prettyCategory),
+                                project: current,
+                                coverOf: _coverOf,
+                                prettyCategory: _prettyCategory,
+                                designer: _designerCache[
+                                    (current['designer_id'] ?? '').toString()],
+                              ),
                               Positioned(
                                 top: 28,
                                 left: 20,
@@ -507,23 +575,33 @@ class _StyleDiscoveryLiveScreenState extends State<StyleDiscoveryLiveScreen>
 
   Widget _buttons() {
     final disabled = _currentCard == null || _animatingExit;
+    // Modern, uygulama aksentine bağlı, 3'lü denge: Pas — Beğen (primary) — Sor
+    final askDisabled = disabled ||
+        ((_currentCard?['designer_id'] ?? '').toString().isEmpty) ||
+        _askingInFlight;
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 48),
+      padding: const EdgeInsets.fromLTRB(32, 4, 32, 8),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
-          _RoundBtn(
+          _ActionBtn(
             icon: LucideIcons.x,
-            color: const Color(0xFFEF4444),
-            size: 52,
+            label: 'Geç',
             onTap: disabled ? null : () => _swipe(liked: false),
+            variant: _ActionVariant.outlined,
           ),
-          _RoundBtn(
+          _ActionBtn(
             icon: Icons.favorite_rounded,
-            color: const Color(0xFF22C55E),
-            size: 64,
-            filled: true,
+            label: 'Beğen',
             onTap: disabled ? null : () => _swipe(liked: true),
+            variant: _ActionVariant.primary,
+            large: true,
+          ),
+          _ActionBtn(
+            icon: LucideIcons.messageCircle,
+            label: 'Sor',
+            onTap: askDisabled ? null : _onAskDesigner,
+            variant: _ActionVariant.soft,
           ),
         ],
       ),
@@ -537,10 +615,12 @@ class _Card extends StatelessWidget {
     required this.project,
     required this.coverOf,
     required this.prettyCategory,
+    this.designer,
   });
   final Map<String, dynamic> project;
   final String Function(Map<String, dynamic>) coverOf;
   final String Function(String) prettyCategory;
+  final Map<String, dynamic>? designer;
 
   IconData _roomIcon(String raw) {
     switch (raw.trim().toLowerCase()) {
@@ -718,6 +798,10 @@ class _Card extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                     ),
                   ],
+                  if (designer != null) ...[
+                    const SizedBox(height: 12),
+                    _DesignerChip(designer: designer!),
+                  ],
                   if (palette.isNotEmpty) ...[
                     const SizedBox(height: 12),
                     Row(
@@ -852,89 +936,238 @@ class _Stamp extends StatelessWidget {
   }
 }
 
-// ─── Header ikon butonu — frameless, 40x40 hit area ───
-class _IconBtn extends StatelessWidget {
-  const _IconBtn({required this.icon, this.onTap});
+// ─── Header glass ikon butonu — yuvarlak, beyaz, zarif gölge ───
+class _GlassIconBtn extends StatelessWidget {
+  const _GlassIconBtn({
+    required this.icon,
+    this.onTap,
+    this.tooltip,
+  });
   final IconData icon;
   final VoidCallback? onTap;
+  final String? tooltip;
 
   @override
   Widget build(BuildContext context) {
     final disabled = onTap == null;
-    return GestureDetector(
-      onTap: onTap == null
-          ? null
-          : () {
-              HapticFeedback.selectionClick();
-              onTap!();
-            },
-      behavior: HitTestBehavior.opaque,
-      child: SizedBox(
-        width: 40,
-        height: 40,
-        child: Center(
+    final btn = Material(
+      color: Colors.white,
+      shape: const CircleBorder(),
+      elevation: disabled ? 0 : 1.5,
+      shadowColor: Colors.black.withValues(alpha: 0.15),
+      child: InkWell(
+        customBorder: const CircleBorder(),
+        onTap: onTap == null
+            ? null
+            : () {
+                HapticFeedback.selectionClick();
+                onTap!();
+              },
+        child: Container(
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            border: Border.all(
+              color: KoalaColors.border.withValues(alpha: 0.55),
+            ),
+          ),
+          alignment: Alignment.center,
           child: Icon(
             icon,
-            size: 22,
-            color: disabled
-                ? KoalaColors.textTer
-                : KoalaColors.ink,
+            size: 20,
+            color: disabled ? KoalaColors.textTer : KoalaColors.ink,
           ),
+        ),
+      ),
+    );
+    if (tooltip == null) return btn;
+    return Tooltip(message: tooltip!, child: btn);
+  }
+}
+
+enum _ActionVariant { outlined, soft, primary }
+
+/// Modern aksiyon butonu — ikon dairesi + alt label.
+/// Koala aksent paletine sadık, hepsi aynı görsel dilde.
+class _ActionBtn extends StatelessWidget {
+  const _ActionBtn({
+    required this.icon,
+    required this.label,
+    required this.variant,
+    this.onTap,
+    this.large = false,
+  });
+  final IconData icon;
+  final String label;
+  final _ActionVariant variant;
+  final VoidCallback? onTap;
+  final bool large;
+
+  @override
+  Widget build(BuildContext context) {
+    final disabled = onTap == null;
+    final size = large ? 68.0 : 56.0;
+    final iconSize = large ? 28.0 : 22.0;
+
+    Color bg;
+    Color fg;
+    Color? border;
+    List<BoxShadow>? shadow;
+
+    switch (variant) {
+      case _ActionVariant.outlined:
+        bg = Colors.white;
+        fg = KoalaColors.textMed;
+        border = KoalaColors.border;
+        shadow = [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ];
+        break;
+      case _ActionVariant.soft:
+        bg = KoalaColors.accentSoft;
+        fg = KoalaColors.accentDeep;
+        border = null;
+        shadow = null;
+        break;
+      case _ActionVariant.primary:
+        bg = KoalaColors.accentDeep;
+        fg = Colors.white;
+        border = null;
+        shadow = [
+          BoxShadow(
+            color: KoalaColors.accentDeep.withValues(alpha: 0.30),
+            blurRadius: 16,
+            offset: const Offset(0, 6),
+          ),
+        ];
+        break;
+    }
+
+    return AnimatedOpacity(
+      opacity: disabled ? 0.4 : 1.0,
+      duration: const Duration(milliseconds: 180),
+      child: GestureDetector(
+        onTap: onTap == null
+            ? null
+            : () {
+                HapticFeedback.mediumImpact();
+                onTap!();
+              },
+        behavior: HitTestBehavior.opaque,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: size,
+              height: size,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: bg,
+                border: border != null ? Border.all(color: border) : null,
+                boxShadow: shadow,
+              ),
+              child: Icon(icon, color: fg, size: iconSize),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: KoalaColors.textSec,
+                letterSpacing: 0.1,
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
 }
 
-class _RoundBtn extends StatelessWidget {
-  const _RoundBtn({
-    required this.icon,
-    required this.color,
-    required this.size,
-    this.onTap,
-    this.filled = false,
-  });
-  final IconData icon;
-  final Color color;
-  final double size;
-  final VoidCallback? onTap;
-  final bool filled;
+/// Kart altında tasarımcı avatar + ismi — kullanıcı bu tasarımın kime
+/// ait olduğunu bilsin. Dark gradient üzerinde okunaklı, küçük ve zarif.
+class _DesignerChip extends StatelessWidget {
+  const _DesignerChip({required this.designer});
+  final Map<String, dynamic> designer;
 
   @override
   Widget build(BuildContext context) {
-    final disabled = onTap == null;
-    return GestureDetector(
-      onTap: onTap == null
-          ? null
-          : () {
-              HapticFeedback.mediumImpact();
-              onTap!();
-            },
-      child: AnimatedOpacity(
-        opacity: disabled ? 0.4 : 1.0,
-        duration: const Duration(milliseconds: 180),
-        child: Container(
-          width: size,
-          height: size,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: filled ? color : Colors.white,
-            border: filled ? null : Border.all(color: KoalaColors.border),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.08),
-                blurRadius: 10,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
-          child: Icon(
-            icon,
-            color: filled ? Colors.white : color,
-            size: size * 0.42,
-          ),
+    final name = (designer['full_name'] ??
+            designer['business_name'] ??
+            '')
+        .toString()
+        .trim();
+    final avatar = (designer['avatar_url'] ?? '').toString().trim();
+    if (name.isEmpty && avatar.isEmpty) return const SizedBox.shrink();
+
+    final initials = _initials(name);
+    return Container(
+      padding: const EdgeInsets.fromLTRB(4, 4, 12, 4),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.14),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(
+          color: Colors.white.withValues(alpha: 0.22),
         ),
       ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 28,
+            height: 28,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: KoalaColors.accentDeep,
+              image: avatar.isEmpty
+                  ? null
+                  : DecorationImage(
+                      image: CachedNetworkImageProvider(avatar),
+                      fit: BoxFit.cover,
+                    ),
+            ),
+            alignment: Alignment.center,
+            child: avatar.isEmpty
+                ? Text(
+                    initials,
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white,
+                    ),
+                  )
+                : null,
+          ),
+          const SizedBox(width: 8),
+          Flexible(
+            child: Text(
+              name.isEmpty ? 'Tasarımcı' : name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: Colors.white,
+                letterSpacing: 0.1,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
+  }
+
+  static String _initials(String name) {
+    final parts = name.trim().split(RegExp(r'\s+'));
+    if (parts.isEmpty || parts.first.isEmpty) return '·';
+    if (parts.length == 1) return parts.first.characters.first.toUpperCase();
+    return (parts.first.characters.first + parts.last.characters.first)
+        .toUpperCase();
   }
 }
