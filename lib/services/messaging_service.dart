@@ -113,6 +113,25 @@ class MessagingService {
     }
   }
 
+  /// Var olan bir sohbeti SADECE bulmak için — yoksa null döner, insert YAPMAZ.
+  /// Popup'larda lazy-create kullanılırken "önce var mı?" kontrolü burada.
+  static Future<Map<String, dynamic>?> findExistingConversation({
+    required String designerId,
+  }) async {
+    if (_uid == null || !Env.hasSupabaseConfig) return null;
+    try {
+      return await _db
+          .from('koala_conversations')
+          .select()
+          .eq('user_id', _uid!)
+          .eq('designer_id', designerId)
+          .maybeSingle();
+    } catch (e) {
+      debugPrint('MessagingService.findExistingConversation error: $e');
+      return null;
+    }
+  }
+
   /// Eski API uyumluluk alias
   static Future<Map<String, dynamic>?> startConversation({
     required String designerId,

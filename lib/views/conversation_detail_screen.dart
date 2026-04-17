@@ -533,6 +533,44 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
         ),
       );
 
+  /// Proje map'inden kategori/oda tipi etiketi üretir — "Bilgehan Ermiş
+  /// Projesi" gibi tekrar eden title yerine "Oturma Odası" vb göstermek için.
+  String _projectCategoryLabel(Map<String, dynamic> p) {
+    for (final k in ['project_type', 'room_type', 'category']) {
+      final v = (p[k] ?? '').toString().trim();
+      if (v.isNotEmpty) return _prettyTrCategory(v);
+    }
+    final t = (p['title'] ?? '').toString().trim();
+    final dn = widget.designerName.trim();
+    if (t.isNotEmpty && dn.isNotEmpty && !t.toLowerCase().contains(dn.toLowerCase())) {
+      return t;
+    }
+    return '';
+  }
+
+  String _prettyTrCategory(String raw) {
+    const trMap = {
+      'living_room': 'Oturma Odası',
+      'bedroom': 'Yatak Odası',
+      'kitchen': 'Mutfak',
+      'bathroom': 'Banyo',
+      'dining_room': 'Yemek Odası',
+      'office': 'Çalışma Odası',
+      'kids_room': 'Çocuk Odası',
+      'hallway': 'Koridor / Hol',
+      'balcony': 'Balkon',
+      'outdoor': 'Dış Mekan',
+    };
+    final key = raw.toLowerCase().trim();
+    if (trMap.containsKey(key)) return trMap[key]!;
+    final cleaned = raw.replaceAll(RegExp(r'[_-]+'), ' ').trim();
+    if (cleaned.isEmpty) return raw;
+    return cleaned
+        .split(RegExp(r'\s+'))
+        .map((w) => w.isEmpty ? w : w[0].toUpperCase() + w.substring(1))
+        .join(' ');
+  }
+
   /// Portfolio görseline tıklanınca proje detay overlay aç
   void _openProjectViewer(Map<String, dynamic> project, int startIndex) {
     showModalBottomSheet<void>(
@@ -1149,21 +1187,27 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
                                     ),
                                 ],
                               ),
-                              if (title.isNotEmpty)
-                                Padding(
+                              // Kategori / oda tipi etiketi.
+                              // "Bilgehan Ermiş Projesi" gibi tasarımcı adı
+                              // tekrarı değil — "Oturma Odası" vb göstersin.
+                              Builder(builder: (_) {
+                                final label = _projectCategoryLabel(project);
+                                if (label.isEmpty) return const SizedBox.shrink();
+                                return Padding(
                                   padding: const EdgeInsets.only(top: 6),
                                   child: Text(
-                                    title,
+                                    label,
                                     style: const TextStyle(
                                       fontSize: 11,
                                       fontWeight: FontWeight.w600,
-                                      color: KoalaColors.text,
+                                      color: KoalaColors.textSec,
                                       height: 1.25,
                                     ),
-                                    maxLines: 2,
+                                    maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                   ),
-                                ),
+                                );
+                              }),
                             ],
                           ),
                         ),

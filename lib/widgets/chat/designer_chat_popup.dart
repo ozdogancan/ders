@@ -149,6 +149,11 @@ class _DesignerChatSheetState extends State<_DesignerChatSheet>
     } catch (_) {}
   }
 
+  /// Popup açılırken conversation YARATMAZ — sadece auth'u hazırlar ve önceden
+  /// var olan bir sohbet varsa mesajları yükler. Yeni sohbet satırı yalnızca
+  /// kullanıcı ilk mesajı/fotoğrafı gönderdiğinde oluşturulur (`_ensureConversation`).
+  /// Böylece "Mesaj At" denip hiçbir şey yazılmadan kapatılan durumlarda
+  /// Mesajlar listesinde hayalet sohbetler birikmez.
   Future<void> _connect() async {
     try {
       // Auth kontrolü — yoksa tekrar dene
@@ -162,25 +167,22 @@ class _DesignerChatSheetState extends State<_DesignerChatSheet>
         return;
       }
 
-      final conv = await MessagingService.getOrCreateConversation(
+      // Var olan bir sohbet var mı? SELECT-only — yoksa NULL döner, oluşturmaz.
+      final existing = await MessagingService.findExistingConversation(
         designerId: widget.designerId,
-        contextType: widget.contextType,
-        contextId: widget.contextId,
-        contextTitle: widget.contextTitle,
       );
-      if (conv == null) {
-        if (mounted) setState(() { _state = _SheetState.error; _errorMsg = 'Bağlantı kurulamadı. Lütfen internet bağlantınızı kontrol edin.'; });
-        return;
+      List<Map<String, dynamic>> messages = [];
+      if (existing != null) {
+        _conversationId = existing['id'] as String;
+        messages = await MessagingService.getMessages(conversationId: _conversationId!);
+        _subscribeRealtime();
+        MessagingService.markAsRead(_conversationId!);
       }
-      _conversationId = conv['id'] as String;
-      final messages = await MessagingService.getMessages(conversationId: _conversationId!);
-      _subscribeRealtime();
-      MessagingService.markAsRead(_conversationId!);
 
-      // Mesajları göster
       if (mounted) setState(() { _messages = messages; _state = _SheetState.ready; });
 
-      // initialMessage varsa öncelikli kullan, yoksa contextTitle'dan üret
+      // initialMessage varsa öncelikli kullan, yoksa contextTitle'dan üret.
+      // Sadece mesaj listesi boşsa (yeni/boş sohbet) draft olarak input'a yazılır.
       if (messages.isEmpty) {
         if (widget.initialMessage != null && widget.initialMessage!.trim().isNotEmpty) {
           _textController.text = widget.initialMessage!.trim();
@@ -191,6 +193,23 @@ class _DesignerChatSheetState extends State<_DesignerChatSheet>
     } catch (e) {
       if (mounted) setState(() { _state = _SheetState.error; _errorMsg = 'Bir hata oluştu: $e'; });
     }
+  }
+
+  /// İlk mesaj anında lazy conversation yaratma. Daha sonraki çağrılarda mevcut
+  /// id'yi döner. Başarısızsa null — arayan hatayı kullanıcıya göstermelidir.
+  Future<String?> _ensureConversation() async {
+    if (_conversationId != null) return _conversationId;
+    final conv = await MessagingService.getOrCreateConversation(
+      designerId: widget.designerId,
+      contextType: widget.contextType,
+      contextId: widget.contextId,
+      contextTitle: widget.contextTitle,
+    );
+    if (conv == null) return null;
+    _conversationId = conv['id'] as String;
+    _subscribeRealtime();
+    MessagingService.markAsRead(_conversationId!);
+    return _conversationId;
   }
 
   void _subscribeRealtime() {
@@ -217,19 +236,29 @@ class _DesignerChatSheetState extends State<_DesignerChatSheet>
 
   Future<void> _sendMessage() async {
     final text = _textController.text.trim();
-    if (text.isEmpty || _sending || _conversationId == null) return;
-    _textController.clear();
+    if (text.isEmpty || _sending) return;
     setState(() => _sending = true);
+    // Lazy — ilk mesajda conversation yarat
+    final convId = await _ensureConversation();
+    if (convId == null) {
+      if (mounted) {
+        setState(() => _sending = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Mesaj gönderilemedi, tekrar deneyin.')),
+        );
+      }
+      return;
+    }
+    _textController.clear();
     final user = FirebaseAuth.instance.currentUser;
     await MessagingService.sendMessage(
-      conversationId: _conversationId!, content: text,
+      conversationId: convId, content: text,
       metadata: { 'sender_display': 'Koala - ${user?.displayName ?? 'Kullanıcı'}', 'sender_email': user?.email ?? '', 'source': 'koala_app' },
     );
     if (mounted) setState(() => _sending = false);
   }
 
   Future<void> _pickAndSendImage() async {
-    if (_conversationId == null) return;
     final picked = await ImagePicker().pickImage(source: ImageSource.gallery, maxWidth: 1200, imageQuality: 80);
     if (picked == null) return;
     setState(() => _uploadingImage = true);
@@ -246,8 +275,19 @@ class _DesignerChatSheetState extends State<_DesignerChatSheet>
       await Supabase.instance.client.storage.from('message-images').uploadBinary(fileName, bytes);
       final imageUrl = Supabase.instance.client.storage.from('message-images').getPublicUrl(fileName);
       final user = FirebaseAuth.instance.currentUser;
+      // Lazy — foto gönderimi de conversation'ı ilk kez yaratabilir
+      final convId = await _ensureConversation();
+      if (convId == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Mesaj gönderilemedi, tekrar deneyin.')),
+          );
+          setState(() => _uploadingImage = false);
+        }
+        return;
+      }
       await MessagingService.sendMessage(
-        conversationId: _conversationId!, content: '\u{1F4F7} Fotoğraf', type: MessageType.image, attachmentUrl: imageUrl,
+        conversationId: convId, content: '\u{1F4F7} Fotoğraf', type: MessageType.image, attachmentUrl: imageUrl,
         metadata: { 'sender_display': 'Koala - ${user?.displayName ?? 'Kullanıcı'}', 'sender_email': user?.email ?? '', 'source': 'koala_app' },
       );
     } catch (_) {
@@ -261,6 +301,50 @@ class _DesignerChatSheetState extends State<_DesignerChatSheet>
   }
 
   /// Portfolio görseline tıklanınca proje detay overlay aç
+  /// Proje map'inden kategori/oda tipi etiketi üretir — proje başlığı genelde
+  /// "Bilgehan Ermiş Projesi" gibi tasarımcı adını tekrarlar, görsele değer
+  /// katmaz. Önce Evlumba'nın `project_type` / `room_type` alanlarını dener;
+  /// yoksa title'a düşer. Boş string dönerse arayan etiketi render etmemeli.
+  String _projectCategoryLabel(Map<String, dynamic> p) {
+    for (final k in ['project_type', 'room_type', 'category']) {
+      final v = (p[k] ?? '').toString().trim();
+      if (v.isNotEmpty) return _prettyTr(v);
+    }
+    // Son çare: title tasarımcı adını içermiyorsa kullan
+    final t = (p['title'] ?? '').toString().trim();
+    final dn = widget.designerName.trim();
+    if (t.isNotEmpty && dn.isNotEmpty && !t.toLowerCase().contains(dn.toLowerCase())) {
+      return t;
+    }
+    return '';
+  }
+
+  /// "living_room" → "Living Room" gibi snake/lowercase değerleri
+  /// Türkçe-duyarlı Title Case'e çevir.
+  String _prettyTr(String raw) {
+    const trMap = {
+      'living_room': 'Oturma Odası',
+      'bedroom': 'Yatak Odası',
+      'kitchen': 'Mutfak',
+      'bathroom': 'Banyo',
+      'dining_room': 'Yemek Odası',
+      'office': 'Çalışma Odası',
+      'kids_room': 'Çocuk Odası',
+      'hallway': 'Koridor / Hol',
+      'balcony': 'Balkon',
+      'outdoor': 'Dış Mekan',
+    };
+    final key = raw.toLowerCase().trim();
+    if (trMap.containsKey(key)) return trMap[key]!;
+    // Fallback: snake/kebab/space'i boşluklayıp başlat
+    final cleaned = raw.replaceAll(RegExp(r'[_-]+'), ' ').trim();
+    if (cleaned.isEmpty) return raw;
+    return cleaned
+        .split(RegExp(r'\s+'))
+        .map((w) => w.isEmpty ? w : w[0].toUpperCase() + w.substring(1))
+        .join(' ');
+  }
+
   void _openProjectViewer(Map<String, dynamic> project, int startIndex) {
     showModalBottomSheet<void>(
       context: context,
@@ -475,16 +559,22 @@ class _DesignerChatSheetState extends State<_DesignerChatSheet>
                               ),
                           ],
                         ),
-                        if (title.isNotEmpty)
-                          Padding(
+                        // Kategori/tip etiketi — tasarımın altında
+                        // "Bilgehan Ermiş Projesi" gibi boş bir tekrar yerine
+                        // "Oturma Odası", "Yatak Odası" vb gözüksün.
+                        Builder(builder: (_) {
+                          final label = _projectCategoryLabel(project);
+                          if (label.isEmpty) return const SizedBox.shrink();
+                          return Padding(
                             padding: const EdgeInsets.only(top: 5),
                             child: Text(
-                              title,
-                              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: KoalaColors.text, height: 1.2),
-                              maxLines: 2,
+                              label,
+                              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: KoalaColors.textSec, height: 1.2),
+                              maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
-                          ),
+                          );
+                        }),
                       ],
                     ),
                   ),
