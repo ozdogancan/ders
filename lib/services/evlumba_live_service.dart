@@ -166,8 +166,7 @@ class EvlumbaLiveService {
   }) async {
     var q = client
         .from('designer_projects')
-        .select('*, designer_project_images(image_url, sort_order), '
-            'profiles:designer_id(id, full_name, avatar_url, city, profession)')
+        .select('*, designer_project_images(image_url, sort_order)')
         .eq('is_published', true);
 
     if (designerId != null && designerId.isNotEmpty) {
