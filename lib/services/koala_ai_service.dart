@@ -124,8 +124,11 @@ class KoalaAIService {
         },
         {
           'name': 'search_projects',
-          'description': 'Evlumba tasarım projelerini ara. Kullanıcıya ilham vermek, '
-              'örnek tasarımlar göstermek veya belirli bir oda tipi için tasarım örnekleri sunmak istediğinde çağır. '
+          'description': 'Evlumba tasarım projelerini (iç mekan fotoğrafları + tasarımcı) ara. '
+              'ZORUNLU tetikleyiciler: "salon göster/bul", "bana X göster", "oturma odası örneği", '
+              '"yatak odası göster", "mutfak göster", "proje göster", "örnek göster", "ilham ver", '
+              '"tasarım göster", "nasıl dekore etmeliyim" gibi ilham/örnek istekleri. '
+              'Bu isteklerde ASLA uydurma proje adları dönme; MUTLAKA bu fonksiyonu çağır. '
               'Kullanıcı "farklı projeler göster" veya "başka öneriler" derse offset parametresini artır.',
           'parameters': {
             'type': 'object',
@@ -751,13 +754,25 @@ class KoalaAIService {
       r'\b(koltuk|kanepe|sehpa|masa|sandalye|aydınlatma|lamba|avize|halı|kilim|perde|yatak|dolap|gardırop|komodin|raf|kitaplık|vitrin|puf|berjer|tv\s*ünitesi|yemek\s*masası|abajur|saksı|ayna|tablo|ottoman)\b',
       caseSensitive: false,
     ).hasMatch(lastUserText);
-    final shouldForceTools = isDesignerRequest || isProductRequest;
+    // Proje/ilham isteği — "salon göster/bul", "yatak odası göster", "proje göster",
+    // "örnek göster", "bana X göster", "ilham ver" vb.
+    final isProjectRequest = RegExp(
+      r'\b(salon|oturma\s*odası|yatak\s*odası|mutfak|banyo|çalışma\s*odası|çocuk\s*odası|ofis|antre|balkon)\s+(göster|bul|ara|bak|örnek|istiyor|lazım)|'
+      r'\b(proje|örnek|tasarım|ilham)\s+(göster|ver|öner|bul|istiyor|lazım|bak)|'
+      r'bana\s+(salon|oturma|yatak|mutfak|banyo|ofis|çocuk|antre|balkon|proje|örnek|ilham|tasarım)|'
+      r'\b(ilham\s*ver|proje\s*bak|tasarım\s*bak)',
+      caseSensitive: false,
+    ).hasMatch(lastUserText);
+    final shouldForceTools =
+        isDesignerRequest || isProductRequest || isProjectRequest;
 
     // freeChat'te de keyword'den doğru fonksiyonu kısıtla
     if (allowedFunctions == null && isDesignerRequest) {
       allowedFunctions = ['search_designers'];
     } else if (allowedFunctions == null && isProductRequest) {
       allowedFunctions = ['search_products'];
+    } else if (allowedFunctions == null && isProjectRequest) {
+      allowedFunctions = ['search_projects'];
     }
 
     // Function result'lardan oluşturulan kartları biriktir
