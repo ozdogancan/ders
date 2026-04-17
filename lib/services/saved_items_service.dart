@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' hide User;
 
 import '../core/config/env.dart';
+import 'analytics_service.dart';
 import 'cache_service.dart';
 
 /// Kaydedilen öğe tipleri
@@ -39,6 +42,11 @@ class SavedItemsService {
         if (collectionId != null) 'collection_id': collectionId,
       }, onConflict: 'user_id,item_type,item_id');
       CacheService.invalidatePrefix('saved_counts_');
+      unawaited(Analytics.log('save', {
+        'item_type': type.name,
+        'item_id': itemId,
+        if (collectionId != null) 'collection_id': collectionId,
+      }));
       return true;
     } catch (e) {
       debugPrint('SavedItemsService.saveItem error: $e');
@@ -59,6 +67,11 @@ class SavedItemsService {
           .eq('user_id', _uid!)
           .eq('item_type', type.name)
           .eq('item_id', itemId);
+      CacheService.invalidatePrefix('saved_counts_');
+      unawaited(Analytics.log('unsave', {
+        'item_type': type.name,
+        'item_id': itemId,
+      }));
       return true;
     } catch (e) {
       debugPrint('SavedItemsService.removeItem error: $e');

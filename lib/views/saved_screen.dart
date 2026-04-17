@@ -4,8 +4,11 @@ import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../core/theme/koala_tokens.dart';
 import '../services/messaging_service.dart';
+import '../services/collections_service.dart';
 import '../services/saved_items_service.dart';
 import '../widgets/koala_widgets.dart';
+import '../widgets/share_sheet.dart';
+import 'collections_screen.dart';
 import 'conversation_detail_screen.dart';
 
 /// Kaydedilenler ekranı — 3 tab: Tasarımlar / Tasarımcılar / Ürünler
@@ -23,7 +26,7 @@ class _SavedScreenState extends State<SavedScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 4, vsync: this);
   }
 
   @override
@@ -52,10 +55,13 @@ class _SavedScreenState extends State<SavedScreen>
           indicatorColor: KoalaColors.accent,
           indicatorSize: TabBarIndicatorSize.label,
           labelStyle: KoalaText.label,
+          isScrollable: true,
+          tabAlignment: TabAlignment.start,
           tabs: const [
             Tab(text: 'Tasarımlar'),
             Tab(text: 'Tasarımcılar'),
             Tab(text: 'Ürünler'),
+            Tab(text: 'Koleksiyonlar'),
           ],
         ),
       ),
@@ -65,6 +71,7 @@ class _SavedScreenState extends State<SavedScreen>
           _SavedList(type: SavedItemType.design),
           _SavedList(type: SavedItemType.designer),
           _SavedList(type: SavedItemType.product),
+          _CollectionsTab(),
         ],
       ),
     );
@@ -307,6 +314,29 @@ class _SavedListState extends State<_SavedList>
                         ],
                       ),
                     ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                // Share button
+                GestureDetector(
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    ShareSheet.show(
+                      context,
+                      itemType: widget.type,
+                      itemId: item['item_id'] as String? ?? '',
+                      title: item['title'] as String?,
+                      imageUrl: item['image_url'] as String?,
+                    );
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(12),
+                      color: KoalaColors.accentSoft,
+                    ),
+                    child: const Icon(Icons.share_rounded,
+                        size: 16, color: KoalaColors.accent),
                   ),
                 ),
                 const SizedBox(width: 10),
@@ -588,4 +618,216 @@ class _SavedListState extends State<_SavedList>
       ),
     );
   }
+}
+
+/// Koleksiyonlar sekmesi — grid şeklinde user'ın koleksiyonları.
+/// Boşsa empty-state + "Yeni koleksiyon oluştur" CTA.
+class _CollectionsTab extends StatefulWidget {
+  const _CollectionsTab();
+
+  @override
+  State<_CollectionsTab> createState() => _CollectionsTabState();
+}
+
+class _CollectionsTabState extends State<_CollectionsTab> {
+  List<Map<String, dynamic>> _items = [];
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() => _loading = true);
+    final items = await CollectionsService.getAll();
+    if (!mounted) return;
+    setState(() {
+      _items = items;
+      _loading = false;
+    });
+  }
+
+  Future<void> _createCollection() async {
+    final nameCtrl = TextEditingController();
+    final name = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Yeni koleksiyon', style: KoalaText.h3),
+        content: TextField(
+          controller: nameCtrl,
+          autofocus: true,
+          decoration: const InputDecoration(
+            hintText: 'Örn: Salon fikirleri',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('İptal'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, nameCtrl.text.trim()),
+            child: const Text('Oluştur'),
+          ),
+        ],
+      ),
+    );
+    if (name == null || name.isEmpty) return;
+    final id = await CollectionsService.create(name: name);
+    if (id != null) _load();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_loading) {
+      return const Center(child: CircularProgressIndicator(strokeWidth: 2));
+    }
+    if (_items.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.collections_bookmark_outlined,
+                  size: 56, color: Colors.grey.shade400),
+              const SizedBox(height: 12),
+              const Text(
+                'Henüz koleksiyonun yok',
+                style: KoalaText.h4,
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Kaydettiğin tasarımları tematik\nkoleksiyonlarda grupla.',
+                textAlign: TextAlign.center,
+                style: KoalaText.bodySec,
+              ),
+              const SizedBox(height: 16),
+              FilledButton.icon(
+                onPressed: _createCollection,
+                icon: const Icon(Icons.add_rounded, size: 18),
+                label: const Text('Koleksiyon oluştur'),
+                style: FilledButton.styleFrom(
+                  backgroundColor: KoalaColors.accent,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return RefreshIndicator(
+      onRefresh: _load,
+      child: CustomScrollView(
+        slivers: [
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+            sliver: SliverToBoxAdapter(
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      '${_items.length} koleksiyon',
+                      style: KoalaText.bodySec,
+                    ),
+                  ),
+                  TextButton.icon(
+                    onPressed: _createCollection,
+                    icon: const Icon(Icons.add_rounded, size: 18),
+                    label: const Text('Yeni'),
+                    style: TextButton.styleFrom(
+                      foregroundColor: KoalaColors.accent,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
+            sliver: SliverGrid(
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 2,
+                mainAxisSpacing: 12,
+                crossAxisSpacing: 12,
+                childAspectRatio: 0.92,
+              ),
+              delegate: SliverChildBuilderDelegate(
+                (ctx, i) => _CollectionCard(item: _items[i]),
+                childCount: _items.length,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CollectionCard extends StatelessWidget {
+  const _CollectionCard({required this.item});
+  final Map<String, dynamic> item;
+
+  @override
+  Widget build(BuildContext context) {
+    final name = (item['name'] ?? '').toString();
+    final cover = (item['cover_image_url'] ?? '').toString();
+    return InkWell(
+      borderRadius: BorderRadius.circular(14),
+      onTap: () {
+        // CollectionsScreen detay akışını kullan
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => const CollectionsScreen(),
+          ),
+        );
+      },
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: Colors.grey.shade200),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(
+              child: cover.isNotEmpty
+                  ? Image.network(
+                      cover,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => _placeholder(),
+                    )
+                  : _placeholder(),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
+              child: Text(
+                name.isEmpty ? 'Koleksiyon' : name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: KoalaColors.text,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _placeholder() => Container(
+        color: KoalaColors.accentSoft,
+        alignment: Alignment.center,
+        child: const Icon(Icons.collections_bookmark_outlined,
+            size: 28, color: KoalaColors.accent),
+      );
 }

@@ -5,7 +5,9 @@ import '../../../core/theme/koala_tokens.dart';
 import '../../../helpers/auth_guard.dart';
 import '../../../services/saved_items_service.dart';
 import '../../../services/profile_feedback_service.dart';
+import '../../../widgets/like_button.dart';
 import '../../../widgets/save_button.dart';
+import '../../../widgets/share_sheet.dart';
 import '../../../widgets/chat/designer_chat_popup.dart';
 import '../../designer_profile_screen.dart';
 import 'chat_constants.dart';
@@ -144,6 +146,14 @@ class DesignerCards extends StatelessWidget {
                           ],
                         ),
                       ),
+                    LikeButton(
+                      itemType: SavedItemType.designer,
+                      itemId: ds['id']?.toString() ?? name,
+                      title: name,
+                      imageUrl: ds['avatar_url'] as String?,
+                      subtitle: ds['title'] as String? ?? '\u0130\u00E7 Mimar',
+                      size: 20,
+                    ),
                     SaveButton(
                       itemType: SavedItemType.designer,
                       itemId: ds['id']?.toString() ?? name,
@@ -158,6 +168,27 @@ class DesignerCards extends StatelessWidget {
                           );
                         }
                       },
+                    ),
+                    GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () {
+                        HapticFeedback.lightImpact();
+                        ShareSheet.show(
+                          context,
+                          itemType: SavedItemType.designer,
+                          itemId: ds['id']?.toString() ?? name,
+                          title: name,
+                          imageUrl: ds['avatar_url'] as String?,
+                        );
+                      },
+                      child: Padding(
+                        padding: const EdgeInsets.all(4),
+                        child: Icon(
+                          Icons.share_rounded,
+                          size: 20,
+                          color: Colors.grey.shade500,
+                        ),
+                      ),
                     ),
                   ],
                 ),
