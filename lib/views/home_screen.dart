@@ -40,6 +40,11 @@ class _HomeScreenState extends State<HomeScreen>
     with TickerProviderStateMixin, WidgetsBindingObserver {
   final ImagePicker _picker = ImagePicker();
   final GlobalKey<_TypewriterInputState> _inputKey = GlobalKey();
+  final GlobalKey<StyleDiscoveryPullState> _pullKey = GlobalKey();
+  // Whole-page drag tracking
+  Offset? _pullPtrStart;
+  Offset? _pullPtrLast;
+  bool _pullEngaged = false;
   int _notifCount = 0;
   int _unreadMsgCount = 0;
   Timer? _inboundPollTimer;
@@ -397,7 +402,47 @@ class _HomeScreenState extends State<HomeScreen>
 
     return Scaffold(
       backgroundColor: KoalaColors.bg,
-      body: SafeArea(
+      body: Listener(
+        behavior: HitTestBehavior.translucent,
+        onPointerDown: (e) {
+          _pullPtrStart = e.position;
+          _pullPtrLast = e.position;
+          _pullEngaged = false;
+        },
+        onPointerMove: (e) {
+          if (_pullPtrStart == null) return;
+          final netDy = e.position.dy - _pullPtrStart!.dy;
+          if (!_pullEngaged) {
+            // Engage only when clearly upward (>18px up)
+            if (netDy < -18) {
+              _pullEngaged = true;
+              _pullKey.currentState?.beginExternalDrag();
+              // Forward the already-accumulated upward delta
+              _pullKey.currentState?.updateExternalDrag(netDy);
+            }
+          } else {
+            final delta = e.position.dy - (_pullPtrLast?.dy ?? e.position.dy);
+            _pullKey.currentState?.updateExternalDrag(delta);
+          }
+          _pullPtrLast = e.position;
+        },
+        onPointerUp: (e) {
+          if (_pullEngaged) {
+            _pullKey.currentState?.endExternalDrag(-600);
+          }
+          _pullPtrStart = null;
+          _pullPtrLast = null;
+          _pullEngaged = false;
+        },
+        onPointerCancel: (e) {
+          if (_pullEngaged) {
+            _pullKey.currentState?.endExternalDrag(0);
+          }
+          _pullPtrStart = null;
+          _pullPtrLast = null;
+          _pullEngaged = false;
+        },
+        child: SafeArea(
         bottom: false,
         child: Column(
           children: [
@@ -776,6 +821,7 @@ class _HomeScreenState extends State<HomeScreen>
             _staggered(
               7,
               StyleDiscoveryPull(
+                key: _pullKey,
                 totalCountBuilder: () async {
                   try {
                     if (!EvlumbaLiveService.isReady) return 0;
@@ -800,6 +846,7 @@ class _HomeScreenState extends State<HomeScreen>
             ),
           ],
         ),
+      ),
       ),
     );
   }

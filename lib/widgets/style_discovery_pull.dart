@@ -1,9 +1,13 @@
 // ═══════════════════════════════════════════════════════════
-// STYLE DISCOVERY PULL — input bar'ın üstünde görünür handle.
-// Kullanıcı parmağını yukarı çektikçe sheet parmağını canlı takip
-// eder. Eşiğe (ekranın %35) ulaşınca orada 5 saniye tutulursa
-// StyleDiscoveryLiveScreen açılır. Tutma süresinde arka planda ilk
-// batch'in görselleri prefetch edilir → swipe ekranı anında hazır.
+// STYLE DISCOVERY PULL — input bar'ın üstünde "Tarzını Keşfet"
+// chip'i. Kullanıcı sayfanın HERHANGİ BİR YERİNDEN yukarı
+// kaydırınca sheet parmağı takip eder. Eşiğe ulaşıp bırakınca
+// StyleDiscoveryLiveScreen açılır. Drag başlayınca arka planda
+// ilk batch görselleri prefetch edilir.
+//
+// External drag: Home Screen body içindeki pointer eventlerini
+// [beginExternalDrag] / [updateExternalDrag] / [endExternalDrag]
+// üzerinden iletir — böylece chip dışındaki her yer drag source.
 // ═══════════════════════════════════════════════════════════
 
 import 'dart:async';
@@ -29,10 +33,10 @@ class StyleDiscoveryPull extends StatefulWidget {
   final Future<int> Function()? totalCountBuilder;
 
   @override
-  State<StyleDiscoveryPull> createState() => _StyleDiscoveryPullState();
+  State<StyleDiscoveryPull> createState() => StyleDiscoveryPullState();
 }
 
-class _StyleDiscoveryPullState extends State<StyleDiscoveryPull>
+class StyleDiscoveryPullState extends State<StyleDiscoveryPull>
     with TickerProviderStateMixin {
   // ─── Drag state ───
   double _dragY = 0;
@@ -43,33 +47,31 @@ class _StyleDiscoveryPullState extends State<StyleDiscoveryPull>
   late final AnimationController _releaseCtrl;
   double _releaseStart = 0;
 
-  // ─── Idle handle nefes animasyonu (up-arrow bob) ───
+  // ─── Idle chip nefes animasyonu (up-arrow bob) ───
   late final AnimationController _idleCtrl;
-
-  // ─── 5-second hold controller — eşikte tutunca doldurur ───
-  late final AnimationController _holdCtrl;
-  Timer? _holdTicker; // eşikte mi? check
 
   // ─── Background prefetch ───
   bool _prefetching = false;
-  List<String> _prefetchedCovers = [];
+  bool _prefetchKicked = false;
+  int _prefetchedCount = 0;
 
   int? _totalCount;
 
-  // Threshold — ekranın %35'i çekilince HOLD moduna gir
+  // Threshold — ekranın %30'u
   double _threshold(BuildContext ctx) =>
-      MediaQuery.of(ctx).size.height * 0.35;
+      MediaQuery.of(ctx).size.height * 0.30;
 
   @override
   void initState() {
     super.initState();
     _releaseCtrl = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 360),
+      duration: const Duration(milliseconds: 320),
     )..addListener(() {
         if (!_dragging) {
           setState(() {
-            _dragY = _releaseStart * (1 - Curves.easeOutCubic.transform(_releaseCtrl.value));
+            _dragY = _releaseStart *
+                (1 - Curves.easeOutCubic.transform(_releaseCtrl.value));
           });
         }
       });
@@ -78,13 +80,6 @@ class _StyleDiscoveryPullState extends State<StyleDiscoveryPull>
       vsync: this,
       duration: const Duration(milliseconds: 1800),
     )..repeat(reverse: true);
-
-    _holdCtrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 5000),
-    )..addStatusListener((s) {
-        if (s == AnimationStatus.completed) _open();
-      });
 
     _maybeLoadCount();
   }
@@ -101,8 +96,6 @@ class _StyleDiscoveryPullState extends State<StyleDiscoveryPull>
   void dispose() {
     _releaseCtrl.dispose();
     _idleCtrl.dispose();
-    _holdCtrl.dispose();
-    _holdTicker?.cancel();
     super.dispose();
   }
 
@@ -111,58 +104,52 @@ class _StyleDiscoveryPullState extends State<StyleDiscoveryPull>
     return _dragY >= _threshold(context);
   }
 
-  void _onDragStart(DragStartDetails d) {
+  // ─── External API — home body pointer events buraya yönlenir ───
+  void beginExternalDrag() => _onDragStart();
+  void updateExternalDrag(double deltaDy) => _onDragDelta(deltaDy);
+  void endExternalDrag(double velocityY) => _onDragEnd(velocityY);
+  bool get isDragging => _dragging;
+
+  void _onDragStart([DragStartDetails? _]) {
     if (_opening) return;
     setState(() {
       _dragging = true;
       _releaseCtrl.stop();
-      _holdCtrl.stop();
-      _holdCtrl.value = 0;
     });
+    // Prefetch drag başlar başlamaz (arka planda)
+    _kickPrefetch();
   }
 
   void _onDragUpdate(DragUpdateDetails d) {
-    if (_opening) return;
-    final next = math.max(0, _dragY - d.delta.dy);
-    setState(() => _dragY = next.toDouble());
+    _onDragDelta(d.delta.dy);
+  }
 
-    final atTh = _isAtThreshold();
-    // Eşikte mi? Hold timer yönet.
-    if (atTh) {
-      if (!_holdCtrl.isAnimating && _holdCtrl.value < 1.0) {
-        HapticFeedback.selectionClick();
-        _holdCtrl.forward(); // 5sn geri sayım başladı
-        _kickPrefetch(); // görsel prefetch paralel
-      }
-    } else {
-      if (_holdCtrl.isAnimating || _holdCtrl.value > 0) {
-        _holdCtrl.stop();
-        _holdCtrl.value = 0;
-      }
+  void _onDragDelta(double dy) {
+    if (_opening) return;
+    final next = math.max(0, _dragY - dy);
+    setState(() => _dragY = next.toDouble());
+    if (_isAtThreshold()) {
+      // Tek haptic feedback eşiğe ilk ulaşınca
+      // (burada her frame atmaması için flag gerekmez; selectionClick hafif)
     }
   }
 
-  void _onDragEnd(DragEndDetails d) {
+  void _onDragEndDetails(DragEndDetails d) {
+    _onDragEnd(d.velocity.pixelsPerSecond.dy);
+  }
+
+  void _onDragEnd(double velocityY) {
     if (_opening) return;
-    final vy = d.velocity.pixelsPerSecond.dy;
-    // Hızlı flick → direkt aç
-    if (vy < -1200) {
+    // Flick yukarı → aç
+    if (velocityY < -900) {
       _open();
       return;
     }
-    // Eşikte değilse spring-back (hold timer zaten durmuş olur)
-    if (!_isAtThreshold()) {
-      _holdCtrl.stop();
-      _holdCtrl.value = 0;
-      _springBack();
+    // Eşiği geçtiyse aç
+    if (_isAtThreshold()) {
+      _open();
       return;
     }
-    // Eşikteyse parmak kalktı — hold devam etmeli mi?
-    // Kullanıcı tuttu zaten, artık elini çekse de geri saysın mı?
-    // Karar: parmak kalkınca hold iptal, spring back.
-    // (UX: 5sn boyunca parmağını tutması gerekli — net sinyal)
-    _holdCtrl.stop();
-    _holdCtrl.value = 0;
     _springBack();
   }
 
@@ -175,7 +162,8 @@ class _StyleDiscoveryPullState extends State<StyleDiscoveryPull>
   }
 
   Future<void> _kickPrefetch() async {
-    if (_prefetching || _prefetchedCovers.isNotEmpty) return;
+    if (_prefetchKicked || _prefetching) return;
+    _prefetchKicked = true;
     _prefetching = true;
     try {
       if (!EvlumbaLiveService.isReady) return;
@@ -192,12 +180,11 @@ class _StyleDiscoveryPullState extends State<StyleDiscoveryPull>
         final url = (sorted.first['image_url'] ?? '').toString();
         if (url.isNotEmpty && !url.startsWith('data:')) covers.add(url);
       }
-      _prefetchedCovers = covers;
-      // Gerçek image prefetch
       if (mounted) {
         for (final url in covers.take(4)) {
           precacheImage(CachedNetworkImageProvider(url), context);
         }
+        setState(() => _prefetchedCount = covers.length);
       }
     } catch (_) {
     } finally {
@@ -216,16 +203,17 @@ class _StyleDiscoveryPullState extends State<StyleDiscoveryPull>
         opaque: true,
         transitionDuration: const Duration(milliseconds: 220),
         reverseTransitionDuration: const Duration(milliseconds: 200),
-        pageBuilder: (_, __, ___) => const StyleDiscoveryLiveScreen(),
-        transitionsBuilder: (_, anim, __, child) => FadeTransition(
+        pageBuilder: (_, _, _) => const StyleDiscoveryLiveScreen(),
+        transitionsBuilder: (_, anim, _, child) => FadeTransition(
           opacity: CurvedAnimation(parent: anim, curve: Curves.easeOut),
           child: child,
         ),
       ),
     );
     if (!mounted) return;
-    _holdCtrl.value = 0;
-    _prefetchedCovers = [];
+    // Reset so prefetch can re-run next session (covers may be stale)
+    _prefetchKicked = false;
+    _prefetchedCount = 0;
     setState(() {
       _opening = false;
       _dragging = false;
@@ -265,10 +253,9 @@ class _StyleDiscoveryPullState extends State<StyleDiscoveryPull>
             _HandleStrip(
               idleCtrl: _idleCtrl,
               active: _dragging || _dragY > 4,
-              progress: progress,
-              onDragStart: _onDragStart,
+              onDragStart: (_) => _onDragStart(),
               onDragUpdate: _onDragUpdate,
-              onDragEnd: _onDragEnd,
+              onDragEnd: _onDragEndDetails,
             ),
             widget.child,
           ],
@@ -287,8 +274,7 @@ class _StyleDiscoveryPullState extends State<StyleDiscoveryPull>
                 atThreshold: atThreshold,
                 totalCount: _totalCount,
                 progress: progress,
-                holdCtrl: _holdCtrl,
-                prefetchedCount: _prefetchedCovers.length,
+                prefetchedCount: _prefetchedCount,
               ),
             ),
           ),
@@ -297,12 +283,11 @@ class _StyleDiscoveryPullState extends State<StyleDiscoveryPull>
   }
 }
 
-// ─── HANDLE STRIP — "Tarzını Keşfet" yazısı + up arrow ───
+// ─── HANDLE STRIP — sade "Tarzını Keşfet" chip'i (çizgi yok) ───
 class _HandleStrip extends StatelessWidget {
   const _HandleStrip({
     required this.idleCtrl,
     required this.active,
-    required this.progress,
     required this.onDragStart,
     required this.onDragUpdate,
     required this.onDragEnd,
@@ -310,7 +295,6 @@ class _HandleStrip extends StatelessWidget {
 
   final AnimationController idleCtrl;
   final bool active;
-  final double progress;
   final GestureDragStartCallback onDragStart;
   final GestureDragUpdateCallback onDragUpdate;
   final GestureDragEndCallback onDragEnd;
@@ -323,90 +307,56 @@ class _HandleStrip extends StatelessWidget {
       onVerticalDragUpdate: onDragUpdate,
       onVerticalDragEnd: onDragEnd,
       child: Container(
-        padding: const EdgeInsets.fromLTRB(16, 6, 16, 4),
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 6),
         color: Colors.transparent,
         child: AnimatedBuilder(
           animation: idleCtrl,
-          builder: (_, __) {
-            // Idle'da yukarı-aşağı bob (2px)
+          builder: (_, _) {
             final floaty =
                 active ? 0.0 : math.sin(idleCtrl.value * math.pi) * 2;
-            final activeT = progress;
-
-            return Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // Üst grab çizgisi
-                AnimatedContainer(
-                  duration: const Duration(milliseconds: 140),
-                  width: 36 + activeT * 28,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: KoalaColors.accentDeep
-                        .withValues(alpha: 0.3 + activeT * 0.5),
-                    borderRadius: BorderRadius.circular(2),
+            return Transform.translate(
+              offset: Offset(0, -floaty),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 12, vertical: 5),
+                decoration: BoxDecoration(
+                  color: active
+                      ? KoalaColors.accentDeep.withValues(alpha: 0.14)
+                      : KoalaColors.accentSoft,
+                  borderRadius: BorderRadius.circular(99),
+                  border: Border.all(
+                    color: KoalaColors.accentDeep.withValues(alpha: 0.18),
+                    width: 0.8,
                   ),
                 ),
-                const SizedBox(height: 6),
-                // Chip: "↑ Tarzını Keşfet" — bariz ama minimal
-                Transform.translate(
-                  offset: Offset(0, -floaty),
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 180),
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 5),
-                    decoration: BoxDecoration(
-                      color: active
-                          ? KoalaColors.accentDeep
-                              .withValues(alpha: 0.14)
-                          : KoalaColors.accentSoft,
-                      borderRadius: BorderRadius.circular(99),
-                      border: Border.all(
-                        color: KoalaColors.accentDeep
-                            .withValues(alpha: 0.18),
-                        width: 0.8,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(
+                      LucideIcons.chevronUp,
+                      size: 14,
+                      color: KoalaColors.accentDeep,
+                    ),
+                    const SizedBox(width: 5),
+                    const Text(
+                      'Tarzını Keşfet',
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w700,
+                        color: KoalaColors.accentDeep,
+                        letterSpacing: 0.3,
                       ),
                     ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        AnimatedBuilder(
-                          animation: idleCtrl,
-                          builder: (_, __) {
-                            final bob = active
-                                ? 0.0
-                                : math.sin(idleCtrl.value * math.pi) * 2;
-                            return Transform.translate(
-                              offset: Offset(0, -bob),
-                              child: const Icon(
-                                LucideIcons.chevronUp,
-                                size: 14,
-                                color: KoalaColors.accentDeep,
-                              ),
-                            );
-                          },
-                        ),
-                        const SizedBox(width: 5),
-                        const Text(
-                          'Tarzını Keşfet',
-                          style: TextStyle(
-                            fontSize: 11.5,
-                            fontWeight: FontWeight.w700,
-                            color: KoalaColors.accentDeep,
-                            letterSpacing: 0.3,
-                          ),
-                        ),
-                        const SizedBox(width: 4),
-                        const Icon(
-                          Icons.auto_awesome,
-                          size: 11,
-                          color: KoalaColors.accentDeep,
-                        ),
-                      ],
+                    const SizedBox(width: 4),
+                    const Icon(
+                      Icons.auto_awesome,
+                      size: 11,
+                      color: KoalaColors.accentDeep,
                     ),
-                  ),
+                  ],
                 ),
-              ],
+              ),
             );
           },
         ),
@@ -415,14 +365,13 @@ class _HandleStrip extends StatelessWidget {
   }
 }
 
-// ─── RISING SHEET — drag ile büyür, eşikte 5s hold progress ───
+// ─── RISING SHEET — drag ile büyür ───
 class _RisingSheet extends StatelessWidget {
   const _RisingSheet({
     required this.height,
     required this.atThreshold,
     required this.totalCount,
     required this.progress,
-    required this.holdCtrl,
     required this.prefetchedCount,
   });
 
@@ -430,13 +379,11 @@ class _RisingSheet extends StatelessWidget {
   final bool atThreshold;
   final int? totalCount;
   final double progress;
-  final AnimationController holdCtrl;
   final int prefetchedCount;
 
   @override
   Widget build(BuildContext context) {
-    final contentOpacity =
-        ((height - 40) / 120).clamp(0.0, 1.0);
+    final contentOpacity = ((height - 40) / 120).clamp(0.0, 1.0);
     final radius = (1 - progress) * 28;
 
     return Container(
@@ -455,39 +402,13 @@ class _RisingSheet extends StatelessWidget {
         ],
       ),
       clipBehavior: Clip.antiAlias,
-      child: Stack(
-        children: [
-          // ── Üstte hold progress bar (0→100% in 5s) ──
-          AnimatedBuilder(
-            animation: holdCtrl,
-            builder: (_, __) => Positioned(
-              top: 0,
-              left: 0,
-              right: 0,
-              height: 4,
-              child: FractionallySizedBox(
-                alignment: Alignment.centerLeft,
-                widthFactor: holdCtrl.value,
-                child: Container(
-                  decoration: const BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [KoalaColors.accent, KoalaColors.accentDeep],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-          Opacity(
-            opacity: contentOpacity,
-            child: _SheetBody(
-              atThreshold: atThreshold,
-              totalCount: totalCount,
-              holdCtrl: holdCtrl,
-              prefetchedCount: prefetchedCount,
-            ),
-          ),
-        ],
+      child: Opacity(
+        opacity: contentOpacity,
+        child: _SheetBody(
+          atThreshold: atThreshold,
+          totalCount: totalCount,
+          prefetchedCount: prefetchedCount,
+        ),
       ),
     );
   }
@@ -497,13 +418,11 @@ class _SheetBody extends StatelessWidget {
   const _SheetBody({
     required this.atThreshold,
     required this.totalCount,
-    required this.holdCtrl,
     required this.prefetchedCount,
   });
 
   final bool atThreshold;
   final int? totalCount;
-  final AnimationController holdCtrl;
   final int prefetchedCount;
 
   @override
@@ -647,54 +566,24 @@ class _SheetBody extends StatelessWidget {
               ),
             ),
           ),
-          const SizedBox(height: 16),
-          // ── ALT HINT — eşiğe göre dinamik ──
-          AnimatedBuilder(
-            animation: holdCtrl,
-            builder: (_, __) {
-              if (atThreshold) {
-                // "Tut: 5 saniye" → tasarım hazırlanıyor hissi
-                final remain = (5 - holdCtrl.value * 5).ceil().clamp(1, 5);
-                return Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    SizedBox(
-                      width: 14,
-                      height: 14,
-                      child: CircularProgressIndicator(
-                        value: holdCtrl.value,
-                        strokeWidth: 2,
-                        color: KoalaColors.accentDeep,
-                        backgroundColor: KoalaColors.accentDeep
-                            .withValues(alpha: 0.2),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      prefetchedCount > 0
-                          ? '$prefetchedCount tasarım hazırlandı · tut: ${remain}s'
-                          : 'Tasarımlar hazırlanıyor · tut: ${remain}s',
-                      style: const TextStyle(
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.w600,
-                        color: KoalaColors.accentDeep,
-                        letterSpacing: 0.1,
-                      ),
-                    ),
-                  ],
-                );
-              }
-              return const Text(
-                'Yukarı çekmeye devam et',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 12.5,
-                  fontWeight: FontWeight.w600,
-                  color: KoalaColors.textSec,
-                  letterSpacing: 0.1,
-                ),
-              );
-            },
+          const SizedBox(height: 14),
+          // Alt hint
+          Center(
+            child: Text(
+              atThreshold
+                  ? (prefetchedCount > 0
+                      ? 'Bırak → $prefetchedCount tasarım hazır'
+                      : 'Bırak → açılsın')
+                  : 'Yukarı çekmeye devam et',
+              style: TextStyle(
+                fontSize: 12.5,
+                fontWeight: FontWeight.w600,
+                color: atThreshold
+                    ? KoalaColors.accentDeep
+                    : KoalaColors.textSec,
+                letterSpacing: 0.1,
+              ),
+            ),
           ),
         ],
       ),
