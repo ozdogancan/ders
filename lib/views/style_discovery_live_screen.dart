@@ -21,7 +21,6 @@ import '../services/evlumba_live_service.dart';
 import '../services/messaging_service.dart';
 import '../services/saved_items_service.dart';
 import '../services/analytics_service.dart';
-import '../widgets/share_sheet.dart';
 
 class StyleDiscoveryLiveScreen extends StatefulWidget {
   const StyleDiscoveryLiveScreen({super.key});
@@ -296,18 +295,6 @@ class _StyleDiscoveryLiveScreenState extends State<StyleDiscoveryLiveScreen>
     }
   }
 
-  void _onShare() {
-    final card = _currentCard;
-    if (card == null) return;
-    ShareSheet.show(
-      context,
-      itemType: SavedItemType.design,
-      itemId: card['id']?.toString() ?? '',
-      title: _prettyCategory((card['project_type'] ?? '').toString()),
-      imageUrl: _coverOf(card),
-    );
-  }
-
   Future<void> _onAskDesigner() async {
     if (_askingInFlight) return;
     final card = _currentCard;
@@ -334,9 +321,19 @@ class _StyleDiscoveryLiveScreenState extends State<StyleDiscoveryLiveScreen>
     }
     final convId = (conv['id'] ?? '').toString();
     if (convId.isEmpty) return;
+    // Tasarımcı profilini cache'den al — ismi/avatarı chat header'ına geçir.
+    // Yoksa hızlıca çek (blok süresi kısa, kullanıcı fark etmez).
+    Map<String, dynamic>? d = _designerCache[designerId];
+    d ??= await EvlumbaLiveService.getDesigner(designerId);
+    if (!mounted) return;
+    final designerName =
+        ((d?['full_name'] ?? d?['business_name'] ?? '') as String).trim();
+    final designerAvatar = ((d?['avatar_url'] ?? '') as String).trim();
     // /chat/dm'e push — swipe ekranı stack'te kalır, native back ile geri dönülür
     context.push('/chat/dm/$convId', extra: {
       'designerId': designerId,
+      if (designerName.isNotEmpty) 'designerName': designerName,
+      if (designerAvatar.isNotEmpty) 'designerAvatarUrl': designerAvatar,
       'pendingDesign': {
         'id': projectId,
         'title': cat,
@@ -412,33 +409,32 @@ class _StyleDiscoveryLiveScreenState extends State<StyleDiscoveryLiveScreen>
   }
 
   Widget _header() {
-    final hasCard = _currentCard != null;
+    // Mesaj ekranı ile birebir aynı tipografi & back iconu — app tutarlılığı.
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
+      padding: const EdgeInsets.fromLTRB(4, 4, 16, 8),
       child: Row(
         children: [
-          _GlassIconBtn(
-            icon: LucideIcons.chevronLeft,
-            onTap: _onBack,
-            tooltip: 'Geri',
+          IconButton(
+            onPressed: _onBack,
+            icon: const Icon(Icons.arrow_back_rounded,
+                color: KoalaColors.text, size: 22),
           ),
-          const Spacer(),
-          // İnce başlık — kullanıcıya ne ekranda olduğunu hatırlatan zarif detay
-          Text(
-            'Tarzını Keşfet',
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w700,
-              color: KoalaColors.ink.withValues(alpha: 0.72),
-              letterSpacing: -0.2,
+          const Expanded(
+            child: Center(
+              child: Text(
+                'Tarzını Keşfet',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                  color: KoalaColors.text,
+                  height: 1.2,
+                ),
+              ),
             ),
           ),
-          const Spacer(),
-          _GlassIconBtn(
-            icon: LucideIcons.share2,
-            onTap: hasCard ? _onShare : null,
-            tooltip: 'Paylaş',
-          ),
+          // IconButton default 48 genişlik — title tam merkezde kalsın diye
+          // sağda aynı genişlikte boşluk
+          const SizedBox(width: 48),
         ],
       ),
     );
@@ -933,56 +929,6 @@ class _Stamp extends StatelessWidget {
         ),
       ),
     );
-  }
-}
-
-// ─── Header glass ikon butonu — yuvarlak, beyaz, zarif gölge ───
-class _GlassIconBtn extends StatelessWidget {
-  const _GlassIconBtn({
-    required this.icon,
-    this.onTap,
-    this.tooltip,
-  });
-  final IconData icon;
-  final VoidCallback? onTap;
-  final String? tooltip;
-
-  @override
-  Widget build(BuildContext context) {
-    final disabled = onTap == null;
-    final btn = Material(
-      color: Colors.white,
-      shape: const CircleBorder(),
-      elevation: disabled ? 0 : 1.5,
-      shadowColor: Colors.black.withValues(alpha: 0.15),
-      child: InkWell(
-        customBorder: const CircleBorder(),
-        onTap: onTap == null
-            ? null
-            : () {
-                HapticFeedback.selectionClick();
-                onTap!();
-              },
-        child: Container(
-          width: 40,
-          height: 40,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            border: Border.all(
-              color: KoalaColors.border.withValues(alpha: 0.55),
-            ),
-          ),
-          alignment: Alignment.center,
-          child: Icon(
-            icon,
-            size: 20,
-            color: disabled ? KoalaColors.textTer : KoalaColors.ink,
-          ),
-        ),
-      ),
-    );
-    if (tooltip == null) return btn;
-    return Tooltip(message: tooltip!, child: btn);
   }
 }
 

@@ -163,6 +163,20 @@ class _ProjectsGalleryBodyState extends State<_ProjectsGalleryBody> {
     return (_current['designer_name'] ?? '').toString().trim();
   }
 
+  String? _designerAvatar() {
+    final dd = widget.designer;
+    if (dd != null) {
+      final a = (dd['avatar_url'] ?? '').toString().trim();
+      if (a.isNotEmpty) return a;
+    }
+    final p = _current['profiles'];
+    if (p is Map) {
+      final a = (p['avatar_url'] ?? '').toString().trim();
+      if (a.isNotEmpty) return a;
+    }
+    return null;
+  }
+
   Future<void> _askDesigner() async {
     if (_askingInFlight) return;
     HapticFeedback.lightImpact();
@@ -194,10 +208,14 @@ class _ProjectsGalleryBodyState extends State<_ProjectsGalleryBody> {
     }
     final conversationId = (conv['id'] ?? '').toString();
     if (conversationId.isEmpty) return;
+    final dName = _designerName();
+    final dAvatar = _designerAvatar();
     Navigator.of(context).pop();
     // Chat ekranı: input üstünde design preview + text entry
     context.push('/chat/dm/$conversationId', extra: {
       'designerId': designerId,
+      if (dName.isNotEmpty) 'designerName': dName,
+      if (dAvatar != null && dAvatar.isNotEmpty) 'designerAvatarUrl': dAvatar,
       'pendingDesign': {
         'id': projectId,
         'title': cat,
