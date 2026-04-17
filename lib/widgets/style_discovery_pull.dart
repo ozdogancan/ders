@@ -723,7 +723,7 @@ class StyleDiscoveryGuestLanding extends StatelessWidget {
               ),
               const Spacer(),
               ElevatedButton(
-                onPressed: () => context.go('/onboarding'),
+                onPressed: () => context.go('/auth'),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: KoalaColors.accentDeep,
                   foregroundColor: Colors.white,

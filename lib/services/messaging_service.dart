@@ -156,7 +156,13 @@ class MessagingService {
           .order('last_message_at', ascending: false)
           .range(offset, offset + limit - 1);
       final all = List<Map<String, dynamic>>.from(res);
-      return all.where((c) => c['status'] != 'archived').toList();
+      // "Mesaj hiç göndermediğim" sohbetleri listede gösterme.
+      // Kullanıcı bir designer ile chat başlatıp hiçbir şey yazmadıysa
+      // last_message_at null kalır — o satırları gizle.
+      return all
+          .where((c) =>
+              c['status'] != 'archived' && c['last_message_at'] != null)
+          .toList();
     } catch (e) {
       debugPrint('MessagingService.getConversations error: $e');
       rethrow;

@@ -97,17 +97,21 @@ class FirebaseService {
       return;
     }
 
-    // Firestore sync (mevcut)
-    await _firestore.collection('users').doc(user.uid).set(<String, dynamic>{
-      'uid': user.uid,
-      'email': user.email,
-      'displayName': user.displayName,
-      'photoUrl': user.photoURL,
-      'lastLoginAt': FieldValue.serverTimestamp(),
-      'createdAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
+    // Firestore sync — never block login on transient errors
+    try {
+      await _firestore.collection('users').doc(user.uid).set(<String, dynamic>{
+        'uid': user.uid,
+        'email': user.email,
+        'displayName': user.displayName,
+        'photoUrl': user.photoURL,
+        'lastLoginAt': FieldValue.serverTimestamp(),
+        'createdAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+    } catch (e) {
+      debugPrint('Firestore user profile sync error: $e');
+    }
 
-    // Supabase users tablosuna upsert
+    // Supabase users tablosuna upsert (internal retry + try/catch)
     await _syncToSupabase(user);
 
     // Supabase client'a x-user-id header ekle (RLS için)
@@ -168,16 +172,23 @@ class FirebaseService {
 
   Future<void> _syncToSupabase(User user) async {
     if (!Env.hasSupabaseConfig) return;
-    try {
-      await Supabase.instance.client.from('users').upsert({
-        'id': user.uid,
-        'email': user.email,
-        'display_name': user.displayName,
-        'photo_url': user.photoURL,
-        'last_login_at': DateTime.now().toUtc().toIso8601String(),
-      }, onConflict: 'id');
-    } catch (e) {
-      debugPrint('Supabase user sync error: $e');
+    // Retry on transient ClientException (network hiccup during login)
+    for (int attempt = 0; attempt < 2; attempt++) {
+      try {
+        await Supabase.instance.client.from('users').upsert({
+          'id': user.uid,
+          'email': user.email,
+          'display_name': user.displayName,
+          'photo_url': user.photoURL,
+          'last_login_at': DateTime.now().toUtc().toIso8601String(),
+        }, onConflict: 'id');
+        return;
+      } catch (e) {
+        debugPrint('Supabase user sync attempt ${attempt + 1} failed: $e');
+        if (attempt == 0) {
+          await Future<void>.delayed(const Duration(milliseconds: 400));
+        }
+      }
     }
   }
 }
