@@ -7,7 +7,7 @@ class KoalaLogo extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Image.asset(
-      'assets/images/koala_logo.png',
+      'assets/images/koala_logo.webp',
       width: size,
       height: size,
       fit: BoxFit.contain,
@@ -23,7 +23,7 @@ class KoalaHero extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Image.asset(
-      'assets/images/koala_logo.png',
+      'assets/images/koala_logo.webp',
       width: size,
       height: size,
       fit: BoxFit.contain,

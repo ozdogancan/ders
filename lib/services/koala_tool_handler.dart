@@ -240,8 +240,11 @@ class KoalaToolHandler {
       }
 
       final projects = await projectQuery.limit(50);
-      final projectIds =
-          (projects as List).map((p) => p['id'] as String).toList();
+      // id null gelirse cast crash olur — güvenli string map + empty drop.
+      final projectIds = (projects as List)
+          .map((p) => p['id']?.toString() ?? '')
+          .where((id) => id.isNotEmpty)
+          .toList();
 
       if (projectIds.isEmpty) {
         return {
@@ -475,10 +478,16 @@ class KoalaToolHandler {
               );
               for (final p in projects) {
                 final images = (p['designer_project_images'] as List?) ?? [];
-                if (images.isNotEmpty) {
-                  portfolioImages.add(images.first['image_url'] as String);
-                } else if (p['cover_image_url'] != null) {
-                  portfolioImages.add(p['cover_image_url'] as String);
+                final firstImg = images.isNotEmpty
+                    ? images.first['image_url']?.toString()
+                    : null;
+                if (firstImg != null && firstImg.isNotEmpty) {
+                  portfolioImages.add(firstImg);
+                } else {
+                  final cover = p['cover_image_url']?.toString();
+                  if (cover != null && cover.isNotEmpty) {
+                    portfolioImages.add(cover);
+                  }
                 }
               }
             } catch (_) {}

@@ -134,9 +134,13 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
     if (_activeConvId != null) {
       MessagingService.unsubscribeFromMessages(_activeConvId!);
     }
-    try {
-      MessagingService.unsubscribeFromConversations(listener: _convListener);
-    } catch (_) {}
+    // ÖNEMLİ: _convListener null iken unsubscribe çağrılırsa tüm global listener'ları
+    // siler (HomeScreen vs. patlar). Sadece abone olmuşsak kaldır.
+    if (_convListener != null) {
+      try {
+        MessagingService.unsubscribeFromConversations(listener: _convListener);
+      } catch (_) {}
+    }
     _textController.dispose();
     _scrollController.dispose();
     super.dispose();
@@ -325,11 +329,14 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
 
   Future<void> _loadOlderMessages() async {
     if (_loadingMore || _messages.isEmpty) return;
-    setState(() => _loadingMore = true);
     final oldest = _messages.last;
+    final pivotId = oldest['id']?.toString();
+    // id yoksa pagination anchor'ı belirsiz; tüm mesajları tekrar çekmeyelim.
+    if (pivotId == null || pivotId.isEmpty) return;
+    setState(() => _loadingMore = true);
     final older = await MessagingService.getMessages(
       conversationId: _activeConvId!,
-      beforeId: oldest['id'] as String,
+      beforeId: pivotId,
     );
     if (mounted) {
       setState(() {

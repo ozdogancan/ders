@@ -46,6 +46,16 @@ if ($LASTEXITCODE -ne 0) {
     exit 1
 }
 
+# ── Post-build cleanup: debug sembol dosyalarını sil ──
+# canvaskit/*.symbols + skwasm.js.symbols = ~3 MB debug-only dosya.
+# Prod'a gitmemeli, sadece disk/transfer şişirir.
+Write-Host "`nPruning debug symbol files..." -ForegroundColor Cyan
+Get-ChildItem -Path "build/web" -Recurse -Filter "*.symbols" -ErrorAction SilentlyContinue |
+    ForEach-Object {
+        Remove-Item $_.FullName -Force
+        Write-Host "  deleted $($_.Name)" -ForegroundColor DarkGray
+    }
+
 # ── Post-build verification ──
 Write-Host "`nVerifying build output..." -ForegroundColor Cyan
 
@@ -58,9 +68,9 @@ foreach ($file in $requiredFiles) {
     }
 }
 
-# Check that koalas.png asset exists
-if (-not (Test-Path "$buildDir/assets/assets/images/koalas.png")) {
-    Write-Host "WARNING: koalas.png asset missing from build" -ForegroundColor Yellow
+# Check that koalas.webp asset exists
+if (-not (Test-Path "$buildDir/assets/assets/images/koalas.webp")) {
+    Write-Host "WARNING: koalas.webp asset missing from build" -ForegroundColor Yellow
 }
 
 # Verify main.dart.js doesn't leak any API keys

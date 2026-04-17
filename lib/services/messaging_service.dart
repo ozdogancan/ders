@@ -337,9 +337,12 @@ class MessagingService {
             .select('created_at')
             .eq('id', beforeId)
             .maybeSingle();
-        if (pivot != null) {
-          query = query.lt('created_at', pivot['created_at']);
+        if (pivot == null) {
+          // Pivot kaybolmuşsa (silinmiş mesaj vb.) tüm mesajları tekrar çekip
+          // sonsuz pagination döngüsüne girmek yerine boş liste dön.
+          return [];
         }
+        query = query.lt('created_at', pivot['created_at']);
       }
 
       final res = await query

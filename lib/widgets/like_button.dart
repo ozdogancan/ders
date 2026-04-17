@@ -79,22 +79,27 @@ class _LikeButtonState extends State<LikeButton>
     });
     if (next) _ctrl.forward(from: 0);
 
-    final ok = await LikesService.toggle(
-      type: widget.itemType,
-      itemId: widget.itemId,
-      title: widget.title,
-      imageUrl: widget.imageUrl,
-      subtitle: widget.subtitle,
-    );
-
-    if (!mounted) return;
-    if (!ok) {
-      // Revert
-      setState(() => _liked = !next);
-    } else {
-      widget.onToggled?.call(next);
+    // try/finally: servis throw atsa bile _busy unstuck olsun.
+    bool ok = false;
+    try {
+      ok = await LikesService.toggle(
+        type: widget.itemType,
+        itemId: widget.itemId,
+        title: widget.title,
+        imageUrl: widget.imageUrl,
+        subtitle: widget.subtitle,
+      );
+    } catch (_) {
+      ok = false;
+    } finally {
+      if (mounted) {
+        setState(() {
+          _busy = false;
+          if (!ok) _liked = !next; // revert optimistic
+        });
+        if (ok) widget.onToggled?.call(next);
+      }
     }
-    setState(() => _busy = false);
   }
 
   @override

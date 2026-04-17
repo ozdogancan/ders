@@ -160,6 +160,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
         photo: bytes,
       );
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _msgs.add(_Msg(
           role: 'koala',
@@ -189,8 +190,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
             (profile['primary_style'] ?? profile['secondary_style'] ?? profile['style']) as String?;
         room = (profile['preferred_room'] ?? profile['room']) as String?;
         budget = (profile['budget_band'] ?? profile['budget']) as String?;
-        final profileColors = (profile['preferred_colors'] ?? profile['colors'] as List?)
-            ?.cast<String>();
+        final profileColors =
+            ((profile['preferred_colors'] ?? profile['colors']) as List?)
+                ?.cast<String>();
         if (profileColors != null && profileColors.isNotEmpty) {
           colors = profileColors.join(', ');
         }
@@ -392,6 +394,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
       });
     } catch (e) {
       debugPrint('AI bridge error: $e');
+      if (!mounted) return;
       setState(() {
         _msgs.add(_Msg(role: 'koala', text: null, isError: true, errorMsg: _friendlyError(e)));
         _loading = false;
@@ -466,6 +469,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     } catch (e) {
       debugPrint('AI error: $e');
       Analytics.aiErrorOccurred(e.toString().substring(0, 200.clamp(0, e.toString().length)));
+      if (!mounted) return;
       setState(() {
         _msgs.add(
           _Msg(
@@ -525,12 +529,14 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
         history: _history,
       );
       _history.add({'role': 'model', 'content': resp.message});
+      if (!mounted) return;
       setState(() {
         _msgs.add(_Msg(role: 'koala', text: resp.message, cards: resp.cards));
         _loading = false;
       });
     } catch (e) {
       debugPrint('AI intent error: $e');
+      if (!mounted) return;
       setState(() {
         _msgs.add(
           _Msg(
@@ -944,7 +950,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
         title: Row(
           children: [
             Image.asset(
-              'assets/images/koalas.png',
+              'assets/images/koalas.webp',
               width: 28,
               height: 28,
               filterQuality: FilterQuality.high,
@@ -1153,6 +1159,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     } catch (e) {
       debugPrint('AI photo-intent error: $e');
       Analytics.aiErrorOccurred(e.toString().substring(0, 200.clamp(0, e.toString().length)));
+      if (!mounted) return;
       setState(() {
         _msgs.add(_Msg(
           role: 'koala',
@@ -1264,7 +1271,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
           mainAxisSize: MainAxisSize.min,
           children: [
             Image.asset(
-              'assets/images/koalas.png',
+              'assets/images/koalas.webp',
               width: 64,
               height: 64,
               filterQuality: FilterQuality.high,
@@ -1665,7 +1672,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
   Widget _koalaAvatar() => ClipRRect(
     borderRadius: BorderRadius.circular(10),
     child: Image.asset(
-      'assets/images/koalas.png',
+      'assets/images/koalas.webp',
       width: 32,
       height: 32,
       filterQuality: FilterQuality.high,

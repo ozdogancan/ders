@@ -30,7 +30,7 @@ class _AuthGateState extends State<AuthGate> {
     super.didChangeDependencies();
     // Onboarding'de kullanılan resmi şimdiden yükle
     // AuthGate spinner dönerken decode tamamlanır
-    precacheImage(const AssetImage('assets/images/koala_hero.png'), context);
+    precacheImage(const AssetImage('assets/images/koala_hero.webp'), context);
   }
 
   Future<Widget> _decideRoute() async {

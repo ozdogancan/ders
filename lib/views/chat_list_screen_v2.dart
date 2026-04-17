@@ -523,7 +523,7 @@ class _ChatListScreenV2State extends State<ChatListScreenV2> {
                   ),
                   child: ClipOval(
                     child: Image.asset(
-                      'assets/images/koalas.png',
+                      'assets/images/koalas.webp',
                       fit: BoxFit.cover,
                       errorBuilder: (_, __, ___) => const Icon(
                         Icons.auto_awesome,
@@ -1000,7 +1000,7 @@ class _ChatListScreenV2State extends State<ChatListScreenV2> {
               decoration: const BoxDecoration(color: _V2.ink, shape: BoxShape.circle),
               child: ClipOval(
                 child: Image.asset(
-                  'assets/images/koalas.png',
+                  'assets/images/koalas.webp',
                   fit: BoxFit.cover,
                   errorBuilder: (_, __, ___) => const Icon(Icons.auto_awesome, color: _V2.goldSoft, size: 20),
                 ),

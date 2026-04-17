@@ -329,7 +329,7 @@ class _Page1State extends State<_Page1> with SingleTickerProviderStateMixin {
                         width: koalaSize,
                         height: koalaSize,
                         child: Image.asset(
-                          'assets/images/koala_hero.png',
+                          'assets/images/koala_hero.webp',
                           fit: BoxFit.contain,
                         ),
                       ),

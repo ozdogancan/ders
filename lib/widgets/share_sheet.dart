@@ -483,7 +483,7 @@ class _ConversationPickerSheetState extends State<_ConversationPickerSheet> {
                       ),
                       if ((c['last_message'] ?? '').toString().isNotEmpty)
                         Text(
-                          (c['last_message'] as String).trim(),
+                          (c['last_message'] ?? '').toString().trim(),
                           style: TextStyle(
                             fontSize: 12,
                             color: Colors.grey.shade500,

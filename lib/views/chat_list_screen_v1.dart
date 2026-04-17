@@ -681,7 +681,7 @@ class _ChatListScreenV1State extends State<ChatListScreenV1> {
                     ),
                     child: ClipOval(
                       child: Image.asset(
-                        'assets/images/koalas.png',
+                        'assets/images/koalas.webp',
                         width: 48, height: 48,
                         errorBuilder: (_, _, _) => const Icon(Icons.auto_awesome_rounded, size: 32, color: Colors.white),
                       ),
@@ -1504,7 +1504,7 @@ class _ChatListScreenV1State extends State<ChatListScreenV1> {
                 child: Padding(
                   padding: const EdgeInsets.all(8),
                   child: Image.asset(
-                    'assets/images/koalas.png',
+                    'assets/images/koalas.webp',
                     fit: BoxFit.contain,
                     errorBuilder: (_, _, _) => const Icon(
                       Icons.auto_awesome_rounded,
