@@ -541,7 +541,7 @@ class _ChatListScreenV1State extends State<ChatListScreenV1> {
           _buildAiHistoryChip(),
         ],
         if (_conversations.isNotEmpty) ...[
-          _buildSectionDivider('Tasarımcılar'),
+          _buildSoftSeparator(),
           ..._conversations.map(_buildConversationTile),
         ],
       ],
@@ -636,6 +636,25 @@ class _ChatListScreenV1State extends State<ChatListScreenV1> {
             child: Container(height: 0.5, color: KoalaColors.borderSolid),
           ),
         ],
+      ),
+    );
+  }
+
+  /// Label'sız yumuşak separator — "Tasarımcılar" başlığı saçma durduğu için
+  /// sadece ortalı kısa bir çizgi ile nefes veriyoruz.
+  Widget _buildSoftSeparator() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(
+          vertical: KoalaSpacing.lg, horizontal: KoalaSpacing.xxl),
+      child: Center(
+        child: Container(
+          height: 3,
+          width: 36,
+          decoration: BoxDecoration(
+            color: KoalaColors.borderSolid,
+            borderRadius: BorderRadius.circular(2),
+          ),
+        ),
       ),
     );
   }
@@ -1215,55 +1234,39 @@ class _ChatListScreenV1State extends State<ChatListScreenV1> {
     );
   }
 
-  /// AI sohbet geçmişi — ince tek-satır şerit, Koala AI kartının altında.
-  /// Kullanıcı "36 sohbeti" görüp tıklayabilir.
+  /// AI sohbet geçmişi — minimal ghost link. Koala AI kartının altında nefes
+  /// veren küçük "N geçmiş sohbet" satırı; kart gibi durmuyor, göze batmıyor.
   Widget _buildAiHistoryChip() {
-    return GestureDetector(
-      onTap: _openAiHistorySheet,
-      child: Container(
-        padding: const EdgeInsets.symmetric(
-            horizontal: KoalaSpacing.md, vertical: 10),
-        decoration: BoxDecoration(
-          color: KoalaColors.surface,
-          borderRadius: BorderRadius.circular(KoalaRadius.md),
-          border: Border.all(color: KoalaColors.border, width: 0.5),
-        ),
+    final count = _aiChats.length;
+    return Padding(
+      padding: const EdgeInsets.only(top: 6, bottom: 2, left: 4, right: 4),
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: _openAiHistorySheet,
         child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Container(
-              width: 22,
-              height: 22,
-              decoration: BoxDecoration(
-                color: KoalaColors.accentSoft,
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: const Icon(LucideIcons.sparkles,
-                  size: 12, color: KoalaColors.accent),
+            const Icon(
+              LucideIcons.history,
+              size: 13,
+              color: KoalaColors.textTer,
             ),
-            const SizedBox(width: 10),
-            const Expanded(
-              child: Text(
-                'Koala AI sohbet geçmişi',
-                style: TextStyle(
-                  fontSize: 12.5,
-                  fontWeight: FontWeight.w700,
-                  color: KoalaColors.text,
-                  letterSpacing: 0.1,
-                ),
-              ),
-            ),
+            const SizedBox(width: 6),
             Text(
-              '${_aiChats.length}',
+              '$count geçmiş sohbet',
               style: const TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w700,
-                color: KoalaColors.accent,
-                letterSpacing: 0.3,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: KoalaColors.textSec,
+                letterSpacing: 0.1,
               ),
             ),
-            const SizedBox(width: 8),
-            const Icon(Icons.chevron_right_rounded,
-                size: 18, color: KoalaColors.textTer),
+            const SizedBox(width: 2),
+            const Icon(
+              Icons.chevron_right_rounded,
+              size: 15,
+              color: KoalaColors.textTer,
+            ),
           ],
         ),
       ),

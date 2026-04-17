@@ -7,6 +7,7 @@ import '../../core/theme/koala_tokens.dart';
 import '../../services/product_analytics_service.dart';
 import '../../services/saved_items_service.dart';
 import '../../services/profile_feedback_service.dart';
+import '../share_sheet.dart';
 
 /// Ürün veri modeli — AI function call sonucundan parse
 class ProductCarouselItem {
@@ -306,6 +307,20 @@ class _ProductCardState extends State<_ProductCard> {
     }
   }
 
+  void _sharePaylas() {
+    HapticFeedback.lightImpact();
+    final p = widget.product;
+    final key = p.id.isNotEmpty ? p.id : 'name_${p.name.hashCode}';
+    ShareSheet.show(
+      context,
+      itemType: SavedItemType.product,
+      itemId: key,
+      title: p.name,
+      imageUrl: p.imageUrl.isNotEmpty ? p.imageUrl : null,
+    );
+  }
+
+  // ignore: unused_element
   void _showAskAISheet() {
     final p = widget.product;
     final questions = [
@@ -483,7 +498,7 @@ class _ProductCardState extends State<_ProductCard> {
                         const SizedBox(width: 6),
                         Expanded(
                           child: GestureDetector(
-                            onTap: _showAskAISheet,
+                            onTap: _sharePaylas,
                             child: Container(
                               padding: const EdgeInsets.symmetric(vertical: 7),
                               decoration: BoxDecoration(
@@ -493,9 +508,9 @@ class _ProductCardState extends State<_ProductCard> {
                               child: const Row(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                  Icon(Icons.auto_awesome, size: 13, color: KoalaColors.accent),
+                                  Icon(Icons.ios_share_rounded, size: 13, color: KoalaColors.accent),
                                   SizedBox(width: 5),
-                                  Text('Sor', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: KoalaColors.accent)),
+                                  Text('Paylaş', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: KoalaColors.accent)),
                                 ],
                               ),
                             ),

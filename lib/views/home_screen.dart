@@ -29,7 +29,9 @@ import 'saved_screen.dart';
 import '../widgets/style_discovery_pull.dart';
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
+  const HomeScreen({super.key, this.openStyleDiscovery = false});
+  /// `/?openPull=1` deep-link ile true gelir — postFrame'de pull otomatik açılır.
+  final bool openStyleDiscovery;
   @override
   State<HomeScreen> createState() => _HomeScreenState();
 }
@@ -194,7 +196,12 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   Future<void> _maybeOpenStyleDiscovery() async {
-    // Style discovery is now triggered on first chat interaction, not on home load.
+    // `/?openPull=1` deep-link ile gelindiyse StyleDiscoveryPull'ı
+    // programatik olarak aç (ChatDetail'deki swipe ikonundan tetiklenir).
+    if (!widget.openStyleDiscovery) return;
+    await Future<void>.delayed(const Duration(milliseconds: 120));
+    if (!mounted) return;
+    _pullKey.currentState?.openProgrammatically();
   }
 
   /// İlk açılışta pull gesture'ı kullanıcıya tanıtmak için tek seferlik

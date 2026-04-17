@@ -233,6 +233,10 @@ class StyleDiscoveryPullState extends State<StyleDiscoveryPull>
     return u == null || u.isAnonymous;
   }
 
+  /// Dışarıdan tetikleme — ChatDetail'deki swipe ikonundan veya benzer
+  /// yerlerden `_pullKey.currentState?.openProgrammatically()` ile çağırılır.
+  Future<void> openProgrammatically() => _open();
+
   Future<void> _open() async {
     if (_opening) return;
     setState(() => _opening = true);

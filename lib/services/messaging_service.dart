@@ -156,13 +156,36 @@ class MessagingService {
           .order('last_message_at', ascending: false)
           .range(offset, offset + limit - 1);
       final all = List<Map<String, dynamic>>.from(res);
-      // "Mesaj hiç göndermediğim" sohbetleri listede gösterme.
-      // Kullanıcı bir designer ile chat başlatıp hiçbir şey yazmadıysa
-      // last_message_at null kalır — o satırları gizle.
-      return all
+      // 1. Archived + hiç mesaj olmayan (last_message_at null) sohbetleri at.
+      final filtered = all
           .where((c) =>
               c['status'] != 'archived' && c['last_message_at'] != null)
           .toList();
+      if (filtered.isEmpty) return filtered;
+
+      // 2. "Kendim hiçbir şey yazmamışım" sohbetleri listeden çıkar —
+      // designer mesaj atsa bile user input'tan bir şey göndermediyse
+      // messages ekranında gözükmesin (kullanıcı isteği).
+      // Tek sorguda: bu conv ID'leri içinden user'ın sender olduğu mesajları çek.
+      final convIds = filtered.map((c) => c['id'].toString()).toList();
+      try {
+        final sent = await _db
+            .from('koala_direct_messages')
+            .select('conversation_id')
+            .eq('sender_id', uid)
+            .inFilter('conversation_id', convIds);
+        final hasSent = <String>{
+          for (final row in (sent as List))
+            (row as Map)['conversation_id'].toString(),
+        };
+        return filtered
+            .where((c) => hasSent.contains(c['id'].toString()))
+            .toList();
+      } catch (e) {
+        // Filter çökerse liste tamamen boş görünmesin — fallback
+        debugPrint('MessagingService: sender-filter failed, returning all: $e');
+        return filtered;
+      }
     } catch (e) {
       debugPrint('MessagingService.getConversations error: $e');
       rethrow;

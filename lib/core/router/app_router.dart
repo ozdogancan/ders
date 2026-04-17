@@ -48,8 +48,11 @@ final GoRouter appRouter = GoRouter(
     // ─── Hub (Home) veya Onboarding ───
     GoRoute(
       path: '/',
-      builder: (context, state) =>
-          onboardingComplete ? const HomeScreen() : const OnboardingScreen(),
+      builder: (context, state) {
+        if (!onboardingComplete) return const OnboardingScreen();
+        final openPull = state.uri.queryParameters['openPull'] == '1';
+        return HomeScreen(openStyleDiscovery: openPull);
+      },
     ),
 
     // ─── Auth (giriş ekranı) ───
