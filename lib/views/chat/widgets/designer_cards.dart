@@ -7,6 +7,7 @@ import '../../../services/saved_items_service.dart';
 import '../../../services/profile_feedback_service.dart';
 import '../../../widgets/save_button.dart';
 import '../../../widgets/chat/designer_chat_popup.dart';
+import '../../designer_profile_screen.dart';
 import 'chat_constants.dart';
 
 class DesignerCards extends StatelessWidget {
@@ -208,30 +209,16 @@ class DesignerCards extends StatelessWidget {
                     ],
                   ),
                 ),
-                // Portfolio g\u00F6rselleri
+                // Portfolio görselleri — max 3 thumb; daha fazla varsa son
+                // thumb'a "+N" overlay eklenir, dokunulduğunda profil açılır.
                 if (ds['portfolio_images'] != null && (ds['portfolio_images'] as List).isNotEmpty)
                   Padding(
                     padding: const EdgeInsets.only(top: 10),
-                    child: SizedBox(
-                      height: 72,
-                      child: ListView.separated(
-                        scrollDirection: Axis.horizontal,
-                        itemCount: (ds['portfolio_images'] as List).length,
-                        separatorBuilder: (_, __) => const SizedBox(width: 8),
-                        itemBuilder: (_, i) => ClipRRect(
-                          borderRadius: BorderRadius.circular(10),
-                          child: Image.network(
-                            (ds['portfolio_images'] as List)[i] as String,
-                            width: 96,
-                            height: 72,
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => Container(
-                              width: 96, height: 72,
-                              color: KoalaColors.surfaceMuted,
-                              child: Icon(Icons.image_rounded, color: KoalaColors.textTer),
-                            ),
-                          ),
-                        ),
+                    child: _PortfolioStrip(
+                      designerId: ds['id']?.toString() ?? '',
+                      designerName: name,
+                      images: List<String>.from(
+                        (ds['portfolio_images'] as List).whereType<String>(),
                       ),
                     ),
                   ),
@@ -333,6 +320,112 @@ class DesignerCards extends StatelessWidget {
           );
         }),
       ],
+    );
+  }
+}
+
+/// Portfolio thumb şeridi — max 3 görseli gösterir. 3'ten fazla varsa son
+/// thumb'ın üzerine "+N Tümünü gör" overlay koyar ve dokunuşu designer
+/// profile ekranına yönlendirir (orada bütün portfolio kategorili görünür).
+class _PortfolioStrip extends StatelessWidget {
+  const _PortfolioStrip({
+    required this.designerId,
+    required this.designerName,
+    required this.images,
+  });
+
+  final String designerId;
+  final String designerName;
+  final List<String> images;
+
+  static const int _visible = 3;
+
+  void _openProfile(BuildContext context) {
+    if (designerId.isEmpty) return;
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => DesignerProfileScreen(
+          designerId: designerId,
+          designerName: designerName,
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final total = images.length;
+    final show = total <= _visible ? total : _visible;
+    final extra = total - show;
+
+    return SizedBox(
+      height: 72,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: show,
+        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        itemBuilder: (_, i) {
+          final isLastWithExtra = i == show - 1 && extra > 0;
+          final thumb = ClipRRect(
+            borderRadius: BorderRadius.circular(10),
+            child: Image.network(
+              images[i],
+              width: 96,
+              height: 72,
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => Container(
+                width: 96,
+                height: 72,
+                color: KoalaColors.surfaceMuted,
+                child: Icon(Icons.image_rounded, color: KoalaColors.textTer),
+              ),
+            ),
+          );
+
+          return GestureDetector(
+            onTap: () {
+              HapticFeedback.selectionClick();
+              _openProfile(context);
+            },
+            child: Stack(
+              children: [
+                thumb,
+                if (isLastWithExtra)
+                  Positioned.fill(
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(10),
+                      child: Container(
+                        color: Colors.black.withValues(alpha: 0.55),
+                        alignment: Alignment.center,
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              '+$extra',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 18,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                            const Text(
+                              'Tümünü gör',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          );
+        },
+      ),
     );
   }
 }

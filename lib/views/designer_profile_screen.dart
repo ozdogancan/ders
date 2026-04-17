@@ -213,9 +213,44 @@ class _ProjectCard extends StatelessWidget {
   const _ProjectCard({required this.project});
   final Map<String, dynamic> project;
 
+  // "Bilgehan Ermiş Projesi" gibi tekrar eden title yerine kategori (Oturma
+  // Odası vb) göster. project_type > room_type > category fallback.
+  static const _trCategoryMap = {
+    'living_room': 'Oturma Odası',
+    'bedroom': 'Yatak Odası',
+    'kitchen': 'Mutfak',
+    'bathroom': 'Banyo',
+    'dining_room': 'Yemek Odası',
+    'office': 'Çalışma Odası',
+    'kids_room': 'Çocuk Odası',
+    'hallway': 'Koridor / Hol',
+    'balcony': 'Balkon',
+    'outdoor': 'Dış Mekan',
+  };
+
+  static String _prettyCategory(String raw) {
+    final key = raw.toLowerCase().trim();
+    if (_trCategoryMap.containsKey(key)) return _trCategoryMap[key]!;
+    final cleaned = raw.replaceAll(RegExp(r'[_-]+'), ' ').trim();
+    if (cleaned.isEmpty) return raw;
+    return cleaned
+        .split(RegExp(r'\s+'))
+        .map((w) => w.isEmpty ? w : w[0].toUpperCase() + w.substring(1))
+        .join(' ');
+  }
+
+  String _categoryOrTitle() {
+    for (final k in ['project_type', 'room_type', 'category']) {
+      final v = (project[k] ?? '').toString().trim();
+      if (v.isNotEmpty) return _prettyCategory(v);
+    }
+    final t = (project['title'] ?? '').toString().trim();
+    return t.isNotEmpty ? t : 'Proje';
+  }
+
   @override
   Widget build(BuildContext context) {
-    final title = project['title'] as String? ?? 'Proje';
+    final title = _categoryOrTitle();
     final description = project['description'] as String? ?? '';
     final images = project['designer_project_images'] as List? ?? [];
     final firstImage =

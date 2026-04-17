@@ -16,19 +16,27 @@ import '../widgets/koala_widgets.dart';
 class ConversationDetailScreen extends StatefulWidget {
   const ConversationDetailScreen({
     super.key,
-    required this.conversationId,
+    this.conversationId,
     this.designerId,
     this.designerName = 'Tasarımcı',
     this.designerAvatarUrl,
     this.projectTitle,
     this.unreadOnEntry,
-  });
+    this.initialDraft,
+  }) : assert(conversationId != null || designerId != null,
+            'conversationId veya designerId verilmeli (lazy chat için)');
 
-  final String conversationId;
+  /// Var olan sohbet ID'si — null ise ilk mesajda lazy yaratılır (designerId
+  /// gerekir). Bu "Mesaj At" popup yerine tam ekran detay açıldığında kullanılır.
+  final String? conversationId;
   final String? designerId;
   final String designerName;
   final String? designerAvatarUrl;
   final String? projectTitle;
+
+  /// Lazy chat girişinde input'a ön-doldurulacak taslak metin (örn:
+  /// "Merhaba, [proje adı] hakkında bilgi almak istiyorum").
+  final String? initialDraft;
 
   /// Chat list ekranı tapta markAsRead fire-and-forget tetikliyor, o yüzden
   /// detail açıldığında DB'den okuduğumuz unread_count zaten 0 olabiliyor.
@@ -76,6 +84,11 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
   // Portfolio header collapse state — varsayılan KAPALI, yer kaplamasın.
   bool _portfolioExpanded = false;
 
+  /// Aktif conversation ID. widget.conversationId null geldiğinde (lazy mode)
+  /// ilk mesajda _ensureConversation() ile doldurulur. Null iken mesaj
+  /// listesi/realtime/markRead çağrıları atlanır — henüz sohbet yok.
+  String? _activeConvId;
+
   // Conversation-level realtime listener — backend pullInbound her 3s unread'i
   // yeniden hesapladığından, biz bu ekrana bakarken unread>0 bump olursa
   // HEMEN markAsRead çağır. Aksi halde badge sürekli geri "1" olur.
@@ -90,31 +103,74 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
   void initState() {
     super.initState();
     _uid = MessagingService.currentUserId;
-    // _loadMessages() kendi sonunda markAsRead çağırıyor — önce unread sayısını
-    // oku, divider'ı hesapla, sonra read flag'ini indir. Eski init'te _markRead
-    // paralel çalışıp unread sayısını sıfırlayabiliyordu ve divider kayboluyordu.
-    _loadMessages();
-    _subscribeRealtime();
-    _subscribeConversationUpdates();
+    _activeConvId = widget.conversationId;
     _scrollController.addListener(_onScroll);
     _loadDesignerDetail();
-    // Global toast bu conv'un detay ekranındayken suppress edilsin —
-    // kullanıcı mesajı zaten görüyor, tekrar toast göstermeye gerek yok.
-    GlobalMessageListener.suppressConvId = widget.conversationId;
+
+    if (_activeConvId != null) {
+      // _loadMessages() kendi sonunda markAsRead çağırıyor — önce unread sayısını
+      // oku, divider'ı hesapla, sonra read flag'ini indir.
+      _loadMessages();
+      _subscribeRealtime();
+      _subscribeConversationUpdates();
+      // Global toast bu conv'un detay ekranındayken suppress edilsin.
+      GlobalMessageListener.suppressConvId = _activeConvId;
+    } else {
+      // Lazy mode: conv henüz yok. Boş state göster, draft prefill et.
+      _loading = false;
+      final draft = widget.initialDraft;
+      if (draft != null && draft.isNotEmpty) {
+        _textController.text = draft;
+      }
+    }
   }
 
   @override
   void dispose() {
-    if (GlobalMessageListener.suppressConvId == widget.conversationId) {
+    if (_activeConvId != null &&
+        GlobalMessageListener.suppressConvId == _activeConvId) {
       GlobalMessageListener.suppressConvId = null;
     }
-    MessagingService.unsubscribeFromMessages(widget.conversationId);
+    if (_activeConvId != null) {
+      MessagingService.unsubscribeFromMessages(_activeConvId!);
+    }
     try {
       MessagingService.unsubscribeFromConversations(listener: _convListener);
     } catch (_) {}
     _textController.dispose();
     _scrollController.dispose();
     super.dispose();
+  }
+
+  /// İlk mesaj gönderiminde lazy çağrılır: var olan conv'u bulur ya da
+  /// yaratır, realtime subscribe/markRead'i bağlar. Başarılıysa conv map'i
+  /// döner; null ise UI hata göstermeli.
+  Future<Map<String, dynamic>?> _ensureConversation() async {
+    if (_activeConvId != null) {
+      // Zaten bağlı — getConversation ile taze kayıt dön (sendMessage'ın
+      // sonraki adımında lazım olmuyor aslında; compat için map lazım değil).
+      return {'id': _activeConvId};
+    }
+    final did = widget.designerId;
+    if (did == null || did.isEmpty) return null;
+    final conv = await MessagingService.getOrCreateConversation(
+      designerId: did,
+      contextTitle: widget.projectTitle,
+    );
+    if (conv == null) return null;
+    final id = conv['id']?.toString();
+    if (id == null || id.isEmpty) return null;
+    if (!mounted) return conv;
+    setState(() {
+      _activeConvId = id;
+    });
+    // İlk attach: realtime + toast suppress bağla. Mesaj listesi zaten
+    // boş — _sendMessage fonksiyonu ilk mesajı insert edecek ve realtime
+    // listener onu listeye ekleyecek.
+    _subscribeRealtime();
+    _subscribeConversationUpdates();
+    GlobalMessageListener.suppressConvId = id;
+    return conv;
   }
 
   Future<void> _loadDesignerDetail() async {
@@ -168,7 +224,7 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
       } else {
         try {
           final conv =
-              await MessagingService.getConversation(widget.conversationId);
+              await MessagingService.getConversation(_activeConvId!);
           if (conv != null) {
             final isUser = conv['user_id'] == _uid;
             unreadOnEntry = isUser
@@ -180,7 +236,7 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
     }
 
     final data = await MessagingService.getMessages(
-      conversationId: widget.conversationId,
+      conversationId: _activeConvId!,
     );
     if (!mounted) return;
 
@@ -272,7 +328,7 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
     setState(() => _loadingMore = true);
     final oldest = _messages.last;
     final older = await MessagingService.getMessages(
-      conversationId: widget.conversationId,
+      conversationId: _activeConvId!,
       beforeId: oldest['id'] as String,
     );
     if (mounted) {
@@ -284,13 +340,15 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
   }
 
   void _subscribeRealtime() {
+    final cid = _activeConvId;
+    if (cid == null) return;
     MessagingService.subscribeToMessages(
-      conversationId: widget.conversationId,
+      conversationId: cid,
       onMessage: (msg) {
         if (mounted) {
           setState(() => _messages.insert(0, msg));
           if (msg['sender_id'] != _uid) {
-            MessagingService.markAsRead(widget.conversationId);
+            MessagingService.markAsRead(cid);
           }
         }
       },
@@ -305,21 +363,23 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
     _convListener = (record) {
       if (!mounted) return;
       final convId = record['id']?.toString();
-      if (convId != widget.conversationId) return;
+      if (convId != _activeConvId) return;
       final uid = MessagingService.currentUserId;
       final isUser = record['user_id'] == uid;
       final unreadNow = isUser
           ? ((record['unread_count_user'] as int?) ?? 0)
           : ((record['unread_count_designer'] as int?) ?? 0);
-      if (unreadNow > 0) {
-        MessagingService.markAsRead(widget.conversationId);
+      if (unreadNow > 0 && _activeConvId != null) {
+        MessagingService.markAsRead(_activeConvId!);
       }
     };
     MessagingService.subscribeToConversations(onUpdate: _convListener!);
   }
 
   Future<void> _markRead() async {
-    await MessagingService.markAsRead(widget.conversationId);
+    final cid = _activeConvId;
+    if (cid == null) return;
+    await MessagingService.markAsRead(cid);
   }
 
   void _onScroll() {
@@ -343,13 +403,33 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
     // kayıp hissi yaşamasın. Sadece _sending true → input lock.
     setState(() => _sending = true);
 
+    // Lazy mode: conv henüz yoksa ilk gönderimde yarat. Başarısızsa erken çık.
+    if (_activeConvId == null) {
+      final conv = await _ensureConversation();
+      if (conv == null || _activeConvId == null) {
+        if (!mounted) return;
+        setState(() => _sending = false);
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(
+            SnackBar(
+              content: const Text('Sohbet başlatılamadı — tekrar deneyin'),
+              backgroundColor: Colors.red.shade700,
+              duration: const Duration(seconds: 6),
+            ),
+          );
+        return;
+      }
+    }
+    final cid = _activeConvId!;
+
     String? errorMsg;
     Map<String, dynamic>? sentMsg;
     try {
       if (designUrl != null && photo == null) {
         // Proje viewer'dan gelen hazır görsel: upload yok, direkt attach.
         sentMsg = await MessagingService.sendMessage(
-          conversationId: widget.conversationId,
+          conversationId: cid,
           content: text, // caption (boş olabilir)
           type: MessageType.image,
           attachmentUrl: designUrl,
@@ -375,7 +455,7 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
               .getPublicUrl(fileName);
 
           sentMsg = await MessagingService.sendMessage(
-            conversationId: widget.conversationId,
+            conversationId: cid,
             content: text, // caption (boş olabilir)
             type: MessageType.image,
             attachmentUrl: imageUrl,
@@ -391,7 +471,7 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
       } else {
         // Sadece text
         sentMsg = await MessagingService.sendMessage(
-          conversationId: widget.conversationId,
+          conversationId: cid,
           content: text,
         );
         if (sentMsg == null) {

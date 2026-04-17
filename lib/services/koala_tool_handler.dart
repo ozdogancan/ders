@@ -398,7 +398,10 @@ class KoalaToolHandler {
         };
       }
 
-      // Her tasarımcıya 3 portfolio görseli ekle
+      // Her tasarımcıya portfolio görselleri ekle. Eskiden limit=3'tü;
+      // bazı projelerin görseli olmadığı için "Bilgehan: 3 proje → 2 geliyor"
+      // bug'ı oluşuyordu. 12'ye çıkardık; UI'da kart max 3 thumb gösterip
+      // geri kalanı "+N Tümünü gör" overlay ile profile yönlendiriyor.
       final result = await Future.wait(
         designers.take(limit).map((d) async {
           final designerId = (d['id'] ?? '').toString();
@@ -406,7 +409,7 @@ class KoalaToolHandler {
           if (designerId.isNotEmpty) {
             try {
               final projects = await EvlumbaLiveService.getProjects(
-                limit: 3,
+                limit: 12,
                 designerId: designerId,
               );
               for (final p in projects) {

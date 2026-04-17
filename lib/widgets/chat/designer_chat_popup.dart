@@ -11,37 +11,51 @@ import '../../services/koala_ai_service.dart';
 import '../../services/messaging_service.dart';
 import '../../services/saved_items_service.dart';
 import '../../views/chat_detail_screen.dart';
+import '../../views/conversation_detail_screen.dart';
 import '../save_button.dart';
 
-/// Tasarımcıya mesaj atma popup'ı.
-/// Mevcut ekranın üzerinde açılır, AI chat kaybolmaz.
+/// Tasarımcıya mesaj atma entry-point'i.
+///
+/// TARİHÇE: Eskiden `showModalBottomSheet` ile kendi popup chat UI'ı açardı
+/// (`_DesignerChatSheet` ~1100 satır). Mesajlar ekranıyla UI paritesi
+/// (kategori etiketi, input, foto picker, tasarım gönderimi vs.) iki yerde
+/// ayrı ayrı sürdürülemiyordu. Artık tek kaynak `ConversationDetailScreen`:
+///   - conv yoksa LAZY başlat (conversationId null → ilk mesajda yaratılır)
+///     → "Mesaj At" popup'ı açıp göndermezse Mesajlar listesine DÜŞMEZ.
+///   - UI birebir Mesajlar ekranıyla aynı (aynı widget).
+///   - Evlumba bridge MessagingService.sendMessage içinden otomatik çalışır
+///     (koala_direct_messages INSERT'inden sonra).
 class DesignerChatPopup {
   DesignerChatPopup._();
 
-  /// Popup'ı aç — herhangi bir ekrandan çağrılabilir.
+  /// Tam ekran Mesaj ekranını aç. Yeni sohbetse LAZY mode (ilk mesajda insert).
   static Future<void> show(
     BuildContext context, {
     required String designerId,
     required String designerName,
     String? designerAvatarUrl,
+    // contextType/contextId artık kullanılmıyor — parity için signature stabil.
     String? contextType,
     String? contextId,
     String? contextTitle,
     String? initialMessage,
-  }) {
-    return showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      barrierColor: Colors.black26,
-      builder: (_) => _DesignerChatSheet(
-        designerId: designerId,
-        designerName: designerName,
-        designerAvatarUrl: designerAvatarUrl,
-        contextType: contextType,
-        contextId: contextId,
-        contextTitle: contextTitle,
-        initialMessage: initialMessage,
+  }) async {
+    // Var olan sohbet var mı? Sadece SELECT — yoksa null, insert YAPMAZ.
+    final existing = await MessagingService.findExistingConversation(
+      designerId: designerId,
+    );
+    if (!context.mounted) return;
+
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ConversationDetailScreen(
+          conversationId: existing?['id']?.toString(),
+          designerId: designerId,
+          designerName: designerName,
+          designerAvatarUrl: designerAvatarUrl,
+          projectTitle: contextTitle,
+          initialDraft: initialMessage,
+        ),
       ),
     );
   }
