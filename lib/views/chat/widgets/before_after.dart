@@ -93,42 +93,24 @@ class BeforeAfter extends StatelessWidget {
               child: GestureDetector(
                 onTap: () async {
                   final designerId = d['designer_id'] as String;
-                  final title = d['title'] as String? ?? 'Tasar\u0131m';
+                  final title = d['title'] as String? ?? 'Tasarım';
                   HapticFeedback.lightImpact();
-                  final conv = await MessagingService.getOrCreateConversation(
+                  // LAZY: mevcut conv varsa aç, yoksa conversationId=null;
+                  // mesaj atılmadan geri dönülürse Mesajlar'a düşmesin.
+                  final existing = await MessagingService.findExistingConversation(
                     designerId: designerId,
-                    contextType: 'project',
-                    contextId: designerId,
-                    contextTitle: title,
                   );
-                  if (conv != null && context.mounted) {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => ConversationDetailScreen(
-                          conversationId: conv['id'] as String,
-                          designerName: d['designer_name'] as String? ?? 'Tasar\u0131mc\u0131',
-                        ),
+                  if (!context.mounted) return;
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => ConversationDetailScreen(
+                        conversationId: existing?['id']?.toString(),
+                        designerId: designerId,
+                        designerName: d['designer_name'] as String? ?? 'Tasarımcı',
+                        projectTitle: title,
                       ),
-                    );
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(context).clearSnackBars();
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          behavior: SnackBarBehavior.floating,
-                          backgroundColor: KoalaColors.greenAlt,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                          duration: const Duration(seconds: 4),
-                          content: const Row(
-                            children: [
-                              Icon(Icons.check_circle_rounded, color: Colors.white, size: 18),
-                              SizedBox(width: 8),
-                              Expanded(child: Text('Mesaj\u0131n\u0131z iletildi! Genellikle 24 saat i\u00E7inde d\u00F6n\u00FC\u015F yap\u0131l\u0131r.', style: TextStyle(color: Colors.white, fontSize: 13))),
-                            ],
-                          ),
-                        ),
-                      );
-                    }
-                  }
+                    ),
+                  );
                 },
                 child: Container(
                   width: double.infinity,

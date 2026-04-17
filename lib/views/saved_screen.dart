@@ -387,45 +387,23 @@ class _SavedListState extends State<_SavedList>
 
   Future<void> _openDesignerChat(String designerId, String name) async {
     if (designerId.isEmpty) return;
-    final conv = await MessagingService.getOrCreateConversation(
+    // LAZY: mevcut conv varsa aç, yoksa conversationId=null ile lazy modda aç.
+    // Kullanıcı mesaj atmadan kapatırsa Mesajlar listesine düşmesin.
+    final existing = await MessagingService.findExistingConversation(
       designerId: designerId,
-      contextType: 'designer',
-      contextId: designerId,
-      contextTitle: name,
     );
-    if (conv != null && mounted) {
+    if (mounted) {
       Navigator.of(context).push(
         MaterialPageRoute(
           builder: (_) => ConversationDetailScreen(
-            conversationId: conv['id'] as String,
+            conversationId: existing?['id']?.toString(),
+            designerId: designerId,
             designerName: name,
           ),
         ),
       );
-      if (mounted) {
-        ScaffoldMessenger.of(context).clearSnackBars();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            behavior: SnackBarBehavior.floating,
-            backgroundColor: KoalaColors.greenAlt,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            duration: const Duration(seconds: 4),
-            content: const Row(
-              children: [
-                Icon(Icons.check_circle_rounded, color: Colors.white, size: 18),
-                SizedBox(width: 8),
-                Expanded(child: Text('Mesajınız iletildi! Genellikle 24 saat içinde dönüş yapılır.', style: TextStyle(color: Colors.white, fontSize: 13))),
-              ],
-            ),
-          ),
-        );
-      }
-    } else if (mounted) {
-      // Fallback: profil aç
-      launchUrl(
-        Uri.parse('https://www.evlumba.com/tasarimci/$designerId'),
-        mode: LaunchMode.inAppBrowserView,
-      );
+      // "Mesajınız iletildi" snackbar'ı kaldırıldı — lazy modda henüz
+      // mesaj atılmamış olabilir, yanıltıcı olmasın.
     }
   }
 

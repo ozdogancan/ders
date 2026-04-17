@@ -2115,36 +2115,44 @@ class _ChatListScreenV1State extends State<ChatListScreenV1> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(designerName, style: KoalaText.h4),
-                  if (projectTitle.isNotEmpty) ...[
-                    const SizedBox(height: 4),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: KoalaColors.accentSoft,
-                        borderRadius: BorderRadius.circular(KoalaRadius.pill),
+                  // İsim + (varsa) title: tek satır, title ince/soft renkte
+                  // ve " · " separator ile. Eski klasör chip'i kaldırıldı.
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.baseline,
+                    textBaseline: TextBaseline.alphabetic,
+                    children: [
+                      Flexible(
+                        child: Text(
+                          designerName,
+                          style: KoalaText.h4,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(Icons.folder_rounded, size: 11, color: KoalaColors.accent),
-                          const SizedBox(width: 4),
-                          Flexible(
-                            child: Text(
-                              projectTitle,
-                              style: const TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600,
-                                color: KoalaColors.accent,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
+                      if (projectTitle.isNotEmpty) ...[
+                        Text(
+                          '  ·  ',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: Colors.grey.shade400,
+                            fontWeight: FontWeight.w500,
                           ),
-                        ],
-                      ),
-                    ),
-                  ],
+                        ),
+                        Flexible(
+                          child: Text(
+                            projectTitle,
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
+                              color: Colors.grey.shade600,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
                   if (lastMessage.isNotEmpty) ...[
                     const SizedBox(height: 4),
                     _LastMessagePreview(
