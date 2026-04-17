@@ -457,14 +457,14 @@ class _ProductCardState extends State<_ProductCard> {
                         style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: KoalaColors.green),
                         maxLines: 1, overflow: TextOverflow.ellipsis),
                     const SizedBox(height: 6),
-                    // Ürünü İncele + Sor
+                    // Ürünü İncele + Sor (Kaydet zaten görselin üzerinde kalp ikonu)
                     Row(
                       children: [
                         Expanded(
                           child: GestureDetector(
                             onTap: _openProduct,
                             child: Container(
-                              padding: const EdgeInsets.symmetric(vertical: 6),
+                              padding: const EdgeInsets.symmetric(vertical: 7),
                               decoration: BoxDecoration(
                                 color: KoalaColors.green,
                                 borderRadius: BorderRadius.circular(8),
@@ -472,69 +472,32 @@ class _ProductCardState extends State<_ProductCard> {
                               child: const Row(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                  Icon(Icons.open_in_new_rounded, size: 12, color: Colors.white),
-                                  SizedBox(width: 4),
-                                  Text('İncele', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Colors.white)),
+                                  Icon(Icons.open_in_new_rounded, size: 13, color: Colors.white),
+                                  SizedBox(width: 5),
+                                  Text('İncele', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.white)),
                                 ],
                               ),
                             ),
                           ),
                         ),
                         const SizedBox(width: 6),
-                        GestureDetector(
-                          onTap: _showAskAISheet,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                            decoration: BoxDecoration(
-                              color: KoalaColors.accentSoft,
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: const Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(Icons.auto_awesome, size: 12, color: KoalaColors.accent),
-                                SizedBox(width: 3),
-                                Text('Sor', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: KoalaColors.accent)),
-                              ],
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 4),
-                        GestureDetector(
-                          onTap: _toggleSave,
-                          child: AnimatedContainer(
-                            duration: const Duration(milliseconds: 180),
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                            decoration: BoxDecoration(
-                              color: _isSaved
-                                  ? KoalaColors.error.withValues(alpha: 0.12)
-                                  : KoalaColors.accentSoft,
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(
-                                  _isSaved
-                                      ? Icons.bookmark_rounded
-                                      : Icons.bookmark_outline_rounded,
-                                  size: 12,
-                                  color: _isSaved
-                                      ? KoalaColors.error
-                                      : KoalaColors.accent,
-                                ),
-                                const SizedBox(width: 3),
-                                Text(
-                                  _isSaved ? 'Kayıtlı' : 'Kaydet',
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w600,
-                                    color: _isSaved
-                                        ? KoalaColors.error
-                                        : KoalaColors.accent,
-                                  ),
-                                ),
-                              ],
+                        Expanded(
+                          child: GestureDetector(
+                            onTap: _showAskAISheet,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(vertical: 7),
+                              decoration: BoxDecoration(
+                                color: KoalaColors.accentSoft,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: const Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.auto_awesome, size: 13, color: KoalaColors.accent),
+                                  SizedBox(width: 5),
+                                  Text('Sor', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: KoalaColors.accent)),
+                                ],
+                              ),
                             ),
                           ),
                         ),

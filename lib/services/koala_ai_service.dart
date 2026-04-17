@@ -670,7 +670,7 @@ class KoalaAIService {
 
     // Fix B: Casual-chat escape — kısa selamlama/dolgu sözcükleri için tool çağırma
     final designKeywords = RegExp(
-      r'\b(oda|salon|banyo|mutfak|mobilya|renk|ürün|tasarım|tasarımcı|mimar|stil|boya|duvar|zemin|koltuk|kanepe|masa|sandalye|yatak|dolap|fotoğraf|foto|resim)\b',
+      r'\b(oda|salon|banyo|mutfak|mobilya|renk|ürün|tasarım|tasarımcı|mimar|uzman|stil|boya|duvar|zemin|koltuk|kanepe|masa|sandalye|yatak|dolap|fotoğraf|foto|resim)\b',
       caseSensitive: false,
     );
     final isCasualGreeting = RegExp(
@@ -679,7 +679,14 @@ class KoalaAIService {
     ).hasMatch(lastUserText.trim());
     final isShortNonDesign = lastUserText.trim().split(RegExp(r'\s+')).length <= 3 &&
         !designKeywords.hasMatch(lastUserText);
-    final isCasualMessage = (isCasualGreeting || isShortNonDesign) && !designKeywords.hasMatch(lastUserText);
+    // ÖNEMLİ: initialAllowedFunctions varsa (designerMatch gibi intent'li çağrı)
+    // casual escape'e ASLA düşme — kullanıcı chip'e bastı, function call mutlaka çalışsın.
+    // Chip handler user mesajını _history'ye eklemediği için lastUserText burada
+    // "Devam et" default'una düşüp yanlışlıkla casual path'e sapıyordu (bug: chip'ten
+    // "Uzman öner" deyince "Harika, hazırım!" gibi saçma yanıt).
+    final isCasualMessage = initialAllowedFunctions == null &&
+        (isCasualGreeting || isShortNonDesign) &&
+        !designKeywords.hasMatch(lastUserText);
 
     if (isCasualMessage) {
       debugPrint('KoalaAI: Casual message detected (v2) — plain text path: "$lastUserText"');
@@ -1016,7 +1023,13 @@ class KoalaAIService {
   ) {
     switch (fnName) {
       case 'search_products':
-        final products = result['products'] as List<dynamic>? ?? [];
+        final productsAll = result['products'] as List<dynamic>? ?? [];
+        // Görseli olmayan ürünleri filtrele — UI'de boş kart gösterme
+        final products = productsAll.where((p) {
+          final pm = p as Map<String, dynamic>;
+          final img = (pm['image_url'] ?? '').toString().trim();
+          return img.isNotEmpty;
+        }).toList();
         // Fix F: Boş sonuç → daraltma chipleri göster
         if (products.isEmpty) {
           final roomType = (result['room_type'] as String? ?? '').toLowerCase();

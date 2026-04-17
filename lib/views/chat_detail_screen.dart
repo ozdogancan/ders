@@ -1220,10 +1220,14 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
               // Direkt designerMatch intent'i — search_designers function call'ını garanti eder
               final ctx = _photoAnalysisContext;
               final style = ctx?['style'] ?? 'modern';
+              const userText = 'Bu oda için uzman tasarımcı öner';
               setState(() {
-                _msgs.add(_Msg(role: 'user', text: 'Bu oda için uzman tasarımcı öner'));
+                _msgs.add(_Msg(role: 'user', text: userText));
                 _loading = true;
               });
+              // History'e de ekle ki servis tarafında lastUserText "Devam et" default'una
+              // düşüp yanlış yere sapmasın (casual escape bug'ı)
+              _history.add({'role': 'user', 'content': userText});
               _scrollDown();
               _sendToAIWithIntent(
                 intent: KoalaIntent.designerMatch,
@@ -2056,12 +2060,17 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
         return StyleAnalysis(card.data);
       case 'product_grid':
         final productsRaw = card.data['products'] as List<dynamic>? ?? [];
+        // Görselsiz ürünleri gizle — bagaj gibi duran boş kartlar gelmesin.
         final carouselItems = productsRaw
             .map(
               (p) =>
                   ProductCarouselItem.fromCardData(p as Map<String, dynamic>),
             )
+            .where((item) => item.imageUrl.trim().isNotEmpty)
             .toList();
+        if (carouselItems.isEmpty) {
+          return const SizedBox.shrink();
+        }
         return ProductCarousel(
           title: card.data['title'] as String? ?? 'Önerilen Ürünler',
           products: carouselItems,
