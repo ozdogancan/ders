@@ -562,15 +562,89 @@ class _Card extends StatelessWidget {
   final String Function(Map<String, dynamic>) coverOf;
   final String Function(String) prettyCategory;
 
+  IconData _roomIcon(String raw) {
+    switch (raw.trim().toLowerCase()) {
+      case 'living_room':
+        return Icons.weekend_outlined;
+      case 'bedroom':
+        return Icons.bed_outlined;
+      case 'kitchen':
+        return Icons.countertops_outlined;
+      case 'bathroom':
+        return Icons.bathtub_outlined;
+      case 'kids_room':
+        return Icons.child_care_outlined;
+      case 'office':
+        return Icons.desk_outlined;
+      case 'dining_room':
+        return Icons.dining_outlined;
+      case 'hallway':
+        return Icons.door_front_door_outlined;
+      default:
+        return Icons.home_outlined;
+    }
+  }
+
+  String _budgetLabel() {
+    final min = (project['budget_min'] as num?)?.toInt();
+    final max = (project['budget_max'] as num?)?.toInt();
+    String fmt(int v) {
+      if (v >= 1000000) return '${(v / 1000000).toStringAsFixed(1)}M';
+      if (v >= 1000) return '${(v / 1000).round()}K';
+      return v.toString();
+    }
+    if (min != null && max != null && min > 0 && max > 0) {
+      return '${fmt(min)}-${fmt(max)}₺';
+    }
+    if (max != null && max > 0) return '<${fmt(max)}₺';
+    if (min != null && min > 0) return '>${fmt(min)}₺';
+    return '';
+  }
+
+  String _styleLabel() {
+    final style = (project['style'] ?? '').toString().trim();
+    if (style.isNotEmpty) return style;
+    final tags = project['tags'];
+    if (tags is List && tags.isNotEmpty) {
+      final t = tags.first.toString().trim();
+      if (t.isNotEmpty) return t;
+    }
+    return '';
+  }
+
+  List<Color> _paletteColors() {
+    final raw = project['palette'] ?? project['colors'];
+    if (raw is List) {
+      final out = <Color>[];
+      for (final e in raw) {
+        final s = e.toString().trim();
+        if (s.startsWith('#') && s.length >= 7) {
+          try {
+            out.add(Color(int.parse('FF${s.substring(1, 7)}', radix: 16)));
+          } catch (_) {}
+        }
+      }
+      return out;
+    }
+    return const [];
+  }
+
   @override
   Widget build(BuildContext context) {
     final url = coverOf(project);
     final title = (project['title'] ?? '').toString().trim();
-    final cat = prettyCategory(
-        (project['project_type'] ?? '').toString().trim());
+    final rawType = (project['project_type'] ?? '').toString().trim();
+    final cat = prettyCategory(rawType);
     final designer = project['profiles'] as Map<String, dynamic>?;
     final designerName =
         (designer?['full_name'] ?? '').toString().trim();
+    final description = (project['description'] ?? '').toString().trim();
+    final subtitle = description.isNotEmpty
+        ? description
+        : (designerName.isNotEmpty ? '$designerName tasarımı' : '');
+    final budget = _budgetLabel();
+    final style = _styleLabel();
+    final palette = _paletteColors();
 
     return Container(
       decoration: BoxDecoration(
@@ -605,79 +679,168 @@ class _Card extends StatelessWidget {
               child: Icon(Icons.image_outlined,
                   color: KoalaColors.textTer, size: 48),
             ),
-          // Gradient alt
-          Positioned(
-            bottom: 0,
-            left: 0,
-            right: 0,
-            child: Container(
-              padding:
-                  const EdgeInsets.fromLTRB(20, 60, 20, 22),
+          // Gradient overlay - top + bottom
+          Positioned.fill(
+            child: DecoratedBox(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
+                  stops: const [0.0, 0.35, 0.65, 1.0],
                   colors: [
+                    Colors.black.withValues(alpha: 0.18),
                     Colors.transparent,
+                    Colors.black.withValues(alpha: 0.15),
                     Colors.black.withValues(alpha: 0.78),
                   ],
                 ),
               ),
+            ),
+          ),
+
+          // Top pills
+          Positioned(
+            top: 16,
+            left: 16,
+            right: 16,
+            child: Row(
+              children: [
+                if (cat.isNotEmpty)
+                  _GlassPill(icon: _roomIcon(rawType), text: cat),
+                if (cat.isNotEmpty && budget.isNotEmpty)
+                  const SizedBox(width: 8),
+                if (budget.isNotEmpty) _GlassPill(text: budget),
+                const Spacer(),
+                if (style.isNotEmpty)
+                  _GlassPill(text: style, accent: true),
+              ],
+            ),
+          ),
+
+          // Bottom content
+          Positioned(
+            bottom: 0,
+            left: 0,
+            right: 0,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 22),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  if (cat.isNotEmpty)
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.2),
-                        borderRadius: BorderRadius.circular(99),
-                      ),
-                      child: Text(
-                        cat,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 0.3,
-                        ),
-                      ),
-                    ),
-                  const SizedBox(height: 10),
                   Text(
                     title.isEmpty ? '$cat Projesi' : title,
                     style: const TextStyle(
-                      fontSize: 22,
+                      fontSize: 26,
                       fontWeight: FontWeight.w800,
                       color: Colors.white,
-                      letterSpacing: -0.3,
-                      height: 1.2,
+                      letterSpacing: -0.5,
+                      height: 1.1,
                     ),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
-                  if (designerName.isNotEmpty) ...[
+                  if (subtitle.isNotEmpty) ...[
                     const SizedBox(height: 6),
+                    Text(
+                      subtitle,
+                      style: TextStyle(
+                        fontSize: 14,
+                        height: 1.4,
+                        color: Colors.white.withValues(alpha: 0.85),
+                        fontWeight: FontWeight.w400,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                  if (palette.isNotEmpty) ...[
+                    const SizedBox(height: 14),
                     Row(
                       children: [
-                        const Icon(Icons.person_outline_rounded,
-                            size: 14, color: Colors.white70),
-                        const SizedBox(width: 4),
-                        Text(
-                          designerName,
-                          style: const TextStyle(
-                            fontSize: 12,
-                            color: Colors.white70,
-                          ),
-                        ),
+                        for (int i = 0;
+                            i < palette.length && i < 4;
+                            i++) ...[
+                          if (i > 0) const SizedBox(width: 6),
+                          _ColorDot(color: palette[i]),
+                        ],
                       ],
                     ),
                   ],
                 ],
               ),
             ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Glass pill ───
+class _GlassPill extends StatelessWidget {
+  const _GlassPill({required this.text, this.icon, this.accent = false});
+  final String text;
+  final IconData? icon;
+  final bool accent;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: accent
+            ? KoalaColors.accentDeep.withValues(alpha: 0.88)
+            : Colors.black.withValues(alpha: 0.38),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: Colors.white.withValues(alpha: accent ? 0.22 : 0.12),
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (icon != null) ...[
+            Icon(icon, color: Colors.white, size: 14),
+            const SizedBox(width: 4),
+          ],
+          Text(
+            text,
+            style: const TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              color: Colors.white,
+              letterSpacing: 0.2,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Color dot ───
+class _ColorDot extends StatelessWidget {
+  const _ColorDot({required this.color});
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 18,
+      height: 18,
+      decoration: BoxDecoration(
+        color: color,
+        shape: BoxShape.circle,
+        border: Border.all(
+          color: Colors.white.withValues(alpha: 0.55),
+          width: 1.5,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.2),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
           ),
         ],
       ),

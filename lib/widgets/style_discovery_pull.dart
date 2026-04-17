@@ -1,23 +1,21 @@
 // ═══════════════════════════════════════════════════════════
-// STYLE DISCOVERY PULL — input bar'ın üstünde ince handle strip.
-// Kullanıcı parmağını yukarı çektikçe sheet parmağını canlı
-// takip eder. Eşik geçilince StyleDiscoveryLiveScreen açılır.
-//
-// Kullanım:
-//   StyleDiscoveryPull(
-//     child: _TypewriterInput(...),  // mevcut input bar
-//   )
-// Widget, child'ı olduğu gibi render eder + üstüne handle strip
-// ekler + drag sırasında sheet'i bütün ekranı kaplayacak şekilde
-// canlı büyütür.
+// STYLE DISCOVERY PULL — input bar'ın üstünde görünür handle.
+// Kullanıcı parmağını yukarı çektikçe sheet parmağını canlı takip
+// eder. Eşiğe (ekranın %35) ulaşınca orada 5 saniye tutulursa
+// StyleDiscoveryLiveScreen açılır. Tutma süresinde arka planda ilk
+// batch'in görselleri prefetch edilir → swipe ekranı anında hazır.
 // ═══════════════════════════════════════════════════════════
 
+import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:lucide_icons/lucide_icons.dart';
 
 import '../core/theme/koala_tokens.dart';
+import '../services/evlumba_live_service.dart';
 import '../views/style_discovery_live_screen.dart';
 
 class StyleDiscoveryPull extends StatefulWidget {
@@ -27,11 +25,7 @@ class StyleDiscoveryPull extends StatefulWidget {
     this.totalCountBuilder,
   });
 
-  /// Sarmalanan input bar (bottom sabit)
   final Widget child;
-
-  /// Opsiyonel — sheet başlığında "2.847 tasarım" göstermek için
-  /// count fetch fonksiyonu. null ise sadece "sana özel öneriler".
   final Future<int> Function()? totalCountBuilder;
 
   @override
@@ -40,21 +34,29 @@ class StyleDiscoveryPull extends StatefulWidget {
 
 class _StyleDiscoveryPullState extends State<StyleDiscoveryPull>
     with TickerProviderStateMixin {
-  // Drag durumu: 0 = idle, > 0 = ne kadar yukarı çekildi (px)
+  // ─── Drag state ───
   double _dragY = 0;
   bool _dragging = false;
   bool _opening = false;
 
-  // Spring-back controller (bırakınca aşağı yumuşakça iner)
+  // ─── Spring-back controller (bırakınca aşağı iner) ───
   late final AnimationController _releaseCtrl;
   double _releaseStart = 0;
 
-  // Idle handle nefes animasyonu
+  // ─── Idle handle nefes animasyonu (up-arrow bob) ───
   late final AnimationController _idleCtrl;
+
+  // ─── 5-second hold controller — eşikte tutunca doldurur ───
+  late final AnimationController _holdCtrl;
+  Timer? _holdTicker; // eşikte mi? check
+
+  // ─── Background prefetch ───
+  bool _prefetching = false;
+  List<String> _prefetchedCovers = [];
 
   int? _totalCount;
 
-  // Threshold — ekranın %35'i çekilince "aç" olarak kabul et
+  // Threshold — ekranın %35'i çekilince HOLD moduna gir
   double _threshold(BuildContext ctx) =>
       MediaQuery.of(ctx).size.height * 0.35;
 
@@ -63,18 +65,27 @@ class _StyleDiscoveryPullState extends State<StyleDiscoveryPull>
     super.initState();
     _releaseCtrl = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 320),
+      duration: const Duration(milliseconds: 360),
     )..addListener(() {
         if (!_dragging) {
           setState(() {
-            _dragY = _releaseStart * (1 - _releaseCtrl.value);
+            _dragY = _releaseStart * (1 - Curves.easeOutCubic.transform(_releaseCtrl.value));
           });
         }
       });
+
     _idleCtrl = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 2400),
+      duration: const Duration(milliseconds: 1800),
     )..repeat(reverse: true);
+
+    _holdCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 5000),
+    )..addStatusListener((s) {
+        if (s == AnimationStatus.completed) _open();
+      });
+
     _maybeLoadCount();
   }
 
@@ -90,7 +101,14 @@ class _StyleDiscoveryPullState extends State<StyleDiscoveryPull>
   void dispose() {
     _releaseCtrl.dispose();
     _idleCtrl.dispose();
+    _holdCtrl.dispose();
+    _holdTicker?.cancel();
     super.dispose();
+  }
+
+  bool _isAtThreshold() {
+    if (!mounted) return false;
+    return _dragY >= _threshold(context);
   }
 
   void _onDragStart(DragStartDetails d) {
@@ -98,27 +116,54 @@ class _StyleDiscoveryPullState extends State<StyleDiscoveryPull>
     setState(() {
       _dragging = true;
       _releaseCtrl.stop();
+      _holdCtrl.stop();
+      _holdCtrl.value = 0;
     });
   }
 
   void _onDragUpdate(DragUpdateDetails d) {
     if (_opening) return;
-    // delta.dy < 0 = yukarı
-    setState(() {
-      _dragY = math.max(0, _dragY - d.delta.dy);
-    });
+    final next = math.max(0, _dragY - d.delta.dy);
+    setState(() => _dragY = next.toDouble());
+
+    final atTh = _isAtThreshold();
+    // Eşikte mi? Hold timer yönet.
+    if (atTh) {
+      if (!_holdCtrl.isAnimating && _holdCtrl.value < 1.0) {
+        HapticFeedback.selectionClick();
+        _holdCtrl.forward(); // 5sn geri sayım başladı
+        _kickPrefetch(); // görsel prefetch paralel
+      }
+    } else {
+      if (_holdCtrl.isAnimating || _holdCtrl.value > 0) {
+        _holdCtrl.stop();
+        _holdCtrl.value = 0;
+      }
+    }
   }
 
   void _onDragEnd(DragEndDetails d) {
     if (_opening) return;
-    final vy = d.velocity.pixelsPerSecond.dy; // < 0 = yukarı flick
-    final th = _threshold(context);
-    final shouldOpen = _dragY > th || vy < -900;
-    if (shouldOpen) {
+    final vy = d.velocity.pixelsPerSecond.dy;
+    // Hızlı flick → direkt aç
+    if (vy < -1200) {
       _open();
-    } else {
-      _springBack();
+      return;
     }
+    // Eşikte değilse spring-back (hold timer zaten durmuş olur)
+    if (!_isAtThreshold()) {
+      _holdCtrl.stop();
+      _holdCtrl.value = 0;
+      _springBack();
+      return;
+    }
+    // Eşikteyse parmak kalktı — hold devam etmeli mi?
+    // Kullanıcı tuttu zaten, artık elini çekse de geri saysın mı?
+    // Karar: parmak kalkınca hold iptal, spring back.
+    // (UX: 5sn boyunca parmağını tutması gerekli — net sinyal)
+    _holdCtrl.stop();
+    _holdCtrl.value = 0;
+    _springBack();
   }
 
   void _springBack() {
@@ -129,37 +174,61 @@ class _StyleDiscoveryPullState extends State<StyleDiscoveryPull>
     _releaseCtrl.forward(from: 0);
   }
 
+  Future<void> _kickPrefetch() async {
+    if (_prefetching || _prefetchedCovers.isNotEmpty) return;
+    _prefetching = true;
+    try {
+      if (!EvlumbaLiveService.isReady) return;
+      final batch = await EvlumbaLiveService.getProjects(limit: 10);
+      final covers = <String>[];
+      for (final p in batch) {
+        final imgs = p['designer_project_images'] as List?;
+        if (imgs == null || imgs.isEmpty) continue;
+        final sorted = List<Map<String, dynamic>>.from(
+          imgs.whereType<Map>().map((e) => Map<String, dynamic>.from(e)),
+        )..sort((a, b) =>
+            ((a['sort_order'] as num?)?.toInt() ?? 9999)
+                .compareTo((b['sort_order'] as num?)?.toInt() ?? 9999));
+        final url = (sorted.first['image_url'] ?? '').toString();
+        if (url.isNotEmpty && !url.startsWith('data:')) covers.add(url);
+      }
+      _prefetchedCovers = covers;
+      // Gerçek image prefetch
+      if (mounted) {
+        for (final url in covers.take(4)) {
+          precacheImage(CachedNetworkImageProvider(url), context);
+        }
+      }
+    } catch (_) {
+    } finally {
+      _prefetching = false;
+    }
+  }
+
   Future<void> _open() async {
     if (_opening) return;
-    setState(() {
-      _opening = true;
-      _dragging = false;
-    });
+    setState(() => _opening = true);
     HapticFeedback.mediumImpact();
-    // Sheet'i önce full height'a çıkar (kısa anim), sonra route push
     await _animateToFull();
     if (!mounted) return;
     await Navigator.of(context).push(
       PageRouteBuilder(
         opaque: true,
-        transitionDuration: const Duration(milliseconds: 260),
-        reverseTransitionDuration: const Duration(milliseconds: 220),
+        transitionDuration: const Duration(milliseconds: 220),
+        reverseTransitionDuration: const Duration(milliseconds: 200),
         pageBuilder: (_, __, ___) => const StyleDiscoveryLiveScreen(),
-        transitionsBuilder: (_, anim, __, child) {
-          return FadeTransition(
-            opacity: CurvedAnimation(
-              parent: anim,
-              curve: Curves.easeOut,
-            ),
-            child: child,
-          );
-        },
+        transitionsBuilder: (_, anim, __, child) => FadeTransition(
+          opacity: CurvedAnimation(parent: anim, curve: Curves.easeOut),
+          child: child,
+        ),
       ),
     );
     if (!mounted) return;
-    // Route kapanınca handle'ı sıfırla
+    _holdCtrl.value = 0;
+    _prefetchedCovers = [];
     setState(() {
       _opening = false;
+      _dragging = false;
       _dragY = 0;
     });
   }
@@ -174,9 +243,7 @@ class _StyleDiscoveryPullState extends State<StyleDiscoveryPull>
     ctrl.addListener(() {
       if (!mounted) return;
       final t = Curves.easeOutCubic.transform(ctrl.value);
-      setState(() {
-        _dragY = start + (targetH - start) * t;
-      });
+      setState(() => _dragY = start + (targetH - start) * t);
     });
     await ctrl.forward();
     ctrl.dispose();
@@ -187,12 +254,11 @@ class _StyleDiscoveryPullState extends State<StyleDiscoveryPull>
     final screenH = MediaQuery.of(context).size.height;
     final th = _threshold(context);
     final progress = (_dragY / th).clamp(0.0, 1.0);
-    final willOpen = _dragY > th;
+    final atThreshold = _dragY >= th;
 
     return Stack(
       clipBehavior: Clip.none,
       children: [
-        // ── BOTTOM STACK: handle strip + child (input) ──
         Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -208,7 +274,7 @@ class _StyleDiscoveryPullState extends State<StyleDiscoveryPull>
           ],
         ),
 
-        // ── SHEET — live tracks drag, covers screen from bottom ──
+        // ── SHEET — parmak yukarı çekildikçe büyür ──
         if (_dragY > 0)
           Positioned(
             left: 0,
@@ -218,9 +284,11 @@ class _StyleDiscoveryPullState extends State<StyleDiscoveryPull>
             child: IgnorePointer(
               child: _RisingSheet(
                 height: _dragY,
-                willOpen: willOpen,
+                atThreshold: atThreshold,
                 totalCount: _totalCount,
                 progress: progress,
+                holdCtrl: _holdCtrl,
+                prefetchedCount: _prefetchedCovers.length,
               ),
             ),
           ),
@@ -229,7 +297,7 @@ class _StyleDiscoveryPullState extends State<StyleDiscoveryPull>
   }
 }
 
-// ─── HANDLE STRIP — input'un hemen üstünde ince çubuk ───
+// ─── HANDLE STRIP — "Tarzını Keşfet" yazısı + up arrow ───
 class _HandleStrip extends StatelessWidget {
   const _HandleStrip({
     required this.idleCtrl,
@@ -255,36 +323,90 @@ class _HandleStrip extends StatelessWidget {
       onVerticalDragUpdate: onDragUpdate,
       onVerticalDragEnd: onDragEnd,
       child: Container(
-        height: 34,
+        padding: const EdgeInsets.fromLTRB(16, 6, 16, 4),
         color: Colors.transparent,
-        alignment: Alignment.center,
         child: AnimatedBuilder(
           animation: idleCtrl,
           builder: (_, __) {
-            // Idle: çok hafif yukarı-aşağı float (2px)
-            final floaty = active ? 0.0 : math.sin(idleCtrl.value * math.pi) * 2;
-            // Active: handle bar genişler + morlaşır
+            // Idle'da yukarı-aşağı bob (2px)
+            final floaty =
+                active ? 0.0 : math.sin(idleCtrl.value * math.pi) * 2;
             final activeT = progress;
-            final barW = 32 + activeT * 28;
-            final barOpacity = 0.35 + activeT * 0.55;
-            return Transform.translate(
-              offset: Offset(0, -floaty),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  AnimatedContainer(
-                    duration: const Duration(milliseconds: 140),
-                    width: barW,
-                    height: 4,
+
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Üst grab çizgisi
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 140),
+                  width: 36 + activeT * 28,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: KoalaColors.accentDeep
+                        .withValues(alpha: 0.3 + activeT * 0.5),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                // Chip: "↑ Tarzını Keşfet" — bariz ama minimal
+                Transform.translate(
+                  offset: Offset(0, -floaty),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 180),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 5),
                     decoration: BoxDecoration(
-                      color: KoalaColors.accentDeep
-                          .withValues(alpha: barOpacity),
-                      borderRadius: BorderRadius.circular(2),
+                      color: active
+                          ? KoalaColors.accentDeep
+                              .withValues(alpha: 0.14)
+                          : KoalaColors.accentSoft,
+                      borderRadius: BorderRadius.circular(99),
+                      border: Border.all(
+                        color: KoalaColors.accentDeep
+                            .withValues(alpha: 0.18),
+                        width: 0.8,
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        AnimatedBuilder(
+                          animation: idleCtrl,
+                          builder: (_, __) {
+                            final bob = active
+                                ? 0.0
+                                : math.sin(idleCtrl.value * math.pi) * 2;
+                            return Transform.translate(
+                              offset: Offset(0, -bob),
+                              child: const Icon(
+                                LucideIcons.chevronUp,
+                                size: 14,
+                                color: KoalaColors.accentDeep,
+                              ),
+                            );
+                          },
+                        ),
+                        const SizedBox(width: 5),
+                        const Text(
+                          'Tarzını Keşfet',
+                          style: TextStyle(
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w700,
+                            color: KoalaColors.accentDeep,
+                            letterSpacing: 0.3,
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        const Icon(
+                          Icons.auto_awesome,
+                          size: 11,
+                          color: KoalaColors.accentDeep,
+                        ),
+                      ],
                     ),
                   ),
-                ],
-              ),
+                ),
+              ],
             );
           },
         ),
@@ -293,27 +415,29 @@ class _HandleStrip extends StatelessWidget {
   }
 }
 
-// ─── RISING SHEET — drag ile büyüyen keşfet önizlemesi ───
+// ─── RISING SHEET — drag ile büyür, eşikte 5s hold progress ───
 class _RisingSheet extends StatelessWidget {
   const _RisingSheet({
     required this.height,
-    required this.willOpen,
+    required this.atThreshold,
     required this.totalCount,
     required this.progress,
+    required this.holdCtrl,
+    required this.prefetchedCount,
   });
 
   final double height;
-  final bool willOpen;
+  final bool atThreshold;
   final int? totalCount;
-  final double progress; // 0..1 eşiğe kadar
+  final double progress;
+  final AnimationController holdCtrl;
+  final int prefetchedCount;
 
   @override
   Widget build(BuildContext context) {
-    // İçerik opacity — 40px'ten sonra yavaşça belirir
     final contentOpacity =
         ((height - 40) / 120).clamp(0.0, 1.0);
-    final radius = (1 - progress) * 28; // yukarı çıktıkça köşeler düzleşir
-    final scale = 0.96 + progress * 0.04;
+    final radius = (1 - progress) * 28;
 
     return Container(
       decoration: BoxDecoration(
@@ -331,41 +455,69 @@ class _RisingSheet extends StatelessWidget {
         ],
       ),
       clipBehavior: Clip.antiAlias,
-      child: Opacity(
-        opacity: contentOpacity,
-        child: Transform.scale(
-          scale: scale,
-          alignment: Alignment.topCenter,
-          child: _SheetPreview(
-            willOpen: willOpen,
-            totalCount: totalCount,
+      child: Stack(
+        children: [
+          // ── Üstte hold progress bar (0→100% in 5s) ──
+          AnimatedBuilder(
+            animation: holdCtrl,
+            builder: (_, __) => Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              height: 4,
+              child: FractionallySizedBox(
+                alignment: Alignment.centerLeft,
+                widthFactor: holdCtrl.value,
+                child: Container(
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [KoalaColors.accent, KoalaColors.accentDeep],
+                    ),
+                  ),
+                ),
+              ),
+            ),
           ),
-        ),
+          Opacity(
+            opacity: contentOpacity,
+            child: _SheetBody(
+              atThreshold: atThreshold,
+              totalCount: totalCount,
+              holdCtrl: holdCtrl,
+              prefetchedCount: prefetchedCount,
+            ),
+          ),
+        ],
       ),
     );
   }
 }
 
-class _SheetPreview extends StatelessWidget {
-  const _SheetPreview({
-    required this.willOpen,
+class _SheetBody extends StatelessWidget {
+  const _SheetBody({
+    required this.atThreshold,
     required this.totalCount,
+    required this.holdCtrl,
+    required this.prefetchedCount,
   });
-  final bool willOpen;
+
+  final bool atThreshold;
   final int? totalCount;
+  final AnimationController holdCtrl;
+  final int prefetchedCount;
 
   @override
   Widget build(BuildContext context) {
     final sub = totalCount != null
         ? '${_fmt(totalCount!)} tasarım · sana özel öneriler'
-        : 'Sana özel öneriler';
+        : 'Sana özel öneriler hazırlıyoruz';
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(22, 22, 22, 24),
+      padding: const EdgeInsets.fromLTRB(22, 18, 22, 24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Küçük grab çizgisi (üstte)
+          // Grab çizgisi (üst ortası)
           Center(
             child: Container(
               width: 40,
@@ -417,10 +569,9 @@ class _SheetPreview extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 18),
-          // Hero önizleme kartı
+          // Hero preview
           Expanded(
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 180),
+            child: Container(
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(22),
                 image: const DecorationImage(
@@ -441,7 +592,6 @@ class _SheetPreview extends StatelessWidget {
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-                  // Alt gradient
                   DecoratedBox(
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
@@ -498,22 +648,53 @@ class _SheetPreview extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 16),
-          // Hint — bırak, açılıyor / devam et
-          AnimatedSwitcher(
-            duration: const Duration(milliseconds: 220),
-            child: Text(
-              willOpen ? 'Bırak — başla ✨' : 'Yukarı çekmeye devam et',
-              key: ValueKey(willOpen),
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: willOpen
-                    ? KoalaColors.accentDeep
-                    : KoalaColors.textSec,
-                letterSpacing: 0.1,
-              ),
-            ),
+          // ── ALT HINT — eşiğe göre dinamik ──
+          AnimatedBuilder(
+            animation: holdCtrl,
+            builder: (_, __) {
+              if (atThreshold) {
+                // "Tut: 5 saniye" → tasarım hazırlanıyor hissi
+                final remain = (5 - holdCtrl.value * 5).ceil().clamp(1, 5);
+                return Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(
+                        value: holdCtrl.value,
+                        strokeWidth: 2,
+                        color: KoalaColors.accentDeep,
+                        backgroundColor: KoalaColors.accentDeep
+                            .withValues(alpha: 0.2),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      prefetchedCount > 0
+                          ? '$prefetchedCount tasarım hazırlandı · tut: ${remain}s'
+                          : 'Tasarımlar hazırlanıyor · tut: ${remain}s',
+                      style: const TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w600,
+                        color: KoalaColors.accentDeep,
+                        letterSpacing: 0.1,
+                      ),
+                    ),
+                  ],
+                );
+              }
+              return const Text(
+                'Yukarı çekmeye devam et',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w600,
+                  color: KoalaColors.textSec,
+                  letterSpacing: 0.1,
+                ),
+              );
+            },
           ),
         ],
       ),
