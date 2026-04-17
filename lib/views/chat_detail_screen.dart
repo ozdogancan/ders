@@ -2060,6 +2060,8 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
         return ColorPalette(card.data);
       case 'designer_card':
         return DesignerCards(card.data);
+      case 'project_card':
+        return _ProjectCardInline(data: card.data);
       case 'budget_plan':
         return BudgetPlan(card.data);
       case 'quick_tips':
@@ -2189,3 +2191,120 @@ class _TypingDotsState extends State<_TypingDots>
 }
 
 // Card widgets extracted to lib/views/chat/widgets/
+
+// ═══════════════════════════════════════════════════════
+// PROJECT CARD INLINE — salon bul / oturma odası önerileri için
+// Kategori badge + görsel + tasarımcı adı. Tıklayınca detay.
+// ═══════════════════════════════════════════════════════
+class _ProjectCardInline extends StatelessWidget {
+  const _ProjectCardInline({required this.data});
+  final Map<String, dynamic> data;
+
+  @override
+  Widget build(BuildContext context) {
+    final title = (data['title'] ?? '').toString();
+    final category = (data['category'] ?? '').toString();
+    final designerName = (data['designer_name'] ?? '').toString();
+    final imageUrl = (data['image_url'] ?? '').toString();
+    final projectId = (data['id'] ?? '').toString();
+    final designerId = (data['designer_id'] ?? '').toString();
+
+    return GestureDetector(
+      onTap: projectId.isEmpty
+          ? null
+          : () => context.push('/project/$projectId'),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 8),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: KoalaColors.border),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (imageUrl.isNotEmpty)
+              AspectRatio(
+                aspectRatio: 16 / 10,
+                child: Image.network(
+                  imageUrl,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => Container(
+                    color: KoalaColors.surfaceMuted,
+                    child: const Icon(Icons.image_not_supported_outlined,
+                        color: KoalaColors.textMuted),
+                  ),
+                ),
+              ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (category.isNotEmpty)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: KoalaColors.accentSoft,
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        category,
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: KoalaColors.accentDeep,
+                        ),
+                      ),
+                    ),
+                  if (title.isNotEmpty &&
+                      title.toLowerCase() != category.toLowerCase()) ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: KoalaColors.ink,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                  if (designerName.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        const Icon(Icons.person_outline_rounded,
+                            size: 14, color: KoalaColors.textMuted),
+                        const SizedBox(width: 4),
+                        Flexible(
+                          child: GestureDetector(
+                            onTap: designerId.isEmpty
+                                ? null
+                                : () => context.push('/designer/$designerId'),
+                            child: Text(
+                              designerName,
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: KoalaColors.textMuted,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

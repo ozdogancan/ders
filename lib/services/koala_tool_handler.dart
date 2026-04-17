@@ -29,6 +29,48 @@ class KoalaToolHandler {
     return mapping[roomType.toLowerCase()] ?? roomType;
   }
 
+  /// Ham project_type → kullanıcıya gösterilecek Türkçe etiket.
+  /// DB zaten TR saklar ama snake_case de gelebilir (ör. "living_room").
+  static String _prettyCategoryLabel(String raw) {
+    if (raw.trim().isEmpty) return '';
+    final key = raw.toLowerCase().trim();
+    const trMap = {
+      'living_room': 'Oturma Odası',
+      'salon': 'Oturma Odası',
+      'oturma odası': 'Oturma Odası',
+      'bedroom': 'Yatak Odası',
+      'yatak_odasi': 'Yatak Odası',
+      'yatak odası': 'Yatak Odası',
+      'kitchen': 'Mutfak',
+      'mutfak': 'Mutfak',
+      'bathroom': 'Banyo',
+      'banyo': 'Banyo',
+      'dining_room': 'Yemek Odası',
+      'yemek odası': 'Yemek Odası',
+      'office': 'Çalışma Odası',
+      'ofis': 'Ofis',
+      'ev_ofisi': 'Ev Ofisi',
+      'ev ofisi': 'Ev Ofisi',
+      'kids_room': 'Çocuk Odası',
+      'cocuk_odasi': 'Çocuk Odası',
+      'çocuk odası': 'Çocuk Odası',
+      'hallway': 'Koridor / Hol',
+      'antre': 'Antre',
+      'balcony': 'Balkon',
+      'balkon': 'Balkon',
+      'outdoor': 'Dış Mekan',
+    };
+    if (trMap.containsKey(key)) return trMap[key]!;
+    // Zaten TR görünüyorsa olduğu gibi döndür
+    if (raw.contains(' ') || RegExp(r'[çğıöşüÇĞİÖŞÜ]').hasMatch(raw)) return raw;
+    // snake_case → Title Case fallback
+    return raw
+        .replaceAll(RegExp(r'[_-]+'), ' ')
+        .split(' ')
+        .map((w) => w.isEmpty ? w : w[0].toUpperCase() + w.substring(1))
+        .join(' ');
+  }
+
   /// Gemini'den gelen function call'ı çalıştır, gerçek veri döndür
   static Future<Map<String, dynamic>> handle(
     String functionName,
@@ -293,11 +335,30 @@ class KoalaToolHandler {
         final firstImage =
             images.isNotEmpty ? images.first['image_url'] : null;
         final desc = (p['description'] ?? '').toString();
+        final rawType = (p['project_type'] ?? '').toString();
+        // Kategori etiketi: "Oturma Odası" vb. — TR saklanıyor, ama snake_case
+        // gelirse de prettify et.
+        final categoryLabel = _prettyCategoryLabel(rawType);
+        final rawTitle = (p['title'] ?? '').toString().trim();
+        // "X Projesi" tekrarlayan title'ları kategoriye çevir.
+        final isGenericTitle = rawTitle.isEmpty ||
+            RegExp(r'Projesi\s*$', caseSensitive: false).hasMatch(rawTitle);
+        final displayTitle = isGenericTitle && categoryLabel.isNotEmpty
+            ? categoryLabel
+            : rawTitle;
+        // Designer adı — nested profiles join varsa al
+        final profile = p['profiles'] as Map<String, dynamic>?;
+        final designerName = (profile?['full_name'] ??
+                p['designer_name'] ??
+                '')
+            .toString();
         return {
           'id': p['id'],
-          'title': p['title'] ?? '',
+          'title': displayTitle,
+          'category': categoryLabel,
+          'designer_name': designerName,
           'description': desc.length > 150 ? '${desc.substring(0, 150)}...' : desc,
-          'room_type': p['project_type'] ?? '',
+          'room_type': rawType,
           'image_url':
               firstImage ?? p['cover_image_url'] ?? p['cover_url'] ?? '',
           'designer_id': p['designer_id'] ?? '',
