@@ -397,14 +397,21 @@ class _ChatListScreenV1State extends State<ChatListScreenV1> {
         final id = p['id'].toString();
         final name = (p['full_name'] ?? p['business_name'] ?? '').toString().trim();
         final avatar = (p['avatar_url'] ?? '').toString().trim();
+        // Profession — "İç Mimar", "Mimar" vb. Title field öncelikli,
+        // yoksa specialty (kategori/stil) fallback.
+        final prof = ((p['title'] ?? p['specialty'] ?? '') as Object)
+            .toString()
+            .trim();
         _designerCache[id] = {
           'name': name.isEmpty ? null : name,
           'avatar': avatar.isEmpty ? null : avatar,
+          'profession': prof.isEmpty ? null : prof,
         };
       }
       // Bulunamayan ID'ler için null set et
       for (final id in missingIds) {
-        _designerCache.putIfAbsent(id, () => {'name': null, 'avatar': null});
+        _designerCache.putIfAbsent(
+            id, () => {'name': null, 'avatar': null, 'profession': null});
       }
       if (mounted) setState(() {});
     } catch (_) {}
@@ -1958,7 +1965,7 @@ class _ChatListScreenV1State extends State<ChatListScreenV1> {
   // ═══════════════════════════════════════════════════════
   Widget _buildConversationTile(Map<String, dynamic> conv) {
     final lastMessage = conv['last_message'] as String? ?? '';
-    final projectTitle = (conv['title'] as String? ?? '').trim();
+    final rawTitle = (conv['title'] as String? ?? '').trim();
     final lastAt = DateTime.tryParse(conv['last_message_at']?.toString() ?? '');
 
     // Unread count (current user perspective)
@@ -1974,6 +1981,26 @@ class _ChatListScreenV1State extends State<ChatListScreenV1> {
         ? 'Tasarımcı'
         : cached!['name']!;
     final avatarUrl = cached?['avatar'];
+    final profession = (cached?['profession'] ?? '').toString().trim();
+
+    // Tile'da isim yanında gösterilecek alt-başlık. Mantık:
+    //   1) conv.title varsa VE designer adını içermiyorsa → onu göster
+    //      (gerçek bir proje başlığı — "Salon renovasyonu" gibi).
+    //   2) conv.title yok/tekrar (Asil Yaşar · Asil Yaşar) → profession
+    //      göster ("İç Mimar"). Profession da yoksa HİÇBİR şey gösterme.
+    String subtitle = '';
+    final nameLower = designerName.toLowerCase();
+    final titleLower = rawTitle.toLowerCase();
+    final titleIsJustName = rawTitle.isEmpty ||
+        titleLower == nameLower ||
+        titleLower.contains(nameLower) ||
+        nameLower.contains(titleLower);
+    if (!titleIsJustName) {
+      subtitle = rawTitle;
+    } else if (profession.isNotEmpty) {
+      subtitle = profession;
+    }
+    final projectTitle = subtitle;
 
     final initials = designerName
         .split(' ')
@@ -2067,7 +2094,11 @@ class _ChatListScreenV1State extends State<ChatListScreenV1> {
           'designerId': designerId,
           'designerName': designerName,
           'designerAvatarUrl': avatarUrl,
-          'projectTitle': projectTitle.isNotEmpty ? projectTitle : null,
+          // Navigation extra'ya gerçek proje başlığını (designer adı tekrarı
+          // değilse) ver — profession fallback'ini gönderme.
+          'projectTitle': titleIsJustName
+              ? null
+              : (rawTitle.isNotEmpty ? rawTitle : null),
           // markAsRead() yukarıda zaten tetiklendi — DB'de unread=0 olacak.
           // Detail screen'de "Yeni mesajlar" divider'ı gösterebilmek için
           // okunmamış sayısını navigation extra'sıyla gönderiyoruz. Aksi
