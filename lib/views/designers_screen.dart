@@ -13,6 +13,7 @@ import '../services/evlumba_live_service.dart';
 import '../services/messaging_service.dart';
 import '../services/saved_items_service.dart';
 import '../widgets/chat/designer_chat_popup.dart';
+import '../widgets/projects_gallery_popup.dart';
 import '../widgets/koala_widgets.dart';
 import '../widgets/save_button.dart';
 import 'chat_detail_screen.dart';
@@ -664,16 +665,15 @@ class _DesignersScreenState extends State<DesignersScreen> {
 
   Future<void> _openProject(_ExpertPreview expert, Map<String, dynamic> project) async {
     if (!mounted) return;
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      barrierColor: Colors.black.withValues(alpha: 0.24),
-      builder: (_) => _ExpertDetailSheet(
-        expert: expert,
-        highlightedProjectId: (project['id'] ?? '').toString(),
-        onSendMessage: (message) => _openExpertChat(expert, customMessage: message),
-      ),
+    final projects = expert.projects;
+    final tappedId = (project['id'] ?? '').toString();
+    var index = projects.indexWhere((p) => (p['id'] ?? '').toString() == tappedId);
+    if (index < 0) index = 0;
+    await ProjectsGalleryPopup.show(
+      context,
+      projects: projects,
+      initialIndex: index,
+      designer: expert.designer,
     );
   }
 

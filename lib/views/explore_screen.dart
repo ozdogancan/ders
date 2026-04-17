@@ -6,6 +6,7 @@ import '../services/evlumba_live_service.dart';
 import '../services/saved_items_service.dart';
 import '../widgets/save_button.dart';
 import '../widgets/error_state.dart';
+import '../widgets/projects_gallery_popup.dart';
 import '../widgets/shimmer_loading.dart';
 
 /// Keşfet ekranı — evlumba tasarımlarını grid'de göster
@@ -220,9 +221,10 @@ class _ExploreScreenState extends State<ExploreScreen> {
                           itemCount: _projects.length,
                           itemBuilder: (context, index) => _ProjectCard(
                             project: _projects[index],
-                            onTap: () => context.push(
-                              '/project/${_projects[index]['id'] ?? index}',
-                              extra: _projects[index],
+                            onTap: () => ProjectsGalleryPopup.show(
+                              context,
+                              projects: _projects,
+                              initialIndex: index,
                             ),
                           ),
                         ),

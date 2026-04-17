@@ -110,6 +110,25 @@ class ShareService {
     }
   }
 
+  /// Design preview ile sohbete navigate eden yeni flow için public logging.
+  /// Mesajı gönderen ConversationDetailScreen — bu fn sadece
+  /// koala_shares + analytics'e "chat" kanalını kaydeder.
+  static Future<void> logShareInChat({
+    required SavedItemType type,
+    required String itemId,
+    required String conversationId,
+    String? designerId,
+  }) async {
+    await _log(
+      type: type,
+      itemId: itemId,
+      channel: 'chat',
+      url: publicUrl(type: type, itemId: itemId),
+      conversationId: conversationId,
+      designerId: designerId,
+    );
+  }
+
   // DB + analytics çift log.
   static Future<void> _log({
     required SavedItemType type,

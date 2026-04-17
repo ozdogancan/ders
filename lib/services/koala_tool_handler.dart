@@ -470,24 +470,37 @@ class KoalaToolHandler {
         designers.take(limit).map((d) async {
           final designerId = (d['id'] ?? '').toString();
           List<String> portfolioImages = [];
+          List<Map<String, dynamic>> portfolioProjects = [];
+          int totalProjects = 0;
           if (designerId.isNotEmpty) {
             try {
               final projects = await EvlumbaLiveService.getProjects(
                 limit: 12,
                 designerId: designerId,
               );
+              totalProjects = projects.length;
               for (final p in projects) {
                 final images = (p['designer_project_images'] as List?) ?? [];
                 final firstImg = images.isNotEmpty
                     ? images.first['image_url']?.toString()
                     : null;
+                String? img;
                 if (firstImg != null && firstImg.isNotEmpty) {
-                  portfolioImages.add(firstImg);
+                  img = firstImg;
                 } else {
                   final cover = p['cover_image_url']?.toString();
-                  if (cover != null && cover.isNotEmpty) {
-                    portfolioImages.add(cover);
-                  }
+                  if (cover != null && cover.isNotEmpty) img = cover;
+                }
+                if (img != null) {
+                  portfolioImages.add(img);
+                  portfolioProjects.add({
+                    'id': (p['id'] ?? '').toString(),
+                    'title': (p['title'] ?? '').toString(),
+                    'project_type': (p['project_type'] ?? '').toString(),
+                    'cover_image_url': img,
+                    'image_url': img,
+                    'designer_id': designerId,
+                  });
                 }
               }
             } catch (_) {}
@@ -499,7 +512,9 @@ class KoalaToolHandler {
             'city': d['city'] ?? '',
             'avatar_url': d['avatar_url'] ?? '',
             'business_name': d['business_name'] ?? '',
+            'total_projects': totalProjects,
             if (portfolioImages.isNotEmpty) 'portfolio_images': portfolioImages,
+            if (portfolioProjects.isNotEmpty) 'portfolio_projects': portfolioProjects,
           };
         }),
       );

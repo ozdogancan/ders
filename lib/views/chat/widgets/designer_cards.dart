@@ -1,15 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:url_launcher/url_launcher.dart';
+import 'package:lucide_icons/lucide_icons.dart';
 import '../../../core/theme/koala_tokens.dart';
 import '../../../helpers/auth_guard.dart';
+import '../../../services/evlumba_live_service.dart';
 import '../../../services/saved_items_service.dart';
 import '../../../services/profile_feedback_service.dart';
 import '../../../widgets/like_button.dart';
 import '../../../widgets/save_button.dart';
 import '../../../widgets/share_sheet.dart';
 import '../../../widgets/chat/designer_chat_popup.dart';
-import '../../designer_profile_screen.dart';
+import '../../../widgets/projects_gallery_popup.dart';
 import 'chat_constants.dart';
 
 class DesignerCards extends StatelessWidget {
@@ -241,15 +242,27 @@ class DesignerCards extends StatelessWidget {
                   ),
                 ),
                 // Portfolio görselleri — max 3 thumb; daha fazla varsa son
-                // thumb'a "+N" overlay eklenir, dokunulduğunda profil açılır.
-                if (ds['portfolio_images'] != null && (ds['portfolio_images'] as List).isNotEmpty)
+                // thumb'a "+N" overlay eklenir, tıklanınca tüm galerisi açılır.
+                if ((ds['portfolio_projects'] as List?)?.isNotEmpty == true ||
+                    (ds['portfolio_images'] as List?)?.isNotEmpty == true)
                   Padding(
                     padding: const EdgeInsets.only(top: 10),
                     child: _PortfolioStrip(
                       designerId: ds['id']?.toString() ?? '',
                       designerName: name,
+                      designerAvatarUrl: ds['avatar_url']?.toString(),
+                      totalProjects: (ds['total_projects'] as int?) ??
+                          ((ds['portfolio_projects'] as List?)?.length ??
+                              (ds['portfolio_images'] as List?)?.length ??
+                              0),
+                      projects: (ds['portfolio_projects'] as List?)
+                              ?.whereType<Map>()
+                              .map((m) => Map<String, dynamic>.from(m))
+                              .toList() ??
+                          const [],
                       images: List<String>.from(
-                        (ds['portfolio_images'] as List).whereType<String>(),
+                        (ds['portfolio_images'] as List? ?? const [])
+                            .whereType<String>(),
                       ),
                     ),
                   ),
@@ -314,38 +327,6 @@ class DesignerCards extends StatelessWidget {
                     ),
                   ),
                 ),
-                const SizedBox(height: 8),
-                // Secondary \u2014 Profili G\u00F6r (full-width outline)
-                GestureDetector(
-                  onTap: () {
-                    final designerId = ds['id']?.toString() ?? '';
-                    final profileUrl = designerId.isNotEmpty
-                        ? 'https://www.evlumba.com/tasarimci/$designerId'
-                        : 'https://www.evlumba.com/tasarimcilar';
-                    launchUrl(
-                      Uri.parse(profileUrl),
-                      mode: LaunchMode.inAppBrowserView,
-                    );
-                  },
-                  child: Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(vertical: 10),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: accent.withValues(alpha: 0.25)),
-                    ),
-                    child: const Center(
-                      child: Text(
-                        'Profili G\u00F6r',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: accent,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
               ],
             ),
           );
@@ -355,48 +336,111 @@ class DesignerCards extends StatelessWidget {
   }
 }
 
-/// Portfolio thumb şeridi — max 3 görseli gösterir. 3'ten fazla varsa son
-/// thumb'ın üzerine "+N Tümünü gör" overlay koyar ve dokunuşu designer
-/// profile ekranına yönlendirir (orada bütün portfolio kategorili görünür).
+/// Portfolio thumb şeridi — max 3 görseli gösterir. 3'ten fazla proje varsa
+/// son thumb'ın üzerine "+N" overlay koyar; tap tüm galeriyi `ProjectsGalleryPopup`
+/// ile açar. Her thumb altında proje kategorisi (`project_type` → Türkçe) yazar.
 class _PortfolioStrip extends StatelessWidget {
   const _PortfolioStrip({
     required this.designerId,
     required this.designerName,
     required this.images,
+    required this.projects,
+    required this.totalProjects,
+    this.designerAvatarUrl,
   });
 
   final String designerId;
   final String designerName;
+  final String? designerAvatarUrl;
   final List<String> images;
+  final List<Map<String, dynamic>> projects;
+  final int totalProjects;
 
   static const int _visible = 3;
 
-  void _openProfile(BuildContext context) {
-    if (designerId.isEmpty) return;
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => DesignerProfileScreen(
-          designerId: designerId,
-          designerName: designerName,
-        ),
-      ),
+  String _prettyCategory(String raw) {
+    const trMap = {
+      'living_room': 'Oturma Odası',
+      'bedroom': 'Yatak Odası',
+      'kitchen': 'Mutfak',
+      'bathroom': 'Banyo',
+      'kids_room': 'Çocuk Odası',
+      'office': 'Çalışma Odası',
+      'dining_room': 'Yemek Odası',
+      'hallway': 'Antre',
+      'balcony': 'Balkon',
+      'outdoor': 'Dış Mekan',
+    };
+    final key = raw.toLowerCase().trim();
+    if (trMap.containsKey(key)) return trMap[key]!;
+    final cleaned = raw.replaceAll(RegExp(r'[_-]+'), ' ').trim();
+    if (cleaned.isEmpty) return 'Proje';
+    return cleaned
+        .split(RegExp(r'\s+'))
+        .map((w) => w.isEmpty ? w : w[0].toUpperCase() + w.substring(1))
+        .join(' ');
+  }
+
+  Future<List<Map<String, dynamic>>> _resolveProjects() async {
+    if (projects.isNotEmpty) return projects;
+    // Fallback: portfolio_images varsa image'lardan project stub'ı üret
+    if (designerId.isNotEmpty && EvlumbaLiveService.isReady) {
+      try {
+        final fetched = await EvlumbaLiveService.getDesignerProjects(
+          designerId,
+          limit: 12,
+        );
+        if (fetched.isNotEmpty) return fetched;
+      } catch (_) {}
+    }
+    return images
+        .map((url) => <String, dynamic>{
+              'id': '',
+              'title': '',
+              'project_type': '',
+              'cover_image_url': url,
+              'image_url': url,
+              'designer_id': designerId,
+            })
+        .toList();
+  }
+
+  Future<void> _openGallery(BuildContext context, int tapIndex) async {
+    HapticFeedback.selectionClick();
+    final resolved = await _resolveProjects();
+    if (!context.mounted || resolved.isEmpty) return;
+    final idx = tapIndex.clamp(0, resolved.length - 1);
+    await ProjectsGalleryPopup.show(
+      context,
+      projects: resolved,
+      initialIndex: idx,
+      designer: {
+        'id': designerId,
+        'full_name': designerName,
+        'avatar_url': designerAvatarUrl ?? '',
+      },
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final total = images.length;
-    final show = total <= _visible ? total : _visible;
+    final total = totalProjects > 0 ? totalProjects : images.length;
+    final thumbsCount = images.length;
+    final show = thumbsCount <= _visible ? thumbsCount : _visible;
     final extra = total - show;
 
     return SizedBox(
-      height: 72,
+      height: 100,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         itemCount: show,
         separatorBuilder: (_, __) => const SizedBox(width: 8),
         itemBuilder: (_, i) {
           final isLastWithExtra = i == show - 1 && extra > 0;
+          final pt = i < projects.length
+              ? (projects[i]['project_type'] ?? '').toString()
+              : '';
+          final categoryLabel = pt.isEmpty ? 'Proje' : _prettyCategory(pt);
           final thumb = ClipRRect(
             borderRadius: BorderRadius.circular(10),
             child: Image.network(
@@ -408,51 +452,56 @@ class _PortfolioStrip extends StatelessWidget {
                 width: 96,
                 height: 72,
                 color: KoalaColors.surfaceMuted,
-                child: Icon(Icons.image_rounded, color: KoalaColors.textTer),
+                child: const Icon(LucideIcons.imageOff,
+                    size: 20, color: KoalaColors.textTer),
               ),
             ),
           );
 
           return GestureDetector(
-            onTap: () {
-              HapticFeedback.selectionClick();
-              _openProfile(context);
-            },
-            child: Stack(
-              children: [
-                thumb,
-                if (isLastWithExtra)
-                  Positioned.fill(
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(10),
-                      child: Container(
-                        color: Colors.black.withValues(alpha: 0.55),
-                        alignment: Alignment.center,
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Text(
-                              '+$extra',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 18,
-                                fontWeight: FontWeight.w800,
+            onTap: () => _openGallery(context, i),
+            child: SizedBox(
+              width: 96,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Stack(
+                    children: [
+                      thumb,
+                      if (isLastWithExtra)
+                        Positioned.fill(
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(10),
+                            child: Container(
+                              color: Colors.black.withValues(alpha: 0.55),
+                              alignment: Alignment.center,
+                              child: Text(
+                                '+$extra',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w800,
+                                ),
                               ),
                             ),
-                            const Text(
-                              'Tümünü gör',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 10,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
+                          ),
                         ),
-                      ),
-                    ),
+                    ],
                   ),
-              ],
+                  const SizedBox(height: 4),
+                  Text(
+                    categoryLabel,
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: KoalaColors.textSec,
+                      height: 1.2,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
             ),
           );
         },

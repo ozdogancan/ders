@@ -10,7 +10,6 @@ import '../../views/profile_screen.dart';
 import '../../views/chat_detail_screen.dart';
 import '../../services/koala_ai_service.dart';
 import '../../views/conversation_detail_screen.dart';
-import '../../views/project_detail_screen.dart';
 import '../../views/designers_screen.dart';
 import '../../views/collections_screen.dart';
 import '../../views/notifications_screen.dart';
@@ -128,14 +127,8 @@ final GoRouter appRouter = GoRouter(
           designerAvatarUrl: extra?['designerAvatarUrl'] as String?,
           projectTitle: extra?['projectTitle'] as String?,
           unreadOnEntry: extra?['unreadOnEntry'] as int?,
+          pendingDesign: extra?['pendingDesign'] as Map<String, dynamic>?,
         );
-      },
-    ),
-    GoRoute(
-      path: '/project/:id',
-      builder: (context, state) {
-        final project = state.extra as Map<String, dynamic>? ?? {};
-        return ProjectDetailScreen(project: project);
       },
     ),
     GoRoute(

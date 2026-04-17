@@ -7,6 +7,7 @@ import '../services/messaging_service.dart';
 import '../services/collections_service.dart';
 import '../services/saved_items_service.dart';
 import '../widgets/koala_widgets.dart';
+import '../widgets/projects_gallery_popup.dart';
 import '../widgets/share_sheet.dart';
 import 'collections_screen.dart';
 import 'conversation_detail_screen.dart';
@@ -406,9 +407,26 @@ class _SavedListState extends State<_SavedList>
       case SavedItemType.design:
         final projectId = extraData?['project_id'] as String? ?? itemId;
         if (projectId.isNotEmpty) {
-          launchUrl(
-            Uri.parse('https://www.evlumba.com/proje/$projectId'),
-            mode: LaunchMode.inAppBrowserView,
+          final designerId = extraData?['designer_id'] as String? ?? '';
+          ProjectsGalleryPopup.show(
+            context,
+            projects: [
+              {
+                'id': projectId,
+                'title': item['title'] as String? ?? '',
+                'cover_image_url': item['image_url'] as String? ?? '',
+                'image_url': item['image_url'] as String? ?? '',
+                'project_type': '',
+                'designer_id': designerId,
+                'designer_name': item['subtitle'] as String? ?? '',
+              }
+            ],
+            designer: designerId.isEmpty
+                ? null
+                : {
+                    'id': designerId,
+                    'full_name': item['subtitle'] as String? ?? '',
+                  },
           );
         }
         break;

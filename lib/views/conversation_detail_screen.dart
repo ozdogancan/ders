@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -10,6 +12,7 @@ import '../services/evlumba_live_service.dart';
 import '../services/global_message_listener.dart';
 import '../services/messaging_service.dart';
 import '../services/saved_items_service.dart';
+import '../services/share_service.dart';
 import '../widgets/koala_widgets.dart';
 
 /// Tasarımcı ile mesaj detay ekranı — gerçek zamanlı
@@ -23,6 +26,7 @@ class ConversationDetailScreen extends StatefulWidget {
     this.projectTitle,
     this.unreadOnEntry,
     this.initialDraft,
+    this.pendingDesign,
   }) : assert(conversationId != null || designerId != null,
             'conversationId veya designerId verilmeli (lazy chat için)');
 
@@ -37,6 +41,12 @@ class ConversationDetailScreen extends StatefulWidget {
   /// Lazy chat girişinde input'a ön-doldurulacak taslak metin (örn:
   /// "Merhaba, [proje adı] hakkında bilgi almak istiyorum").
   final String? initialDraft;
+
+  /// ShareSheet'ten design paylaşımı için ön-dolmuş tasarım. Map keys:
+  /// `id`, `title`, `imageUrl`, `designerId`. Input üstünde preview çıkar;
+  /// send'e basınca image mesajı olarak gönderilir + `ShareService.logShareInChat`
+  /// çağrılır (koala_shares + analytics).
+  final Map<String, dynamic>? pendingDesign;
 
   /// Chat list ekranı tapta markAsRead fire-and-forget tetikliyor, o yüzden
   /// detail açıldığında DB'den okuduğumuz unread_count zaten 0 olabiliyor.
@@ -68,6 +78,10 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
   // _pendingPhoto'dan farkı: bytes yok, upload yapılmaz — direkt attachment_url
   // olarak gönderilir (görsel zaten Evlumba CDN'inde).
   String? _pendingDesignUrl;
+  // ShareSheet "design" flow'dan gelen tasarım meta bilgisi — send sonrası
+  // koala_shares tablosuna "chat" kanalı olarak log'lanır.
+  String? _pendingDesignId;
+  String? _pendingDesignTitle;
 
   /// Oldest unread message ID on entry. "Yeni mesajlar" divider bunun üstünde
   /// gözükür ve ilk frame'de ekran buraya pozisyonlanır. markAsRead UI'ı
@@ -121,6 +135,19 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
       final draft = widget.initialDraft;
       if (draft != null && draft.isNotEmpty) {
         _textController.text = draft;
+      }
+    }
+
+    // ShareSheet → pendingDesign: input üstünde preview, send'e basınca image
+    // mesajı olarak gönder + koala_shares log.
+    final pd = widget.pendingDesign;
+    if (pd != null) {
+      final url = (pd['imageUrl'] ?? '').toString();
+      final id = (pd['id'] ?? '').toString();
+      if (url.isNotEmpty && id.isNotEmpty) {
+        _pendingDesignUrl = url;
+        _pendingDesignId = id;
+        _pendingDesignTitle = (pd['title'] ?? '').toString();
       }
     }
   }
@@ -498,10 +525,24 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
       if (sentMsg != null) {
         // BAŞARI: input'u temizle.
         _textController.clear();
+
+        // Design paylaşımı ise koala_shares + analytics log (fire-and-forget).
+        final designId = _pendingDesignId;
+        if (designId != null && designId.isNotEmpty) {
+          unawaited(ShareService.logShareInChat(
+            type: SavedItemType.design,
+            itemId: designId,
+            conversationId: cid,
+            designerId: widget.designerId,
+          ));
+        }
+
         setState(() {
           _sending = false;
           _pendingPhoto = null;
           _pendingDesignUrl = null;
+          _pendingDesignId = null;
+          _pendingDesignTitle = null;
         });
       } else {
         // BAŞARISIZ: text/foto kullanıcının elinde kalsın, sticky hata göster.
@@ -795,15 +836,22 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
         margin: const EdgeInsets.fromLTRB(16, 0, 16, 6),
         padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
-          color: Colors.white,
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.06),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
-            ),
-          ],
+          borderRadius: BorderRadius.circular(14),
+          color: _pendingDesignId != null
+              ? KoalaColors.accentSoft
+              : Colors.white,
+          border: _pendingDesignId != null
+              ? Border.all(color: KoalaColors.accentDeep.withValues(alpha: 0.2))
+              : null,
+          boxShadow: _pendingDesignId != null
+              ? null
+              : [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.06),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
         ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.center,
@@ -815,14 +863,14 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
                   child: _pendingPhoto != null
                       ? Image.memory(
                           _pendingPhoto!,
-                          width: 64,
-                          height: 64,
+                          width: 72,
+                          height: 72,
                           fit: BoxFit.cover,
                         )
                       : Image.network(
                           _pendingDesignUrl!,
-                          width: 64,
-                          height: 64,
+                          width: 72,
+                          height: 72,
                           fit: BoxFit.cover,
                           errorBuilder: (_, __, ___) => Container(
                             width: 64,
@@ -840,6 +888,8 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
                     onTap: () => setState(() {
                       _pendingPhoto = null;
                       _pendingDesignUrl = null;
+                      _pendingDesignId = null;
+                      _pendingDesignTitle = null;
                     }),
                     child: Container(
                       width: 22,
@@ -860,15 +910,52 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
             ),
             const SizedBox(width: 12),
             Expanded(
-              child: Text(
-                'Foto eklendi · isteğe bağlı bir not yazıp gönder',
-                style: const TextStyle(
-                  fontSize: 12.5,
-                  color: KoalaColors.textSec,
-                  fontWeight: FontWeight.w500,
-                  height: 1.3,
-                ),
-              ),
+              child: _pendingDesignTitle != null && _pendingDesignTitle!.isNotEmpty
+                  ? Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Text(
+                          'Tasarım ekleniyor',
+                          style: TextStyle(
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w700,
+                            color: KoalaColors.accentDeep,
+                            letterSpacing: 0.3,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          _pendingDesignTitle!,
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: KoalaColors.ink,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 1),
+                        const Text(
+                          'İstersen bir not ekle, sonra gönder',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: KoalaColors.textSec,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    )
+                  : const Text(
+                      'Foto eklendi · isteğe bağlı bir not yazıp gönder',
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        color: KoalaColors.textSec,
+                        fontWeight: FontWeight.w500,
+                        height: 1.3,
+                      ),
+                    ),
             ),
           ],
         ),

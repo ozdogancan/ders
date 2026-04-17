@@ -12,8 +12,14 @@ import '../services/saved_plans_service.dart';
 import '../services/analytics_service.dart';
 import '../services/profile_feedback_service.dart';
 import '../core/theme/koala_tokens.dart';
+import '../services/evlumba_live_service.dart';
+import '../services/saved_items_service.dart';
+import '../widgets/chat/designer_chat_popup.dart';
 import '../widgets/chat/product_carousel.dart';
 import '../widgets/offline_banner.dart';
+import '../widgets/projects_gallery_popup.dart';
+import '../widgets/share_sheet.dart';
+import 'package:lucide_icons/lucide_icons.dart';
 import '../helpers/web_drop.dart' as web_drop;
 import 'chat/widgets/chat_widgets.dart';
 
@@ -2203,47 +2209,170 @@ class _TypingDotsState extends State<_TypingDots>
 // PROJECT CARD INLINE — salon bul / oturma odası önerileri için
 // Kategori badge + görsel + tasarımcı adı. Tıklayınca detay.
 // ═══════════════════════════════════════════════════════
+String _prettyTrProjectCategory(String raw) {
+  const trMap = {
+    'living_room': 'Oturma Odası',
+    'bedroom': 'Yatak Odası',
+    'kitchen': 'Mutfak',
+    'bathroom': 'Banyo',
+    'kids_room': 'Çocuk Odası',
+    'office': 'Çalışma Odası',
+    'dining_room': 'Yemek Odası',
+    'hallway': 'Antre',
+    'balcony': 'Balkon',
+    'outdoor': 'Dış Mekan',
+  };
+  final key = raw.toLowerCase().trim();
+  if (trMap.containsKey(key)) return trMap[key]!;
+  final cleaned = raw.replaceAll(RegExp(r'[_-]+'), ' ').trim();
+  if (cleaned.isEmpty) return 'Proje';
+  return cleaned
+      .split(RegExp(r'\s+'))
+      .map((w) => w.isEmpty ? w : w[0].toUpperCase() + w.substring(1))
+      .join(' ');
+}
+
 class _ProjectCardInline extends StatelessWidget {
   const _ProjectCardInline({required this.data});
   final Map<String, dynamic> data;
 
+  Future<void> _openGallery(BuildContext context) async {
+    final projectId = (data['id'] ?? '').toString();
+    final designerId = (data['designer_id'] ?? '').toString();
+    final imageUrl = (data['image_url'] ?? '').toString();
+    final title = (data['title'] ?? '').toString();
+    final category = (data['category'] ?? '').toString();
+    final designerName = (data['designer_name'] ?? '').toString();
+
+    final baseProject = <String, dynamic>{
+      'id': projectId,
+      'title': title,
+      'cover_image_url': imageUrl,
+      'image_url': imageUrl,
+      'project_type': category,
+      'designer_id': designerId,
+      'designer_name': designerName,
+    };
+
+    List<Map<String, dynamic>> projects = [baseProject];
+    int initialIndex = 0;
+    Map<String, dynamic>? designer;
+    if (designerId.isNotEmpty && EvlumbaLiveService.isReady) {
+      try {
+        final fetched = await EvlumbaLiveService.getDesignerProjects(
+          designerId,
+          limit: 12,
+        );
+        if (fetched.isNotEmpty) {
+          final idx = fetched.indexWhere((p) => (p['id'] ?? '').toString() == projectId);
+          if (idx >= 0) {
+            projects = fetched;
+            initialIndex = idx;
+          } else {
+            projects = [baseProject, ...fetched];
+          }
+        }
+        final d = await EvlumbaLiveService.getDesignerById(designerId);
+        if (d != null) designer = d;
+      } catch (_) {}
+    }
+    if (!context.mounted) return;
+    await ProjectsGalleryPopup.show(
+      context,
+      projects: projects,
+      initialIndex: initialIndex,
+      designer: designer ??
+          {
+            'id': designerId,
+            'full_name': designerName,
+          },
+    );
+  }
+
+  void _askDesigner(BuildContext context) {
+    final designerId = (data['designer_id'] ?? '').toString();
+    if (designerId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Tasarımcı bilgisi bulunamadı')),
+      );
+      return;
+    }
+    final designerName = (data['designer_name'] ?? '').toString();
+    final projectId = (data['id'] ?? '').toString();
+    final category = (data['category'] ?? '').toString();
+    final cat = _prettyTrProjectCategory(category);
+    HapticFeedback.lightImpact();
+    DesignerChatPopup.show(
+      context,
+      designerId: designerId,
+      designerName: designerName,
+      contextType: 'project',
+      contextId: projectId,
+      contextTitle: cat,
+    );
+  }
+
+  Future<void> _saveProject(BuildContext context) async {
+    final projectId = (data['id'] ?? '').toString();
+    if (projectId.isEmpty) return;
+    HapticFeedback.lightImpact();
+    final cat = _prettyTrProjectCategory((data['category'] ?? '').toString());
+    final ok = await SavedItemsService.saveItem(
+      type: SavedItemType.design,
+      itemId: projectId,
+      title: cat,
+      imageUrl: (data['image_url'] ?? '').toString(),
+      subtitle: (data['designer_name'] ?? '').toString(),
+      extraData: {'designer_id': (data['designer_id'] ?? '').toString()},
+    );
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(
+        content: Text(ok ? 'Kaydedildi' : 'Kaydedilemedi, tekrar dene'),
+        backgroundColor: ok ? KoalaColors.greenAlt : Colors.red.shade700,
+        duration: const Duration(seconds: 2),
+      ));
+  }
+
+  void _shareProject(BuildContext context) {
+    final projectId = (data['id'] ?? '').toString();
+    if (projectId.isEmpty) return;
+    HapticFeedback.lightImpact();
+    final cat = _prettyTrProjectCategory((data['category'] ?? '').toString());
+    ShareSheet.show(
+      context,
+      itemType: SavedItemType.design,
+      itemId: projectId,
+      title: cat,
+      imageUrl: (data['image_url'] ?? '').toString(),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final title = (data['title'] ?? '').toString();
     final category = (data['category'] ?? '').toString();
     final designerName = (data['designer_name'] ?? '').toString();
     final imageUrl = (data['image_url'] ?? '').toString();
     final projectId = (data['id'] ?? '').toString();
     final designerId = (data['designer_id'] ?? '').toString();
+    final prettyCat = category.isEmpty ? '' : _prettyTrProjectCategory(category);
 
-    return GestureDetector(
-      onTap: projectId.isEmpty
-          ? null
-          : () => context.push('/project/$projectId', extra: {
-                'id': projectId,
-                'title': title,
-                'cover_image_url': imageUrl,
-                'image_url': imageUrl,
-                'project_type': category,
-                'designer_id': designerId,
-                'profiles': {
-                  'id': designerId,
-                  'full_name': designerName,
-                },
-              }),
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 8),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: KoalaColors.border),
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (imageUrl.isNotEmpty)
-              AspectRatio(
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: KoalaColors.border),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (imageUrl.isNotEmpty)
+            GestureDetector(
+              onTap: projectId.isEmpty ? null : () => _openGallery(context),
+              child: AspectRatio(
                 aspectRatio: 16 / 10,
                 child: Image.network(
                   imageUrl,
@@ -2255,72 +2384,126 @@ class _ProjectCardInline extends StatelessWidget {
                   ),
                 ),
               ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (category.isNotEmpty)
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: KoalaColors.accentSoft,
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                      child: Text(
-                        category,
-                        style: const TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          color: KoalaColors.accentDeep,
-                        ),
-                      ),
+            ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (prettyCat.isNotEmpty)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: KoalaColors.accentSoft,
+                      borderRadius: BorderRadius.circular(999),
                     ),
-                  if (title.isNotEmpty &&
-                      title.toLowerCase() != category.toLowerCase()) ...[
-                    const SizedBox(height: 6),
-                    Text(
-                      title,
+                    child: Text(
+                      prettyCat,
                       style: const TextStyle(
-                        fontSize: 14,
+                        fontSize: 11,
                         fontWeight: FontWeight.w600,
-                        color: KoalaColors.ink,
+                        color: KoalaColors.accentDeep,
                       ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
                     ),
-                  ],
-                  if (designerName.isNotEmpty) ...[
-                    const SizedBox(height: 4),
-                    Row(
-                      children: [
-                        const Icon(Icons.person_outline_rounded,
-                            size: 14, color: KoalaColors.textMuted),
-                        const SizedBox(width: 4),
-                        Flexible(
-                          child: GestureDetector(
-                            onTap: designerId.isEmpty
-                                ? null
-                                : () => context.push('/designer/$designerId'),
-                            child: Text(
-                              designerName,
-                              style: const TextStyle(
-                                fontSize: 12,
-                                color: KoalaColors.textMuted,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
+                  ),
+                if (designerName.isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      const Icon(Icons.person_outline_rounded,
+                          size: 14, color: KoalaColors.textMuted),
+                      const SizedBox(width: 4),
+                      Flexible(
+                        child: GestureDetector(
+                          onTap: designerId.isEmpty
+                              ? null
+                              : () => context.push('/designer/$designerId'),
+                          child: Text(
+                            designerName,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: KoalaColors.textMuted,
                             ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
-                      ],
+                      ),
+                    ],
+                  ),
+                ],
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    _ProjectActionIconButton(
+                      icon: LucideIcons.messageCircle,
+                      tooltip: 'Sor',
+                      onTap: () => _askDesigner(context),
+                    ),
+                    const SizedBox(width: 8),
+                    _ProjectActionIconButton(
+                      icon: LucideIcons.bookmark,
+                      tooltip: 'Kaydet',
+                      onTap: () => _saveProject(context),
+                    ),
+                    const SizedBox(width: 8),
+                    _ProjectActionIconButton(
+                      icon: LucideIcons.share2,
+                      tooltip: 'Paylaş',
+                      onTap: () => _shareProject(context),
                     ),
                   ],
-                ],
-              ),
+                ),
+              ],
             ),
-          ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ProjectActionIconButton extends StatefulWidget {
+  const _ProjectActionIconButton({
+    required this.icon,
+    required this.tooltip,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onTap;
+
+  @override
+  State<_ProjectActionIconButton> createState() =>
+      _ProjectActionIconButtonState();
+}
+
+class _ProjectActionIconButtonState extends State<_ProjectActionIconButton> {
+  double _scale = 1.0;
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: widget.tooltip,
+      child: GestureDetector(
+        onTapDown: (_) => setState(() => _scale = 0.9),
+        onTapCancel: () => setState(() => _scale = 1.0),
+        onTapUp: (_) => setState(() => _scale = 1.0),
+        onTap: widget.onTap,
+        child: AnimatedScale(
+          scale: _scale,
+          duration: const Duration(milliseconds: 120),
+          child: Container(
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(
+              color: KoalaColors.accentSoft,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            alignment: Alignment.center,
+            child: Icon(widget.icon, size: 16, color: KoalaColors.accentDeep),
+          ),
         ),
       ),
     );

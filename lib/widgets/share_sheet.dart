@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
+import 'package:go_router/go_router.dart';
+
 import '../core/theme/koala_tokens.dart';
 import '../services/messaging_service.dart';
 import '../services/evlumba_live_service.dart';
@@ -307,6 +309,28 @@ class _ConversationPickerSheetState extends State<_ConversationPickerSheet> {
   Future<void> _send(Map<String, dynamic> conv) async {
     if (_sending) return;
     setState(() => _sending = true);
+
+    // Design paylaşımında direkt mesaj atma — önce conversation'a navigate,
+    // input üstünde design preview göster. Kullanıcı kendi notunu yazıp
+    // ekleyebilsin. Diğer tipler (designer/product) için eski flow.
+    if (widget.itemType == SavedItemType.design) {
+      final conversationId = conv['id'].toString();
+      final designerId = conv['designer_id']?.toString();
+      final pending = <String, dynamic>{
+        'id': widget.itemId,
+        'title': widget.title ?? '',
+        'imageUrl': widget.imageUrl ?? '',
+        'designerId': designerId ?? '',
+      };
+      if (!mounted) return;
+      Navigator.of(context).pop();
+      context.push('/chat/dm/$conversationId', extra: {
+        'designerId': designerId,
+        'pendingDesign': pending,
+      });
+      return;
+    }
+
     final ok = await ShareService.shareInChat(
       type: widget.itemType,
       itemId: widget.itemId,
