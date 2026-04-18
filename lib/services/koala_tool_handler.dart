@@ -397,15 +397,25 @@ class KoalaToolHandler {
       }
       final city = args['city'] as String?;
       final query = args['query'] as String?;
+      final roomType = (args['room_type'] as String?)?.trim();
+      final style = (args['style'] as String?)?.trim();
       final limit = (args['limit'] as num?)?.toInt().clamp(1, 5) ?? 3;
 
       List<Map<String, dynamic>> designers = [];
 
-      // 1. Önce profiles tablosundan dene
+      // 1. Önce profiles tablosundan dene.
+      //    query varsa: isim/uzmanlık araması (searchDesigners).
+      //    query yoksa: oda/stil önerisi → interior-only + room/style puanlama.
       if (query != null && query.isNotEmpty) {
         designers = await EvlumbaLiveService.searchDesigners(query);
       } else {
-        designers = await EvlumbaLiveService.getDesigners(limit: limit, city: city);
+        designers = await EvlumbaLiveService.getDesigners(
+          limit: limit,
+          city: city,
+          interiorOnly: true,
+          roomType: roomType,
+          style: style,
+        );
       }
 
       // 2. Profiles boşsa → projelerden designer keşfet (fallback)
@@ -424,16 +434,25 @@ class KoalaToolHandler {
             }
           }
 
-          // Tüm designer profilleri tek sorguda getir (N+1 → 1)
-          final idList = designerIds.take(limit).toList();
+          // Tüm designer profilleri tek sorguda getir (N+1 → 1).
+          // Aday havuzu limit*3 — sonra interior filtresi + ilk N.
+          final idList = designerIds.take(limit * 3).toList();
           final profiles = await EvlumbaLiveService.getDesignersByIds(idList);
           final profileMap = <String, Map<String, dynamic>>{};
           for (final p in profiles) {
             profileMap[p['id'].toString()] = p;
           }
           for (final did in idList) {
+            if (designers.length >= limit) break;
             final profile = profileMap[did];
             if (profile != null) {
+              // Fallback de non-interior'ları atlasın.
+              final spec = (profile['specialty'] ?? '').toString().toLowerCase();
+              final isNonInterior = [
+                'grafik', 'graphic', 'logo', 'brand', 'web', 'ui', 'ux',
+                'illüstrasyon', 'illustration', 'motion', 'animasyon', 'video',
+              ].any(spec.contains);
+              if (isNonInterior) continue;
               designers.add(profile);
             } else {
               final dProjects = projectsByDesigner[did] ?? [];

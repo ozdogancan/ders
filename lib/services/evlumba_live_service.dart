@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -71,12 +72,44 @@ class EvlumbaLiveService {
   // TASARIMCILAR (profiles tablosu)
   // ═══════════════════════════════════════
 
-  /// Tüm tasarımcıları getir (role = 'designer')
+  /// İç mimari / dekorasyon DIŞINDA kalan specialty anahtarları.
+  /// Grafik tasarım, logo, web, UI/UX vs. oda önerilerine girmesin.
+  static const List<String> _nonInteriorSpecialtyKeywords = [
+    'grafik', 'graphic',
+    'logo', 'brand', 'branding',
+    'web', 'ui', 'ux',
+    'illüstrasyon', 'illustration',
+    'motion', 'animasyon', 'animation',
+    'video',
+    'sosyal medya', 'social media',
+    'reklam',
+  ];
+
+  /// Bir tasarımcı profilinin iç mekâna uygun olup olmadığını döndürür.
+  /// specialty boşsa (null/empty) kabul edilir — eski kayıtlar filtreyle
+  /// tamamen silinmesin.
+  static bool _isInteriorSpecialty(Map<String, dynamic> p) {
+    final s = (p['specialty'] ?? '').toString().toLowerCase().trim();
+    if (s.isEmpty) return true;
+    for (final kw in _nonInteriorSpecialtyKeywords) {
+      if (s.contains(kw)) return false;
+    }
+    return true;
+  }
+
+  /// Tüm tasarımcıları getir (role = 'designer').
+  ///
+  /// [interiorOnly] true ise grafik/logo/web vb. uzmanlık alanları client-side
+  /// dışlanır. [roomType]/[style] verilirse eşleşen specialty'ler puanlanıp
+  /// öne alınır (sıralama sabit olmaz — rastgeleleştirilmiş).
   static Future<List<Map<String, dynamic>>> getDesigners({
     int limit = 20,
     int offset = 0,
     String? city,
     String? specialty,
+    bool interiorOnly = false,
+    String? roomType,
+    String? style,
   }) async {
     var query = client.from('profiles').select().eq('role', 'designer');
 
@@ -84,12 +117,49 @@ class EvlumbaLiveService {
       query = query.eq('city', city);
     }
 
+    // Aynı ilk-N'i döndürmemek için havuzu genişlet: limit*4 veya 40 cap.
+    final poolSize = interiorOnly
+        ? (limit * 4).clamp(limit, 40)
+        : limit;
+
     final data = await query
         .order('created_at', ascending: false)
-        .range(offset, offset + limit - 1);
-    debugPrint('EvlumbaLive: ${data.length} designers fetched');
-    return List<Map<String, dynamic>>.from(data);
+        .range(offset, offset + poolSize - 1);
+    var list = List<Map<String, dynamic>>.from(data);
+
+    if (interiorOnly) {
+      final before = list.length;
+      list = list.where(_isInteriorSpecialty).toList();
+      debugPrint('EvlumbaLive: interior filter $before → ${list.length}');
+    }
+
+    if (interiorOnly) {
+      // Puanla: room/style eşleşmesi + küçük rastgele bozulma
+      // → her çağrı farklı ama alakalılar hâlâ öne geliyor.
+      final rt = (roomType ?? '').toLowerCase().trim();
+      final st = (style ?? '').toLowerCase().trim();
+      final rand = _rand;
+      int score(Map<String, dynamic> p) {
+        final spec = (p['specialty'] ?? '').toString().toLowerCase();
+        final bio = (p['bio'] ?? '').toString().toLowerCase();
+        var s = 0;
+        if (rt.isNotEmpty && (spec.contains(rt) || bio.contains(rt))) s += 5;
+        if (st.isNotEmpty && (spec.contains(st) || bio.contains(st))) s += 4;
+        for (final kw in ['iç mimar', 'mimar', 'dekoratör', 'dekorasyon', 'interior']) {
+          if (spec.contains(kw)) { s += 2; break; }
+        }
+        s += rand.nextInt(3); // diversity jitter
+        return s;
+      }
+      list.sort((a, b) => score(b).compareTo(score(a)));
+    }
+
+    final result = list.take(limit).toList();
+    debugPrint('EvlumbaLive: ${result.length}/${list.length} designers returned (pool=$poolSize)');
+    return result;
   }
+
+  static final Random _rand = Random();
 
   /// Tek tasarımcı detay (role filtresi yok — proje sahibi zaten tasarımcı)
   static Future<Map<String, dynamic>?> getDesigner(String id) async {
@@ -187,7 +257,21 @@ class EvlumbaLiveService {
         .or(orClauses.join(','))
         .order('created_at', ascending: false)
         .limit(20);
-    final results = List<Map<String, dynamic>>.from(data);
+    var results = List<Map<String, dynamic>>.from(data);
+
+    // İsim eşleşmelerini koru (full_name match), sadece name match YOKKEN
+    // specialty match ile gelen non-interior'ları dışla. Böylece
+    // "Hakan bul" yine Hakan'ı getirir ama "modern tasarımcı" grafik
+    // tasarımcı getirmez.
+    results = results.where((p) {
+      if (_isInteriorSpecialty(p)) return true;
+      // Non-interior; sadece full_name eşleşirse kabul et
+      final name = (p['full_name'] ?? '').toString().toLowerCase();
+      for (final t in effective) {
+        if (t.length >= 3 && name.contains(t)) return true;
+      }
+      return false;
+    }).toList();
 
     // Name-priority: isim token'ı eşleşenleri öne al
     results.sort((a, b) {

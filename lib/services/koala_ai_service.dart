@@ -151,18 +151,33 @@ class KoalaAIService {
         },
         {
           'name': 'search_designers',
-          'description': 'Evlumba tasarımcılarını ara. Kullanıcı tasarımcı bulmak istediğinde, '
-              'profesyonel yardım sorduğunda veya belirli bir şehirdeki tasarımcıları aradığında çağır.',
+          'description': 'Evlumba iç mimar / dekoratör tasarımcılarını ara. Kullanıcı '
+              'oda/ev için profesyonel yardım istediğinde, belirli bir şehirdeki '
+              'tasarımcıları aradığında veya "uzman öner" dediğinde çağır. '
+              'Grafik tasarımcı, logo/web tasarımcısı vb. iç mekân dışı uzmanlıklar '
+              'otomatik dışlanır.',
           'parameters': {
             'type': 'object',
             'properties': {
               'query': {
                 'type': 'string',
-                'description': 'Tasarımcı adı veya uzmanlık alanı ile ara',
+                'description': 'Tasarımcı adı. Boş bırakılabilir — oda/stil önerisi '
+                    'yapıyorsan query GEREKMEZ, sadece room_type/style ver.',
               },
               'city': {
                 'type': 'string',
                 'description': 'Şehir filtresi. Örnekler: İstanbul, Ankara, İzmir',
+              },
+              'room_type': {
+                'type': 'string',
+                'description': 'Oda tipi: salon, yatak_odasi, mutfak, banyo, ofis, cocuk_odasi. '
+                    'Kullanıcı belirli bir oda için uzman istiyorsa mutlaka ver.',
+              },
+              'style': {
+                'type': 'string',
+                'description': 'Stil anahtarı: modern, minimalist, klasik, iskandinav, '
+                    'endüstriyel, boho, rustik, art_deco vb. Kullanıcının fotoğraf '
+                    'analizinden ya da tercihinden bilinen stili geçir.',
               },
               'limit': {
                 'type': 'integer',
