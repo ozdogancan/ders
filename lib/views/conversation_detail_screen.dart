@@ -82,6 +82,10 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
   // koala_shares tablosuna "chat" kanalı olarak log'lanır.
   String? _pendingDesignId;
   String? _pendingDesignTitle;
+  // Swipe kartından gelen isteğe bağlı bilgi: proje açıklaması ilk cümle +
+  // oda kategorisi. Chat input üstündeki preview'da info olarak gösterilir.
+  String? _pendingDesignTagline;
+  String? _pendingDesignCategory;
 
   /// Oldest unread message ID on entry. "Yeni mesajlar" divider bunun üstünde
   /// gözükür ve ilk frame'de ekran buraya pozisyonlanır. markAsRead UI'ı
@@ -148,6 +152,10 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
         _pendingDesignUrl = url;
         _pendingDesignId = id;
         _pendingDesignTitle = (pd['title'] ?? '').toString();
+        final tagline = (pd['tagline'] ?? '').toString().trim();
+        _pendingDesignTagline = tagline.isEmpty ? null : tagline;
+        final cat = (pd['category'] ?? '').toString().trim();
+        _pendingDesignCategory = cat.isEmpty ? null : cat;
       }
     }
   }
@@ -543,6 +551,8 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
           _pendingDesignUrl = null;
           _pendingDesignId = null;
           _pendingDesignTitle = null;
+          _pendingDesignTagline = null;
+          _pendingDesignCategory = null;
         });
       } else {
         // BAŞARISIZ: text/foto kullanıcının elinde kalsın, sticky hata göster.
@@ -915,14 +925,42 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Text(
-                          'Tasarım ekleniyor',
-                          style: TextStyle(
-                            fontSize: 10.5,
-                            fontWeight: FontWeight.w700,
-                            color: KoalaColors.accentDeep,
-                            letterSpacing: 0.3,
-                          ),
+                        Row(
+                          children: [
+                            const Text(
+                              'Tasarım ekleniyor',
+                              style: TextStyle(
+                                fontSize: 10.5,
+                                fontWeight: FontWeight.w700,
+                                color: KoalaColors.accentDeep,
+                                letterSpacing: 0.3,
+                              ),
+                            ),
+                            if (_pendingDesignCategory != null) ...[
+                              const SizedBox(width: 6),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 6, vertical: 1),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(6),
+                                  border: Border.all(
+                                    color: KoalaColors.accentDeep
+                                        .withValues(alpha: 0.18),
+                                  ),
+                                ),
+                                child: Text(
+                                  _pendingDesignCategory!,
+                                  style: const TextStyle(
+                                    fontSize: 9.5,
+                                    fontWeight: FontWeight.w700,
+                                    color: KoalaColors.accentDeep,
+                                    letterSpacing: 0.2,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
                         ),
                         const SizedBox(height: 2),
                         Text(
@@ -936,13 +974,15 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
                           overflow: TextOverflow.ellipsis,
                         ),
                         const SizedBox(height: 1),
-                        const Text(
-                          'İstersen bir not ekle, sonra gönder',
-                          style: TextStyle(
+                        Text(
+                          _pendingDesignTagline ??
+                              'İstersen bir not ekle, sonra gönder',
+                          style: const TextStyle(
                             fontSize: 11,
                             color: KoalaColors.textSec,
+                            height: 1.35,
                           ),
-                          maxLines: 1,
+                          maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                         ),
                       ],

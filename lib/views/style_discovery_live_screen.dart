@@ -305,11 +305,16 @@ class _StyleDiscoveryLiveScreenState extends State<StyleDiscoveryLiveScreen>
     final projectId = card['id']?.toString() ?? '';
     final cat = _prettyCategory((card['project_type'] ?? '').toString());
     final coverUrl = _coverOf(card);
+    // Karttan gizlediğimiz bilgileri chat preview'a taşıyoruz: proje başlığı
+    // + kısa açıklama. "Sor"a basınca kullanıcı neyi sorduğunu görsün diye.
+    final projectTitle = (card['title'] ?? '').toString().trim();
+    final rawDesc = (card['description'] ?? '').toString().trim();
+    final tagline = _quickFirstSentence(rawDesc);
     final conv = await MessagingService.getOrCreateConversation(
       designerId: designerId,
       contextType: 'project',
       contextId: projectId,
-      contextTitle: cat,
+      contextTitle: projectTitle.isNotEmpty ? projectTitle : cat,
     );
     if (!mounted) return;
     setState(() => _askingInFlight = false);
@@ -336,11 +341,26 @@ class _StyleDiscoveryLiveScreenState extends State<StyleDiscoveryLiveScreen>
       if (designerAvatar.isNotEmpty) 'designerAvatarUrl': designerAvatar,
       'pendingDesign': {
         'id': projectId,
-        'title': cat,
+        // Başlık önceliği: proje title → oda kategorisi → jenerik
+        'title': projectTitle.isNotEmpty
+            ? projectTitle
+            : (cat.isNotEmpty ? '$cat projesi' : 'Tasarım'),
+        if (tagline.isNotEmpty) 'tagline': tagline,
+        if (cat.isNotEmpty) 'category': cat,
         'imageUrl': coverUrl,
         'designerId': designerId,
       },
     });
+  }
+
+  /// İlk cümle — chat preview'da ipucu olarak göstermek için.
+  String _quickFirstSentence(String s) {
+    final t = s.trim();
+    if (t.isEmpty) return '';
+    final idx = t.indexOf(RegExp(r'[.!?]'));
+    final cut = idx < 0 ? t : t.substring(0, idx).trim();
+    // Çok uzunsa kısalt
+    return cut.length > 140 ? '${cut.substring(0, 137)}…' : cut;
   }
 
   /// Lazy fetch designer info for the card's designer_id.
@@ -366,14 +386,25 @@ class _StyleDiscoveryLiveScreenState extends State<StyleDiscoveryLiveScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: KoalaColors.bg,
+      // Mesajlar ekranı ile birebir aynı AppBar — leading/title hizası app genelinde tutarlı.
+      appBar: AppBar(
+        backgroundColor: KoalaColors.bg,
+        surfaceTintColor: KoalaColors.bg,
+        elevation: 0,
+        leading: IconButton(
+          onPressed: _onBack,
+          icon: const Icon(Icons.arrow_back_rounded),
+        ),
+        title: const Text('Tarzını Keşfet', style: KoalaText.h2),
+      ),
       body: SafeArea(
+        top: false,
         child: _loading
             ? const Center(child: CircularProgressIndicator())
             : _deck.isEmpty
                 ? _emptyState()
                 : Column(
                     children: [
-                      _header(),
                       Expanded(child: _deckStack()),
                       _buttons(),
                       const SizedBox(height: 20),
@@ -408,6 +439,7 @@ class _StyleDiscoveryLiveScreenState extends State<StyleDiscoveryLiveScreen>
     );
   }
 
+  // ignore: unused_element
   Widget _header() {
     // Mesaj ekranı ile birebir aynı tipografi & back iconu — app tutarlılığı.
     return Padding(
@@ -615,9 +647,11 @@ class _Card extends StatelessWidget {
   });
   final Map<String, dynamic> project;
   final String Function(Map<String, dynamic>) coverOf;
+  // ignore: unused_element_parameter
   final String Function(String) prettyCategory;
   final Map<String, dynamic>? designer;
 
+  // ignore: unused_element
   IconData _roomIcon(String raw) {
     switch (raw.trim().toLowerCase()) {
       case 'living_room':
@@ -641,6 +675,7 @@ class _Card extends StatelessWidget {
     }
   }
 
+  // ignore: unused_element
   String _styleLabel() {
     final style = (project['style'] ?? '').toString().trim();
     if (style.isNotEmpty) return style;
@@ -669,6 +704,7 @@ class _Card extends StatelessWidget {
     return const [];
   }
 
+  // ignore: unused_element
   String _firstSentence(String s) {
     final t = s.trim();
     if (t.isEmpty) return '';
@@ -681,12 +717,6 @@ class _Card extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final url = coverOf(project);
-    final title = (project['title'] ?? '').toString().trim();
-    final rawType = (project['project_type'] ?? '').toString().trim();
-    final cat = prettyCategory(rawType);
-    final description = (project['description'] ?? '').toString().trim();
-    final subtitle = _firstSentence(description);
-    final style = _styleLabel();
     final palette = _paletteColors();
 
     return Container(
@@ -741,80 +771,38 @@ class _Card extends StatelessWidget {
             ),
           ),
 
-          // Top pills — SADECE oda pill + (opsiyonel) stil
-          Positioned(
-            top: 16,
-            left: 16,
-            right: 16,
-            child: Row(
-              children: [
-                if (cat.isNotEmpty)
-                  _GlassPill(icon: _roomIcon(rawType), text: cat),
-                const Spacer(),
-                if (style.isNotEmpty)
-                  _GlassPill(text: style, accent: true),
-              ],
-            ),
-          ),
-
-          // Bottom content — en alt ~25%
-          Positioned(
-            bottom: 0,
-            left: 0,
-            right: 0,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 0, 20, 22),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    title.isEmpty ? (cat.isEmpty ? 'Tasarım' : '$cat Projesi') : title,
-                    style: const TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.w800,
-                      color: Colors.white,
-                      letterSpacing: -0.5,
-                      height: 1.15,
-                    ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  if (subtitle.isNotEmpty) ...[
-                    const SizedBox(height: 6),
-                    Text(
-                      subtitle,
-                      style: TextStyle(
-                        fontSize: 13,
-                        height: 1.35,
-                        color: Colors.white.withValues(alpha: 0.75),
-                        fontWeight: FontWeight.w400,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                  if (designer != null) ...[
-                    const SizedBox(height: 12),
-                    _DesignerChip(designer: designer!),
-                  ],
-                  if (palette.isNotEmpty) ...[
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        for (int i = 0;
-                            i < palette.length && i < 4;
-                            i++) ...[
-                          if (i > 0) const SizedBox(width: 6),
-                          _ColorDot(color: palette[i]),
+          // Kart üstü: oda pill + başlık + tagline kaldırıldı (Sor'a basınca
+          // chat preview'da info olarak gösteriliyor). Sadece tasarımcı chip'i
+          // ve palet alt tarafta kalıyor — kim yapmış görsel olarak anlaşılsın.
+          if (designer != null || palette.isNotEmpty)
+            Positioned(
+              bottom: 0,
+              left: 0,
+              right: 0,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (designer != null) _DesignerChip(designer: designer!),
+                    if (palette.isNotEmpty) ...[
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          for (int i = 0;
+                              i < palette.length && i < 4;
+                              i++) ...[
+                            if (i > 0) const SizedBox(width: 6),
+                            _ColorDot(color: palette[i]),
+                          ],
                         ],
-                      ],
-                    ),
+                      ),
+                    ],
                   ],
-                ],
+                ),
               ),
             ),
-          ),
         ],
       ),
     );
@@ -822,6 +810,7 @@ class _Card extends StatelessWidget {
 }
 
 // ─── Glass pill ───
+// ignore: unused_element
 class _GlassPill extends StatelessWidget {
   const _GlassPill({required this.text, this.icon, this.accent = false});
   final String text;
@@ -975,10 +964,18 @@ class _ActionBtn extends StatelessWidget {
         ];
         break;
       case _ActionVariant.soft:
+        // "Sor" aksiyonu — primary kadar öne çıkmasın ama sönük de durmasın.
+        // Hafif accent dolgu + soft accent border + mor sızıntı gölgesi.
         bg = KoalaColors.accentSoft;
         fg = KoalaColors.accentDeep;
-        border = null;
-        shadow = null;
+        border = KoalaColors.accentDeep.withValues(alpha: 0.18);
+        shadow = [
+          BoxShadow(
+            color: KoalaColors.accentDeep.withValues(alpha: 0.14),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ];
         break;
       case _ActionVariant.primary:
         bg = KoalaColors.accentDeep;
