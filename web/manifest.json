@@ -1,25 +1,47 @@
 {
-  "name": "Koala - AI İç Mimari Asistanı",
-  "short_name": "Koala",
-  "start_url": "/",
-  "display": "standalone",
-  "background_color": "#FFFFFF",
-  "theme_color": "#6366F1",
-  "description": "Yapay zeka destekli iç mimari tasarım asistanı. Evlumba tasarımcılarıyla tanış, ilham al, ürün keşfet.",
-  "orientation": "portrait-primary",
-  "prefer_related_applications": true,
-  "related_applications": [
-    {
-      "platform": "play",
-      "id": "com.evlumba.koala"
-    }
-  ],
-  "categories": ["lifestyle", "design", "shopping"],
-  "lang": "tr",
-  "icons": [
-    {"src": "icons/Icon-192.png", "sizes": "192x192", "type": "image/png"},
-    {"src": "icons/Icon-512.png", "sizes": "512x512", "type": "image/png"},
-    {"src": "icons/Icon-maskable-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable"},
-    {"src": "icons/Icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"}
-  ]
+    "name": "Koala - AI İç Mimari Asistanı",
+    "short_name": "Koala",
+    "start_url": "/",
+    "display": "standalone",
+    "background_color": "#6B5BE6",
+    "theme_color": "#6B5BE6",
+    "description": "Yapay zeka destekli iç mimari tasarım asistanı. Evlumba tasarımcılarıyla tanış, ilham al, ürün keşfet.",
+    "orientation": "portrait-primary",
+    "prefer_related_applications": true,
+    "related_applications": [
+        {
+            "platform": "play",
+            "id": "com.evlumba.koala"
+        }
+    ],
+    "categories": [
+        "lifestyle",
+        "design",
+        "shopping"
+    ],
+    "lang": "tr",
+    "icons": [
+        {
+            "src": "icons/Icon-192.png",
+            "sizes": "192x192",
+            "type": "image/png"
+        },
+        {
+            "src": "icons/Icon-512.png",
+            "sizes": "512x512",
+            "type": "image/png"
+        },
+        {
+            "src": "icons/Icon-maskable-192.png",
+            "sizes": "192x192",
+            "type": "image/png",
+            "purpose": "maskable"
+        },
+        {
+            "src": "icons/Icon-maskable-512.png",
+            "sizes": "512x512",
+            "type": "image/png",
+            "purpose": "maskable"
+        }
+    ]
 }

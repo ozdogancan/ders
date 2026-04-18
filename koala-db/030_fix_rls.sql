@@ -107,7 +107,7 @@ DROP POLICY IF EXISTS "Admins read all users" ON users;
 CREATE POLICY "user_select" ON users FOR SELECT
   USING (id = get_user_id() OR EXISTS (SELECT 1 FROM users u WHERE u.id = get_user_id() AND u.role = 'admin'));
 CREATE POLICY "user_insert" ON users FOR INSERT
-  WITH CHECK (true); -- Firebase sync, herkes kayıt olabilmeli
+  WITH CHECK (id = get_user_id()); -- Sadece kendi UID'siyle kayıt oluşturabilir
 CREATE POLICY "user_update" ON users FOR UPDATE
   USING (id = get_user_id());
 

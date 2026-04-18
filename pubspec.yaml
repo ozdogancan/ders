@@ -73,7 +73,7 @@ flutter_launcher_icons:
   image_path: "assets/launcher/icon.png"
   min_sdk_android: 23
   adaptive_icon_background: "#6B5BE6"
-  adaptive_icon_foreground: "assets/launcher/icon.png"
+  adaptive_icon_foreground: "assets/launcher/icon_foreground.png"
   remove_alpha_ios: true
   web:
     generate: true
@@ -86,10 +86,10 @@ flutter_launcher_icons:
 # Kullanım: flutter pub run flutter_native_splash:create
 flutter_native_splash:
   color: "#6B5BE6"
-  image: "assets/launcher/icon.png"
+  image: "assets/launcher/splash.png"
   android_12:
     color: "#6B5BE6"
-    image: "assets/launcher/icon.png"
+    image: "assets/launcher/splash.png"
   android: true
   ios: true
   web: false

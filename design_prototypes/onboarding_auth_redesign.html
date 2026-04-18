@@ -1,0 +1,1723 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Koala — Onboarding & Auth Redesign</title>
+
+<!-- Fonts: Distinctive pairing — not generic -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">
+
+<style>
+  /* ═══════════════════════════════════════════
+     DESIGN TOKENS — Koala Refined Palette
+     Away from generic purple-on-white.
+     Warm luxury: cream canvas, deep plum accent,
+     terracotta warmth, sage calm.
+  ═══════════════════════════════════════════ */
+  :root {
+    /* Core */
+    --plum: #4A3563;
+    --plum-light: #6C5CE7;
+    --plum-glow: rgba(108, 92, 231, 0.15);
+    --plum-deep: #2D1B4E;
+
+    /* Warm accents */
+    --terracotta: #C4754B;
+    --terracotta-soft: #E8A882;
+    --sage: #7A9E7E;
+    --sage-soft: #B5D4B8;
+
+    /* Neutrals — warm, not cold */
+    --cream: #FBF8F4;
+    --cream-mid: #F3EDE5;
+    --warm-gray: #9E958A;
+    --charcoal: #2C2824;
+    --charcoal-soft: #4A443E;
+
+    /* Functional */
+    --white: #FFFFFF;
+    --error: #D94F4F;
+    --success: #4CAF7D;
+
+    /* Shadows */
+    --shadow-sm: 0 2px 8px rgba(44, 40, 36, 0.06);
+    --shadow-md: 0 8px 32px rgba(44, 40, 36, 0.1);
+    --shadow-lg: 0 16px 48px rgba(44, 40, 36, 0.14);
+    --shadow-glow: 0 8px 40px rgba(108, 92, 231, 0.2);
+
+    /* Radius */
+    --r-sm: 12px;
+    --r-md: 20px;
+    --r-lg: 28px;
+    --r-xl: 36px;
+    --r-full: 999px;
+
+    /* Type scale */
+    --fs-xs: 0.7rem;
+    --fs-sm: 0.8rem;
+    --fs-base: 0.95rem;
+    --fs-md: 1.1rem;
+    --fs-lg: 1.35rem;
+    --fs-xl: 1.7rem;
+    --fs-2xl: 2.2rem;
+    --fs-3xl: 2.8rem;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: #1a1a2e;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    color: var(--charcoal);
+    overflow: hidden;
+  }
+
+  /* ═══════════════════════════════════════════
+     PHONE FRAME — Android mockup container
+  ═══════════════════════════════════════════ */
+  .phone-frame {
+    width: 390px;
+    height: 844px;
+    border-radius: 44px;
+    overflow: hidden;
+    position: relative;
+    background: var(--cream);
+    box-shadow:
+      0 0 0 2px #333,
+      0 0 0 6px #1a1a1a,
+      0 30px 80px rgba(0,0,0,0.5);
+  }
+
+  .phone-frame::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 150px;
+    height: 28px;
+    background: #1a1a1a;
+    border-radius: 0 0 20px 20px;
+    z-index: 1000;
+  }
+
+  /* Status bar */
+  .status-bar {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 48px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 28px;
+    z-index: 999;
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .status-bar.dark { color: var(--white); }
+  .status-bar.light { color: var(--charcoal); }
+  .status-icons { display: flex; gap: 6px; align-items: center; }
+  .status-icons svg { width: 16px; height: 16px; }
+
+  /* ═══════════════════════════════════════════
+     SCREEN SYSTEM — slides
+  ═══════════════════════════════════════════ */
+  .screen-container {
+    width: 100%;
+    height: 100%;
+    position: relative;
+  }
+
+  .screen {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.5s cubic-bezier(0.4, 0, 0.2, 1),
+                transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+    transform: translateX(60px);
+    overflow: hidden;
+  }
+
+  .screen.active {
+    opacity: 1;
+    pointer-events: all;
+    transform: translateX(0);
+  }
+
+  .screen.exit-left {
+    opacity: 0;
+    transform: translateX(-60px);
+  }
+
+  /* ═══════════════════════════════════════════
+     SCREEN 1 — ONBOARDING: Welcome
+     Warm, inviting, mascot-focused
+  ═══════════════════════════════════════════ */
+  .onboard-1 {
+    background: linear-gradient(168deg, var(--plum-deep) 0%, var(--plum) 40%, #5B3D7A 100%);
+    position: relative;
+  }
+
+  .onboard-1 .bg-orb {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(80px);
+    opacity: 0.3;
+  }
+  .onboard-1 .bg-orb.orb-1 {
+    width: 300px; height: 300px;
+    background: var(--terracotta);
+    top: -60px; right: -80px;
+    animation: orbFloat 8s ease-in-out infinite;
+  }
+  .onboard-1 .bg-orb.orb-2 {
+    width: 200px; height: 200px;
+    background: var(--sage);
+    bottom: 100px; left: -60px;
+    animation: orbFloat 10s ease-in-out infinite reverse;
+  }
+
+  @keyframes orbFloat {
+    0%, 100% { transform: translate(0, 0); }
+    50% { transform: translate(20px, -30px); }
+  }
+
+  .onboard-1 .content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 80px 32px 0;
+    position: relative;
+    z-index: 2;
+  }
+
+  /* Koala mascot area */
+  .mascot-container {
+    width: 180px;
+    height: 180px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.08);
+    backdrop-filter: blur(20px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    margin-bottom: 36px;
+  }
+
+  .mascot-container::before {
+    content: '';
+    position: absolute;
+    inset: -3px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--terracotta-soft), var(--plum-light), var(--sage-soft));
+    z-index: -1;
+    animation: ringRotate 6s linear infinite;
+  }
+
+  @keyframes ringRotate {
+    to { transform: rotate(360deg); }
+  }
+
+  .mascot-emoji {
+    font-size: 80px;
+    filter: drop-shadow(0 4px 12px rgba(0,0,0,0.2));
+    animation: mascotBounce 3s ease-in-out infinite;
+  }
+
+  @keyframes mascotBounce {
+    0%, 100% { transform: translateY(0) scale(1); }
+    50% { transform: translateY(-8px) scale(1.03); }
+  }
+
+  .onboard-1 h1 {
+    font-family: 'Playfair Display', serif;
+    font-size: var(--fs-2xl);
+    color: var(--white);
+    text-align: center;
+    line-height: 1.2;
+    margin-bottom: 12px;
+    opacity: 0;
+    animation: fadeUp 0.7s 0.3s forwards;
+  }
+
+  .onboard-1 h1 em {
+    font-style: italic;
+    color: var(--terracotta-soft);
+  }
+
+  .onboard-1 .subtitle {
+    font-size: var(--fs-base);
+    color: rgba(255,255,255,0.65);
+    text-align: center;
+    line-height: 1.5;
+    max-width: 280px;
+    opacity: 0;
+    animation: fadeUp 0.7s 0.5s forwards;
+  }
+
+  /* Feature pills */
+  .feature-pills {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
+    margin-top: 32px;
+    opacity: 0;
+    animation: fadeUp 0.7s 0.7s forwards;
+  }
+
+  .pill {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    border-radius: var(--r-full);
+    background: rgba(255,255,255,0.1);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255,255,255,0.12);
+    color: rgba(255,255,255,0.85);
+    font-size: var(--fs-sm);
+    font-weight: 500;
+    white-space: nowrap;
+  }
+
+  .pill-icon {
+    font-size: 14px;
+  }
+
+  /* Bottom section */
+  .onboard-bottom {
+    padding: 0 32px 60px;
+    position: relative;
+    z-index: 2;
+  }
+
+  /* Progress dots */
+  .progress-bar {
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+    margin-bottom: 20px;
+  }
+
+  .dot {
+    height: 4px;
+    border-radius: 4px;
+    background: rgba(255,255,255,0.25);
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .dot.active {
+    width: 32px;
+    background: var(--white);
+  }
+  .dot.inactive {
+    width: 12px;
+  }
+
+  /* CTA Buttons */
+  .btn-primary {
+    width: 100%;
+    height: 56px;
+    border: none;
+    border-radius: var(--r-lg);
+    font-family: 'DM Sans', sans-serif;
+    font-size: var(--fs-md);
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .btn-primary::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(rgba(255,255,255,0.15), transparent);
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+
+  .btn-primary:active::after { opacity: 1; }
+  .btn-primary:active { transform: scale(0.97); }
+
+  .btn-continue {
+    background: var(--white);
+    color: var(--plum-deep);
+  }
+
+  .btn-start {
+    background: linear-gradient(135deg, var(--terracotta), var(--terracotta-soft));
+    color: var(--white);
+    box-shadow: var(--shadow-glow);
+  }
+
+  .btn-icon { font-size: 20px; }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ═══════════════════════════════════════════
+     SCREEN 2 — ONBOARDING: Value Demo
+     Shows what the app actually does
+  ═══════════════════════════════════════════ */
+  .onboard-2 {
+    background: linear-gradient(168deg, var(--plum-deep) 0%, #3D2B56 60%, var(--plum) 100%);
+    position: relative;
+  }
+
+  .onboard-2 .content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 72px 28px 0;
+    position: relative;
+    z-index: 2;
+  }
+
+  .onboard-2 h2 {
+    font-family: 'Playfair Display', serif;
+    font-size: var(--fs-xl);
+    color: var(--white);
+    text-align: center;
+    margin-bottom: 8px;
+  }
+
+  .onboard-2 .subtitle {
+    font-size: var(--fs-sm);
+    color: rgba(255,255,255,0.55);
+    text-align: center;
+    margin-bottom: 28px;
+  }
+
+  /* Demo card stack */
+  .demo-stack {
+    width: 100%;
+    max-width: 320px;
+    position: relative;
+    height: 380px;
+  }
+
+  .demo-card {
+    position: absolute;
+    width: 100%;
+    border-radius: var(--r-md);
+    overflow: hidden;
+    box-shadow: var(--shadow-lg);
+    opacity: 0;
+    transform: translateY(30px) scale(0.95);
+  }
+
+  /* Card 1: Room photo with scan line */
+  .demo-room {
+    height: 200px;
+    background: linear-gradient(135deg, #D4C5A9 0%, #A89279 100%);
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 3;
+  }
+
+  .demo-room-inner {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .room-illustration {
+    font-size: 48px;
+    opacity: 0.8;
+  }
+
+  .room-label {
+    position: absolute;
+    bottom: 12px;
+    left: 12px;
+    background: rgba(0,0,0,0.5);
+    backdrop-filter: blur(8px);
+    color: white;
+    padding: 6px 14px;
+    border-radius: var(--r-full);
+    font-size: var(--fs-xs);
+    font-weight: 500;
+  }
+
+  .scan-line {
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, transparent, var(--plum-light), var(--terracotta-soft), transparent);
+    box-shadow: 0 0 20px var(--plum-light);
+    top: 0;
+  }
+
+  .demo-room.animate .scan-line {
+    animation: scanDown 2s 0.5s ease-in-out forwards;
+  }
+
+  @keyframes scanDown {
+    0% { top: 0; opacity: 1; }
+    90% { top: 100%; opacity: 1; }
+    100% { top: 100%; opacity: 0; }
+  }
+
+  /* Card 2: Style result */
+  .demo-style {
+    height: 120px;
+    background: var(--white);
+    top: 130px;
+    left: 16px;
+    right: 16px;
+    z-index: 4;
+    padding: 16px;
+    display: flex;
+    gap: 14px;
+  }
+
+  .style-color-strip {
+    width: 6px;
+    border-radius: 6px;
+    background: linear-gradient(to bottom, var(--terracotta), var(--plum-light), var(--sage));
+    flex-shrink: 0;
+  }
+
+  .style-info h4 {
+    font-family: 'Playfair Display', serif;
+    font-size: var(--fs-md);
+    color: var(--charcoal);
+    margin-bottom: 4px;
+  }
+
+  .style-info p {
+    font-size: var(--fs-xs);
+    color: var(--warm-gray);
+    line-height: 1.4;
+  }
+
+  .style-tags {
+    display: flex;
+    gap: 6px;
+    margin-top: 8px;
+  }
+
+  .style-tag {
+    padding: 3px 10px;
+    border-radius: var(--r-full);
+    background: var(--cream-mid);
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--plum);
+  }
+
+  /* Card 3: Product suggestion */
+  .demo-product {
+    height: 100px;
+    background: var(--white);
+    bottom: 40px;
+    left: 8px;
+    right: 8px;
+    z-index: 5;
+    padding: 14px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+
+  .product-thumb {
+    width: 72px;
+    height: 72px;
+    border-radius: var(--r-sm);
+    background: linear-gradient(135deg, var(--cream-mid), var(--terracotta-soft));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 32px;
+    flex-shrink: 0;
+  }
+
+  .product-info { flex: 1; }
+
+  .product-info .label {
+    font-size: var(--fs-xs);
+    color: var(--warm-gray);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 2px;
+  }
+
+  .product-info h5 {
+    font-size: var(--fs-sm);
+    color: var(--charcoal);
+    margin-bottom: 4px;
+  }
+
+  .product-info .price {
+    font-size: var(--fs-base);
+    font-weight: 700;
+    color: var(--plum);
+  }
+
+  .product-cta {
+    padding: 8px 16px;
+    border-radius: var(--r-full);
+    background: var(--plum);
+    color: white;
+    font-size: var(--fs-xs);
+    font-weight: 600;
+    border: none;
+    white-space: nowrap;
+  }
+
+  /* Demo animation sequence */
+  .demo-stack.animate .demo-room {
+    animation: cardIn 0.6s 0.2s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  }
+  .demo-stack.animate .demo-style {
+    animation: cardIn 0.6s 2.2s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  }
+  .demo-stack.animate .demo-product {
+    animation: cardIn 0.6s 3.0s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  }
+
+  @keyframes cardIn {
+    from { opacity: 0; transform: translateY(30px) scale(0.95); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+  }
+
+  /* ═══════════════════════════════════════════
+     SCREEN 3 — AUTH ENTRY
+     Clean, warm, trust-building
+  ═══════════════════════════════════════════ */
+  .auth-screen {
+    background: var(--cream);
+    position: relative;
+  }
+
+  .auth-screen .bg-shape {
+    position: absolute;
+    top: -120px;
+    left: -60px;
+    right: -60px;
+    height: 420px;
+    background: linear-gradient(168deg, var(--plum-deep) 0%, var(--plum) 100%);
+    border-radius: 0 0 60px 60px;
+    z-index: 0;
+  }
+
+  .auth-screen .bg-shape::after {
+    content: '';
+    position: absolute;
+    bottom: -1px;
+    left: 0;
+    right: 0;
+    height: 80px;
+    background: linear-gradient(transparent, var(--cream));
+  }
+
+  .auth-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    z-index: 1;
+    padding: 0 28px;
+  }
+
+  /* Auth header with mascot */
+  .auth-header {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding-top: 72px;
+    margin-bottom: 28px;
+  }
+
+  .auth-mascot {
+    width: 80px;
+    height: 80px;
+    border-radius: 24px;
+    background: rgba(255,255,255,0.12);
+    backdrop-filter: blur(16px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 42px;
+    margin-bottom: 20px;
+    border: 2px solid rgba(255,255,255,0.15);
+    box-shadow: var(--shadow-glow);
+  }
+
+  .auth-header h2 {
+    font-family: 'Playfair Display', serif;
+    font-size: var(--fs-xl);
+    color: var(--white);
+    text-align: center;
+    margin-bottom: 6px;
+  }
+
+  .auth-header .subtitle {
+    font-size: var(--fs-sm);
+    color: rgba(255,255,255,0.6);
+    text-align: center;
+  }
+
+  /* Auth card */
+  .auth-card {
+    background: var(--white);
+    border-radius: var(--r-xl);
+    padding: 28px 24px;
+    box-shadow: var(--shadow-lg);
+    margin-top: auto;
+    margin-bottom: 16px;
+  }
+
+  /* Google button — PRIMARY */
+  .btn-google {
+    width: 100%;
+    height: 56px;
+    border-radius: var(--r-lg);
+    border: none;
+    background: var(--charcoal);
+    color: var(--white);
+    font-family: 'DM Sans', sans-serif;
+    font-size: var(--fs-base);
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    transition: all 0.3s;
+    margin-bottom: 12px;
+  }
+
+  .btn-google:active { transform: scale(0.97); background: #1a1a1a; }
+
+  .btn-google svg {
+    width: 20px;
+    height: 20px;
+  }
+
+  /* Divider */
+  .auth-divider {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin: 4px 0 16px;
+  }
+
+  .auth-divider::before,
+  .auth-divider::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--cream-mid);
+  }
+
+  .auth-divider span {
+    font-size: var(--fs-xs);
+    color: var(--warm-gray);
+    font-weight: 500;
+    text-transform: lowercase;
+  }
+
+  /* Phone button — SECONDARY */
+  .btn-phone {
+    width: 100%;
+    height: 52px;
+    border-radius: var(--r-lg);
+    border: 1.5px solid var(--cream-mid);
+    background: transparent;
+    color: var(--charcoal);
+    font-family: 'DM Sans', sans-serif;
+    font-size: var(--fs-sm);
+    font-weight: 500;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    transition: all 0.3s;
+  }
+
+  .btn-phone:active { transform: scale(0.97); background: var(--cream-mid); }
+
+  /* GUEST mode — KEY addition */
+  .btn-guest {
+    width: 100%;
+    height: 44px;
+    border: none;
+    background: transparent;
+    color: var(--plum-light);
+    font-family: 'DM Sans', sans-serif;
+    font-size: var(--fs-sm);
+    font-weight: 600;
+    cursor: pointer;
+    margin-top: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    transition: all 0.3s;
+    padding: 0;
+  }
+
+  .btn-guest:active { opacity: 0.7; }
+
+  .btn-guest .arrow {
+    transition: transform 0.3s;
+  }
+
+  .btn-guest:hover .arrow {
+    transform: translateX(3px);
+  }
+
+  /* Trust badges */
+  .trust-strip {
+    display: flex;
+    justify-content: center;
+    gap: 20px;
+    margin-top: 20px;
+    padding-top: 16px;
+    border-top: 1px solid var(--cream-mid);
+  }
+
+  .trust-item {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 11px;
+    color: var(--warm-gray);
+    font-weight: 500;
+  }
+
+  .trust-icon { font-size: 13px; }
+
+  /* Legal */
+  .auth-legal {
+    text-align: center;
+    font-size: 11px;
+    color: var(--warm-gray);
+    line-height: 1.5;
+    padding: 12px 16px 48px;
+  }
+
+  .auth-legal a {
+    color: var(--plum-light);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+
+  /* ═══════════════════════════════════════════
+     SCREEN 4 — PHONE AUTH
+     Clean OTP entry with auto-format
+  ═══════════════════════════════════════════ */
+  .phone-screen {
+    background: var(--cream);
+  }
+
+  .phone-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    padding: 0 28px;
+  }
+
+  .phone-header {
+    padding-top: 64px;
+    margin-bottom: 36px;
+  }
+
+  .back-btn {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    border: none;
+    background: var(--white);
+    box-shadow: var(--shadow-sm);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 20px;
+    margin-bottom: 24px;
+    transition: all 0.2s;
+    color: var(--charcoal);
+  }
+
+  .back-btn:active { transform: scale(0.9); }
+
+  .phone-header h2 {
+    font-family: 'Playfair Display', serif;
+    font-size: var(--fs-xl);
+    color: var(--charcoal);
+    margin-bottom: 8px;
+  }
+
+  .phone-header p {
+    font-size: var(--fs-sm);
+    color: var(--warm-gray);
+    line-height: 1.5;
+  }
+
+  /* Phone input */
+  .phone-input-group {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 24px;
+  }
+
+  .country-code {
+    width: 80px;
+    height: 56px;
+    border-radius: var(--r-md);
+    border: 1.5px solid var(--cream-mid);
+    background: var(--white);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    font-size: var(--fs-base);
+    font-weight: 600;
+    color: var(--charcoal);
+    cursor: pointer;
+    transition: border-color 0.3s;
+  }
+
+  .country-code:hover { border-color: var(--plum-light); }
+
+  .country-flag { font-size: 18px; }
+
+  .phone-input {
+    flex: 1;
+    height: 56px;
+    border-radius: var(--r-md);
+    border: 1.5px solid var(--cream-mid);
+    background: var(--white);
+    padding: 0 16px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: var(--fs-md);
+    font-weight: 500;
+    color: var(--charcoal);
+    letter-spacing: 1px;
+    outline: none;
+    transition: border-color 0.3s, box-shadow 0.3s;
+  }
+
+  .phone-input:focus {
+    border-color: var(--plum-light);
+    box-shadow: 0 0 0 3px var(--plum-glow);
+  }
+
+  .phone-input::placeholder {
+    color: var(--warm-gray);
+    opacity: 0.5;
+    letter-spacing: 0;
+  }
+
+  .btn-send-code {
+    width: 100%;
+    height: 56px;
+    border: none;
+    border-radius: var(--r-lg);
+    background: var(--plum);
+    color: var(--white);
+    font-family: 'DM Sans', sans-serif;
+    font-size: var(--fs-base);
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s;
+  }
+
+  .btn-send-code:active { transform: scale(0.97); }
+  .btn-send-code:disabled {
+    background: var(--cream-mid);
+    color: var(--warm-gray);
+    cursor: not-allowed;
+  }
+
+  /* ═══════════════════════════════════════════
+     SCREEN 5 — OTP VERIFICATION
+  ═══════════════════════════════════════════ */
+  .otp-screen {
+    background: var(--cream);
+  }
+
+  .otp-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    padding: 0 28px;
+  }
+
+  .otp-header {
+    padding-top: 64px;
+    text-align: center;
+    margin-bottom: 36px;
+  }
+
+  .otp-header .phone-display {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    border-radius: var(--r-full);
+    background: var(--plum-glow);
+    color: var(--plum);
+    font-size: var(--fs-sm);
+    font-weight: 600;
+    margin-bottom: 20px;
+  }
+
+  .otp-header h2 {
+    font-family: 'Playfair Display', serif;
+    font-size: var(--fs-xl);
+    color: var(--charcoal);
+    margin-bottom: 8px;
+  }
+
+  .otp-header p {
+    font-size: var(--fs-sm);
+    color: var(--warm-gray);
+  }
+
+  /* OTP boxes */
+  .otp-boxes {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    margin-bottom: 32px;
+  }
+
+  .otp-box {
+    width: 50px;
+    height: 60px;
+    border-radius: var(--r-sm);
+    border: 1.5px solid var(--cream-mid);
+    background: var(--white);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'DM Sans', sans-serif;
+    font-size: var(--fs-xl);
+    font-weight: 700;
+    color: var(--charcoal);
+    transition: all 0.3s;
+  }
+
+  .otp-box.focused {
+    border-color: var(--plum-light);
+    box-shadow: 0 0 0 3px var(--plum-glow);
+  }
+
+  .otp-box.filled {
+    border-color: var(--plum-light);
+    background: var(--plum-glow);
+  }
+
+  .otp-cursor {
+    width: 2px;
+    height: 24px;
+    background: var(--plum-light);
+    border-radius: 2px;
+    animation: cursorBlink 1s step-end infinite;
+  }
+
+  @keyframes cursorBlink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0; }
+  }
+
+  /* Resend */
+  .otp-resend {
+    text-align: center;
+    margin-bottom: 32px;
+  }
+
+  .otp-timer {
+    font-size: var(--fs-sm);
+    color: var(--warm-gray);
+  }
+
+  .otp-timer strong {
+    color: var(--plum);
+    font-weight: 600;
+  }
+
+  .btn-verify {
+    width: 100%;
+    height: 56px;
+    border: none;
+    border-radius: var(--r-lg);
+    background: var(--plum);
+    color: var(--white);
+    font-family: 'DM Sans', sans-serif;
+    font-size: var(--fs-base);
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s;
+  }
+
+  .btn-verify:active { transform: scale(0.97); }
+
+  /* Success animation */
+  .success-check {
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    padding: 40px 0;
+  }
+
+  .success-check.show { display: flex; }
+
+  .check-circle {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--sage), var(--sage-soft));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 40px;
+    animation: popIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  @keyframes popIn {
+    0% { transform: scale(0); }
+    100% { transform: scale(1); }
+  }
+
+  .success-check p {
+    font-family: 'Playfair Display', serif;
+    font-size: var(--fs-lg);
+    color: var(--charcoal);
+  }
+
+  /* ═══════════════════════════════════════════
+     NAVIGATION HINT (bottom bar for prototype)
+  ═══════════════════════════════════════════ */
+  .nav-hint {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 34px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+  }
+
+  .nav-hint .handle {
+    width: 134px;
+    height: 5px;
+    border-radius: 5px;
+    background: rgba(0,0,0,0.15);
+  }
+
+  .nav-hint.light .handle { background: rgba(255,255,255,0.3); }
+
+  /* ═══════════════════════════════════════════
+     PROTOTYPE CONTROLS (outside phone)
+  ═══════════════════════════════════════════ */
+  .controls {
+    position: fixed;
+    top: 24px;
+    left: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    z-index: 9999;
+  }
+
+  .control-label {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px;
+    color: rgba(255,255,255,0.4);
+    margin-bottom: 4px;
+  }
+
+  .control-btn {
+    padding: 10px 20px;
+    border-radius: 12px;
+    border: 1px solid rgba(255,255,255,0.12);
+    background: rgba(255,255,255,0.06);
+    color: rgba(255,255,255,0.7);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-align: left;
+  }
+
+  .control-btn:hover {
+    background: rgba(255,255,255,0.12);
+    color: white;
+  }
+
+  .control-btn.active {
+    background: var(--plum-light);
+    color: white;
+    border-color: var(--plum-light);
+  }
+
+  /* Notes panel */
+  .notes {
+    position: fixed;
+    top: 24px;
+    right: 24px;
+    width: 300px;
+    z-index: 9999;
+  }
+
+  .note-card {
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 16px;
+    padding: 20px;
+    font-family: 'DM Sans', sans-serif;
+    color: rgba(255,255,255,0.7);
+    font-size: 12px;
+    line-height: 1.6;
+    transition: all 0.5s;
+  }
+
+  .note-card h3 {
+    font-size: 14px;
+    font-weight: 600;
+    color: rgba(255,255,255,0.9);
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .note-card .change-tag {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 6px;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 4px;
+  }
+
+  .tag-new { background: rgba(76, 175, 125, 0.2); color: #4CAF7D; }
+  .tag-improved { background: rgba(108, 92, 231, 0.2); color: #A498E8; }
+  .tag-critical { background: rgba(217, 79, 79, 0.2); color: #E87070; }
+
+  .note-item {
+    padding: 6px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+  }
+
+  .note-item:last-child { border: none; }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════
+     PROTOTYPE CONTROLS
+═══════════════════════════════════════════ -->
+<div class="controls">
+  <div class="control-label">📱 Ekranlar</div>
+  <button class="control-btn active" onclick="goTo(0)">1 — Onboarding: Hoşgeldin</button>
+  <button class="control-btn" onclick="goTo(1)">2 — Onboarding: Demo</button>
+  <button class="control-btn" onclick="goTo(2)">3 — Giriş Yap</button>
+  <button class="control-btn" onclick="goTo(3)">4 — Telefon Numarası</button>
+  <button class="control-btn" onclick="goTo(4)">5 — OTP Doğrulama</button>
+</div>
+
+<!-- ═══════════════════════════════════════════
+     DESIGN NOTES
+═══════════════════════════════════════════ -->
+<div class="notes">
+  <div class="note-card" id="designNotes">
+    <h3>✨ Tasarım Notları</h3>
+    <div id="noteContent"></div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════
+     PHONE FRAME
+═══════════════════════════════════════════ -->
+<div class="phone-frame">
+  <!-- Status Bar -->
+  <div class="status-bar dark" id="statusBar">
+    <span>12:30</span>
+    <div class="status-icons">
+      <svg viewBox="0 0 16 16" fill="currentColor"><path d="M1 14h2V8H1v6zm4 0h2V5H5v9zm4 0h2V2H9v12zm4 0h2V0h-2v14z"/></svg>
+      <svg viewBox="0 0 16 16" fill="currentColor"><path d="M15.5 5.1c-2-2.1-4.7-3.2-7.5-3.2S2.5 3 .5 5.1l1.1 1.1c1.7-1.8 4-2.8 6.4-2.8s4.7 1 6.4 2.8l1.1-1.1zM8 6.4c-1.8 0-3.5.7-4.8 2l1.1 1.1c1-1 2.3-1.5 3.7-1.5s2.7.6 3.7 1.5l1.1-1.1C11.5 7.1 9.8 6.4 8 6.4zM8 10c-1 0-2 .4-2.7 1.2L8 14.5l2.7-3.3C10 10.4 9 10 8 10z"/></svg>
+      <svg viewBox="0 0 16 16" fill="currentColor"><path d="M14 4h-1V3a3 3 0 0 0-6 0v1H2a1 1 0 0 0-1 1v7a3 3 0 0 0 3 3h8a3 3 0 0 0 3-3V5a1 1 0 0 0-1-1zM9 4H7V3a1 1 0 0 1 2 0v1z"/></svg>
+    </div>
+  </div>
+
+  <div class="screen-container">
+
+    <!-- ═══ SCREEN 1: Onboarding Welcome ═══ -->
+    <div class="screen onboard-1 active" id="screen0">
+      <div class="bg-orb orb-1"></div>
+      <div class="bg-orb orb-2"></div>
+
+      <div class="content">
+        <div class="mascot-container">
+          <div class="mascot-emoji">🐨</div>
+        </div>
+        <h1>Evinizi birlikte<br><em>tasarlayalım</em></h1>
+        <p class="subtitle">Yapay zeka destekli kişisel iç mimar asistanınız</p>
+        <div class="feature-pills">
+          <div class="pill"><span class="pill-icon">🎨</span> Stil Analizi</div>
+          <div class="pill"><span class="pill-icon">🛋️</span> Ürün Önerileri</div>
+          <div class="pill"><span class="pill-icon">🏠</span> Mekan Tasarımı</div>
+          <div class="pill"><span class="pill-icon">👩‍🎨</span> Tasarımcı Eşleştir</div>
+        </div>
+      </div>
+
+      <div class="onboard-bottom">
+        <div class="progress-bar">
+          <div class="dot active"></div>
+          <div class="dot inactive"></div>
+        </div>
+        <button class="btn-primary btn-continue" onclick="goTo(1)">
+          Devam <span class="btn-icon">→</span>
+        </button>
+      </div>
+
+      <div class="nav-hint light"><div class="handle"></div></div>
+    </div>
+
+    <!-- ═══ SCREEN 2: Onboarding Demo ═══ -->
+    <div class="screen onboard-2" id="screen1">
+      <div class="content">
+        <h2>Nasıl çalışır?</h2>
+        <p class="subtitle">3 adımda hayalinizdeki odayı keşfedin</p>
+
+        <div class="demo-stack" id="demoStack">
+          <!-- Room scan card -->
+          <div class="demo-card demo-room">
+            <div class="demo-room-inner">
+              <span class="room-illustration">🛋️</span>
+              <div class="room-label">📸 Odanızı analiz edelim</div>
+              <div class="scan-line"></div>
+            </div>
+          </div>
+
+          <!-- Style result card -->
+          <div class="demo-card demo-style">
+            <div class="style-color-strip"></div>
+            <div class="style-info">
+              <h4>Modern Bohem</h4>
+              <p>Sıcak tonlar, doğal dokular ve minimalist çizgiler</p>
+              <div class="style-tags">
+                <span class="style-tag">Terracotta</span>
+                <span class="style-tag">Ahşap</span>
+                <span class="style-tag">Minimal</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Product card -->
+          <div class="demo-card demo-product">
+            <div class="product-thumb">🪑</div>
+            <div class="product-info">
+              <div class="label">Size özel öneri</div>
+              <h5>Bergen Berjer Koltuk</h5>
+              <div class="price">₺4.290</div>
+            </div>
+            <button class="product-cta">İncele →</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="onboard-bottom">
+        <div class="progress-bar">
+          <div class="dot inactive"></div>
+          <div class="dot active"></div>
+        </div>
+        <button class="btn-primary btn-start" onclick="goTo(2)">
+          ✨ Başla
+        </button>
+      </div>
+
+      <div class="nav-hint light"><div class="handle"></div></div>
+    </div>
+
+    <!-- ═══ SCREEN 3: Auth Entry ═══ -->
+    <div class="screen auth-screen" id="screen2">
+      <div class="bg-shape"></div>
+
+      <div class="auth-content">
+        <div class="auth-header">
+          <div class="auth-mascot">🐨</div>
+          <h2>Koala'ya Hoş Geldin</h2>
+          <p class="subtitle">Hesap oluştur veya giriş yap</p>
+        </div>
+
+        <div class="auth-card">
+          <!-- Google — PRIMARY CTA -->
+          <button class="btn-google" onclick="showSuccess()">
+            <svg viewBox="0 0 24 24" width="20" height="20">
+              <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"/>
+              <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+              <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18A10.96 10.96 0 0 0 1 12c0 1.77.42 3.45 1.18 4.93l3.66-2.84z"/>
+              <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+            </svg>
+            Google ile devam et
+          </button>
+
+          <!-- Divider -->
+          <div class="auth-divider"><span>veya</span></div>
+
+          <!-- Phone — SECONDARY -->
+          <button class="btn-phone" onclick="goTo(3)">
+            📱 Telefon numarasıyla giriş
+          </button>
+
+          <!-- GUEST MODE — NEW -->
+          <button class="btn-guest" onclick="showSuccess()">
+            Önce keşfetmek istiyorum <span class="arrow">→</span>
+          </button>
+
+          <!-- Trust badges -->
+          <div class="trust-strip">
+            <div class="trust-item"><span class="trust-icon">🔒</span> Güvenli giriş</div>
+            <div class="trust-item"><span class="trust-icon">🎁</span> Tamamen ücretsiz</div>
+            <div class="trust-item"><span class="trust-icon">⚡</span> 30 saniye</div>
+          </div>
+        </div>
+
+        <!-- Legal -->
+        <div class="auth-legal">
+          Devam ederek <a href="#">Kullanım Koşulları</a>'nı ve <a href="#">Gizlilik Politikası</a>'nı kabul etmiş olursunuz.
+        </div>
+      </div>
+
+      <div class="nav-hint"><div class="handle"></div></div>
+    </div>
+
+    <!-- ═══ SCREEN 4: Phone Input ═══ -->
+    <div class="screen phone-screen" id="screen3">
+      <div class="phone-content">
+        <div class="phone-header">
+          <button class="back-btn" onclick="goTo(2)">←</button>
+          <h2>Telefon Numarası</h2>
+          <p>SMS ile doğrulama kodu göndereceğiz</p>
+        </div>
+
+        <div class="phone-input-group">
+          <div class="country-code">
+            <span class="country-flag">🇹🇷</span>
+            <span>+90</span>
+          </div>
+          <input
+            type="tel"
+            class="phone-input"
+            id="phoneInput"
+            placeholder="(5XX) XXX XX XX"
+            maxlength="15"
+            oninput="formatPhone(this)"
+          />
+        </div>
+
+        <button class="btn-send-code" id="sendCodeBtn" disabled onclick="goTo(4)">
+          Doğrulama Kodu Gönder
+        </button>
+      </div>
+
+      <div class="nav-hint"><div class="handle"></div></div>
+    </div>
+
+    <!-- ═══ SCREEN 5: OTP Verification ═══ -->
+    <div class="screen otp-screen" id="screen4">
+      <div class="otp-content">
+        <div class="otp-header">
+          <button class="back-btn" onclick="goTo(3)" style="position:absolute;left:28px;top:64px">←</button>
+          <div style="padding-top:60px"></div>
+          <div class="phone-display">📱 +90 (532) 123 45 67</div>
+          <h2>Doğrulama Kodu</h2>
+          <p>6 haneli kodu girin</p>
+        </div>
+
+        <div class="otp-boxes" id="otpBoxes">
+          <div class="otp-box focused"><div class="otp-cursor"></div></div>
+          <div class="otp-box"></div>
+          <div class="otp-box"></div>
+          <div class="otp-box"></div>
+          <div class="otp-box"></div>
+          <div class="otp-box"></div>
+        </div>
+
+        <div class="otp-resend">
+          <span class="otp-timer">Yeniden gönder: <strong id="timerDisplay">0:59</strong></span>
+        </div>
+
+        <button class="btn-verify" onclick="verifyOtp()">Doğrula</button>
+
+        <div class="success-check" id="successCheck">
+          <div class="check-circle">✓</div>
+          <p>Hoş geldin! 🎉</p>
+        </div>
+      </div>
+
+      <div class="nav-hint"><div class="handle"></div></div>
+    </div>
+
+  </div><!-- /screen-container -->
+</div><!-- /phone-frame -->
+
+<script>
+  // ═══════════════════════════════════════════
+  // SCREEN NAVIGATION
+  // ═══════════════════════════════════════════
+  let currentScreen = 0;
+  const totalScreens = 5;
+
+  const designNotes = [
+    // Screen 0
+    `<div class="note-item">
+      <span class="change-tag tag-improved">İyileştirildi</span><br>
+      <strong>Koala maskotu merkeze alındı</strong> — gradient ring ile premium his. Onboarding'den auth'a aynı maskot taşınacak.
+    </div>
+    <div class="note-item">
+      <span class="change-tag tag-improved">İyileştirildi</span><br>
+      <strong>Pulsing circle 3→1</strong> — daha az kaos, daha fazla odak. Tek ring gradient ile yeterli hareket.
+    </div>
+    <div class="note-item">
+      <span class="change-tag tag-improved">İyileştirildi</span><br>
+      <strong>Başlık italik vurgu</strong> — "tasarlayalım" kelimesi Playfair Display italic ile vurgulanıyor.
+    </div>
+    <div class="note-item">
+      <span class="change-tag tag-improved">İyileştirildi</span><br>
+      <strong>Pill şeklinde feature chip'ler</strong> — glassmorphism efekti, emoji ikonlar ile sıcak his.
+    </div>`,
+
+    // Screen 1
+    `<div class="note-item">
+      <span class="change-tag tag-improved">İyileştirildi</span><br>
+      <strong>Demo animasyonu 7s→5s</strong> — kart yığını pattern'i ile daha hızlı, daha etkili.
+    </div>
+    <div class="note-item">
+      <span class="change-tag tag-improved">İyileştirildi</span><br>
+      <strong>"Başla" butonu farklılaştırıldı</strong> — terracotta gradient + glow shadow. "Devam" ise düz beyaz.
+    </div>
+    <div class="note-item">
+      <span class="change-tag tag-improved">İyileştirildi</span><br>
+      <strong>Tarama çizgisi efekti</strong> — oda fotoğrafı üzerinde AI analiz hissi veren scan line.
+    </div>`,
+
+    // Screen 2
+    `<div class="note-item">
+      <span class="change-tag tag-critical">Kritik</span><br>
+      <strong>Maskot tutarlılığı sağlandı</strong> — Auth ekranında da 🐨 koala kullanılıyor. Soyut ikon kaldırıldı.
+    </div>
+    <div class="note-item">
+      <span class="change-tag tag-critical">Kritik</span><br>
+      <strong>Misafir modu eklendi</strong> — "Önce keşfetmek istiyorum" butonu. Kayıt zorunluluğu kaldırıldı.
+    </div>
+    <div class="note-item">
+      <span class="change-tag tag-improved">İyileştirildi</span><br>
+      <strong>Google butonu birincil yapıldı</strong> — koyu, büyük, dikkat çekici. Telefon butonu ikincil (outlined).
+    </div>
+    <div class="note-item">
+      <span class="change-tag tag-new">Yeni</span><br>
+      <strong>"veya" ayracı eklendi</strong> — butonlar arası görsel hiyerarşi.
+    </div>
+    <div class="note-item">
+      <span class="change-tag tag-new">Yeni</span><br>
+      <strong>Güven rozetleri</strong> — "Güvenli giriş · Tamamen ücretsiz · 30 saniye" — tereddüt kırıcı.
+    </div>`,
+
+    // Screen 3
+    `<div class="note-item">
+      <span class="change-tag tag-new">Yeni</span><br>
+      <strong>Ülke kodu seçici</strong> — 🇹🇷 +90 varsayılan, tıklanabilir (gelecek: picker).
+    </div>
+    <div class="note-item">
+      <span class="change-tag tag-improved">İyileştirildi</span><br>
+      <strong>Otomatik numara formatı</strong> — (5XX) XXX XX XX şeklinde real-time format.
+    </div>
+    <div class="note-item">
+      <span class="change-tag tag-improved">İyileştirildi</span><br>
+      <strong>Geri butonu</strong> — sol üstte temiz back navigation.
+    </div>`,
+
+    // Screen 4
+    `<div class="note-item">
+      <span class="change-tag tag-improved">İyileştirildi</span><br>
+      <strong>OTP kutuları tek alanlı</strong> — SMS autofill uyumlu tek input, görsel 6 kutu. Şu an 6 ayrı controller yerine.
+    </div>
+    <div class="note-item">
+      <span class="change-tag tag-new">Yeni</span><br>
+      <strong>Numara gösterimi</strong> — üstte pill badge ile gönderilen numara görünür.
+    </div>
+    <div class="note-item">
+      <span class="change-tag tag-new">Yeni</span><br>
+      <strong>Başarı animasyonu</strong> — doğrulama sonrası yeşil ✓ + "Hoş geldin!" popup.
+    </div>`
+  ];
+
+  function goTo(index) {
+    if (index === currentScreen) return;
+
+    const screens = document.querySelectorAll('.screen');
+    const buttons = document.querySelectorAll('.control-btn');
+
+    // Exit current
+    screens[currentScreen].classList.remove('active');
+    screens[currentScreen].classList.add('exit-left');
+    buttons[currentScreen].classList.remove('active');
+
+    // Enter new
+    setTimeout(() => {
+      screens[currentScreen].classList.remove('exit-left');
+    }, 500);
+
+    currentScreen = index;
+    screens[currentScreen].classList.add('active');
+    buttons[currentScreen].classList.add('active');
+
+    // Status bar color
+    const statusBar = document.getElementById('statusBar');
+    if (index <= 1) {
+      statusBar.className = 'status-bar dark';
+    } else {
+      statusBar.className = index === 2 ? 'status-bar dark' : 'status-bar light';
+    }
+
+    // Design notes
+    document.getElementById('noteContent').innerHTML = designNotes[index];
+
+    // Trigger demo animation on screen 1
+    if (index === 1) {
+      const stack = document.getElementById('demoStack');
+      stack.classList.remove('animate');
+      void stack.offsetWidth;
+      stack.classList.add('animate');
+      // Also trigger room scan
+      setTimeout(() => {
+        const room = document.querySelector('.demo-room');
+        room.classList.add('animate');
+      }, 800);
+    }
+
+    // Reset OTP on screen 4
+    if (index === 4) {
+      startTimer();
+      simulateOtp();
+    }
+  }
+
+  // Phone number formatter
+  function formatPhone(input) {
+    let value = input.value.replace(/\D/g, '');
+    let formatted = '';
+
+    if (value.length > 0) formatted += '(' + value.substring(0, 3);
+    if (value.length >= 3) formatted += ') ';
+    if (value.length > 3) formatted += value.substring(3, 6);
+    if (value.length > 6) formatted += ' ' + value.substring(6, 8);
+    if (value.length > 8) formatted += ' ' + value.substring(8, 10);
+
+    input.value = formatted;
+
+    // Enable/disable send button
+    const btn = document.getElementById('sendCodeBtn');
+    btn.disabled = value.length < 10;
+  }
+
+  // OTP Timer
+  let timerInterval;
+  function startTimer() {
+    let seconds = 59;
+    clearInterval(timerInterval);
+    timerInterval = setInterval(() => {
+      seconds--;
+      const display = document.getElementById('timerDisplay');
+      if (display) {
+        display.textContent = `0:${seconds.toString().padStart(2, '0')}`;
+      }
+      if (seconds <= 0) clearInterval(timerInterval);
+    }, 1000);
+  }
+
+  // Simulate OTP entry
+  function simulateOtp() {
+    const boxes = document.querySelectorAll('.otp-box');
+    const digits = ['4', '7', '2', '9', '1', '5'];
+
+    boxes.forEach((box, i) => {
+      box.className = 'otp-box';
+      box.innerHTML = '';
+    });
+
+    boxes[0].classList.add('focused');
+    boxes[0].innerHTML = '<div class="otp-cursor"></div>';
+
+    digits.forEach((digit, i) => {
+      setTimeout(() => {
+        boxes[i].classList.remove('focused');
+        boxes[i].classList.add('filled');
+        boxes[i].innerHTML = digit;
+
+        if (i < 5) {
+          boxes[i + 1].classList.add('focused');
+          boxes[i + 1].innerHTML = '<div class="otp-cursor"></div>';
+        }
+      }, 800 + (i * 400));
+    });
+  }
+
+  function verifyOtp() {
+    document.querySelector('.otp-boxes').style.display = 'none';
+    document.querySelector('.otp-resend').style.display = 'none';
+    document.querySelector('.btn-verify').style.display = 'none';
+    document.getElementById('successCheck').classList.add('show');
+  }
+
+  function showSuccess() {
+    // Simple feedback for prototype
+    const btn = event.target;
+    const original = btn.textContent;
+    btn.textContent = '✓ Yönlendiriliyor...';
+    btn.style.opacity = '0.7';
+    setTimeout(() => {
+      btn.textContent = original;
+      btn.style.opacity = '1';
+    }, 1500);
+  }
+
+  // Initialize first screen notes
+  document.getElementById('noteContent').innerHTML = designNotes[0];
+</script>
+
+</body>
+</html>
