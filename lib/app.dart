@@ -35,6 +35,21 @@ class _KoalaAppState extends State<KoalaApp> {
       theme: AppTheme.lightTheme,
       routerConfig: appRouter,
       scaffoldMessengerKey: NotificationToastService.messengerKey,
+      // OEM font-scale sertleştirme: Samsung/Xiaomi gibi cihazlarda sistem
+      // yazı boyutu %130-140'a çekildiğinde onboarding ve home kartları
+      // taşıyor / iç içe geçiyor. Erişilebilirliği tamamen kısmamak için
+      // kullanıcının ölçeğini korur ama en fazla 1.15 ile sınırlar.
+      builder: (context, child) {
+        final mq = MediaQuery.of(context);
+        final clamped = mq.textScaler.clamp(
+          minScaleFactor: 0.9,
+          maxScaleFactor: 1.15,
+        );
+        return MediaQuery(
+          data: mq.copyWith(textScaler: clamped),
+          child: child ?? const SizedBox.shrink(),
+        );
+      },
     );
   }
 }

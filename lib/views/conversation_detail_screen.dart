@@ -528,9 +528,10 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
         GlobalMessageListener.syncTick.value++;
       } catch (_) {}
     } finally {
-      if (!mounted) return;
-
-      if (sentMsg != null) {
+      // NOT: `return` yerine `if (mounted) { ... }` — finally içindeki return
+      // try bloğunda yakalanmamış exception'ı sessizce yutar (control_flow_in_finally).
+      if (mounted) {
+        if (sentMsg != null) {
         // BAŞARI: input'u temizle.
         _textController.clear();
 
@@ -572,6 +573,7 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
               ),
             ),
           );
+      }
       }
     }
   }

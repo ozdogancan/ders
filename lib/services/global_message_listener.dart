@@ -28,9 +28,9 @@ class GlobalMessageListener {
 
   // ignore: unused_field
   static Timer? _pollTimer;
-  // ignore: unused_field
   static RealtimeChannel? _evlChannel;
   static bool _started = false;
+  static StreamSubscription<User?>? _authSub;
 
   /// Bir conv için son toast gösterilen mesajın designer+count imzası —
   /// aynı mesaj için tekrar tekrar toast patlamasın.
@@ -53,8 +53,28 @@ class GlobalMessageListener {
       _tick();
     });
     _subscribeEvlumbaRealtime();
+    // Sign-out olduğunda realtime channel'ı temizle — aksi halde Evlumba
+    // tarafında koala_global_inbound kanalı sızdırılır (her cold-start yeni
+    // channel bindirir). Fonksiyonel etki yok, sadece memory/connection
+    // hijyeni.
+    _authSub ??= FirebaseAuth.instance.authStateChanges().listen((user) {
+      if (user == null) {
+        _disposeEvlumbaChannel();
+      }
+    });
     // İlk açılışta hızlı tick
     _tick();
+  }
+
+  static void _disposeEvlumbaChannel() {
+    final ch = _evlChannel;
+    if (ch == null) return;
+    try {
+      EvlumbaLiveService.client.removeChannel(ch);
+    } catch (e) {
+      debugPrint('GlobalMessageListener: removeChannel failed: $e');
+    }
+    _evlChannel = null;
   }
 
   static Future<void> _tick() async {
