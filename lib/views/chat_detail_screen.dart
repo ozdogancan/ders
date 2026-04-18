@@ -947,18 +947,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
           icon: const Icon(Icons.arrow_back_rounded, color: _ink),
           onPressed: () => Navigator.pop(context),
         ),
-        actions: [
-          IconButton(
-            tooltip: 'Tarzını Keşfet',
-            onPressed: () {
-              HapticFeedback.lightImpact();
-              // Home ekranına dönüp pull'ı programatik olarak aç.
-              // Böylece her yerden aynı Tarzını Keşfet deneyimi.
-              context.go('/?openPull=1');
-            },
-            icon: const _SwipeSparkIcon(color: _accent),
-          ),
-        ],
+        actions: const [],
         title: Row(
           children: [
             Image.asset(
@@ -2544,6 +2533,7 @@ class _ProjectActionIconButtonState extends State<_ProjectActionIconButton> {
 /// AppBar'da kullanılan "Tarzını Keşfet" ikonu. İki üst üste binmiş, hafif
 /// eğik kart + küçük spark noktası ile kaydırmalı deck'i ima eder. Düz
 /// sparkle'a göre neyi açtığını net gösterir, modern ve sempatik durur.
+// ignore: unused_element
 class _SwipeSparkIcon extends StatelessWidget {
   const _SwipeSparkIcon({required this.color});
   final Color color;
