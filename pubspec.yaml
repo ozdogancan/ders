@@ -60,12 +60,40 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
 
-  # The "flutter_lints" package below contains a set of recommended lints to
-  # encourage good coding practices. The lint set provided by the package is
-  # activated in the `analysis_options.yaml` file located at the root of your
-  # package. See that file for information about deactivating specific lint
-  # rules and activating additional ones.
   flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.14.3
+  flutter_native_splash: ^2.4.4
+
+# ═══ Uygulama ikonu ═══
+# Kaynak: assets/launcher/icon.png (1024x1024)
+# Kullanım: flutter pub run flutter_launcher_icons
+flutter_launcher_icons:
+  android: "launcher_icon"
+  ios: true
+  image_path: "assets/launcher/icon.png"
+  min_sdk_android: 23
+  adaptive_icon_background: "#6B5BE6"
+  adaptive_icon_foreground: "assets/launcher/icon.png"
+  remove_alpha_ios: true
+  web:
+    generate: true
+    image_path: "assets/launcher/icon.png"
+    background_color: "#6B5BE6"
+    theme_color: "#6B5BE6"
+
+# ═══ Splash ekranı ═══
+# Flutter default logo'sunu kaldırıp Koala ikon + mor arkaplan.
+# Kullanım: flutter pub run flutter_native_splash:create
+flutter_native_splash:
+  color: "#6B5BE6"
+  image: "assets/launcher/icon.png"
+  android_12:
+    color: "#6B5BE6"
+    image: "assets/launcher/icon.png"
+  android: true
+  ios: true
+  web: false
+  fullscreen: true
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
@@ -79,6 +107,7 @@ flutter:
   uses-material-design: true
   assets:
     - assets/images/
+    - assets/launcher/
     # style_discovery görselleri artık CachedNetworkImage ile yükleniyor
 
   # To add assets to your application, add an assets section, like this:

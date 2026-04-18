@@ -634,13 +634,16 @@ class AuthFeatureStrip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: const <Widget>[
+    // Dar ekranlarda (ör. annenizin telefonunda 'Tasarımcı eşleştir'
+    // sıkışıyor) Wrap ile otomatik alt satıra geçsin.
+    return const Wrap(
+      alignment: WrapAlignment.center,
+      runAlignment: WrapAlignment.center,
+      spacing: 14,
+      runSpacing: 8,
+      children: <Widget>[
         _FeatureDot(label: 'Ücretsiz mekan analizi'),
-        SizedBox(width: 16),
         _FeatureDot(label: 'Stil tespiti'),
-        SizedBox(width: 16),
         _FeatureDot(label: 'Tasarımcı eşleştir'),
       ],
     );

@@ -502,9 +502,14 @@ class _Page2State extends State<_Page2>
   @override
   Widget build(BuildContext context) {
     super.build(context);
-    final w = MediaQuery.of(context).size.width;
+    final mq = MediaQuery.of(context);
+    final w = mq.size.width;
+    final h = mq.size.height;
     final photoW = w - 48;
-    final photoH = photoW * 0.65;
+    // Kısa ekranlarda (eski/küçük Android) aspect'i düşür ki altındaki
+    // ürün kartı başlıkla çakışmasın.
+    final aspect = h < 720 ? 0.55 : 0.62;
+    final photoH = photoW * aspect;
 
     return AnimatedBuilder(
       animation: _ctrl,
@@ -515,21 +520,25 @@ class _Page2State extends State<_Page2>
         final styleOpacity = _phase(2.0, 3.0);
         final productOpacity = _phase(4.0, 5.0);
 
-        final availH = MediaQuery.of(context).size.height * 0.6;
-        final clampedPhotoH = photoH.clamp(140.0, availH - 100);
+        // Fotoğraf için kullanılabilir yüksekliğin max yarısı.
+        final availH = h * 0.55;
+        final clampedPhotoH = photoH.clamp(130.0, availH - 110);
+        // Stack'in alt payı: ürün kartının fotoğrafın dışına sarkacağı yer.
+        // Kart yüksekliği ~70-80px; biraz rahat pay bırak.
+        const bottomOverhang = 70.0;
 
         return SingleChildScrollView(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(24, 8, 24, 0),
             child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisAlignment: MainAxisAlignment.start,
               children: [
-                const SizedBox(height: 24),
+                const SizedBox(height: 12),
                 Opacity(
                   opacity: photoOpacity,
                   child: SizedBox(
                     width: photoW,
-                    height: clampedPhotoH + 90,
+                    height: clampedPhotoH + bottomOverhang,
                     child: Stack(
                       clipBehavior: Clip.none,
                       children: [
