@@ -947,6 +947,18 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
           icon: const Icon(Icons.arrow_back_rounded, color: _ink),
           onPressed: () => Navigator.pop(context),
         ),
+        actions: [
+          IconButton(
+            tooltip: 'Tarzını Keşfet',
+            onPressed: () {
+              HapticFeedback.lightImpact();
+              // Home ekranına dönüp pull'ı programatik olarak aç.
+              // Böylece her yerden aynı Tarzını Keşfet deneyimi.
+              context.go('/?openPull=1');
+            },
+            icon: const _SwipeSparkIcon(color: _accent),
+          ),
+        ],
         title: Row(
           children: [
             Image.asset(
@@ -2529,3 +2541,92 @@ class _ProjectActionIconButtonState extends State<_ProjectActionIconButton> {
   }
 }
 
+/// AppBar'da kullanılan "Tarzını Keşfet" ikonu. İki üst üste binmiş, hafif
+/// eğik kart + küçük spark noktası ile kaydırmalı deck'i ima eder. Düz
+/// sparkle'a göre neyi açtığını net gösterir, modern ve sempatik durur.
+class _SwipeSparkIcon extends StatelessWidget {
+  const _SwipeSparkIcon({required this.color});
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 22,
+      height: 22,
+      child: CustomPaint(painter: _SwipeSparkPainter(color: color)),
+    );
+  }
+}
+
+class _SwipeSparkPainter extends CustomPainter {
+  _SwipeSparkPainter({required this.color});
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final stroke = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.6
+      ..strokeJoin = StrokeJoin.round;
+    final fill = Paint()
+      ..color = color.withValues(alpha: 0.18)
+      ..style = PaintingStyle.fill;
+
+    // Arka kart — hafif sola yatık
+    canvas.save();
+    canvas.translate(size.width * 0.5, size.height * 0.55);
+    canvas.rotate(-0.22);
+    final backRect = RRect.fromRectAndRadius(
+      Rect.fromCenter(
+        center: Offset.zero,
+        width: size.width * 0.62,
+        height: size.height * 0.78,
+      ),
+      const Radius.circular(3.5),
+    );
+    canvas.drawRRect(backRect, fill);
+    canvas.drawRRect(backRect, stroke);
+    canvas.restore();
+
+    // Ön kart — hafif sağa yatık
+    canvas.save();
+    canvas.translate(size.width * 0.52, size.height * 0.55);
+    canvas.rotate(0.14);
+    final frontRect = RRect.fromRectAndRadius(
+      Rect.fromCenter(
+        center: Offset.zero,
+        width: size.width * 0.62,
+        height: size.height * 0.78,
+      ),
+      const Radius.circular(3.5),
+    );
+    final frontFill = Paint()
+      ..color = color.withValues(alpha: 0.08)
+      ..style = PaintingStyle.fill;
+    canvas.drawRRect(frontRect, frontFill);
+    canvas.drawRRect(frontRect, stroke);
+    canvas.restore();
+
+    // Sağ üstte küçük 4-köşe spark
+    final sparkCenter = Offset(size.width * 0.84, size.height * 0.2);
+    final sparkPath = Path();
+    const sparkR = 2.6;
+    sparkPath.moveTo(sparkCenter.dx, sparkCenter.dy - sparkR);
+    sparkPath.lineTo(sparkCenter.dx + 0.8, sparkCenter.dy - 0.8);
+    sparkPath.lineTo(sparkCenter.dx + sparkR, sparkCenter.dy);
+    sparkPath.lineTo(sparkCenter.dx + 0.8, sparkCenter.dy + 0.8);
+    sparkPath.lineTo(sparkCenter.dx, sparkCenter.dy + sparkR);
+    sparkPath.lineTo(sparkCenter.dx - 0.8, sparkCenter.dy + 0.8);
+    sparkPath.lineTo(sparkCenter.dx - sparkR, sparkCenter.dy);
+    sparkPath.lineTo(sparkCenter.dx - 0.8, sparkCenter.dy - 0.8);
+    sparkPath.close();
+    final sparkPaint = Paint()
+      ..color = color
+      ..style = PaintingStyle.fill;
+    canvas.drawPath(sparkPath, sparkPaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _SwipeSparkPainter old) => old.color != color;
+}
