@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
@@ -92,6 +93,24 @@ class _ChatExpertCard extends StatelessWidget {
 
   String get _id => (designer['id'] ?? '').toString();
 
+  String get _matchReason =>
+      (designer['match_reason'] ?? '').toString().trim();
+
+  static const Map<String, String> _projectTypeLabels = {
+    'living_room': 'Oturma',
+    'bedroom': 'Yatak',
+    'kitchen': 'Mutfak',
+    'bathroom': 'Banyo',
+    'kids_room': 'Çocuk',
+    'office': 'Çalışma',
+    'dining_room': 'Yemek',
+    'hallway': 'Antre',
+  };
+
+  String _prettyType(String raw) {
+    return _projectTypeLabels[raw.trim().toLowerCase()] ?? 'Proje';
+  }
+
   String? get _bio {
     final raw = designer['bio']?.toString().trim();
     if (raw != null && raw.isNotEmpty) return raw;
@@ -146,9 +165,15 @@ class _ChatExpertCard extends StatelessWidget {
     return const [];
   }
 
-  Future<void> _openChat(BuildContext context) async {
+  void _openProfile(BuildContext context) {
     if (_id.isEmpty) return;
     HapticFeedback.lightImpact();
+    context.push('/designer/$_id');
+  }
+
+  Future<void> _openChat(BuildContext context) async {
+    if (_id.isEmpty) return;
+    HapticFeedback.mediumImpact();
 
     if (!await ensureAuthenticated(context)) return;
     if (!context.mounted) return;
@@ -162,6 +187,7 @@ class _ChatExpertCard extends StatelessWidget {
     if (!context.mounted) return;
     final convId = conv?['id']?.toString();
     if (convId == null || convId.isEmpty) {
+      HapticFeedback.heavyImpact();
       final err = MessagingService.lastConvError;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -281,7 +307,8 @@ class _ChatExpertCard extends StatelessWidget {
                 title: _name,
                 subtitle: designer['specialty']?.toString(),
                 imageUrl: _avatar.isNotEmpty ? _avatar : null,
-                size: 20,
+                size: 24,
+                onToggled: (_) => HapticFeedback.selectionClick(),
               ),
             ],
           ),
@@ -309,7 +336,10 @@ class _ChatExpertCard extends StatelessWidget {
                   final imageUrl =
                       (p['cover_image_url'] ?? p['image_url'] ?? '')
                           .toString();
-                  final title = (p['title'] ?? 'Proje').toString();
+                  final title = (p['title'] ?? '').toString().trim();
+                  final projectType = (p['project_type'] ?? '').toString();
+                  final label =
+                      title.isEmpty ? _prettyType(projectType) : title;
                   return GestureDetector(
                     onTap: () => _openGallery(context, i),
                     child: SizedBox(
@@ -331,10 +361,14 @@ class _ChatExpertCard extends StatelessWidget {
                                         color: KoalaColors.textTer,
                                       ),
                                     )
-                                  : Image.network(
-                                      imageUrl,
+                                  : CachedNetworkImage(
+                                      imageUrl: imageUrl,
                                       fit: BoxFit.cover,
-                                      errorBuilder: (_, __, ___) => Container(
+                                      memCacheWidth: 264,
+                                      placeholder: (_, __) => Container(
+                                        color: KoalaColors.surfaceAlt,
+                                      ),
+                                      errorWidget: (_, __, ___) => Container(
                                         color: KoalaColors.surfaceAlt,
                                       ),
                                     ),
@@ -342,7 +376,7 @@ class _ChatExpertCard extends StatelessWidget {
                           ),
                           const SizedBox(height: 6),
                           Text(
-                            title.isEmpty ? 'Proje' : title,
+                            label,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: GoogleFonts.manrope(
@@ -359,26 +393,87 @@ class _ChatExpertCard extends StatelessWidget {
               ),
             ),
           ],
-          const SizedBox(height: 16),
-          GestureDetector(
-            onTap: () => _openChat(context),
-            child: Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 15),
-              decoration: BoxDecoration(
-                color: KoalaColors.accent,
-                borderRadius: BorderRadius.circular(20),
-              ),
-              alignment: Alignment.center,
-              child: Text(
-                'Mesaj At',
-                style: GoogleFonts.manrope(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w800,
-                  color: Colors.white,
-                ),
+          if (_matchReason.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 10, bottom: 2),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(
+                    Icons.auto_awesome,
+                    size: 12,
+                    color: KoalaColors.accentDeep.withValues(alpha: 0.7),
+                  ),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: Text(
+                      _matchReason,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.manrope(
+                        fontSize: 11,
+                        fontStyle: FontStyle.italic,
+                        color: KoalaColors.textSec,
+                        height: 1.35,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                flex: 40,
+                child: GestureDetector(
+                  onTap: () => _openProfile(context),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: KoalaColors.accentDeep.withValues(alpha: 0.4),
+                        width: 1.2,
+                      ),
+                    ),
+                    alignment: Alignment.center,
+                    child: Text(
+                      'Profil',
+                      style: GoogleFonts.manrope(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                        color: KoalaColors.accentDeep,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                flex: 60,
+                child: GestureDetector(
+                  onTap: () => _openChat(context),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 15),
+                    decoration: BoxDecoration(
+                      color: KoalaColors.accent,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    alignment: Alignment.center,
+                    child: Text(
+                      'Mesaj At',
+                      style: GoogleFonts.manrope(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -417,7 +512,10 @@ class _ExpertAvatar extends StatelessWidget {
               )
             : null,
         image: url.isNotEmpty
-            ? DecorationImage(image: NetworkImage(url), fit: BoxFit.cover)
+            ? DecorationImage(
+                image: CachedNetworkImageProvider(url),
+                fit: BoxFit.cover,
+              )
             : null,
       ),
       alignment: Alignment.center,

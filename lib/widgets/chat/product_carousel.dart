@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
@@ -19,6 +20,7 @@ class ProductCarouselItem {
   final String shopName;
   final String source;
   final String projectId;
+  final String? matchNote;
 
   const ProductCarouselItem({
     required this.id,
@@ -29,6 +31,7 @@ class ProductCarouselItem {
     this.shopName = '',
     this.source = '',
     this.projectId = '',
+    this.matchNote,
   });
 
   factory ProductCarouselItem.fromCardData(Map<String, dynamic> data) {
@@ -39,6 +42,8 @@ class ProductCarouselItem {
       price = '$price TL';
     }
 
+    final matchNoteRaw = (data['match_note'] ?? data['why'] ?? '').toString().trim();
+
     return ProductCarouselItem(
       id: (data['id'] ?? data['product_id'] ?? '').toString(),
       name: data['name'] ?? data['product_title'] ?? data['title'] ?? 'Ürün',
@@ -48,6 +53,7 @@ class ProductCarouselItem {
       shopName: (data['shop_name'] ?? '').toString(),
       source: (data['source'] ?? '').toString(),
       projectId: (data['project_id'] ?? '').toString(),
+      matchNote: matchNoteRaw.isEmpty ? null : matchNoteRaw,
     );
   }
 }
@@ -153,8 +159,8 @@ class _ProductCarouselState extends State<ProductCarousel> {
           ),
         ),
 
-        // Dot indicator (4'ten fazla üründe — max 4 ürün önerildiğinde gizle)
-        if (widget.products.length > 4)
+        // Dot indicator (birden fazla üründe göster)
+        if (widget.products.length > 1)
           Padding(
             padding: const EdgeInsets.only(top: 10),
             child: Row(
@@ -168,7 +174,7 @@ class _ProductCarouselState extends State<ProductCarousel> {
                   height: 6,
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(3),
-                    color: i == _visibleIndex ? KoalaColors.accent : KoalaColors.borderMed,
+                    color: i == _visibleIndex ? KoalaColors.accentDeep : KoalaColors.borderMed,
                   ),
                 ),
               ),
@@ -195,6 +201,7 @@ class _ProductCard extends StatefulWidget {
 class _ProductCardState extends State<_ProductCard> {
   bool _isSaved = false;
   bool _animating = false;
+  bool _saving = false;
 
   @override
   void initState() {
@@ -228,60 +235,79 @@ class _ProductCardState extends State<_ProductCard> {
   }
 
   Future<void> _toggleSave() async {
+    if (_saving) return;
+    _saving = true;
     HapticFeedback.lightImpact();
-    setState(() => _animating = true);
+
+    final previousSaved = _isSaved;
+    final nowSaved = !previousSaved;
+    // Optimistic flip
+    if (mounted) {
+      setState(() {
+        _isSaved = nowSaved;
+        _animating = true;
+      });
+    }
 
     final key = widget.product.id.isNotEmpty
         ? widget.product.id
         : 'name_${widget.product.name.hashCode}';
-    await SavedItemsService.toggle(
-      type: SavedItemType.product,
-      itemId: key,
-      title: widget.product.name,
-      imageUrl: widget.product.imageUrl.isNotEmpty ? widget.product.imageUrl : null,
-      subtitle: widget.product.price.isNotEmpty ? widget.product.price : null,
-      extraData: {
-        if (widget.product.url.isNotEmpty) 'url': widget.product.url,
-        if (widget.product.shopName.isNotEmpty) 'shop_name': widget.product.shopName,
-      },
-    );
 
-    final nowSaved = !_isSaved;
-    if (mounted) setState(() { _isSaved = nowSaved; });
-    if (nowSaved && mounted) {
-      ProductAnalyticsService.trackSave(
-        productId: widget.product.id,
-        productName: widget.product.name,
-        shopName: widget.product.shopName,
-        price: widget.product.price,
-        source: widget.product.source,
+    try {
+      await SavedItemsService.toggle(
+        type: SavedItemType.product,
+        itemId: key,
+        title: widget.product.name,
+        imageUrl: widget.product.imageUrl.isNotEmpty ? widget.product.imageUrl : null,
+        subtitle: widget.product.price.isNotEmpty ? widget.product.price : null,
+        extraData: {
+          if (widget.product.url.isNotEmpty) 'url': widget.product.url,
+          if (widget.product.shopName.isNotEmpty) 'shop_name': widget.product.shopName,
+        },
       );
-      ProfileFeedbackService.recordSaveSignal(
-        itemTitle: widget.product.name,
-      );
-      ScaffoldMessenger.of(context).clearSnackBars();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          behavior: SnackBarBehavior.floating,
-          backgroundColor: KoalaColors.accentDeep,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          duration: const Duration(seconds: 3),
-          content: const Text('Kaydedildi', style: TextStyle(color: Colors.white)),
-          action: SnackBarAction(
-            label: 'Kaydedilenlerimi Gör',
-            textColor: Colors.white,
-            onPressed: () {
-              GoRouter.of(context).push('/saved');
-            },
+
+      if (nowSaved && mounted) {
+        ProductAnalyticsService.trackSave(
+          productId: widget.product.id,
+          productName: widget.product.name,
+          shopName: widget.product.shopName,
+          price: widget.product.price,
+          source: widget.product.source,
+        );
+        ProfileFeedbackService.recordSaveSignal(
+          itemTitle: widget.product.name,
+        );
+        ScaffoldMessenger.of(context).clearSnackBars();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: KoalaColors.accentDeep,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            duration: const Duration(seconds: 3),
+            content: const Text('Kaydedildi', style: TextStyle(color: Colors.white)),
+            action: SnackBarAction(
+              label: 'Kaydedilenlerimi Gör',
+              textColor: Colors.white,
+              onPressed: () {
+                GoRouter.of(context).push('/saved');
+              },
+            ),
           ),
-        ),
-      );
+        );
+      }
+    } catch (e) {
+      debugPrint('ProductCarousel: toggleSave failed → $e');
+      // Revert optimistic flip on failure
+      if (mounted) setState(() => _isSaved = previousSaved);
+    } finally {
+      await Future.delayed(const Duration(milliseconds: 250));
+      if (mounted) setState(() => _animating = false);
+      _saving = false;
     }
-    await Future.delayed(const Duration(milliseconds: 250));
-    if (mounted) setState(() => _animating = false);
   }
 
-  void _openProduct() {
+  Future<void> _openProduct() async {
+    HapticFeedback.selectionClick();
     final p = widget.product;
     // Tıklama analitik kaydı
     ProductAnalyticsService.trackClick(
@@ -295,15 +321,32 @@ class _ProductCardState extends State<_ProductCard> {
     final link = p.url.isNotEmpty
         ? p.url
         : 'https://www.evlumba.com/kesfet?q=${Uri.encodeComponent(p.name)}';
+    final uri = Uri.parse(link);
+    if (uri.scheme.isEmpty || (!uri.scheme.startsWith('http'))) {
+      debugPrint('ProductCarousel: Invalid URL scheme: $link');
+      return;
+    }
     try {
-      final uri = Uri.parse(link);
-      if (uri.scheme.isEmpty || (!uri.scheme.startsWith('http'))) {
-        debugPrint('KoalaCarousel: Invalid URL scheme: $link');
-        return;
+      final ok = await launchUrl(uri, mode: LaunchMode.inAppBrowserView);
+      if (!ok) {
+        final ok2 = await launchUrl(uri, mode: LaunchMode.externalApplication);
+        if (!ok2 && mounted) {
+          await Clipboard.setData(ClipboardData(text: link));
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Mağaza açılamadı, link kopyalandı')),
+          );
+        }
       }
-      launchUrl(uri, mode: LaunchMode.inAppBrowserView);
     } catch (e) {
-      debugPrint('KoalaCarousel: Failed to open URL: $link — $e');
+      debugPrint('ProductCarousel: launchUrl failed → $e');
+      if (mounted) {
+        await Clipboard.setData(ClipboardData(text: link));
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Mağaza açılamadı, link kopyalandı')),
+        );
+      }
     }
   }
 
@@ -320,7 +363,6 @@ class _ProductCardState extends State<_ProductCard> {
     );
   }
 
-  // ignore: unused_element
   void _showAskAISheet() {
     final p = widget.product;
     final questions = [
@@ -391,6 +433,10 @@ class _ProductCardState extends State<_ProductCard> {
       label: '${p.name}, ${p.price}',
       child: GestureDetector(
       onTap: _openProduct,
+      onLongPress: () {
+        HapticFeedback.mediumImpact();
+        _showAskAISheet();
+      },
       child: Container(
         width: 180,
         decoration: BoxDecoration(
@@ -410,13 +456,19 @@ class _ProductCardState extends State<_ProductCard> {
                 ClipRRect(
                   borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
                   child: p.imageUrl.isNotEmpty
-                      ? Image.network(
-                          p.imageUrl,
-                          width: 180, height: 140,
+                      ? CachedNetworkImage(
+                          imageUrl: p.imageUrl,
+                          width: 180,
+                          height: 140,
                           fit: BoxFit.cover,
-                          loadingBuilder: (_, child, progress) =>
-                            progress == null ? child : _placeholder(),
-                          errorBuilder: (_, __, ___) => _placeholder(),
+                          memCacheWidth: 360,
+                          fadeInDuration: const Duration(milliseconds: 180),
+                          placeholder: (_, __) => Container(
+                            width: 180,
+                            height: 140,
+                            color: Colors.grey[100],
+                          ),
+                          errorWidget: (_, __, ___) => _placeholder(),
                         )
                       : _placeholder(),
                 ),
@@ -461,16 +513,34 @@ class _ProductCardState extends State<_ProductCard> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Ürün adı
-                    Text(p.name,
-                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: KoalaColors.ink, height: 1.3),
-                      maxLines: 2, overflow: TextOverflow.ellipsis),
-                    const Spacer(),
-                    // Fiyat
+                    // Fiyat (üstte, daha prominent)
                     if (p.price.isNotEmpty)
                       Text(p.price,
-                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: KoalaColors.green),
+                        style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: KoalaColors.accentDeep, height: 1.1),
                         maxLines: 1, overflow: TextOverflow.ellipsis),
+                    const SizedBox(height: 2),
+                    // Ürün adı (altta, sekunder)
+                    Text(p.name,
+                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: KoalaColors.textSec, height: 1.3),
+                      maxLines: 2, overflow: TextOverflow.ellipsis),
+                    // Match note (neden bu ürün)
+                    if (p.matchNote != null && p.matchNote!.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: Text(
+                          p.matchNote!,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w500,
+                            color: KoalaColors.textSec.withValues(alpha: 0.85),
+                            fontStyle: FontStyle.italic,
+                            height: 1.3,
+                          ),
+                        ),
+                      ),
+                    const Spacer(),
                     const SizedBox(height: 6),
                     // Ürünü İncele + Sor (Kaydet zaten görselin üzerinde kalp ikonu)
                     Row(

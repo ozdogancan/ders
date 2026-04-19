@@ -102,10 +102,28 @@ class KoalaToolHandler {
     Map<String, dynamic> args,
   ) async {
     try {
-      final query = (args['query'] as String?) ?? '';
+      final rawQuery = (args['query'] as String?) ?? '';
+      // Güvenlik: wildcard injection'ı önle — %, _, virgül karakterlerini temizle.
+      final query = rawQuery.replaceAll(RegExp(r'[%_,]'), '');
       final roomType = args['room_type'] as String?;
       final maxPrice = args['max_price'] as num?;
-      final limit = (args['limit'] as num?)?.toInt().clamp(1, 4) ?? 4;
+      final limit = (args['limit'] as num?)?.toInt().clamp(1, 8) ?? 6;
+      final offset = (args['offset'] as num?)?.toInt().clamp(0, 500) ?? 0;
+
+      // exclude_ids: liste ya da virgül-ayrılmış string olabilir.
+      final excludeIdsRaw = args['exclude_ids'];
+      final List<String> excludeIds = <String>[];
+      if (excludeIdsRaw is List) {
+        for (final e in excludeIdsRaw) {
+          final s = e?.toString().trim() ?? '';
+          if (s.isNotEmpty) excludeIds.add(s);
+        }
+      } else if (excludeIdsRaw is String && excludeIdsRaw.isNotEmpty) {
+        for (final s in excludeIdsRaw.split(',')) {
+          final t = s.trim();
+          if (t.isNotEmpty) excludeIds.add(t);
+        }
+      }
 
       // Koala API'den gerçek ürün ara (Google Search Grounding)
       final apiResult = await _searchProductsFromAPI(
@@ -113,10 +131,17 @@ class KoalaToolHandler {
         roomType: roomType,
         maxPrice: maxPrice,
         limit: limit,
+        offset: offset,
       );
 
       if (apiResult != null && (apiResult['products'] as List).isNotEmpty) {
-        return apiResult;
+        // match_note ekle (API result'a da)
+        final annotated = _annotateProductsWithMatchNote(
+          (apiResult['products'] as List).cast<Map<String, dynamic>>(),
+          roomType: roomType,
+          maxPrice: maxPrice,
+        );
+        return {...apiResult, 'products': annotated};
       }
 
       // API başarısız olursa Evlumba DB fallback
@@ -126,11 +151,44 @@ class KoalaToolHandler {
         roomType: roomType,
         maxPrice: maxPrice,
         limit: limit,
+        offset: offset,
+        excludeIds: excludeIds,
       );
     } catch (e) {
       debugPrint('KoalaToolHandler _searchProducts error: $e');
       return {'products': [], 'error': e.toString()};
     }
+  }
+
+  /// Ürün listesine `match_note` alanı ekler (varsa).
+  static List<Map<String, dynamic>> _annotateProductsWithMatchNote(
+    List<Map<String, dynamic>> products, {
+    String? roomType,
+    num? maxPrice,
+  }) {
+    final roomPretty = (roomType != null && roomType.isNotEmpty)
+        ? _prettyRoom(roomType)
+        : null;
+    return products.map((item) {
+      String? note;
+      final title = (item['name'] ?? item['product_title'] ?? '').toString().toLowerCase();
+      if (roomPretty != null && title.isNotEmpty) {
+        final foldedTitle = _trFold(title);
+        final foldedRoom = _trFold(roomPretty.toLowerCase());
+        if (foldedTitle.contains(foldedRoom)) {
+          note = '$roomPretty için seçildi';
+        }
+      }
+      if (note == null && maxPrice != null) {
+        final priceStr = (item['price'] ?? '').toString().replaceAll(RegExp(r'[^\d.,]'), '');
+        final parsed = double.tryParse(priceStr.replaceAll('.', '').replaceAll(',', '.'));
+        if (parsed != null && parsed > 0 && parsed < maxPrice.toDouble() * 0.7) {
+          note = 'Bütçenin altında';
+        }
+      }
+      if (note == null) return item;
+      return {...item, 'match_note': note};
+    }).toList();
   }
 
   /// Koala API üzerinden Gemini Google Search Grounding ile gerçek ürün ara
@@ -139,6 +197,7 @@ class KoalaToolHandler {
     String? roomType,
     num? maxPrice,
     required int limit,
+    int offset = 0,
   }) async {
     try {
       final uri = Uri.parse('${Env.koalaApiUrl}/api/products/search');
@@ -147,6 +206,7 @@ class KoalaToolHandler {
         if (roomType != null && roomType.isNotEmpty) 'room_type': roomType,
         if (maxPrice != null) 'max_price': maxPrice,
         'limit': limit,
+        if (offset > 0) 'offset': offset,
       };
 
       final response = await http
@@ -220,6 +280,8 @@ class KoalaToolHandler {
     String? roomType,
     num? maxPrice,
     required int limit,
+    int offset = 0,
+    List<String> excludeIds = const [],
   }) async {
     try {
       if (!EvlumbaLiveService.isReady) {
@@ -260,10 +322,20 @@ class KoalaToolHandler {
           .inFilter('project_id', projectIds);
 
       if (query.isNotEmpty && !_isRoomName(query)) {
-        shopQuery = shopQuery.ilike('product_title', '%$query%');
+        final foldedQuery = _trFold(query);
+        // Hem ham hem fold edilmiş variant için ara (Türkçe normalize).
+        if (foldedQuery != query.toLowerCase()) {
+          shopQuery = shopQuery.or(
+            'product_title.ilike.%$query%,product_title.ilike.%$foldedQuery%',
+          );
+        } else {
+          shopQuery = shopQuery.ilike('product_title', '%$query%');
+        }
       }
 
-      final rawProducts = await shopQuery.limit(limit * 3);
+      final rangeStart = offset;
+      final rangeEnd = offset + limit * 3 - 1;
+      final rawProducts = await shopQuery.range(rangeStart, rangeEnd);
 
       var products = (rawProducts as List).map((p) {
         final priceStr = (p['product_price'] ?? '')
@@ -284,17 +356,53 @@ class KoalaToolHandler {
             .toList();
       }
 
+      // excludeIds: shop_link.id veya product_title match'lerini ele.
+      if (excludeIds.isNotEmpty) {
+        final excludeSet = excludeIds.toSet();
+        products = products.where((p) {
+          final pid = (p['id'] ?? '').toString();
+          final ptitle = (p['product_title'] ?? '').toString();
+          if (pid.isNotEmpty && excludeSet.contains(pid)) return false;
+          if (ptitle.isNotEmpty && excludeSet.contains(ptitle)) return false;
+          return true;
+        }).toList();
+      }
+
+      final roomPretty = (roomType != null && roomType.isNotEmpty)
+          ? _prettyRoom(roomType)
+          : null;
       final result = products.take(limit).map((p) {
-        return {
+        final title = (p['product_title'] ?? 'Ürün').toString();
+        final priceRaw = (p['product_price'] ?? '').toString();
+
+        // match_note hesapla
+        String? note;
+        if (roomPretty != null) {
+          final foldedTitle = _trFold(title.toLowerCase());
+          final foldedRoom = _trFold(roomPretty.toLowerCase());
+          if (foldedTitle.contains(foldedRoom)) {
+            note = '$roomPretty için seçildi';
+          }
+        }
+        if (note == null && maxPrice != null) {
+          final parsed = p['parsed_price'] as double?;
+          if (parsed != null && parsed > 0 && parsed < maxPrice.toDouble() * 0.7) {
+            note = 'Bütçenin altında';
+          }
+        }
+
+        final item = <String, dynamic>{
           'id': p['id'],
-          'name': p['product_title'] ?? 'Ürün',
-          'price': p['product_price'] ?? '',
+          'name': title,
+          'price': priceRaw,
           'image_url': p['product_image_url'] ?? '',
           'url': p['product_url'] ?? '',
           'shop_name': p['shop_name'] ?? '',
           'source': 'evlumba',
           'project_id': p['project_id'],
         };
+        if (note != null) item['match_note'] = note;
+        return item;
       }).toList();
 
       if (result.isEmpty) {
@@ -520,64 +628,125 @@ class KoalaToolHandler {
       // "Bilgehan: 3 proje → 2 geliyor" bug'ı oluşuyordu. 12'ye çıkardık;
       // UI'da kart max 3 thumb gösterip geri kalanı "+N Tümünü gör" overlay
       // ile profile yönlendiriyor.
-      final enriched = await Future.wait(
-        designers.take(limit * 2).map((d) async {
-          final designerId = (d['id'] ?? '').toString();
-          List<String> portfolioImages = [];
-          List<Map<String, dynamic>> portfolioProjects = [];
-          int totalProjects = 0;
-          int validProjects = 0;
-          if (designerId.isNotEmpty) {
-            try {
-              final projects = await EvlumbaLiveService.getProjects(
-                limit: 12,
-                designerId: designerId,
-              );
-              totalProjects = projects.length;
-              for (final p in projects) {
-                final rawTitle = (p['title'] ?? '').toString().trim();
-                // Test/placeholder proje filtresi — client-side kalite.
-                if (_isLowQualityProjectTitle(rawTitle)) continue;
-                final images = (p['designer_project_images'] as List?) ?? [];
-                final firstImg = images.isNotEmpty
-                    ? images.first['image_url']?.toString()
-                    : null;
-                String? img;
-                if (firstImg != null && firstImg.isNotEmpty) {
-                  img = firstImg;
-                } else {
-                  final cover = p['cover_image_url']?.toString();
-                  if (cover != null && cover.isNotEmpty) img = cover;
-                }
-                if (img != null) {
-                  validProjects++;
-                  portfolioImages.add(img);
-                  portfolioProjects.add({
-                    'id': (p['id'] ?? '').toString(),
-                    'title': rawTitle,
-                    'project_type': (p['project_type'] ?? '').toString(),
-                    'cover_image_url': img,
-                    'image_url': img,
-                    'designer_id': designerId,
-                  });
-                }
-              }
-            } catch (_) {}
+      // BATCH portfolio enrichment — N+1 yerine tek sorgu.
+      // Sadece ilk limit*2 aday için enrich (lazy).
+      final candidates = designers.take(limit * 2).toList();
+      final candidateIds = candidates
+          .map((d) => (d['id'] ?? '').toString())
+          .where((id) => id.isNotEmpty)
+          .toList();
+
+      // designer_id → list<project>
+      final Map<String, List<Map<String, dynamic>>> projectsByDesigner = {};
+      if (candidateIds.isNotEmpty) {
+        try {
+          final rows = await EvlumbaLiveService.client
+              .from('designer_projects')
+              .select(
+                  'id, designer_id, project_type, title, cover_image_url, designer_project_images(image_url)')
+              .eq('is_published', true)
+              .inFilter('designer_id', candidateIds)
+              .order('created_at', ascending: false);
+          for (final r in (rows as List)) {
+            final row = r as Map<String, dynamic>;
+            final did = (row['designer_id'] ?? '').toString();
+            if (did.isEmpty) continue;
+            final list = projectsByDesigner.putIfAbsent(did, () => []);
+            if (list.length < 12) {
+              list.add(row);
+            }
           }
-          return {
-            'id': d['id'],
-            'name': d['full_name'] ?? '',
-            'specialty': d['specialty'] ?? '',
-            'city': d['city'] ?? '',
-            'avatar_url': d['avatar_url'] ?? '',
-            'business_name': d['business_name'] ?? '',
-            'total_projects': totalProjects,
-            '_valid_projects': validProjects,
-            if (portfolioImages.isNotEmpty) 'portfolio_images': portfolioImages,
-            if (portfolioProjects.isNotEmpty) 'portfolio_projects': portfolioProjects,
-          };
-        }),
-      );
+        } catch (e) {
+          debugPrint('KoalaToolHandler: batch portfolio fetch failed: $e');
+        }
+      }
+
+      final mappedRoomForScore = _mapRoomType(roomType);
+
+      final enriched = candidates.map((d) {
+        final designerId = (d['id'] ?? '').toString();
+        final List<String> portfolioImages = [];
+        final List<Map<String, dynamic>> portfolioProjects = [];
+        int totalProjects = 0;
+        int validProjects = 0;
+        int roomHits = 0;
+
+        final projects = projectsByDesigner[designerId] ?? const [];
+        totalProjects = projects.length;
+        for (final p in projects) {
+          final rawTitle = (p['title'] ?? '').toString().trim();
+          if (_isLowQualityProjectTitle(rawTitle)) continue;
+          final images = (p['designer_project_images'] as List?) ?? [];
+          final firstImg = images.isNotEmpty
+              ? images.first['image_url']?.toString()
+              : null;
+          String? img;
+          if (firstImg != null && firstImg.isNotEmpty) {
+            img = firstImg;
+          } else {
+            final cover = p['cover_image_url']?.toString();
+            if (cover != null && cover.isNotEmpty) img = cover;
+          }
+          if (img != null) {
+            validProjects++;
+            final pType = (p['project_type'] ?? '').toString();
+            if (mappedRoomForScore != null &&
+                mappedRoomForScore.isNotEmpty &&
+                pType.toLowerCase() == mappedRoomForScore.toLowerCase()) {
+              roomHits++;
+            }
+            portfolioImages.add(img);
+            portfolioProjects.add({
+              'id': (p['id'] ?? '').toString(),
+              'title': rawTitle,
+              'project_type': pType,
+              'cover_image_url': img,
+              'image_url': img,
+              'designer_id': designerId,
+            });
+          }
+        }
+
+        // match_score
+        int matchScore = 0;
+        String? matchReason;
+        if (roomType != null && roomType.isNotEmpty && validProjects > 0) {
+          final rate = roomHits / validProjects;
+          matchScore = (rate * 100).round();
+          if (roomHits > 0) {
+            matchReason =
+                'Son $validProjects projesinin ${roomHits}\'i ${_prettyRoom(roomType)}';
+          }
+        }
+
+        final item = <String, dynamic>{
+          'id': d['id'],
+          'name': d['full_name'] ?? '',
+          'specialty': d['specialty'] ?? '',
+          'city': d['city'] ?? '',
+          'avatar_url': d['avatar_url'] ?? '',
+          'business_name': d['business_name'] ?? '',
+          'total_projects': totalProjects,
+          '_valid_projects': validProjects,
+          'match_score': matchScore,
+          'room_match_count': roomHits,
+          'room_match_total': validProjects,
+          if (portfolioImages.isNotEmpty) 'portfolio_images': portfolioImages,
+          if (portfolioProjects.isNotEmpty) 'portfolio_projects': portfolioProjects,
+        };
+        if (matchReason != null) item['match_reason'] = matchReason;
+        return item;
+      }).toList();
+
+      // match_score DESC, valid_projects DESC
+      enriched.sort((a, b) {
+        final sa = (a['match_score'] as int?) ?? 0;
+        final sb = (b['match_score'] as int?) ?? 0;
+        if (sb != sa) return sb.compareTo(sa);
+        final va = (a['_valid_projects'] as int?) ?? 0;
+        final vb = (b['_valid_projects'] as int?) ?? 0;
+        return vb.compareTo(va);
+      });
 
       // Progressive relaxation: önce min_projects eşiğinde filtrele,
       // yeterli sonuç yoksa eşiği 1'e düşür.
@@ -671,6 +840,74 @@ class KoalaToolHandler {
     final letterCount = RegExp(r'[A-Za-zÇĞİıÖŞÜçğıöşü]').allMatches(t).length;
     if (letterCount < 4) return true;
     return false;
+  }
+
+  /// Türkçe karakter fold + lowercase + wildcard escape.
+  /// Supabase .ilike/.or sorgularında Türkçe normalize için.
+  static String _trFold(String s) {
+    final buf = StringBuffer();
+    for (final codeUnit in s.runes) {
+      final ch = String.fromCharCode(codeUnit);
+      switch (ch) {
+        case 'ş':
+        case 'Ş':
+          buf.write('s');
+          break;
+        case 'ı':
+          buf.write('i');
+          break;
+        case 'İ':
+          buf.write('i');
+          break;
+        case 'ğ':
+        case 'Ğ':
+          buf.write('g');
+          break;
+        case 'ü':
+        case 'Ü':
+          buf.write('u');
+          break;
+        case 'ö':
+        case 'Ö':
+          buf.write('o');
+          break;
+        case 'ç':
+        case 'Ç':
+          buf.write('c');
+          break;
+        case '%':
+          buf.write(r'\%');
+          break;
+        case '_':
+          buf.write(r'\_');
+          break;
+        default:
+          buf.write(ch.toLowerCase());
+      }
+    }
+    return buf.toString();
+  }
+
+  /// room_type key → kullanıcıya gösterilecek kısa Türkçe etiket.
+  static String _prettyRoom(String key) {
+    const map = {
+      'salon': 'Oturma',
+      'oturma_odasi': 'Oturma',
+      'yatak_odasi': 'Yatak',
+      'mutfak': 'Mutfak',
+      'banyo': 'Banyo',
+      'ofis': 'Ofis',
+      'ev_ofisi': 'Ev Ofisi',
+      'cocuk_odasi': 'Çocuk Odası',
+      'antre': 'Antre',
+      'balkon': 'Balkon',
+      'yemek_odasi': 'Yemek Odası',
+      'calisma_odasi': 'Çalışma',
+    };
+    final k = key.toLowerCase().trim();
+    if (map.containsKey(k)) return map[k]!;
+    // Fallback: _prettyCategoryLabel TR map'i çok daha geniş.
+    return _prettyCategoryLabel(key);
   }
 
   /// Sorgu bir oda adı mı? Eğer öyleyse product_title aramasına ekleme,

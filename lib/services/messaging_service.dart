@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' hide User;
 
 import '../core/config/env.dart';
@@ -605,32 +606,139 @@ class MessagingService {
     final apiUrl = Env.koalaApiUrl;
     if (apiUrl.isEmpty) return;
 
+    final payload = <String, dynamic>{
+      'firebaseUid': user.uid,
+      'email': user.email,
+      'displayName': user.displayName,
+      'avatarUrl': user.photoURL,
+      'designerId': designerId,
+      'body': body,
+      'koalaConversationId': koalaConversationId,
+      if (attachmentUrl != null) 'attachmentUrl': attachmentUrl,
+    };
+
+    final ok = await _postBridge(payload);
+    if (!ok) {
+      // Başarısız — retry queue'ya persist et.
+      await _enqueueFailedBridge(payload);
+    }
+  }
+
+  /// Tek bir bridge POST — başarılı ise true döner. 2xx dışı veya exception false.
+  static Future<bool> _postBridge(Map<String, dynamic> payload) async {
+    final apiUrl = Env.koalaApiUrl;
+    if (apiUrl.isEmpty) return false;
     try {
       final res = await http
           .post(
             Uri.parse('$apiUrl/api/messages/bridge'),
             headers: {'Content-Type': 'application/json'},
-            body: jsonEncode({
-              'firebaseUid': user.uid,
-              'email': user.email,
-              'displayName': user.displayName,
-              'avatarUrl': user.photoURL,
-              'designerId': designerId,
-              'body': body,
-              'koalaConversationId': koalaConversationId,
-              if (attachmentUrl != null) 'attachmentUrl': attachmentUrl,
-            }),
+            body: jsonEncode(payload),
           )
           .timeout(const Duration(seconds: 10));
 
       if (res.statusCode >= 200 && res.statusCode < 300) {
         debugPrint('MessagingService: bridge ok ${res.body}');
+        return true;
       } else {
-        debugPrint('MessagingService: bridge failed ${res.statusCode} ${res.body}');
+        debugPrint(
+            'MessagingService: bridge failed ${res.statusCode} ${res.body}');
+        return false;
       }
     } catch (e) {
       // Non-fatal — bridge çalışmasa bile Koala tarafı düzgün çalışır.
       debugPrint('MessagingService: bridge error $e');
+      return false;
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════
+  // BRIDGE RETRY QUEUE (local persistence)
+  // ═══════════════════════════════════════════════════════
+  static const String _retryQueueKey = 'koala_messaging_retry_queue';
+  static const int _retryQueueMax = 50;
+  static bool _retryInFlight = false;
+
+  static Future<List<Map<String, dynamic>>> _readQueue() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_retryQueueKey);
+      if (raw == null || raw.isEmpty) return [];
+      final decoded = jsonDecode(raw);
+      if (decoded is List) {
+        return decoded
+            .whereType<Map>()
+            .map((m) => m.map((k, v) => MapEntry(k.toString(), v)))
+            .toList();
+      }
+    } catch (e) {
+      debugPrint('MessagingService: readQueue error $e');
+    }
+    return [];
+  }
+
+  static Future<void> _writeQueue(List<Map<String, dynamic>> queue) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (queue.isEmpty) {
+        await prefs.remove(_retryQueueKey);
+      } else {
+        await prefs.setString(_retryQueueKey, jsonEncode(queue));
+      }
+    } catch (e) {
+      debugPrint('MessagingService: writeQueue error $e');
+    }
+  }
+
+  static Future<void> _enqueueFailedBridge(
+      Map<String, dynamic> payload) async {
+    final queue = await _readQueue();
+    queue.add({
+      ...payload,
+      '_enqueuedAt': DateTime.now().toIso8601String(),
+    });
+    // Cap: overflow varsa en eskileri at.
+    while (queue.length > _retryQueueMax) {
+      queue.removeAt(0);
+    }
+    await _writeQueue(queue);
+    debugPrint('MessagingService: bridge enqueued (size=${queue.length})');
+  }
+
+  /// Kuyruktaki başarısız bridge mesajlarını sırayla tekrar dener.
+  /// Her payload için 3 deneme, exponential backoff (1s, 2s, 4s).
+  /// Başarılı olanlar kuyruktan silinir, başarısızlar kalır.
+  /// Eş zamanlı çağrıları önlemek için içsel lock vardır.
+  static Future<void> retryQueuedMessages() async {
+    if (_retryInFlight) return;
+    _retryInFlight = true;
+    try {
+      final queue = await _readQueue();
+      if (queue.isEmpty) return;
+
+      final remaining = <Map<String, dynamic>>[];
+      for (final item in queue) {
+        final payload = Map<String, dynamic>.from(item)..remove('_enqueuedAt');
+        bool success = false;
+        const delays = [
+          Duration(seconds: 1),
+          Duration(seconds: 2),
+          Duration(seconds: 4),
+        ];
+        for (int attempt = 0; attempt < 3; attempt++) {
+          await Future.delayed(delays[attempt]);
+          success = await _postBridge(payload);
+          if (success) break;
+        }
+        if (!success) {
+          remaining.add(item); // başarısız — kuyrukta tut
+        }
+      }
+      await _writeQueue(remaining);
+      debugPrint(
+          'MessagingService: retry finished (remaining=${remaining.length})');
+    } finally {
+      _retryInFlight = false;
     }
   }
 

@@ -774,12 +774,7 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
               child: _loading
                   ? const LoadingState()
                   : _messages.isEmpty
-                      ? const Center(
-                          child: Text(
-                            'Henüz mesaj yok. İlk mesajı sen gönder!',
-                            style: KoalaText.bodySec,
-                          ),
-                        )
+                      ? _buildEmptyStateWithPresets()
                       : ListView.builder(
                           controller: _scrollController,
                           reverse: true,
@@ -1444,6 +1439,105 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
               : const SizedBox.shrink(),
         ),
       ],
+    );
+  }
+
+  /// İlgili oda/kategori kelimesi — prefill "Portfolyondaki [ilgili oda]..." için.
+  /// pendingDesign → _contextProject → fallback "odam" sırasıyla kontrol eder.
+  /// Her durumda String döner (null asla).
+  String _detectRoomWord() {
+    final pd = widget.pendingDesign;
+    if (pd != null) {
+      for (final key in const ['category', 'room_type', 'projectType', 'context_title']) {
+        final v = (pd[key] ?? '').toString().trim();
+        if (v.isNotEmpty) return v.toLowerCase();
+      }
+    }
+    final cat = _pendingDesignCategory?.trim();
+    if (cat != null && cat.isNotEmpty) return cat.toLowerCase();
+    final ctx = _contextProject;
+    if (ctx != null) {
+      for (final key in const ['room_type', 'category', 'projectType']) {
+        final v = (ctx[key] ?? '').toString().trim();
+        if (v.isNotEmpty) return v.toLowerCase();
+      }
+    }
+    return 'odam';
+  }
+
+  void _applyPresetChip(String prefillText) {
+    HapticFeedback.selectionClick();
+    _textController.text = prefillText;
+    _textController.selection = TextSelection.fromPosition(
+      TextPosition(offset: prefillText.length),
+    );
+    setState(() {});
+  }
+
+  Widget _buildPresetChip(String label, String prefill) {
+    return GestureDetector(
+      onTap: () => _applyPresetChip(prefill),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: KoalaColors.surfaceAlt,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: KoalaColors.border),
+        ),
+        child: Text(
+          label,
+          style: const TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w500,
+            color: KoalaColors.text,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEmptyStateWithPresets() {
+    final room = _detectRoomWord();
+    final presets = <List<String>>[
+      ['💰 Bütçe ne olabilir?', 'Projemin bütçesi ne kadar olabilir?'],
+      ['⏱ Ne kadar sürer?', 'Ortalama ne kadar sürede tamamlanır?'],
+      ['🎥 Önce görüşsek?', 'Başlamadan önce video call yapabilir miyiz?'],
+      ['🖼 Benzer bir proje', 'Portfolyondaki $room projesine benzer istiyorum.'],
+    ];
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'Henüz mesaj yok. İlk mesajı sen gönder!',
+              style: KoalaText.bodySec,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 24),
+            const Text(
+              'Başlamak için bir soru seç:',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: KoalaColors.textSec,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 10,
+              alignment: WrapAlignment.center,
+              children: [
+                for (final p in presets) _buildPresetChip(p[0], p[1]),
+              ],
+            ),
+          ],
+        ),
+      ),
     );
   }
 

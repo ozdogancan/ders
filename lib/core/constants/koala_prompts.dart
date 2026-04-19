@@ -120,6 +120,12 @@ GERÇEK VERİ KURALLARI (KRİTİK):
 7. Oda tipi belli ise room_type parametresini kullan.
 
 8. Her sohbette en fazla 2 kez fonksiyon çağır (performans için).
+
+### BAĞLAM TUTMAK
+Sohbet süresince kullanıcının daha önce söylediği oda/bütçe/stil tekrar sormak YASAK.
+Bu bilgiler sistemde "## SOHBET BAĞLAMI" başlığı altında sana iletilir.
+Tool çağırırken room_type/max_price parametrelerini bu bağlamdan doldur.
+Cliche başlangıçlar ("İşte", "Harika", "Peki", "Süper", "Elbette", "Tabii", "Muhteşem", "Mükemmel", "Hemen") YASAK.
 ''';
 
   /// Public accessor for the system base (used by service as system_instruction).
@@ -386,14 +392,16 @@ KRİTİK STİL TESPİT KURALLARI:
 
 Eğer ODA fotoğrafıysa:
 1. "style_analysis" — Mevcut stilini tespit et (style_name, confidence 0-100, description, color_palette 4 renk, mood, tags)
+   - confidence: Stil tahminin ne kadar emin olduğunu yüzdeyle ver; fotoğraf bulanık/belirsizse düşük ver.
+   - color_palette: fotoğrafta fiilen GÖRDÜĞÜN baskın 4 rengin HEX'i. Stil şablonundan veya genel Japandi/Skandinav paletinden TÜRETME — gerçek görünen duvar/mobilya/aksesuar rengini okku.
 2. "color_palette" — İyileştirme için önerilen renk paleti (4 renk + kullanım). title: "Önerilen renk paleti"
 3. Ürün önerisi İSTENDİYSE search_products function call yap; AKSİ HALDE "product_grid" ÜRETME.
-4. "quick_tips" — 3 iyileştirme ipucu
+4. "quick_tips" — 3 iyileştirme ipucu. Her ipucu fotoğrafta GÖRDÜĞÜN spesifik bir detaya referans versin. Örn: "pencerendeki beyaz perdeyi naturel ketene çevir". Generic tavsiye yasak.
 5. "question_chips" — "Ne yapmak istersin?" seçenekleri: ["Bu odayı yeniden tasarla", "Renk paletini değiştir", "Bu oda için uzman öner", "Farklı bir stil dene"]
 
 ODA TİPİ TESPİTİ (kritik):
-- Fotoğraftaki odanın tipini ALGILA (salon/oturma odası, yatak odası, mutfak, banyo, çocuk odası, ofis, antre, balkon).
-- style_analysis kartına MUTLAKA `"room_type": "<algılanan_oda>"` alanını ekle (snake_case: "salon", "yatak_odasi", "mutfak", "banyo", "cocuk_odasi", "ofis", "antre", "balkon").
+- Fotoğraftaki odanın tipini ALGILA (salon/oturma odası, yatak odası, mutfak, banyo, çocuk odası, ofis, antre, balkon, salon_mutfak (açık plan), studyo (tek oda)).
+- style_analysis kartına MUTLAKA `"room_type": "<algılanan_oda>"` alanını ekle (snake_case: "salon", "yatak_odasi", "mutfak", "banyo", "cocuk_odasi", "ofis", "antre", "balkon", "salon_mutfak", "studyo").
 - search_products veya search_designers çağırıyorsan `room_type` parametresine algılanan odayı MUTLAKA geçir. search_designers'a ayrıca `min_projects: 2` ekle.
 
 Eğer MOBİLYA/OBJE fotoğrafıysa:
@@ -402,7 +410,7 @@ Eğer MOBİLYA/OBJE fotoğrafıysa:
 3. "quick_tips" — Kombinasyon önerileri
 4. "question_chips" — Seçenekler: ["Bu objeye ne yakışır?", "Hangi odaya uyar?", "Bu stilde uzman öner"]
 
-message: "<1-2 cümle, fotoğraftaki odaya özgün bir yorum. KLİŞE GİRİŞ YASAK ('Harika', 'İşte', 'Tabii ki' vb.)>"
+message: "<1-2 cümle, fotoğraftaki odaya özgün bir yorum. KLİŞE GİRİŞ YASAK ('Harika', 'İşte', 'Tabii ki', 'Peki', 'Süper', 'Elbette', 'Muhteşem', 'Mükemmel', 'Hemen' vb. — İLK KELİME KURALI'na uy)>"
 
 SADECE JSON.
 ''';
@@ -476,10 +484,13 @@ KRİTİK STİL TESPİT KURALLARI:
   * Rustik: doğal taş, kütük ahşap, toprak tonları
 
 ŞU KARTLARI ÜRET (başka kart yok):
-1. "style_analysis" — {"style_name": "...", "confidence": 0-100, "description": "2-3 cümle neden bu stil", "color_palette": [4 renk {name, hex}], "mood": "...", "tags": ["..."]}
-2. "quick_tips" — 3 ipucu: bu stili nasıl güçlendirebilirsin (emoji + text)
+1. "style_analysis" — {"style_name": "...", "confidence": 0-100, "description": "2-3 cümle neden bu stil", "color_palette": [4 renk {name, hex}], "mood": "...", "tags": ["..."], "room_type": "salon|yatak_odasi|mutfak|banyo|ofis|cocuk_odasi|antre|balkon|ev_ofisi|salon_mutfak|studyo"}
+   - color_palette: fotoğrafta fiilen GÖRDÜĞÜN baskın 4 rengin HEX'i. Stil şablonundan veya genel Japandi/Skandinav paletinden TÜRETME — gerçek görünen duvar/mobilya/aksesuar rengini okku.
+   - confidence: Stil tahminin ne kadar emin olduğunu yüzdeyle ver; fotoğraf bulanık/belirsizse düşük ver.
+2. "quick_tips" — 3 ipucu: bu stili nasıl güçlendirebilirsin (emoji + text).
+   - Her ipucu fotoğrafta GÖRDÜĞÜN spesifik bir detaya referans versin. Örn: "pencerendeki beyaz perdeyi naturel ketene çevir". Generic tavsiye yasak.
 
-message: "<Max 1 cümle, fotoğraftaki stile özgün referans. KLİŞE GİRİŞ YASAK ('Harika', 'İşte', 'Tabii ki' vb.)>"
+message: "<Max 1 cümle, fotoğraftaki stile özgün referans. KLİŞE GİRİŞ YASAK ('Harika', 'İşte', 'Tabii ki', 'Peki', 'Süper', 'Elbette', 'Muhteşem', 'Mükemmel', 'Hemen' vb. — İLK KELİME KURALI'na uy)>"
 
 KRİTİK:
 - Ürün adı, fiyat, link YAZMA. search_products ÇAĞIRMA.

@@ -119,6 +119,15 @@ class KoalaAIService {
                 'type': 'integer',
                 'description': 'Kaç ürün dönsün (varsayılan 6, max 8)',
               },
+              'offset': {
+                'type': 'integer',
+                'description': 'Kaç ürün atlansın. Kullanıcı "başka göster" dediğinde offset artır.',
+              },
+              'exclude_ids': {
+                'type': 'array',
+                'items': {'type': 'string'},
+                'description': 'Bu ürün kimlikleri hariç tut (tekrar gelmesin).',
+              },
             },
             'required': ['query'],
           },
@@ -156,7 +165,8 @@ class KoalaAIService {
               'oda/ev için profesyonel yardım istediğinde, belirli bir şehirdeki '
               'tasarımcıları aradığında veya "uzman öner" dediğinde çağır. '
               'Grafik tasarımcı, logo/web tasarımcısı vb. iç mekân dışı uzmanlıklar '
-              'otomatik dışlanır.',
+              'otomatik dışlanır. Sonuç her tasarımcı için match_score (0-100) ve '
+              'match_reason döner — UI bunu rationale olarak gösterir.',
           'parameters': {
             'type': 'object',
             'properties': {
@@ -286,17 +296,40 @@ class KoalaAIService {
   /// Builds the system_instruction text for ALL Gemini calls.
   /// Includes Koala identity + user preferences — so every call sees the same base.
   String _buildSystemInstructionText({bool includeProfile = true}) {
-    if (!includeProfile) return KoalaPrompts.systemBase;
-    return KoalaPrompts.buildSystemInstruction(
-      style: _userPrefs['style'],
-      colors: _userPrefs['colors'],
-      room: _userPrefs['room'],
-      budget: _userPrefs['budget'],
-      dislikedStyles: _userPrefs['dislikedStyles'],
-      dislikedColors: _userPrefs['dislikedColors'],
-      likedDetailsText: _userPrefs['likedDetailsText'],
-      tasteHint: _tasteHint,
-    );
+    final base = !includeProfile
+        ? KoalaPrompts.systemBase
+        : KoalaPrompts.buildSystemInstruction(
+            style: _userPrefs['style'],
+            colors: _userPrefs['colors'],
+            room: _userPrefs['room'],
+            budget: _userPrefs['budget'],
+            dislikedStyles: _userPrefs['dislikedStyles'],
+            dislikedColors: _userPrefs['dislikedColors'],
+            likedDetailsText: _userPrefs['likedDetailsText'],
+            tasteHint: _tasteHint,
+          );
+    // Chat slot-memory (sohbet bağlamı) varsa append et — kullanıcının daha
+    // önce söylediği oda/bütçe/stil tekrar sorulmasın.
+    if (_chatContext.isNotEmpty) {
+      final lines = <String>[];
+      if (_chatContext['room'] != null) {
+        lines.add('Bilinen oda: ${_chatContext['room']}');
+      }
+      if (_chatContext['budget'] != null) {
+        lines.add('Bilinen bütçe: ${_chatContext['budget']}');
+      }
+      if (_chatContext['style'] != null) {
+        lines.add('Bilinen stil: ${_chatContext['style']}');
+      }
+      if (_chatContext['last_cards'] != null) {
+        lines.add('Önceki öneri: ${_chatContext['last_cards']}');
+      }
+      if (lines.isNotEmpty) {
+        return '$base\n\n## SOHBET BAĞLAMI\n${lines.join('\n')}\n'
+            'Tool çağrılarında bu bağlamı kullan — kullanıcı tekrar söylemesin.';
+      }
+    }
+    return base;
   }
 
   /// Product intent detection — used to decide whether to force search_products
@@ -516,19 +549,24 @@ class KoalaAIService {
     final systemInstruction = {'parts': [{'text': systemText}]};
     final contents = <Map<String, dynamic>>[];
 
-    // Conversation history (last 8 messages, max 6000 karakter)
-    if (history != null) {
-      final recent = history.length > 8 ? history.sublist(history.length - 8) : history;
+    // Conversation history — karakter-first pruning (gerçek sınır karakter,
+    // mesaj sayısı sadece güvenlik tamponu).
+    if (history != null && history.isNotEmpty) {
       int totalChars = 0;
       const maxHistoryChars = 6000;
-      for (final msg in recent.reversed) {
-        final text = msg['content'] ?? '';
+      const maxMessages = 12; // daha geniş tampon, karakter gerçek sınır
+      int added = 0;
+      for (int i = history.length - 1; i >= 0 && added < maxMessages; i--) {
+        final msg = history[i];
+        final text = (msg['content'] ?? '').toString();
+        if (text.isEmpty) continue;
         if (totalChars + text.length > maxHistoryChars) break;
         totalChars += text.length;
         contents.insert(0, {
           'role': msg['role'] == 'user' ? 'user' : 'model',
           'parts': [{'text': text}],
         });
+        added++;
       }
     }
 
@@ -543,7 +581,7 @@ class KoalaAIService {
 
     final generationConfig = <String, dynamic>{
       'temperature': 0.7,
-      'maxOutputTokens': 2048,
+      'maxOutputTokens': jsonMode ? 1500 : 400,
     };
     if (jsonMode) {
       generationConfig['responseMimeType'] = 'application/json';
@@ -622,7 +660,8 @@ class KoalaAIService {
     final imageB64 = base64Encode(imageBytes);
     final systemText = _buildSystemInstructionText();
     final generationConfig = <String, dynamic>{
-      'temperature': 0.7,
+      // Vision görev — yaratıcılık değil tanıma. Düşük sıcaklık daha tutarlı analiz.
+      'temperature': 0.3,
       'maxOutputTokens': 4096,
     };
     if (jsonMode && disableTools) {
@@ -733,7 +772,8 @@ class KoalaAIService {
           .toList();
 
       final turn2Gen = <String, dynamic>{
-        'temperature': 0.7,
+        // Sentez turu — biraz esneklik ama yaratıcılık dışarıda.
+        'temperature': 0.4,
         'maxOutputTokens': 2048,
       };
       if (jsonMode) turn2Gen['responseMimeType'] = 'application/json';
@@ -836,6 +876,9 @@ class KoalaAIService {
     bool jsonMode = false,
   }) async {
     var allowedFunctions = initialAllowedFunctions;
+    // hasCardsIntent: kart beklenen intent mi? allowedFunctions liste-nonempty ise true.
+    // maxOutputTokens bütçesi için kullanılır (kart üretimi daha geniş bütçe).
+    final hasCardsIntent = allowedFunctions != null && allowedFunctions.isNotEmpty;
 
     // System instruction: Koala kimliği + kullanıcı profili + intent-specific prompt
     // Bu, history'nin system prompt ile kirlenmesini önler.
@@ -846,12 +889,17 @@ class KoalaAIService {
     // Fix C: History'deki önceki functionCall/functionResponse part'larını temizle
     // Bunlar yeni user mesajı için alakasız ve Gemini'yi yanıltır
     final contents = <Map<String, dynamic>>[];
-    if (history != null) {
-      final recent = history.length > 8 ? history.sublist(history.length - 8) : history;
+    // Karakter-first pruning (gerçek sınır karakter). Uzun tek mesaj history'yi
+    // uçurmasın diye; mesaj sayısı sadece güvenlik tamponu.
+    if (history != null && history.isNotEmpty) {
       int totalChars = 0;
       const maxHistoryChars = 6000;
-      for (final msg in recent.reversed) {
-        final text = msg['content'] ?? '';
+      const maxMessages = 12; // daha geniş tampon, karakter gerçek sınır
+      int added = 0;
+      for (int i = history.length - 1; i >= 0 && added < maxMessages; i--) {
+        final msg = history[i];
+        final text = (msg['content'] ?? '').toString();
+        if (text.isEmpty) continue;
         if (totalChars + text.length > maxHistoryChars) break;
         totalChars += text.length;
         // Sadece text part'ı ekle — functionCall/functionResponse geçmişten çıkar
@@ -859,6 +907,7 @@ class KoalaAIService {
           'role': msg['role'] == 'user' ? 'user' : 'model',
           'parts': [{'text': text}],
         });
+        added++;
       }
     }
     // YENİ user mesajı contents'e somut olarak eklensin
@@ -1001,9 +1050,16 @@ class KoalaAIService {
     for (int turn = 0; turn < 3; turn++) {
       // jsonMode sadece son sentez turlarında (function call üretmeyen turda) güvenli.
       // İlk turda function call'ı zorlarken responseMimeType kullanmıyoruz.
+      // Intent-aware token bütçesi:
+      //  - jsonMode && hasCardsIntent → 2048 (zengin kart sentezi)
+      //  - jsonMode && !hasCardsIntent → 800 (kısa JSON mesaj)
+      //  - !jsonMode → 512 (düz text sentezi)
+      final int turnMaxTokens = jsonMode
+          ? (hasCardsIntent ? 2048 : 800)
+          : 512;
       final genConfig = <String, dynamic>{
         'temperature': 0.7,
-        'maxOutputTokens': jsonMode ? 2048 : 1024,
+        'maxOutputTokens': turnMaxTokens,
       };
       if (jsonMode && turn > 0) {
         genConfig['responseMimeType'] = 'application/json';
@@ -1106,6 +1162,28 @@ class KoalaAIService {
           }
         }
 
+        // PERF P1: Skip Turn 2 — tek function call ve sonuç dolu ise
+        // 2. Gemini çağrısını atla, mesajı hard-code et.
+        // Koşullar: tek call, bilinen search_* fn, kartlar dolu (non-empty).
+        if (resolved.length == 1 && functionResultCards.isNotEmpty) {
+          final r0 = resolved.first;
+          final fn0 = r0['name'] as String;
+          final args0 = (r0['args'] as Map<String, dynamic>?) ?? const {};
+          if (fn0 == 'search_products' ||
+              fn0 == 'search_designers' ||
+              fn0 == 'search_projects') {
+            final cardCount = _estimateCardItemCount(fn0, functionResultCards);
+            if (cardCount > 0) {
+              final synthMsg = _synthesisMessage(fn0, args0, cardCount);
+              debugPrint('KoalaAI: Skipping Turn 2 — single $fn0 with $cardCount results');
+              return KoalaResponse(
+                message: _sanitizeMessage(synthMsg),
+                cards: functionResultCards,
+              );
+            }
+          }
+        }
+
         // Model'in function call'larını tek turn'de history'ye ekle
         contents.add({
           'role': 'model',
@@ -1191,6 +1269,141 @@ class KoalaAIService {
     }
     return const KoalaResponse(message: '', cards: []);
   }
+
+  // ═══════════════════════════════════════════════════════
+  // SKIP-TURN-2 YARDIMCILARI
+  // ═══════════════════════════════════════════════════════
+
+  /// Hardcoded sentez mesajı — Turn 2'yi atladığımızda kullanıcıya özgün
+  /// ama klişesiz kısa bir giriş sunar. İLK KELİME KURALI'na uyar.
+  String _synthesisMessage(String fnName, Map<String, dynamic> args, int cardCount) {
+    final roomPretty = _prettyRoomLabel(args['room_type'] as String?);
+    switch (fnName) {
+      case 'search_products':
+        final scope = roomPretty.isNotEmpty ? '$roomPretty için ' : '';
+        return '${scope}sana $cardCount seçenek hazırladım:';
+      case 'search_projects':
+        return '${roomPretty.isNotEmpty ? roomPretty : 'Senin için'} $cardCount tasarım örneği:';
+      case 'search_designers':
+        return '$cardCount tasarımcı buldum, incele:';
+      default:
+        return '';
+    }
+  }
+
+  String _prettyRoomLabel(String? key) {
+    if (key == null) return '';
+    const m = {
+      'salon': 'Salon',
+      'yatak_odasi': 'Yatak odası',
+      'mutfak': 'Mutfak',
+      'banyo': 'Banyo',
+      'ofis': 'Ofis',
+      'cocuk_odasi': 'Çocuk odası',
+      'antre': 'Antre',
+      'balkon': 'Balkon',
+      'ev_ofisi': 'Ev ofisi',
+    };
+    return m[key] ?? '';
+  }
+
+  /// Kart listesinden gösterilebilir öğe sayısını hesapla (product_grid.products,
+  /// designer_card.designers, project_card=her kart tek öğe).
+  int _estimateCardItemCount(String fnName, List<KoalaCard> cards) {
+    int count = 0;
+    for (final c in cards) {
+      if (fnName == 'search_products' && c.type == 'product_grid') {
+        final list = c.data['products'] as List<dynamic>? ?? const [];
+        count += list.length;
+      } else if (fnName == 'search_designers' && c.type == 'designer_card') {
+        final list = c.data['designers'] as List<dynamic>? ?? const [];
+        count += list.length;
+      } else if (fnName == 'search_projects' && c.type == 'project_card') {
+        count += 1;
+      }
+    }
+    return count;
+  }
+
+  // ═══════════════════════════════════════════════════════
+  // CHAT SLOT-MEMORY — budget / room / style bağlamı
+  // LLM çağrısı olmadan kullanıcı mesajından çıkarılır.
+  // ═══════════════════════════════════════════════════════
+
+  final Map<String, String> _chatContext = {};
+  String? get chatContextRoom => _chatContext['room'];
+  String? get chatContextBudget => _chatContext['budget'];
+  String? get chatContextStyle => _chatContext['style'];
+  String? get chatContextLastCards => _chatContext['last_cards'];
+
+  /// Call once per user message BEFORE askWithIntent. Extracts
+  /// budget / room / style slots from the text without an LLM call.
+  void absorbUserMessage(String text) {
+    final t = text.toLowerCase();
+    // Budget: "5000 tl", "5.000 tl", "30-60k", "10 bin"
+    final budgetRe = RegExp(
+      r'(\d{1,3}(?:[.\s]\d{3})*|\d+)\s*(?:k|bin|tl|₺)',
+      caseSensitive: false,
+    );
+    final budgetMatch = budgetRe.firstMatch(t);
+    if (budgetMatch != null) {
+      _chatContext['budget'] = budgetMatch.group(0)!.trim();
+    }
+    // Room
+    const roomMap = {
+      'salon': 'salon',
+      'oturma': 'salon',
+      'oturma odası': 'salon',
+      'yatak': 'yatak_odasi',
+      'yatak odası': 'yatak_odasi',
+      'mutfak': 'mutfak',
+      'banyo': 'banyo',
+      'ofis': 'ofis',
+      'çalışma odası': 'ofis',
+      'çocuk': 'cocuk_odasi',
+      'antre': 'antre',
+      'balkon': 'balkon',
+    };
+    for (final e in roomMap.entries) {
+      if (t.contains(e.key)) {
+        _chatContext['room'] = e.value;
+        break;
+      }
+    }
+    // Style
+    const styles = [
+      'modern', 'minimalist', 'minimal', 'skandinav', 'iskandinav',
+      'japandi', 'bohem', 'klasik', 'endüstriyel', 'rustik', 'art deco',
+    ];
+    for (final s in styles) {
+      if (t.contains(s)) {
+        _chatContext['style'] = s;
+        break;
+      }
+    }
+  }
+
+  /// Called from chat screen after an AI response with cards, so that the
+  /// next turn can reference them by title.
+  void recordCardSummary(List<KoalaCard> cards) {
+    if (cards.isEmpty) {
+      _chatContext.remove('last_cards');
+      return;
+    }
+    final titles = <String>[];
+    for (final c in cards.take(3)) {
+      final title = (c.data['title'] ??
+              c.data['name'] ??
+              c.data['designer_name'] ??
+              '')
+          .toString()
+          .trim();
+      if (title.isNotEmpty) titles.add(title);
+    }
+    if (titles.isNotEmpty) _chatContext['last_cards'] = titles.join(' · ');
+  }
+
+  void resetChatContext() => _chatContext.clear();
 
   /// Aynı sohbette tekrar eden önerileri filtrele
   void _deduplicateResult(
@@ -1455,6 +1668,14 @@ class KoalaAIService {
         }
         if (rest.isNotEmpty) {
           clean = rest[0].toUpperCase() + rest.substring(1);
+        } else {
+          // BUG B8: stripped tamamen tek klişe kelimeyse boş dön — "Harika!"
+          // gibi anlamsız tek-kelime cevapları UI'da gizlensin.
+          final forbiddenSoloWords = RegExp(
+            r'^(İşte|Harika|Tabii|Elbette|Peki|Süper|Muhteşem|Mükemmel|Hemen)[\s\!\?\.\,]*$',
+            caseSensitive: false,
+          );
+          if (forbiddenSoloWords.hasMatch(stripped)) return '';
         }
       }
     }
@@ -1463,6 +1684,15 @@ class KoalaAIService {
 
   /// Parse başarısız olduğunda ham text'ten okunabilir kısmı çıkar
   String _extractFriendlyText(String raw) {
+    // BUG B7: Kırık JSON başlarsa ham metni kullanıcıya göstermeyelim.
+    // JSON gibi görünen payload'larda (özellikle "message"/"cards" anahtarı
+    // içeren) kısmi parse'a güvenmek yerine boş dön.
+    final trimmed0 = raw.trim();
+    if (trimmed0.startsWith('{') ||
+        trimmed0.contains('"message"') ||
+        trimmed0.contains('"cards"')) {
+      return '';
+    }
     // "message" alanını regex ile yakala
     final match = RegExp(r'"message"\s*:\s*"((?:[^"\\]|\\.)*)').firstMatch(raw);
     if (match != null) {

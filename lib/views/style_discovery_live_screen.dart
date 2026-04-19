@@ -15,6 +15,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/theme/koala_tokens.dart';
 import '../services/evlumba_live_service.dart';
@@ -35,6 +36,23 @@ class _StyleDiscoveryLiveScreenState extends State<StyleDiscoveryLiveScreen>
     with TickerProviderStateMixin {
   static const int _batchSize = 10;
   static const int _prefetchThreshold = 3; // kalan kart sayısı < bu → fetch
+
+  // Kategori filtresi — opsiyonel. null / boş = Hepsi.
+  // Persist key: SharedPreferences üzerinden session'lar arası korunur.
+  static const String _prefsCategoryKey = 'style_discovery_category';
+  // Sıra burada UI'da kullanılan sıra — bottom sheet chip sırası.
+  static const List<MapEntry<String, String>> _categoryOptions = [
+    MapEntry('', 'Hepsi'),
+    MapEntry('living_room', 'Oturma Odası'),
+    MapEntry('bedroom', 'Yatak Odası'),
+    MapEntry('kitchen', 'Mutfak'),
+    MapEntry('bathroom', 'Banyo'),
+    MapEntry('kids_room', 'Çocuk Odası'),
+    MapEntry('office', 'Çalışma Odası'),
+    MapEntry('dining_room', 'Yemek Odası'),
+    MapEntry('hallway', 'Antre'),
+  ];
+  String? _selectedCategory; // null = Hepsi
 
   final List<Map<String, dynamic>> _deck = [];
   final Set<String> _seenIds = <String>{};
@@ -69,8 +87,16 @@ class _StyleDiscoveryLiveScreenState extends State<StyleDiscoveryLiveScreen>
     )..addStatusListener((status) {
         if (status == AnimationStatus.completed) _onExitComplete();
       });
-    _bootstrap();
+    _loadSavedCategory().then((_) => _bootstrap());
     Analytics.screenViewed('style_discovery_live');
+  }
+
+  Future<void> _loadSavedCategory() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final v = prefs.getString(_prefsCategoryKey) ?? '';
+      if (v.isNotEmpty) _selectedCategory = v;
+    } catch (_) {/* sessiz geç — filtre yoksa "Hepsi" */}
   }
 
   Future<void> _bootstrap() async {
@@ -102,11 +128,15 @@ class _StyleDiscoveryLiveScreenState extends State<StyleDiscoveryLiveScreen>
   Future<int> _fetchCount() async {
     try {
       if (!EvlumbaLiveService.isReady) return 0;
-      final res = await EvlumbaLiveService.client
+      var q = EvlumbaLiveService.client
           .from('designer_projects')
           .select()
-          .eq('is_published', true)
-          .count();
+          .eq('is_published', true);
+      final cat = _selectedCategory;
+      if (cat != null && cat.isNotEmpty) {
+        q = q.ilike('project_type', cat);
+      }
+      final res = await q.count();
       return res.count;
     } catch (_) {
       return 0;
@@ -120,6 +150,7 @@ class _StyleDiscoveryLiveScreenState extends State<StyleDiscoveryLiveScreen>
       final batch = await EvlumbaLiveService.getProjects(
         limit: _batchSize,
         offset: _offset,
+        projectType: _selectedCategory,
       );
       _offset += _batchSize;
       // Wrap-around: bir tur tamamlandıysa başa dön ve seenIds temizle
@@ -129,6 +160,7 @@ class _StyleDiscoveryLiveScreenState extends State<StyleDiscoveryLiveScreen>
         final retry = await EvlumbaLiveService.getProjects(
           limit: _batchSize,
           offset: 0,
+          projectType: _selectedCategory,
         );
         _offset = _batchSize;
         batch.addAll(retry);
@@ -445,6 +477,33 @@ class _StyleDiscoveryLiveScreenState extends State<StyleDiscoveryLiveScreen>
           icon: const Icon(Icons.arrow_back_rounded),
         ),
         title: const Text('Tarzını Keşfet', style: KoalaText.h2),
+        actions: [
+          IconButton(
+            tooltip: 'Kategori filtresi',
+            onPressed: _openCategorySheet,
+            icon: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                const Icon(Icons.tune_rounded),
+                if (_selectedCategory != null &&
+                    _selectedCategory!.isNotEmpty)
+                  Positioned(
+                    top: -1,
+                    right: -1,
+                    child: Container(
+                      width: 8,
+                      height: 8,
+                      decoration: const BoxDecoration(
+                        color: KoalaColors.accentDeep,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 4),
+        ],
       ),
       body: SafeArea(
         top: false,
@@ -464,6 +523,8 @@ class _StyleDiscoveryLiveScreenState extends State<StyleDiscoveryLiveScreen>
   }
 
   Widget _emptyState() {
+    final filtered =
+        _selectedCategory != null && _selectedCategory!.isNotEmpty;
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
@@ -473,19 +534,120 @@ class _StyleDiscoveryLiveScreenState extends State<StyleDiscoveryLiveScreen>
             const Icon(Icons.style_outlined,
                 size: 48, color: KoalaColors.textTer),
             const SizedBox(height: 12),
-            const Text(
-              'Şu an gösterilecek tasarım yok',
-              style: TextStyle(fontSize: 15, color: KoalaColors.textMed),
+            Text(
+              filtered
+                  ? 'Bu kategoride gösterilecek tasarım kalmadı'
+                  : 'Şu an gösterilecek tasarım yok',
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                  fontSize: 15, color: KoalaColors.textMed),
             ),
             const SizedBox(height: 16),
-            TextButton(
-              onPressed: _onBack,
-              child: const Text('Kapat'),
-            ),
+            if (filtered)
+              TextButton(
+                onPressed: _openCategorySheet,
+                child: const Text('Kategoriyi değiştir'),
+              )
+            else
+              TextButton(
+                onPressed: _onBack,
+                child: const Text('Kapat'),
+              ),
           ],
         ),
       ),
     );
+  }
+
+  // ───── Kategori filtresi ─────
+  // Minimalist bir bottom sheet. Chip'ler pill-shape, ikonsuz.
+  // User geri bildirimi: "kaos olmasın" — sade tut.
+  Future<void> _openCategorySheet() async {
+    HapticFeedback.selectionClick();
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: KoalaColors.bg,
+      barrierColor: Colors.black54,
+      isScrollControlled: false,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) {
+        final current = _selectedCategory ?? '';
+        return SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 36,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: KoalaColors.border,
+                      borderRadius: BorderRadius.circular(100),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 4),
+                  child: Text('Kategori seç', style: KoalaText.h2),
+                ),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  children: [
+                    for (final e in _categoryOptions)
+                      _CategoryChip(
+                        label: e.value,
+                        active: current == e.key,
+                        onTap: () {
+                          Navigator.of(ctx).pop();
+                          _applyCategory(e.key);
+                        },
+                      ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _applyCategory(String key) async {
+    final normalized = key.trim();
+    final next = normalized.isEmpty ? null : normalized;
+    final current = _selectedCategory;
+    if (next == current) return; // no-op
+    HapticFeedback.selectionClick();
+    unawaited(Analytics.log('style_category_filter', {
+      'category': normalized.isEmpty ? 'all' : normalized,
+    }));
+    // Persist
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_prefsCategoryKey, normalized);
+    } catch (_) {}
+    if (!mounted) return;
+    setState(() {
+      _selectedCategory = next;
+      _deck.clear();
+      _seenIds.clear();
+      _history.clear();
+      _index = 0;
+      _offset = 0;
+      _dragDx = 0;
+      _dragDy = 0;
+      _loading = true;
+    });
+    await _bootstrap();
   }
 
   // ignore: unused_element
@@ -1171,5 +1333,48 @@ class _DesignerChip extends StatelessWidget {
     if (parts.length == 1) return parts.first.characters.first.toUpperCase();
     return (parts.first.characters.first + parts.last.characters.first)
         .toUpperCase();
+  }
+}
+
+// Kategori seçim chip'i — pill shape, ikonsuz, sade.
+// Aktif durumda accentDeep arka plan + beyaz label; pasifte surfaceAlt + border.
+class _CategoryChip extends StatelessWidget {
+  final String label;
+  final bool active;
+  final VoidCallback onTap;
+  const _CategoryChip({
+    required this.label,
+    required this.active,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeOut,
+        height: 40,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: active ? KoalaColors.accentDeep : KoalaColors.surfaceAlt,
+          borderRadius: BorderRadius.circular(100),
+          border: Border.all(
+            color: active ? KoalaColors.accentDeep : KoalaColors.border,
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            color: active ? Colors.white : KoalaColors.textMed,
+          ),
+        ),
+      ),
+    );
   }
 }

@@ -78,6 +78,25 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
   /// Fotoğraf analizi sonrası bağlam — follow-up chip'lerde kullanılır
   Map<String, String>? _photoAnalysisContext;
 
+  // ── Dinamik hint rotasyonu (empty composer, idle) ──
+  static const List<String> _hintRotation = [
+    'Salonum için modern bir koltuk öner',
+    '50000 TL bütçeyle yatak odası tasarımı',
+    'Minimalist tarzda mutfak fikirleri',
+    'Bu fotoğrafa benzer ürün bul',
+    'Antalya\'da tasarımcı öner',
+    'Çalışma odası için raf önerisi',
+  ];
+  int _hintIndex = 0;
+  String _currentHint = 'Salonum için modern bir koltuk öner';
+  Timer? _hintTimer;
+  final FocusNode _inputFocus = FocusNode();
+
+  // ── Mekan analizi kademeli loading mesajları ──
+  Timer? _loadingStage1;
+  Timer? _loadingStage2;
+  String? _loadingOverrideText;
+
   @override
   void initState() {
     super.initState();
@@ -85,6 +104,28 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     _chatId = widget.chatId ?? 'chat_${DateTime.now().millisecondsSinceEpoch}';
     _loadUserPreferences();
     _scroll.addListener(_onScrollChanged);
+    _ctrl.addListener(_onComposerTextChanged);
+    _inputFocus.addListener(_onComposerTextChanged);
+
+    // Yeni (boş) bir sohbet ise AI slot-context'i sıfırla; mevcut sohbeti koru.
+    if (widget.chatId == null) {
+      _ai.resetChatContext();
+    }
+
+    // Eğer bu sohbet için daha önce kaydedilmiş photoAnalysisContext varsa yükle.
+    _restorePhotoAnalysisContext();
+
+    // Hint rotasyon timer'i — sadece boş composer + unfocused + boş sohbette rotate eder.
+    _hintTimer = Timer.periodic(const Duration(seconds: 4), (_) {
+      if (!mounted) return;
+      if (_msgs.isNotEmpty) return;
+      if (_ctrl.text.isNotEmpty) return;
+      if (_inputFocus.hasFocus) return;
+      setState(() {
+        _hintIndex = (_hintIndex + 1) % _hintRotation.length;
+        _currentHint = _hintRotation[_hintIndex];
+      });
+    });
     if (kIsWeb) {
       web_drop.registerWebDrop(
         onDrop: (bytes) {
@@ -152,9 +193,82 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     if (kIsWeb) web_drop.unregisterWebDrop();
     _ai.dispose();
     _scroll.removeListener(_onScrollChanged);
+    _hintTimer?.cancel();
+    _loadingStage1?.cancel();
+    _loadingStage2?.cancel();
+    _ctrl.removeListener(_onComposerTextChanged);
+    _inputFocus.removeListener(_onComposerTextChanged);
+    _inputFocus.dispose();
     _ctrl.dispose();
     _scroll.dispose();
     super.dispose();
+  }
+
+  void _onComposerTextChanged() {
+    // Composer durumu değişince rebuild (hint switch + has button).
+    if (!mounted) return;
+    setState(() {});
+  }
+
+  // ── Kademeli loading mesajları ──
+  void _startStagedLoadingMessages() {
+    _loadingStage1?.cancel();
+    _loadingStage2?.cancel();
+    _loadingOverrideText = null;
+    _loadingStage1 = Timer(const Duration(seconds: 10), () {
+      if (!mounted || !_loading) return;
+      setState(() => _loadingOverrideText = 'Mekanı detaylı inceliyorum...');
+    });
+    _loadingStage2 = Timer(const Duration(seconds: 20), () {
+      if (!mounted || !_loading) return;
+      setState(
+          () => _loadingOverrideText = 'Renkler ve stil analizi devam ediyor...');
+    });
+  }
+
+  void _stopStagedLoadingMessages() {
+    _loadingStage1?.cancel();
+    _loadingStage2?.cancel();
+    _loadingStage1 = null;
+    _loadingStage2 = null;
+    if (_loadingOverrideText != null) {
+      _loadingOverrideText = null;
+    }
+  }
+
+  // ── photoAnalysisContext persistence ──
+  String get _photoCtxPrefsKey =>
+      'koala_photo_analysis_ctx_${widget.chatId ?? "new"}';
+
+  Future<void> _persistPhotoAnalysisContext() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final ctx = _photoAnalysisContext;
+      if (ctx == null || ctx.isEmpty) {
+        await prefs.remove(_photoCtxPrefsKey);
+      } else {
+        await prefs.setString(_photoCtxPrefsKey, jsonEncode(ctx));
+      }
+    } catch (e) {
+      debugPrint('persistPhotoAnalysisContext error: $e');
+    }
+  }
+
+  Future<void> _restorePhotoAnalysisContext() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_photoCtxPrefsKey);
+      if (raw == null || raw.isEmpty) return;
+      final decoded = jsonDecode(raw);
+      if (decoded is Map) {
+        final ctx = decoded.map((k, v) => MapEntry(k.toString(), v.toString()));
+        if (ctx.isNotEmpty && mounted) {
+          setState(() => _photoAnalysisContext = ctx);
+        }
+      }
+    } catch (e) {
+      debugPrint('restorePhotoAnalysisContext error: $e');
+    }
   }
 
   // ── Test asset photo loader ──
@@ -443,6 +557,14 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     // Vision çağrısında kullanılacak foto: yeni yüklenen > referans
     final visionPhoto = photo ?? referencePhoto;
 
+    // Slot-memory: kullanıcının ham metninden slot'ları emdirt (AI çağrısından önce).
+    if (text != null && text.isNotEmpty) {
+      _ai.absorbUserMessage(text);
+    }
+
+    // Fotoğraf varsa kademeli loading mesajlarını başlat.
+    if (visionPhoto != null) _startStagedLoadingMessages();
+
     try {
       if (visionPhoto != null) {
         // Fotoğraf analizi → non-stream (image payload)
@@ -450,11 +572,14 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
         _history.add({'role': 'model', 'content': resp.message});
         // Fotoğraf analiz bağlamını sakla — follow-up chip'ler için
         _extractPhotoContext(resp);
+        // Slot-memory: kart özetlerini kaydet.
+        if (resp.cards.isNotEmpty) _ai.recordCardSummary(resp.cards);
         if (!mounted) return;
         setState(() {
           _msgs.add(_Msg(role: 'koala', text: resp.message, cards: resp.cards));
           _loading = false;
         });
+        _stopStagedLoadingMessages();
       } else {
         // Function-calling destekli istek — gerçek ürün/tasarımcı/proje verisi getirebilir
         // hiddenContext zaten _history'de AI'a gönderildi, ekstra eklemeye gerek yok
@@ -468,6 +593,8 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
         if (resp.cards.isNotEmpty && _photoAnalysisContext == null) {
           _extractPhotoContext(resp);
         }
+        // Slot-memory: kart özetlerini kaydet.
+        if (resp.cards.isNotEmpty) _ai.recordCardSummary(resp.cards);
         if (!mounted) return;
         setState(() {
           _msgs.add(_Msg(role: 'koala', text: resp.message, cards: resp.cards));
@@ -475,6 +602,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
         });
       }
     } catch (e) {
+      _stopStagedLoadingMessages();
       debugPrint('AI error: $e');
       Analytics.aiErrorOccurred(e.toString().substring(0, 200.clamp(0, e.toString().length)));
       if (!mounted) return;
@@ -537,6 +665,8 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
         history: _history,
       );
       _history.add({'role': 'model', 'content': resp.message});
+      // Slot-memory: kart özetlerini kaydet.
+      if (resp.cards.isNotEmpty) _ai.recordCardSummary(resp.cards);
       if (!mounted) return;
       setState(() {
         _msgs.add(_Msg(role: 'koala', text: resp.message, cards: resp.cards));
@@ -651,7 +781,10 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
       }
     }
 
-    if (ctx.isNotEmpty) _photoAnalysisContext = ctx;
+    if (ctx.isNotEmpty) {
+      _photoAnalysisContext = ctx;
+      _persistPhotoAnalysisContext();
+    }
     debugPrint('PhotoContext: $ctx');
   }
 
@@ -817,6 +950,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     if (_loading) return; // AI yanıt verirken gönderme
     final t = _ctrl.text.trim();
     if (t.isEmpty && _pendingPhoto == null) return;
+    HapticFeedback.lightImpact();
     _ctrl.clear();
     final p = _pendingPhoto;
     setState(() => _pendingPhoto = null);
@@ -905,7 +1039,16 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     );
     if (f == null) return;
     Analytics.aiPhotoUploaded(src == ImageSource.camera ? 'camera' : 'gallery');
-    final bytes = await f.readAsBytes();
+    Uint8List bytes;
+    try {
+      bytes = await f.readAsBytes();
+      // TODO(koala): pubspec'te flutter_image_compress yok. Eklenirse burada
+      // EXIF orientation düzeltmesi + pre-compress (minWidth/Height 1600, q 82,
+      // autoCorrectionAngle: true) uygulayabiliriz.
+    } catch (e) {
+      debugPrint('_doPick readAsBytes error: $e');
+      return;
+    }
     setState(() => _pendingPhoto = bytes);
   }
 
@@ -1097,15 +1240,6 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     );
   }
 
-  /// Chat'teki en son kullanıcı fotoğrafını bul (yoksa null).
-  Uint8List? _latestUserPhoto() {
-    for (int i = _msgs.length - 1; i >= 0; i--) {
-      final m = _msgs[i];
-      if (m.role == 'user' && m.photo != null) return m.photo;
-    }
-    return null;
-  }
-
   /// "Renk öner", "Ürün bul", "Stil analizi" gibi foto-bağımlı chip'ler.
   /// Her tıklamada en son fotoyu vision ile yeniden yorumlar — stale text
   /// context'e güvenmez. Foto yoksa picker açılır.
@@ -1243,10 +1377,171 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
             _quickChip(Icons.auto_awesome_rounded, 'Stil analizi',
               () => _onPhotoChip('Bu odanın stilini detaylı analiz et',
                   intent: KoalaIntent.styleAnalysisFromPhoto)),
+            if (_hasRecentImage())
+              _quickChip(Icons.auto_fix_high_rounded, 'Önce / Sonra',
+                  _onBeforeAfterTap),
           ],
         ),
       ),
     );
+  }
+
+  /// _photoAnalysisContext doluysa ya da son mesajlarda user photo varsa true.
+  bool _hasRecentImage() {
+    if (_photoAnalysisContext != null) return true;
+    // Son 6 mesajda user photo ara.
+    final start = _msgs.length - 6 < 0 ? 0 : _msgs.length - 6;
+    for (int i = _msgs.length - 1; i >= start; i--) {
+      final m = _msgs[i];
+      if (m.role == 'user' && m.photo != null) return true;
+    }
+    return false;
+  }
+
+  /// Son user fotoğrafının byte'larını döndür (yoksa null).
+  Uint8List? _latestUserPhoto() {
+    for (int i = _msgs.length - 1; i >= 0; i--) {
+      final m = _msgs[i];
+      if (m.role == 'user' && m.photo != null) return m.photo;
+    }
+    return null;
+  }
+
+  Future<void> _onBeforeAfterTap() async {
+    if (_loading) return;
+    HapticFeedback.lightImpact();
+    final photo = _latestUserPhoto();
+    if (photo == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Önce bir oda fotoğrafı yükle.')),
+      );
+      return;
+    }
+
+    // Stil seçimi için bottom sheet.
+    final choices = const ['Modern', 'Minimalist', 'İskandinav', 'Endüstriyel'];
+    final chosen = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Center(
+              child: Container(
+                width: 36,
+                height: 4,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(2),
+                  color: Colors.grey.shade300,
+                ),
+              ),
+            ),
+            const SizedBox(height: 14),
+            const Text(
+              'Hangi tarzda yeniden tasarlayalım?',
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+                color: _ink,
+              ),
+            ),
+            const SizedBox(height: 12),
+            ...choices.map((s) => Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: GestureDetector(
+                    onTap: () => Navigator.pop(ctx, s),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 14),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(12),
+                        color: _accentLight,
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.auto_fix_high_rounded,
+                              size: 18, color: _accent),
+                          const SizedBox(width: 10),
+                          Text(s,
+                              style: const TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                color: _ink,
+                              )),
+                        ],
+                      ),
+                    ),
+                  ),
+                )),
+          ],
+        ),
+      ),
+    );
+
+    if (chosen == null || !mounted) return;
+
+    // Loading dialog.
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(
+        child: Padding(
+          padding: EdgeInsets.all(24),
+          child: Material(
+            color: Colors.transparent,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CircularProgressIndicator(
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                ),
+                SizedBox(height: 12),
+                Text('Yeni tasarım üretiliyor...',
+                    style: TextStyle(color: Colors.white, fontSize: 14)),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    Uint8List? afterBytes;
+    try {
+      afterBytes = await _imgService.generateAfterImage(
+        beforePhoto: photo,
+        style: chosen,
+        changes: 'Stili $chosen olacak şekilde yeniden tasarla.',
+      );
+    } catch (e) {
+      debugPrint('generateAfterImage error: $e');
+    }
+
+    if (!mounted) return;
+    Navigator.of(context, rootNavigator: true).pop(); // loading dialog'u kapat
+
+    if (afterBytes == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Önce/Sonra üretimi şu an başarısız oldu. Tekrar dene.')),
+      );
+      return;
+    }
+
+    setState(() {
+      _msgs.add(_Msg(
+        role: 'koala',
+        text: 'İşte $chosen tarzında yeniden yorumladım:',
+        photo: afterBytes,
+      ));
+    });
+    _scrollDown();
+    _persist();
   }
 
   Widget _quickChip(IconData icon, String label, VoidCallback onTap) => Padding(
@@ -1431,9 +1726,10 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
               _TypingDots(),
               const SizedBox(width: 10),
               Text(
-                widget.intent == KoalaIntent.photoAnalysis && _msgs.length <= 1
-                    ? 'fotoğrafı analiz ediyorum...'
-                    : 'düşünüyor...',
+                _loadingOverrideText ??
+                    (widget.intent == KoalaIntent.photoAnalysis && _msgs.length <= 1
+                        ? 'fotoğrafı analiz ediyorum...'
+                        : 'düşünüyor...'),
                 style: TextStyle(fontSize: 13, color: Colors.grey.shade500),
               ),
             ],
@@ -1826,13 +2122,25 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
             Expanded(
               child: TextField(
                 controller: _ctrl,
+                focusNode: _inputFocus,
                 enabled: !_loading,
+                maxLines: 5,
+                minLines: 1,
+                maxLength: 2000,
+                textInputAction: TextInputAction.send,
+                buildCounter: (_,
+                        {required int currentLength,
+                        required bool isFocused,
+                        int? maxLength}) =>
+                    null,
                 decoration: InputDecoration(
                   hintText: _loading
                       ? 'Koala düşünüyor...'
                       : _pendingPhoto != null
                           ? 'Fotoğrafa mesaj ekle (isteğe bağlı)...'
-                          : 'Koala\'ya sor...',
+                          : _msgs.isNotEmpty
+                              ? 'Mesajını yaz...'
+                              : _currentHint,
                   hintStyle: TextStyle(
                     fontSize: 14,
                     color: _loading ? Colors.grey.shade300 : Colors.grey.shade400,
@@ -1842,10 +2150,10 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                     horizontal: 10,
                     vertical: 14,
                   ),
+                  counterText: '',
                 ),
                 style: const TextStyle(fontSize: 14, color: _ink),
                 onSubmitted: (_) => _submitText(),
-                onChanged: (_) => setState(() {}),
               ),
             ),
             if (has || _loading)
