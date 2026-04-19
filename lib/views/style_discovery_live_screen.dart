@@ -507,17 +507,24 @@ class _StyleDiscoveryLiveScreenState extends State<StyleDiscoveryLiveScreen>
       ),
       body: SafeArea(
         top: false,
-        child: _loading
-            ? const Center(child: CircularProgressIndicator())
-            : _deck.isEmpty
-                ? _emptyState()
-                : Column(
-                    children: [
-                      Expanded(child: _deckStack()),
-                      _buttons(),
-                      const SizedBox(height: 20),
-                    ],
-                  ),
+        child: Column(
+          children: [
+            _buildCategoryBar(),
+            Expanded(
+              child: _loading
+                  ? const Center(child: CircularProgressIndicator())
+                  : _deck.isEmpty
+                      ? _emptyState()
+                      : Column(
+                          children: [
+                            Expanded(child: _deckStack()),
+                            _buttons(),
+                            const SizedBox(height: 20),
+                          ],
+                        ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -618,6 +625,36 @@ class _StyleDiscoveryLiveScreenState extends State<StyleDiscoveryLiveScreen>
           ),
         );
       },
+    );
+  }
+
+  /// AppBar'ın hemen altında — net, her zaman görünür yatay kategori bar'ı.
+  /// Kullanıcı AppBar süzgeç ikonunu gözden kaçırırsa bile buradan seçebilir.
+  Widget _buildCategoryBar() {
+    return Container(
+      height: 48,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: const BoxDecoration(
+        color: KoalaColors.bg,
+        border: Border(
+          bottom: BorderSide(color: KoalaColors.border, width: 0.5),
+        ),
+      ),
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        itemCount: _categoryOptions.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        itemBuilder: (_, i) {
+          final e = _categoryOptions[i];
+          final active = (_selectedCategory ?? '') == e.key;
+          return _CategoryChip(
+            label: e.value,
+            active: active,
+            onTap: () => _applyCategory(e.key),
+          );
+        },
+      ),
     );
   }
 
