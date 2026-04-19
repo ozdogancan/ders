@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'style_discovery_live_screen.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' hide User;
@@ -556,7 +557,13 @@ class _ChatListScreenV1State extends State<ChatListScreenV1> {
     return GestureDetector(
       onTap: () {
         HapticFeedback.lightImpact();
-        context.push('/style');
+        // `/style` route yok — live deck'i doğrudan push et (home
+        // pull-to-reveal'ın kullandığı aynı ekran).
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => const StyleDiscoveryLiveScreen(),
+          ),
+        );
       },
       behavior: HitTestBehavior.opaque,
       child: Container(
