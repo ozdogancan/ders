@@ -19,6 +19,10 @@ class SavedItemsService {
 
   static SupabaseClient get _db => Supabase.instance.client;
 
+  /// UI'ın okuyabilmesi için son hata mesajı (isSaved/saveItem/removeItem).
+  /// `MessagingService.lastConvError` pattern'iyle aynı.
+  static String? lastError;
+
   // ─── KAYDET ──────────────────────────────────────────
   static Future<bool> saveItem({
     required SavedItemType type,
@@ -50,6 +54,7 @@ class SavedItemsService {
       return true;
     } catch (e) {
       debugPrint('SavedItemsService.saveItem error: $e');
+      lastError = e.toString();
       return false;
     }
   }
@@ -75,6 +80,7 @@ class SavedItemsService {
       return true;
     } catch (e) {
       debugPrint('SavedItemsService.removeItem error: $e');
+      lastError = e.toString();
       return false;
     }
   }
@@ -95,6 +101,8 @@ class SavedItemsService {
           .limit(1);
       return (res as List).isNotEmpty;
     } catch (e) {
+      debugPrint('SavedItemsService.isSaved error: $e');
+      lastError = e.toString();
       return false;
     }
   }

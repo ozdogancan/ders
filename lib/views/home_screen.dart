@@ -48,7 +48,6 @@ class _HomeScreenState extends State<HomeScreen>
   bool _pullEngaged = false;
   int _notifCount = 0;
   int _unreadMsgCount = 0;
-  Timer? _inboundPollTimer;
 
   late final AnimationController _staggerCtrl;
 
@@ -66,18 +65,14 @@ class _HomeScreenState extends State<HomeScreen>
     _migrateChatsOnce();
     _requestNotificationPermission();
     _kickInboundSync();
-    // Her 1.5 sn'de bir arka planda inbound sync — designer mesajları için.
-    // (Realtime subscribe ile de dinliyoruz ama Evlumba RLS nedeniyle event
-    //  düşebiliyor; 1.5s polling güvenli fallback ve "anında" hissi veriyor.)
-    _inboundPollTimer = Timer.periodic(
-      const Duration(milliseconds: 1500),
-      (_) => _kickInboundSync(),
-    );
+    // Inbound polling ARTIK burada yapılmıyor — GlobalMessageListener
+    // merkezi olarak adaptif interval (fg 15s / bg 60s) ile sync yapıyor.
+    // Her tick sonrası syncTick.value değişiyor → _onGlobalSyncTick badge
+    // yenilemesini tetikler.
     // Realtime: koala_conversations update event'lerini dinle — yeni mesaj
     // geldiğinde badge + toast anında.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _subscribeIncomingMessages();
-      _subscribeEvlumbaLive();
       _maybeOpenStyleDiscovery();
       _maybeShowPullHint();
     });
@@ -91,39 +86,10 @@ class _HomeScreenState extends State<HomeScreen>
     _loadUnreadMsgCount();
   }
 
-  // Evlumba'daki `messages` tablosuna DOĞRUDAN realtime abone olur.
-  // Herhangi bir INSERT geldiğinde anında pullInbound tetiklenir — 3s polling
-  // lag'i yok, gerçek anlık teslimat.
-  RealtimeChannel? _evlumbaChannel;
-
-  Future<void> _subscribeEvlumbaLive() async {
-    try {
-      if (!EvlumbaLiveService.isReady) {
-        final ok = await EvlumbaLiveService.waitForReady(
-          timeout: const Duration(seconds: 8),
-        );
-        if (!ok) return;
-      }
-      // Aynı channel'i iki kere açmayalım
-      if (_evlumbaChannel != null) return;
-      final client = EvlumbaLiveService.client;
-      final ch = client.channel('koala_inbound_evlumba_messages');
-      ch.onPostgresChanges(
-        event: PostgresChangeEvent.insert,
-        schema: 'public',
-        table: 'messages',
-        callback: (payload) {
-          // Her yeni mesajda anında inbound sync — server tarafında kullanıcıya
-          // göre filtre zaten yapılıyor. Filtrelemeye gerek yok.
-          _kickInboundSync();
-        },
-      ).subscribe();
-      _evlumbaChannel = ch;
-      debugPrint('HomeScreen: subscribed to Evlumba.messages INSERT');
-    } catch (e) {
-      debugPrint('HomeScreen: Evlumba realtime subscribe failed: $e');
-    }
-  }
+  // Evlumba realtime subscription ARTIK HomeScreen'de kurulmuyor —
+  // GlobalMessageListener global olarak `koala_global_inbound` kanalıyla
+  // messages INSERT dinliyor. Çift kanal açmak DO sunucusunda boş
+  // realtime connection tutuyordu.
 
   /// Yeni designer mesajı geldi mi tespit etmek için conv başına son
   /// gördüğümüz unread count'u ve last_message_at'i tut. Artış → toast göster.
@@ -276,17 +242,10 @@ class _HomeScreenState extends State<HomeScreen>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    _inboundPollTimer?.cancel();
     _authSub?.cancel();
     GlobalMessageListener.syncTick.removeListener(_onGlobalSyncTick);
     try {
       MessagingService.unsubscribeFromConversations(listener: _convListener);
-    } catch (_) {}
-    try {
-      if (_evlumbaChannel != null && EvlumbaLiveService.isReady) {
-        EvlumbaLiveService.client.removeChannel(_evlumbaChannel!);
-      }
-      _evlumbaChannel = null;
     } catch (_) {}
     _staggerCtrl.dispose();
     super.dispose();

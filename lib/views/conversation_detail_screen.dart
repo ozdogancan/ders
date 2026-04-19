@@ -14,6 +14,7 @@ import '../services/messaging_service.dart';
 import '../services/saved_items_service.dart';
 import '../services/share_service.dart';
 import '../widgets/koala_widgets.dart';
+import '../widgets/media_upload_helper.dart';
 
 /// Tasarımcı ile mesaj detay ekranı — gerçek zamanlı
 class ConversationDetailScreen extends StatefulWidget {
@@ -487,15 +488,19 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
         }
       } else if (photo != null) {
         // Foto var → upload + image message (caption = text)
+        // MIME magic-byte'tan belirlenir; uzantı MIME ile senkron olmazsa
+        // CDN/resize proxy broken image verebiliyor.
+        final mime = MediaUploadHelper.detectMime(photo);
+        final ext = MediaUploadHelper.extensionFor(mime);
         final fileName =
-            '${_uid ?? 'anon'}/${DateTime.now().millisecondsSinceEpoch}.jpg';
+            '${_uid ?? 'anon'}/${DateTime.now().millisecondsSinceEpoch}.$ext';
         try {
           await Supabase.instance.client.storage
               .from('message-images')
               .uploadBinary(
                 fileName,
                 photo,
-                fileOptions: const FileOptions(contentType: 'image/jpeg'),
+                fileOptions: FileOptions(contentType: mime),
               );
           final imageUrl = Supabase.instance.client.storage
               .from('message-images')

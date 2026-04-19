@@ -10,6 +10,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'app.dart';
 import 'core/router/app_router.dart';
 import 'services/analytics_service.dart';
+import 'services/cache_service.dart';
 import 'services/connectivity_service.dart';
 import 'services/evlumba_live_service.dart';
 import 'services/push_token_service.dart';
@@ -112,6 +113,10 @@ class _BootstrapAppState extends State<_BootstrapApp> {
   late final Future<void> _initFuture = _initializeBackends();
   bool _didTrackStartup = false;
   bool _supabaseReady = false;
+  // Önceki auth UID — auth state değiştiğinde in-memory cache'i temizlemek
+  // için tutulur. Login / logout / user switch durumlarında stale count
+  // (başka kullanıcının saved_counts vs.) görünmesin.
+  String? _lastAuthUid;
 
   Future<void> _initializeBackends() async {
     try {
@@ -131,6 +136,20 @@ class _BootstrapAppState extends State<_BootstrapApp> {
         debugPrint('Anonymous auth skipped: $e');
       }
     }
+
+    // Auth state değişiminde in-memory cache temizliği.
+    // Logout / login / user-switch → eski kullanıcının saved_counts_xxx
+    // gibi key'leri yeni kullanıcıya sızmasın.
+    _lastAuthUid = FirebaseAuth.instance.currentUser?.uid;
+    FirebaseAuth.instance.authStateChanges().listen((user) {
+      final prev = _lastAuthUid;
+      final curr = user?.uid;
+      if (prev != curr) {
+        CacheService.clearAll();
+        debugPrint('Auth changed ($prev → $curr), cache cleared');
+      }
+      _lastAuthUid = curr;
+    });
 
     if (Env.hasSupabaseConfig) {
       try {

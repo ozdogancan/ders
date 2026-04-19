@@ -1,9 +1,6 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:supabase_flutter/supabase_flutter.dart' hide User;
 
 import '../core/utils/format_utils.dart';
 import '../services/chat_persistence.dart';
@@ -86,8 +83,6 @@ class _ChatListScreenV2State extends State<ChatListScreenV2> {
   final Map<String, Map<String, String?>> _designerCache = {};
 
   void Function(Map<String, dynamic>)? _convListener;
-  Timer? _inboundPollTimer;
-  RealtimeChannel? _evlumbaChannel;
 
   // Hidden debug (5-tap on title)
   int _titleTapCount = 0;
@@ -104,13 +99,11 @@ class _ChatListScreenV2State extends State<ChatListScreenV2> {
       } catch (e) {
         debugPrint('ChatListScreenV2: subscribe error $e');
       }
+      // İlk açılışta tek sync — sonrası GlobalMessageListener yönetiyor.
       _syncInboundThenReload();
-      _subscribeEvlumbaLive();
-      _inboundPollTimer = Timer.periodic(
-        const Duration(milliseconds: 1500),
-        (_) => _syncInboundThenReload(),
-      );
     });
+    // Inbound polling ve Evlumba realtime artık GlobalMessageListener'da
+    // merkezi. Sadece tick'e abone olup sessiz reload yapıyoruz.
     GlobalMessageListener.syncTick.addListener(_onGlobalSyncTick);
   }
 
@@ -119,41 +112,11 @@ class _ChatListScreenV2State extends State<ChatListScreenV2> {
     _load(silent: true);
   }
 
-  Future<void> _subscribeEvlumbaLive() async {
-    try {
-      if (!EvlumbaLiveService.isReady) {
-        final ok = await EvlumbaLiveService.waitForReady(
-          timeout: const Duration(seconds: 6),
-        );
-        if (!ok) return;
-      }
-      if (_evlumbaChannel != null) return;
-      final client = EvlumbaLiveService.client;
-      final ch = client.channel('koala_chatlistv2_inbound_messages');
-      ch.onPostgresChanges(
-        event: PostgresChangeEvent.insert,
-        schema: 'public',
-        table: 'messages',
-        callback: (_) => _syncInboundThenReload(),
-      ).subscribe();
-      _evlumbaChannel = ch;
-    } catch (e) {
-      debugPrint('ChatListScreenV2: Evlumba subscribe failed: $e');
-    }
-  }
-
   @override
   void dispose() {
-    _inboundPollTimer?.cancel();
     GlobalMessageListener.syncTick.removeListener(_onGlobalSyncTick);
     try {
       MessagingService.unsubscribeFromConversations(listener: _convListener);
-    } catch (_) {}
-    try {
-      if (_evlumbaChannel != null && EvlumbaLiveService.isReady) {
-        EvlumbaLiveService.client.removeChannel(_evlumbaChannel!);
-      }
-      _evlumbaChannel = null;
     } catch (_) {}
     super.dispose();
   }

@@ -278,6 +278,51 @@ class KoalaAIService {
     return prompt + block;
   }
 
+  /// Builds the system_instruction text for ALL Gemini calls.
+  /// Includes Koala identity + user preferences — so every call sees the same base.
+  String _buildSystemInstructionText({bool includeProfile = true}) {
+    if (!includeProfile) return KoalaPrompts.systemBase;
+    return KoalaPrompts.buildSystemInstruction(
+      style: _userPrefs['style'],
+      colors: _userPrefs['colors'],
+      room: _userPrefs['room'],
+      budget: _userPrefs['budget'],
+      dislikedStyles: _userPrefs['dislikedStyles'],
+      dislikedColors: _userPrefs['dislikedColors'],
+      likedDetailsText: _userPrefs['likedDetailsText'],
+      tasteHint: _tasteHint,
+    );
+  }
+
+  /// Product intent detection — used to decide whether to force search_products
+  /// on photo flow (mode=ANY) vs let the model decide (mode=AUTO).
+  static final RegExp _productIntentRegex = RegExp(
+    r'\b(öner|önerir|bul|göster|arıyor|bakıyor|lazım|tavsiye|'
+    r'ürün|mobilya|halı|kilim|masa|sandalye|kanepe|koltuk|lamba|avize|'
+    r'perde|yatak|dolap|gardırop|komodin|raf|kitaplık|sehpa|puf|berjer|'
+    r'tv\s*ünitesi|yemek\s*masası|abajur|saksı|ayna|tablo|ottoman)\b',
+    caseSensitive: false,
+  );
+  bool _isProductRequest(String? text) {
+    if (text == null || text.trim().isEmpty) return false;
+    return _productIntentRegex.hasMatch(text);
+  }
+
+  /// JSON response intents — these return structured JSON (responseMimeType).
+  /// Casual chat returns plain text, NOT JSON.
+  static const Set<KoalaIntent> _jsonIntents = {
+    KoalaIntent.styleExplore,
+    KoalaIntent.roomRenovation,
+    KoalaIntent.colorAdvice,
+    KoalaIntent.designerMatch,
+    KoalaIntent.budgetPlan,
+    KoalaIntent.beforeAfter,
+    KoalaIntent.pollResult,
+    KoalaIntent.photoAnalysis,
+    KoalaIntent.colorPaletteFromPhoto,
+    KoalaIntent.styleAnalysisFromPhoto,
+  };
+
   /// Main entry — with conversation history
   Future<KoalaResponse> askWithIntent({
     required KoalaIntent intent,
@@ -332,7 +377,19 @@ class KoalaAIService {
       case KoalaIntent.photoAnalysis:
         prompt = KoalaPrompts.photoAnalysis(freeText);
       case KoalaIntent.freeChat:
-        prompt = KoalaPrompts.freeChat(freeText ?? 'Merhaba');
+        {
+          final txt = freeText ?? 'Merhaba';
+          // Dart-side intent detection → TOOL_HINT
+          String? toolHint;
+          if (_isProductRequest(txt)) {
+            toolHint = 'search_products';
+          } else if (RegExp(r'(tasarımcı|iç\s*mimar|mimar|uzman)', caseSensitive: false).hasMatch(txt)) {
+            toolHint = 'search_designers';
+          } else if (RegExp(r'(proje|ilham|örnek|göster)', caseSensitive: false).hasMatch(txt)) {
+            toolHint = 'search_projects';
+          }
+          prompt = KoalaPrompts.freeChat(txt, toolHint: toolHint);
+        }
       case KoalaIntent.colorPaletteFromPhoto:
         prompt = KoalaPrompts.colorPaletteFromPhoto();
       case KoalaIntent.styleAnalysisFromPhoto:
@@ -350,6 +407,8 @@ class KoalaAIService {
       prompt = _withProfile(prompt);
     }
 
+    final isJsonIntent = _jsonIntents.contains(intent);
+
     if (photo != null) {
       // Dar-amaçlı foto intent'lerde tool'ları kapat — yalnız ilgili kart üretilsin
       final disableTools = intent == KoalaIntent.colorPaletteFromPhoto ||
@@ -358,6 +417,8 @@ class KoalaAIService {
         prompt: prompt,
         imageBytes: photo,
         disableTools: disableTools,
+        userText: freeText,
+        jsonMode: isJsonIntent,
       );
     }
 
@@ -378,15 +439,28 @@ class KoalaAIService {
       if (intent == KoalaIntent.designerMatch) {
         allowedFunctions = ['search_designers'];
       }
-      return _callGeminiWithTools(prompt: prompt, history: history, initialAllowedFunctions: allowedFunctions);
+      return _callGeminiWithTools(
+        prompt: prompt,
+        history: history,
+        initialAllowedFunctions: allowedFunctions,
+        userText: freeText,
+        jsonMode: isJsonIntent,
+      );
     }
 
-    return _callGemini(prompt: prompt, history: history);
+    return _callGemini(
+      prompt: prompt,
+      history: history,
+      userText: freeText,
+      jsonMode: isJsonIntent,
+    );
   }
 
   /// Builds prompt with user profile injected (for streaming usage).
   String buildPromptForFreeChat(String text) =>
     _withProfile(KoalaPrompts.freeChat(text));
+
+  // Note: freeChat prompt artık minimal; system_instruction tüm ağır kısmı taşıyor.
 
   /// Simple ask with history
   Future<KoalaResponse> ask(String text, {List<Map<String, String>>? history}) =>
@@ -402,6 +476,7 @@ class KoalaAIService {
       },
     ];
     final payload = {
+      'system_instruction': {'parts': [{'text': _buildSystemInstructionText()}]},
       'contents': contents,
       'generationConfig': {'temperature': 0.7, 'maxOutputTokens': 300},
     };
@@ -420,8 +495,15 @@ class KoalaAIService {
   /// Proxy URL for Koala API backend
   Uri get _proxyUri => Uri.parse('${Env.koalaApiUrl}/api/chat');
 
-  Future<KoalaResponse> _callGemini({required String prompt, List<Map<String, String>>? history}) async {
-    final systemInstruction = {'parts': [{'text': prompt}]};
+  Future<KoalaResponse> _callGemini({
+    required String prompt,
+    List<Map<String, String>>? history,
+    String? userText,
+    bool jsonMode = false,
+  }) async {
+    // system_instruction = Koala kimliği + kullanıcı profili + intent-specific prompt
+    final systemText = '${_buildSystemInstructionText()}\n\n${prompt.trim()}';
+    final systemInstruction = {'parts': [{'text': systemText}]};
     final contents = <Map<String, dynamic>>[];
 
     // Conversation history (last 8 messages, max 6000 karakter)
@@ -440,31 +522,44 @@ class KoalaAIService {
       }
     }
 
-    // Gemini en az 1 user mesajı ister
-    if (contents.isEmpty || (contents.last['role'] != 'user')) {
+    // Fix: YENİ user mesajı contents'e somut olarak eklensin
+    final userMsg = (userText ?? '').trim();
+    if (userMsg.isNotEmpty) {
+      contents.add({'role': 'user', 'parts': [{'text': userMsg}]});
+    } else if (contents.isEmpty || (contents.last['role'] != 'user')) {
+      // Gemini en az 1 user mesajı ister — hiç user mesajı yoksa fallback
       contents.add({'role': 'user', 'parts': [{'text': 'Devam et'}]});
+    }
+
+    final generationConfig = <String, dynamic>{
+      'temperature': 0.7,
+      'maxOutputTokens': 2048,
+    };
+    if (jsonMode) {
+      generationConfig['responseMimeType'] = 'application/json';
     }
 
     final payload = {
       'system_instruction': systemInstruction,
       'contents': contents,
-      'generationConfig': {
-        'temperature': 0.7,
-        'maxOutputTokens': 2048,
-      },
+      'generationConfig': generationConfig,
     };
 
-    debugPrint('KoalaAI: Sending request via proxy (${contents.length} messages)...');
+    debugPrint('KoalaAI: Sending request via proxy (${contents.length} messages, jsonMode=$jsonMode)...');
     final response = await _client.post(_proxyUri, headers: {'Content-Type': 'application/json'}, body: jsonEncode(payload))
         .timeout(const Duration(seconds: 30));
 
     if (response.statusCode >= 300) {
-      debugPrint('KoalaAI ERROR ${response.statusCode}: ${response.body.substring(0, 300.clamp(0, response.body.length))}');
+      debugPrint('KoalaAI ERROR ${response.statusCode}: ${_truncForLog(response.body, 300)}');
       throw Exception('Gemini failed: ${response.statusCode}');
     }
 
-    return _parseResponse(_extractText(response.body));
+    return _parseResponse(_extractText(response.body), jsonMode: jsonMode);
   }
+
+  /// Safe substring for log lines.
+  String _truncForLog(String s, [int n = 200]) =>
+      s.length > n ? s.substring(0, n) : s;
 
   /// Moondream ön-analiz endpoint'i
   Uri get _moondreamUri => Uri.parse('${Env.koalaApiUrl}/api/analyze-room');
@@ -498,6 +593,8 @@ class KoalaAIService {
     required String prompt,
     required Uint8List imageBytes,
     bool disableTools = false,
+    String? userText,
+    bool jsonMode = false,
   }) async {
     // Moondream devre dışı — API key 401 veriyor, 8s boşa bekleme yapıyordu
     // final preAnalysis = await _moondreamPreAnalyze(imageBytes);
@@ -507,9 +604,23 @@ class KoalaAIService {
     // Gemini 2.5 Flash image'ı doğrudan analiz ediyor
     String enrichedPrompt = prompt;
 
+    // Akıllı mode seçimi: user gerçekten ürün istiyorsa ANY ile zorla,
+    // aksi halde AUTO ile modele bırak (halüsinasyon koruması zaten mevcut).
+    final wantsProducts = _isProductRequest(userText);
+
     // ── Tur 1: Görsel + tools ile Gemini çağır ──
     final imageB64 = base64Encode(imageBytes);
+    final systemText = _buildSystemInstructionText();
+    final generationConfig = <String, dynamic>{
+      'temperature': 0.7,
+      'maxOutputTokens': 4096,
+    };
+    if (jsonMode && disableTools) {
+      // Tools açıkken responseMimeType=application/json uyumsuzluk yaratır.
+      generationConfig['responseMimeType'] = 'application/json';
+    }
     final firstPayload = <String, dynamic>{
+      'system_instruction': {'parts': [{'text': systemText}]},
       'contents': [
         {
           'role': 'user',
@@ -519,20 +630,26 @@ class KoalaAIService {
           ]
         }
       ],
-      'generationConfig': {'temperature': 0.7, 'maxOutputTokens': 4096},
+      'generationConfig': generationConfig,
     };
     if (!disableTools) {
       firstPayload['tools'] = _toolDeclarations;
-      // Fotoğraf akışında modelin ÜRÜN önerirken MUTLAKA search_products'ı
-      // çağırmasını zorla — aksi halde Gemini halüsinasyonla "product_grid"
-      // kartı üretebiliyor (gerçek evlumba ürünü değil). Mode ANY ile
-      // sadece allowed fonksiyon çağrılabilir, halüsinasyonu engeller.
-      firstPayload['tool_config'] = {
-        'function_calling_config': {
-          'mode': 'ANY',
-          'allowed_function_names': ['search_products'],
-        },
-      };
+      if (wantsProducts) {
+        // Kullanıcı açıkça ürün istedi → mode=ANY ile zorla, halüsinasyonu engelle.
+        firstPayload['tool_config'] = {
+          'function_calling_config': {
+            'mode': 'ANY',
+            'allowed_function_names': ['search_products'],
+          },
+        };
+        debugPrint('KoalaAI: Image — product intent detected, mode=ANY');
+      } else {
+        // Kullanıcı ürün istemediyse modele bırak; halüsinasyon stripping zaten aktif.
+        firstPayload['tool_config'] = {
+          'function_calling_config': {'mode': 'AUTO'},
+        };
+        debugPrint('KoalaAI: Image — no product intent, mode=AUTO');
+      }
     } else {
       debugPrint('KoalaAI: Image call with tools DISABLED (narrow-intent)');
     }
@@ -561,8 +678,7 @@ class KoalaAIService {
       throw Exception('Sunucuya ulaşılamadı. İnternet bağlantını kontrol et.');
     }
     if (response.statusCode >= 300) {
-      final body = response.body.length > 300 ? response.body.substring(0, 300) : response.body;
-      debugPrint('KoalaAI: Image FAIL: ${response.statusCode} — $body');
+      debugPrint('KoalaAI: Image FAIL: ${response.statusCode} — ${_truncForLog(response.body, 300)}');
       throw Exception('Fotoğraf analizi başarısız (hata: ${response.statusCode}). Lütfen tekrar dene.');
     }
 
@@ -573,42 +689,58 @@ class KoalaAIService {
     var content = (candidates.first as Map<String, dynamic>)['content'] as Map<String, dynamic>? ?? {};
     var parts = content['parts'] as List<dynamic>? ?? [];
 
-    // Function call kontrolü
-    Map<String, dynamic>? functionCall;
-    for (final p in parts) {
-      if ((p as Map<String, dynamic>).containsKey('functionCall')) {
-        functionCall = p;
-        break;
-      }
-    }
+    // Paralel function call desteği — tüm functionCall part'larını topla
+    final functionCalls = parts
+        .whereType<Map<String, dynamic>>()
+        .where((p) => p.containsKey('functionCall'))
+        .toList();
 
     // ── Tur 2: Function call varsa çalıştır, sonuçla tekrar çağır (IMAGE OLMADAN) ──
     final imageFunctionCards = <KoalaCard>[];
-    if (functionCall != null) {
-      final fc = functionCall['functionCall'] as Map<String, dynamic>;
-      final fnName = fc['name'] as String;
-      final fnArgs = (fc['args'] as Map<String, dynamic>?) ?? {};
-      debugPrint('KoalaAI: Image function call → $fnName($fnArgs)');
-
-      final result = await KoalaToolHandler.handle(fnName, fnArgs);
+    if (functionCalls.isNotEmpty) {
+      // Paralel çalıştır
+      final resolved = await Future.wait(functionCalls.map((p) async {
+        final fc = p['functionCall'] as Map<String, dynamic>;
+        final fnName = fc['name'] as String;
+        final fnArgs = (fc['args'] as Map<String, dynamic>?) ?? {};
+        debugPrint('KoalaAI: Image function call → $fnName($fnArgs)');
+        final result = await KoalaToolHandler.handle(fnName, fnArgs);
+        return {'name': fnName, 'args': fnArgs, 'result': result};
+      }));
 
       // Function result'tan direkt kart oluştur
-      imageFunctionCards.addAll(_buildCardsFromFunctionResult(fnName, result));
+      for (final r in resolved) {
+        imageFunctionCards.addAll(_buildCardsFromFunctionResult(
+          r['name'] as String, r['result'] as Map<String, dynamic>));
+      }
 
-      // 2. tur: image yok, sadece text context + function call sonucu
-      // Fix D: Turn-2'de NONE modu — Gemini sadece sentez yapsın, yeni function call açmasın
+      // 2. tur: image yok, sadece text context + function call sonuçları
+      final modelParts = resolved
+          .map((r) => {'functionCall': {'name': r['name'], 'args': r['args']}})
+          .toList();
+      final responseParts = resolved
+          .map((r) => {'functionResponse': {'name': r['name'], 'response': r['result']}})
+          .toList();
+
+      final turn2Gen = <String, dynamic>{
+        'temperature': 0.7,
+        'maxOutputTokens': 2048,
+      };
+      if (jsonMode) turn2Gen['responseMimeType'] = 'application/json';
+
       final turn2Payload = {
+        'system_instruction': {'parts': [{'text': systemText}]},
         'contents': [
           // Orijinal kullanıcı mesajı (image olmadan, sadece text)
           {'role': 'user', 'parts': [{'text': enrichedPrompt}]},
-          // Model'in function call'ı
-          {'role': 'model', 'parts': [{'functionCall': {'name': fnName, 'args': fnArgs}}]},
-          // Function sonucu
-          {'role': 'user', 'parts': [{'functionResponse': {'name': fnName, 'response': result}}]},
+          // Model'in function call'ları (hepsi tek turn'de)
+          {'role': 'model', 'parts': modelParts},
+          // Function sonuçları (hepsi tek turn'de)
+          {'role': 'user', 'parts': responseParts},
         ],
         'tools': _toolDeclarations,
         'tool_config': {'function_calling_config': {'mode': 'NONE'}},
-        'generationConfig': {'temperature': 0.7, 'maxOutputTokens': 2048},
+        'generationConfig': turn2Gen,
       };
 
       debugPrint('KoalaAI: Image turn2 (function result)...');
@@ -639,15 +771,16 @@ class KoalaAIService {
     }
 
     if (text.isEmpty && imageFunctionCards.isNotEmpty) {
-      // Gemini text boş ama function result kartları var
-      return KoalaResponse(message: 'İşte odanız için önerilerim!', cards: imageFunctionCards);
+      // Gemini text boş ama function result kartları var — mesaj alanını boş bırak
+      return KoalaResponse(message: '', cards: imageFunctionCards);
     }
     if (text.isEmpty) {
-      throw const FormatException('Empty response from Gemini');
+      // Exception yerine boş yanıt — kullanıcıya "aksilik" mesajı göstermek yerine sessiz ol
+      return const KoalaResponse(message: '', cards: []);
     }
 
     // Gemini'nin JSON'unu parse et, function result kartlarını ekle
-    final parsed = _parseResponse(text);
+    final parsed = _parseResponse(text, jsonMode: jsonMode);
     if (imageFunctionCards.isNotEmpty) {
       final mergedCards = <KoalaCard>[];
       for (final card in parsed.cards) {
@@ -689,12 +822,15 @@ class KoalaAIService {
     required String prompt,
     List<Map<String, String>>? history,
     List<String>? initialAllowedFunctions,
+    String? userText,
+    bool jsonMode = false,
   }) async {
     var allowedFunctions = initialAllowedFunctions;
 
-    // System instruction'ı ayır — contents'e kullanıcı mesajı olarak ekleme
-    // Bu, history'nin system prompt ile kirlenmesini önler
-    final systemInstruction = {'parts': [{'text': prompt}]};
+    // System instruction: Koala kimliği + kullanıcı profili + intent-specific prompt
+    // Bu, history'nin system prompt ile kirlenmesini önler.
+    final systemText = '${_buildSystemInstructionText()}\n\n${prompt.trim()}';
+    final systemInstruction = {'parts': [{'text': systemText}]};
 
     // Mesaj geçmişi hazırla (max 8 mesaj, max 6000 karakter)
     // Fix C: History'deki önceki functionCall/functionResponse part'larını temizle
@@ -715,8 +851,12 @@ class KoalaAIService {
         });
       }
     }
-    // Son kullanıcı mesajı yoksa boş bir mesaj ekle (Gemini en az 1 user mesajı ister)
-    if (contents.isEmpty || (contents.last['role'] != 'user')) {
+    // YENİ user mesajı contents'e somut olarak eklensin
+    final userMsg = (userText ?? '').trim();
+    if (userMsg.isNotEmpty) {
+      contents.add({'role': 'user', 'parts': [{'text': userMsg}]});
+    } else if (contents.isEmpty || (contents.last['role'] != 'user')) {
+      // Gerçekten hiç user mesajı yoksa fallback
       contents.add({'role': 'user', 'parts': [{'text': 'Devam et'}]});
     }
 
@@ -849,14 +989,20 @@ class KoalaAIService {
 
     // Max 3 tur (ilk istek + 2 function call) — lite hızlı, 3 tur yeterli
     for (int turn = 0; turn < 3; turn++) {
+      // jsonMode sadece son sentez turlarında (function call üretmeyen turda) güvenli.
+      // İlk turda function call'ı zorlarken responseMimeType kullanmıyoruz.
+      final genConfig = <String, dynamic>{
+        'temperature': 0.7,
+        'maxOutputTokens': jsonMode ? 2048 : 1024,
+      };
+      if (jsonMode && turn > 0) {
+        genConfig['responseMimeType'] = 'application/json';
+      }
       final payload = <String, dynamic>{
         'system_instruction': systemInstruction,
         'contents': contents,
         'tools': _toolDeclarations,
-        'generationConfig': {
-          'temperature': 0.7,
-          'maxOutputTokens': 2048,
-        },
+        'generationConfig': genConfig,
       };
       // İlk turda function call'ı zorla:
       // 1. allowedFunctions varsa → belirli fonksiyona kısıtla (designerMatch gibi)
@@ -883,7 +1029,7 @@ class KoalaAIService {
       ).timeout(const Duration(seconds: 20));
 
       if (response.statusCode >= 300) {
-        debugPrint('KoalaAI ERROR ${response.statusCode}: ${response.body.substring(0, 300.clamp(0, response.body.length))}');
+        debugPrint('KoalaAI ERROR ${response.statusCode}: ${_truncForLog(response.body, 300)}');
         throw Exception('Gemini failed: ${response.statusCode}');
       }
 
@@ -894,74 +1040,75 @@ class KoalaAIService {
       final content = (candidates.first as Map<String, dynamic>)['content'] as Map<String, dynamic>? ?? {};
       final parts = content['parts'] as List<dynamic>? ?? [];
 
-      // Function call kontrolü
-      Map<String, dynamic>? functionCall;
-      for (final p in parts) {
-        if ((p as Map<String, dynamic>).containsKey('functionCall')) {
-          functionCall = p;
-          break;
-        }
-      }
+      // Paralel function call desteği — tüm functionCall part'larını topla
+      final functionCallParts = parts
+          .whereType<Map<String, dynamic>>()
+          .where((p) => p.containsKey('functionCall'))
+          .toList();
 
-      if (functionCall != null) {
-        final fc = functionCall['functionCall'] as Map<String, dynamic>;
-        final fnName = fc['name'] as String;
-        final fnArgs = (fc['args'] as Map<String, dynamic>?) ?? {};
+      if (functionCallParts.isNotEmpty) {
+        // Hepsini paralel çalıştır
+        final resolved = await Future.wait(functionCallParts.map((p) async {
+          final fc = p['functionCall'] as Map<String, dynamic>;
+          final fnName = fc['name'] as String;
+          final fnArgs = (fc['args'] as Map<String, dynamic>?) ?? {};
+          debugPrint('KoalaAI: Function call → $fnName($fnArgs)');
+          final result = await KoalaToolHandler.handle(fnName, fnArgs)
+              .timeout(const Duration(seconds: 15), onTimeout: () {
+            debugPrint('KoalaAI: Function handler timeout for $fnName');
+            return <String, dynamic>{'error': 'timeout', 'message': 'Veri alınamadı'};
+          });
+          debugPrint('KoalaAI: Function result → ${result.keys.toList()}');
+          return {'name': fnName, 'args': fnArgs, 'result': result};
+        }));
 
-        debugPrint('KoalaAI: Function call → $fnName($fnArgs)');
-
-        // Function'ı çalıştır (15s timeout — DB sorguları uzayabilir)
-        final result = await KoalaToolHandler.handle(fnName, fnArgs)
-            .timeout(const Duration(seconds: 15), onTimeout: () {
-          debugPrint('KoalaAI: Function handler timeout for $fnName');
-          return <String, dynamic>{'error': 'timeout', 'message': 'Veri alınamadı'};
-        });
-
-        debugPrint('KoalaAI: Function result → ${result.keys.toList()}');
-
-        // Tekrar edenleri filtrele
-        _deduplicateResult(fnName, result, seenProjectIds, seenDesignerIds, seenProductNames);
-
-        // Function sonucundan direkt kart oluştur — Gemini'nin JSON formatına güvenme
-        final builtCards = _buildCardsFromFunctionResult(fnName, result);
-        if (builtCards.isNotEmpty) {
-          functionResultCards.addAll(builtCards);
-        }
-
-        // Fix F: Boş sonuç durumunda (sadece question_chips döndü) sentez turuna gerek yok
-        final isEmpty = (fnName == 'search_products' && ((result['products'] as List?)?.isEmpty ?? true)) ||
-            (fnName == 'search_designers' && ((result['designers'] as List?)?.isEmpty ?? true)) ||
-            (fnName == 'search_projects' && ((result['projects'] as List?)?.isEmpty ?? true));
-        if (isEmpty && builtCards.isNotEmpty) {
-          String emptyMsg;
-          if (fnName == 'search_products') {
-            final roomType = (result['room_type'] as String? ?? 'oda').toLowerCase();
-            emptyMsg = '$roomType için hangi tür ürün? Seç, daha isabetli arayayım.';
-          } else if (fnName == 'search_designers') {
-            emptyMsg = 'Hangi stilde tasarımcı arıyorsun?';
-          } else {
-            emptyMsg = 'Farklı bir seçenek dene.';
+        // Tüm sonuçları dedup + kart üretimi
+        for (final r in resolved) {
+          final fnName = r['name'] as String;
+          final result = r['result'] as Map<String, dynamic>;
+          _deduplicateResult(fnName, result, seenProjectIds, seenDesignerIds, seenProductNames);
+          final builtCards = _buildCardsFromFunctionResult(fnName, result);
+          if (builtCards.isNotEmpty) {
+            functionResultCards.addAll(builtCards);
           }
-          return KoalaResponse(message: emptyMsg, cards: builtCards);
         }
 
-        // Model response'u history'ye ekle
+        // Boş sonuç durumu: tek fn için eski davranışı koru
+        if (resolved.length == 1) {
+          final r = resolved.first;
+          final fnName = r['name'] as String;
+          final result = r['result'] as Map<String, dynamic>;
+          final builtCards = _buildCardsFromFunctionResult(fnName, result);
+          final isEmpty = (fnName == 'search_products' && ((result['products'] as List?)?.isEmpty ?? true)) ||
+              (fnName == 'search_designers' && ((result['designers'] as List?)?.isEmpty ?? true)) ||
+              (fnName == 'search_projects' && ((result['projects'] as List?)?.isEmpty ?? true));
+          if (isEmpty && builtCards.isNotEmpty) {
+            String emptyMsg;
+            if (fnName == 'search_products') {
+              final roomType = (result['room_type'] as String? ?? 'oda').toLowerCase();
+              emptyMsg = '$roomType için hangi tür ürün? Seç, daha isabetli arayayım.';
+            } else if (fnName == 'search_designers') {
+              emptyMsg = 'Hangi stilde tasarımcı arıyorsun?';
+            } else {
+              emptyMsg = 'Farklı bir seçenek dene.';
+            }
+            return KoalaResponse(message: emptyMsg, cards: builtCards);
+          }
+        }
+
+        // Model'in function call'larını tek turn'de history'ye ekle
         contents.add({
           'role': 'model',
-          'parts': [{'functionCall': {'name': fnName, 'args': fnArgs}}],
+          'parts': resolved
+              .map((r) => {'functionCall': {'name': r['name'], 'args': r['args']}})
+              .toList(),
         });
-
-        // Function sonucunu ekle
+        // Function sonuçlarını tek user turn'ünde ekle
         contents.add({
           'role': 'user',
-          'parts': [
-            {
-              'functionResponse': {
-                'name': fnName,
-                'response': result,
-              },
-            },
-          ],
+          'parts': resolved
+              .map((r) => {'functionResponse': {'name': r['name'], 'response': r['result']}})
+              .toList(),
         });
 
         // Döngü devam: Gemini sonuçla birlikte final cevap üretsin
@@ -980,39 +1127,44 @@ class KoalaAIService {
       // Gemini'nin text mesajını al, kartları function result'tan kullan
       String message = '';
       final cards = List<KoalaCard>.from(functionResultCards);
+      final hadFunctionCall = functionResultCards.isNotEmpty;
 
       if (text.isNotEmpty) {
         // JSON parse dene — Gemini doğru JSON döndüyse onun kartlarını da ekle
-        final parsed = _parseResponse(text);
+        final parsed = _parseResponse(text, jsonMode: jsonMode);
         message = parsed.message;
-        // Sadece Gemini'nin kendi ürettiği kartları ekle (function result kartlarını tekrarlama)
+        // HALÜSİNASYON KORUMASI: Gerçek function call yapılmadıysa
+        // model'in ürettiği product_grid/designer_card/project_card kartları
+        // halüsinasyon olabilir — strip et.
         for (final card in parsed.cards) {
-          if (card.type != 'product_grid' && card.type != 'designer_card' && card.type != 'project_card') {
+          final isRealDataCard = card.type == 'product_grid' ||
+              card.type == 'designer_card' ||
+              card.type == 'project_card';
+          if (!isRealDataCard) {
             cards.add(card);
+          } else if (hadFunctionCall) {
+            // Function call yapıldıysa zaten functionResultCards'a eklendi,
+            // Gemini'nin kendi ürettiği tekrarını atla.
+            continue;
+          } else {
+            debugPrint('KoalaAI: Stripped hallucinated ${card.type} (no function call)');
           }
         }
 
         // JSON parse başarısızsa düz metinden kart çıkarmayı dene
-        if ((message.isEmpty || message.contains('aksilik oldu')) &&
-            text.length > 20 && !text.trimLeft().startsWith('{')) {
+        if (message.isEmpty && text.length > 20 && !text.trimLeft().startsWith('{')) {
           message = _sanitizeMessage(text);
-          // Düz text'ten renk/stil kartları çıkarmayı dene
           if (cards.isEmpty) {
             cards.addAll(_extractCardsFromPlainText(text));
           }
         }
       }
 
-      // Mesaj hala boşsa fallback
-      if (message.isEmpty) {
-        message = cards.isNotEmpty
-            ? 'İşte senin için bulduklarım!'
-            : 'Yanıt oluşturulamadı, lütfen tekrar deneyin.';
-      }
+      // Mesaj boşsa: klişe fallback YOK — UI boş mesajı bar'ı gizleyecek.
+      // (Eski: "İşte senin için bulduklarım!" — klişe, her zaman aynı.)
 
       // Kartlar varsa mesajı kısa tut — uzun text'i kırp
       if (cards.isNotEmpty && message.length > 150) {
-        // İlk 2 cümleyi al
         final sentences = message.split(RegExp(r'[.!?]\s+'));
         if (sentences.length > 2) {
           message = '${sentences.take(2).join('. ')}.';
@@ -1022,12 +1174,12 @@ class KoalaAIService {
       return KoalaResponse(message: message, cards: cards);
     }
 
-    // Turlar tükendi — toplanan kartlar varsa onları göster
+    // Turlar tükendi — toplanan kartlar varsa mesajsız göster
     debugPrint('KoalaAI: Turns exhausted, functionResultCards=${functionResultCards.length}');
     if (functionResultCards.isNotEmpty) {
-      return KoalaResponse(message: 'İşte senin için bulduklarım!', cards: functionResultCards);
+      return KoalaResponse(message: '', cards: functionResultCards);
     }
-    return KoalaResponse(message: 'İşlem tamamlanamadı, lütfen tekrar deneyin.', cards: []);
+    return const KoalaResponse(message: '', cards: []);
   }
 
   /// Aynı sohbette tekrar eden önerileri filtrele
@@ -1192,7 +1344,19 @@ class KoalaAIService {
     return cards;
   }
 
-  KoalaResponse _parseResponse(String raw) {
+  KoalaResponse _parseResponse(String raw, {bool jsonMode = false}) {
+    // Casual chat (jsonMode=false): Gemini doğal metin döndürür,
+    // JSON değilse direkt metni mesaj olarak dön, "aksilik" fallback'i YOK.
+    if (!jsonMode) {
+      final trimmed = raw.trim();
+      final looksLikeJson = trimmed.startsWith('{') || trimmed.startsWith('[') ||
+          trimmed.startsWith('```');
+      if (!looksLikeJson) {
+        return KoalaResponse(message: _sanitizeMessage(trimmed), cards: const []);
+      }
+      // JSON gibi görünse de jsonMode değilse: parse dene, fail olursa natural text.
+    }
+
     try {
       final cleaned = _extractJsonString(raw);
       final data = jsonDecode(cleaned) as Map<String, dynamic>;
@@ -1204,7 +1368,7 @@ class KoalaAIService {
           .toList();
       return KoalaResponse(message: message, cards: cards);
     } catch (e) {
-      debugPrint('KoalaAI parse error: $e\nRaw: ${raw.substring(0, 300.clamp(0, raw.length))}');
+      debugPrint('KoalaAI parse error: $e\nRaw: ${_truncForLog(raw, 300)}');
       // İkinci deneme: JSON bloğunu regex ile bul
       try {
         final jsonMatch = RegExp(r'\{[\s\S]*"message"[\s\S]*"cards"[\s\S]*\}').firstMatch(raw);
@@ -1220,9 +1384,9 @@ class KoalaAIService {
           return KoalaResponse(message: message, cards: cards);
         }
       } catch (_) {}
-      // Son çare: sadece mesajı göster
+      // Son çare: exception fırlatma, natural text'i mesaj olarak dön.
       final friendly = _extractFriendlyText(raw);
-      return KoalaResponse(message: friendly, cards: []);
+      return KoalaResponse(message: friendly, cards: const []);
     }
   }
 
@@ -1257,7 +1421,7 @@ class KoalaAIService {
     clean = clean.replaceAll(RegExp(r'\\u[0-9a-fA-F]{4}'), '');
     // Birden fazla boşluk/newline temizle
     clean = clean.replaceAll(RegExp(r'\s{3,}'), '  ');
-    return clean.isEmpty ? 'İşte önerilerim!' : clean;
+    return clean;
   }
 
   /// Parse başarısız olduğunda ham text'ten okunabilir kısmı çıkar
@@ -1280,8 +1444,8 @@ class KoalaAIService {
     if (!looksLikeJson && trimmed.isNotEmpty && trimmed.length < 500) {
       return _sanitizeMessage(trimmed);
     }
-    // Hiçbir şey bulamazsa genel mesaj
-    return 'Yanıtımı hazırlarken bir aksilik oldu. Tekrar dener misin? 🐨';
+    // Hiçbir şey bulamazsa boş mesaj — UI mesaj bar'ı gizleyecek.
+    return '';
   }
 
   // ═══════════════════════════════════════════════════════

@@ -21,6 +21,8 @@ class _ExploreScreenState extends State<ExploreScreen> {
   List<Map<String, dynamic>> _projects = [];
   bool _loading = true;
   bool _hasError = false;
+  bool _loadingMore = false;
+  bool _hasMore = true;
   String? _selectedRoom;
   int _offset = 0;
   final int _limit = 20;
@@ -68,6 +70,8 @@ class _ExploreScreenState extends State<ExploreScreen> {
   }
 
   void _onScroll() {
+    // Tükendiyse veya zaten yükleniyorsa erken dön — gereksiz round-trip olmasın.
+    if (!_hasMore || _loading || _loadingMore) return;
     if (_scrollCtrl.position.pixels >= _scrollCtrl.position.maxScrollExtent - 200) {
       _loadMore();
     }
@@ -75,6 +79,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
 
   Future<void> _load() async {
     _offset = 0;
+    _hasMore = true;
     setState(() { _loading = true; _hasError = false; });
     try {
       final data = await EvlumbaLiveService.getProjects(
@@ -82,7 +87,13 @@ class _ExploreScreenState extends State<ExploreScreen> {
         offset: 0,
         projectType: _selectedRoom,
       );
-      if (mounted) setState(() { _projects = data; _loading = false; });
+      if (mounted) {
+        setState(() {
+          _projects = data;
+          _loading = false;
+          _hasMore = data.length >= _limit;
+        });
+      }
     } catch (e) {
       debugPrint('Explore load error: $e');
       if (mounted) setState(() { _loading = false; _hasError = true; });
@@ -90,18 +101,36 @@ class _ExploreScreenState extends State<ExploreScreen> {
   }
 
   Future<void> _loadMore() async {
-    if (_loading) return;
-    _offset += _limit;
+    if (_loading || _loadingMore || !_hasMore) return;
+    _loadingMore = true;
+    // Offset'i başarı sonrası ilerlet — hata olursa aynı sayfayı retry
+    // edebilelim, eksik sayfa olmasın.
+    final nextOffset = _offset + _limit;
     try {
       final data = await EvlumbaLiveService.getProjects(
         limit: _limit,
-        offset: _offset,
+        offset: nextOffset,
         projectType: _selectedRoom,
       );
-      if (mounted && data.isNotEmpty) {
-        setState(() => _projects.addAll(data));
-      }
-    } catch (_) {}
+      if (!mounted) return;
+      setState(() {
+        if (data.isNotEmpty) _projects.addAll(data);
+        _offset = nextOffset;
+        _hasMore = data.length >= _limit;
+        _loadingMore = false;
+      });
+    } catch (e) {
+      debugPrint('Explore loadMore error: $e');
+      _loadingMore = false;
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Daha fazla yüklenemedi'),
+          behavior: SnackBarBehavior.floating,
+          action: SnackBarAction(label: 'Tekrar', onPressed: _loadMore),
+        ),
+      );
+    }
   }
 
   @override

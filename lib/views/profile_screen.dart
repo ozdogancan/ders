@@ -5,6 +5,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' hide AuthState, User;
 
 import '../core/theme/koala_tokens.dart';
+import '../widgets/media_upload_helper.dart';
 import '../services/analytics_service.dart';
 import '../services/collections_service.dart';
 import '../services/saved_items_service.dart';
@@ -60,10 +61,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
       final image = await picker.pickImage(source: ImageSource.gallery, maxWidth: 512, maxHeight: 512, imageQuality: 80);
       if (image == null) return;
       final bytes = await image.readAsBytes();
-      final fileName = 'profile_${_user!.uid}_${DateTime.now().millisecondsSinceEpoch}.jpg';
+      // MIME magic-byte'tan — uzantı ve contentType senkron olmazsa avatar
+      // broken image görünüyor (özellikle HEIC/WEBP galeri seçimlerinde).
+      final mime = MediaUploadHelper.detectMime(bytes);
+      final ext = MediaUploadHelper.extensionFor(mime);
+      final fileName = 'profile_${_user!.uid}_${DateTime.now().millisecondsSinceEpoch}.$ext';
       final supabase = Supabase.instance.client;
       await supabase.storage.from('avatars').uploadBinary(fileName, bytes,
-        fileOptions: const FileOptions(contentType: 'image/jpeg', upsert: true));
+        fileOptions: FileOptions(contentType: mime, upsert: true));
       final publicUrl = supabase.storage.from('avatars').getPublicUrl(fileName);
       await _user.updatePhotoURL(publicUrl);
       if (mounted) {

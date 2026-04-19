@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../core/theme/koala_tokens.dart';
 import '../services/messaging_service.dart';
@@ -12,7 +13,9 @@ import '../widgets/share_sheet.dart';
 import 'collections_screen.dart';
 import 'conversation_detail_screen.dart';
 
-/// Kaydedilenler ekranı — 3 tab: Tasarımlar / Tasarımcılar / Ürünler
+/// Kaydedilenler ekranı — 5 tab: Tasarımlar / Ürünler / Tasarımcılar / Paletler / Koleksiyonlar.
+/// Ürünler tab'ını ilk ekranda görünür tutmak için sıra ayarlandı; son aktif tab
+/// SharedPreferences'a yazılıp tekrar açılınca restore edilir.
 class SavedScreen extends StatefulWidget {
   const SavedScreen({super.key});
 
@@ -22,16 +25,44 @@ class SavedScreen extends StatefulWidget {
 
 class _SavedScreenState extends State<SavedScreen>
     with SingleTickerProviderStateMixin {
+  static const _kLastTabKey = 'saved_last_tab';
+  static const _kTabCount = 5;
   late TabController _tabController;
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 5, vsync: this);
+    _tabController = TabController(length: _kTabCount, vsync: this);
+    _tabController.addListener(_persistTab);
+    _restoreTab();
+  }
+
+  Future<void> _restoreTab() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final saved = prefs.getInt(_kLastTabKey);
+      if (saved == null || saved < 0 || saved >= _kTabCount) return;
+      if (!mounted) return;
+      if (_tabController.index != saved) {
+        _tabController.index = saved;
+      }
+    } catch (_) {
+      // SharedPreferences failure — ilk tab'da kal.
+    }
+  }
+
+  void _persistTab() {
+    // Sadece stabil (indicator animasyonu bitmiş) değişimlerde yaz.
+    if (_tabController.indexIsChanging) return;
+    final idx = _tabController.index;
+    SharedPreferences.getInstance()
+        .then((p) => p.setInt(_kLastTabKey, idx))
+        .catchError((_) => false);
   }
 
   @override
   void dispose() {
+    _tabController.removeListener(_persistTab);
     _tabController.dispose();
     super.dispose();
   }
@@ -60,9 +91,9 @@ class _SavedScreenState extends State<SavedScreen>
           tabAlignment: TabAlignment.start,
           tabs: const [
             Tab(text: 'Tasarımlar'),
-            Tab(text: 'Paletler'),
-            Tab(text: 'Tasarımcılar'),
             Tab(text: 'Ürünler'),
+            Tab(text: 'Tasarımcılar'),
+            Tab(text: 'Paletler'),
             Tab(text: 'Koleksiyonlar'),
           ],
         ),
@@ -71,9 +102,9 @@ class _SavedScreenState extends State<SavedScreen>
         controller: _tabController,
         children: const [
           _SavedList(type: SavedItemType.design),
-          _SavedList(type: SavedItemType.palette),
-          _SavedList(type: SavedItemType.designer),
           _SavedList(type: SavedItemType.product),
+          _SavedList(type: SavedItemType.designer),
+          _SavedList(type: SavedItemType.palette),
           _CollectionsTab(),
         ],
       ),

@@ -15,7 +15,14 @@ class EvlumbaLiveService {
   static bool _initializing = false;
   static int _retryCount = 0;
   static const int _maxRetries = 5;
-  static final Completer<bool> _readyCompleter = Completer<bool>();
+  // Completer final değil — fail durumunda reset edilir, böylece
+  // kullanıcı uçak modundan çıktığında waitForReady() yeniden denemeyi
+  // tetikleyebilir (sonsuz "false" sıkışmasına son).
+  static Completer<bool> _readyCompleter = Completer<bool>();
+  // En son reinit denemesi — pasif retry için cooldown.
+  static DateTime? _lastFailAt;
+  // Reinit cooldown'u: min 60 sn'lik bir fail geçmişi varsa yeniden dene.
+  static const Duration _reinitCooldown = Duration(seconds: 60);
 
   /// main.dart'tan bir kere çağrılır
   static void initialize({required String url, required String anonKey}) {
@@ -31,6 +38,8 @@ class EvlumbaLiveService {
     try {
       _client = SupabaseClient(_pendingUrl!, _pendingAnonKey!);
       debugPrint('EvlumbaLive: initialized → $_pendingUrl');
+      _lastFailAt = null;
+      _initializing = false;
       if (!_readyCompleter.isCompleted) _readyCompleter.complete(true);
     } catch (e) {
       debugPrint('EvlumbaLive: init failed (attempt ${_retryCount + 1}/$_maxRetries) → $e');
@@ -39,16 +48,38 @@ class EvlumbaLiveService {
         _retryCount++;
         Future.delayed(const Duration(seconds: 3), _tryInit);
       } else {
-        debugPrint('EvlumbaLive: giving up after $_maxRetries retries');
+        debugPrint('EvlumbaLive: giving up after $_maxRetries retries (will retry passively on next waitForReady)');
+        _lastFailAt = DateTime.now();
         if (!_readyCompleter.isCompleted) _readyCompleter.complete(false);
       }
     }
   }
 
+  /// Başarısız olduysa ve cooldown dolduysa yeniden init denemesi tetikler.
+  /// Pasif retry: kullanıcı waitForReady / client çağırdığında çalışır,
+  /// ağ geri gelmiş olabilir.
+  static void _maybeReinit() {
+    if (_client != null || _initializing) return;
+    if (_pendingUrl == null) return;
+    final last = _lastFailAt;
+    if (last == null) return;
+    if (DateTime.now().difference(last) < _reinitCooldown) return;
+    debugPrint('EvlumbaLive: reinit triggered (last fail: $last)');
+    _retryCount = 0;
+    _lastFailAt = null;
+    // Complete(false) olmuş completer'ı sıfırla ki waitForReady bu sefer
+    // yeni sonucu bekleyebilsin.
+    if (_readyCompleter.isCompleted) {
+      _readyCompleter = Completer<bool>();
+    }
+    _tryInit();
+  }
+
   static SupabaseClient get client {
     if (_client == null) {
-      // Auto-retry if pending config exists
-      _tryInit();
+      // Auto-retry if pending config exists (fresh start veya pasif reinit)
+      _maybeReinit();
+      if (_client == null) _tryInit();
       if (_client == null) throw StateError('EvlumbaLiveService not initialized');
     }
     return _client!;
@@ -56,10 +87,23 @@ class EvlumbaLiveService {
 
   static bool get isReady => _client != null;
 
-  /// Bağlantı hazır olana kadar bekle (max 10 saniye)
+  /// Bağlantı hazır olana kadar bekle (max 10 saniye).
+  /// Önceki girişim başarısız olup cooldown geçtiyse yeniden init denenir.
   static Future<bool> waitForReady({Duration timeout = const Duration(seconds: 10)}) async {
     if (isReady) return true;
     if (_pendingUrl == null) return false; // config yok
+    _maybeReinit();
+    // Halen completer tamamlanmış ve false ise (cooldown dolmadı) hızlıca false dön.
+    if (_readyCompleter.isCompleted) {
+      try {
+        final val = await _readyCompleter.future;
+        if (val) return true;
+        // false — cooldown'u beklemek yerine kullanıcıya hızlı dönüş.
+        return false;
+      } catch (_) {
+        return false;
+      }
+    }
     _tryInit();
     try {
       return await _readyCompleter.future.timeout(timeout, onTimeout: () => false);

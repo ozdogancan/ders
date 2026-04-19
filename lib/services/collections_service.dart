@@ -140,12 +140,13 @@ class CollectionsService {
     required String savedItemId,
     required String collectionId,
   }) async {
-    if (!Env.hasSupabaseConfig) return false;
+    if (_uid == null || !Env.hasSupabaseConfig) return false;
     try {
       await _db
           .from('saved_items')
           .update({'collection_id': collectionId})
-          .eq('id', savedItemId);
+          .eq('id', savedItemId)
+          .eq('user_id', _uid!);
       return true;
     } catch (e) {
       debugPrint('CollectionsService.addItemToCollection error: $e');
@@ -155,12 +156,13 @@ class CollectionsService {
 
   // ─── ÖĞEDEN KOLEKSİYONU KALDIR ──────────────────────
   static Future<bool> removeItemFromCollection(String savedItemId) async {
-    if (!Env.hasSupabaseConfig) return false;
+    if (_uid == null || !Env.hasSupabaseConfig) return false;
     try {
       await _db
           .from('saved_items')
           .update({'collection_id': null})
-          .eq('id', savedItemId);
+          .eq('id', savedItemId)
+          .eq('user_id', _uid!);
       return true;
     } catch (e) {
       debugPrint('CollectionsService.removeItemFromCollection error: $e');

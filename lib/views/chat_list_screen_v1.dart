@@ -42,8 +42,6 @@ class _ChatListScreenV1State extends State<ChatListScreenV1> {
 
   // Realtime listener referansı — dispose'da aynı referansla kapatılır.
   void Function(Map<String, dynamic>)? _convListener;
-  Timer? _inboundPollTimer;
-  RealtimeChannel? _evlumbaChannel;
 
   @override
   void initState() {
@@ -57,17 +55,12 @@ class _ChatListScreenV1State extends State<ChatListScreenV1> {
       } catch (e) {
         debugPrint('ChatListScreen: subscribe error $e');
       }
+      // İlk açılışta bir kez sync iste — sonrası GlobalMessageListener'a bırak.
       _syncInboundThenReload();
-      _subscribeEvlumbaLive();
-      // Kullanıcı mesajlar sayfasındayken agresif polling — 1.5 sn'de bir.
-      // Evlumba realtime zaten var ama RLS nedeniyle event düşebiliyor; polling
-      // güvenli fallback. Designer mesajları böylece max ~1.5s lag ile iner.
-      _inboundPollTimer = Timer.periodic(
-        const Duration(milliseconds: 1500),
-        (_) => _syncInboundThenReload(),
-      );
     });
-    // GlobalMessageListener her pullInbound sonrası tick — liste sessiz reload.
+    // Inbound polling ve Evlumba realtime artık GlobalMessageListener
+    // tarafından merkezi olarak yönetiliyor. Burada sadece tick'e abone
+    // olup listeyi sessiz reload ediyoruz.
     GlobalMessageListener.syncTick.addListener(_onGlobalSyncTick);
   }
 
@@ -76,45 +69,12 @@ class _ChatListScreenV1State extends State<ChatListScreenV1> {
     _load(silent: true);
   }
 
-  /// Evlumba DB'sine direkt realtime abone ol — messages INSERT event'i
-  /// geldiği an inbound sync çağır. 1.5s polling'i beklemeden anlık getirir.
-  Future<void> _subscribeEvlumbaLive() async {
-    try {
-      if (!EvlumbaLiveService.isReady) {
-        final ok = await EvlumbaLiveService.waitForReady(
-          timeout: const Duration(seconds: 6),
-        );
-        if (!ok) return;
-      }
-      if (_evlumbaChannel != null) return;
-      final client = EvlumbaLiveService.client;
-      final ch = client.channel('koala_chatlist_inbound_messages');
-      ch.onPostgresChanges(
-        event: PostgresChangeEvent.insert,
-        schema: 'public',
-        table: 'messages',
-        callback: (_) => _syncInboundThenReload(),
-      ).subscribe();
-      _evlumbaChannel = ch;
-      debugPrint('ChatListScreen: Evlumba realtime subscribed');
-    } catch (e) {
-      debugPrint('ChatListScreen: Evlumba subscribe failed: $e');
-    }
-  }
-
   @override
   void dispose() {
     _searchController.dispose();
-    _inboundPollTimer?.cancel();
     GlobalMessageListener.syncTick.removeListener(_onGlobalSyncTick);
     try {
       MessagingService.unsubscribeFromConversations(listener: _convListener);
-    } catch (_) {}
-    try {
-      if (_evlumbaChannel != null && EvlumbaLiveService.isReady) {
-        EvlumbaLiveService.client.removeChannel(_evlumbaChannel!);
-      }
-      _evlumbaChannel = null;
     } catch (_) {}
     super.dispose();
   }

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' hide User;
 
 import 'evlumba_live_service.dart';
@@ -23,14 +24,32 @@ import 'notification_toast_service.dart';
 ///
 /// Böylece kullanıcı home, style_discovery, saved veya her hangi başka ekranda
 /// olsa bile yeni mesaj geldiğinde toast görür.
+///
+/// Merkezi polling: Tüm ekranlar bu singleton'un `syncTick` notifier'ını
+/// dinler. Home / ChatList / v2 kendi ayrı `Timer.periodic`lerini tutmaz —
+/// DO Frankfurt 1vCPU sunucuyu korumak için poll fırtınası kaldırıldı.
+///
+/// Adaptif interval:
+///   - Foreground (resumed/inactive)  : 15 sn
+///   - Background (hidden)            : 60 sn
+///   - Paused / detached              : timer durur
+/// Realtime INSERT event geldiğinde timer reset olur — event zaten mesajı
+/// getirdiği için hemen arkasından boş poll yapılmaz (debounce/coalesce).
 class GlobalMessageListener {
   GlobalMessageListener._();
 
-  // ignore: unused_field
   static Timer? _pollTimer;
   static RealtimeChannel? _evlChannel;
   static bool _started = false;
   static StreamSubscription<User?>? _authSub;
+  static _LifecycleBridge? _lifecycleBridge;
+  static AppLifecycleState _lifecycle = AppLifecycleState.resumed;
+
+  // Re-entrancy lock — yavaş ağda tick'ler üst üste binmesin.
+  static bool _inFlight = false;
+
+  static const Duration _fgInterval = Duration(seconds: 15);
+  static const Duration _bgInterval = Duration(seconds: 60);
 
   /// Bir conv için son toast gösterilen mesajın designer+count imzası —
   /// aynı mesaj için tekrar tekrar toast patlamasın.
@@ -49,9 +68,10 @@ class GlobalMessageListener {
     if (_started) return;
     _started = true;
 
-    _pollTimer = Timer.periodic(const Duration(milliseconds: 1500), (_) {
-      _tick();
-    });
+    _lifecycleBridge ??= _LifecycleBridge(_onLifecycleChanged);
+    WidgetsBinding.instance.addObserver(_lifecycleBridge!);
+
+    _restartTimer();
     _subscribeEvlumbaRealtime();
     // Sign-out olduğunda realtime channel'ı temizle — aksi halde Evlumba
     // tarafında koala_global_inbound kanalı sızdırılır (her cold-start yeni
@@ -66,6 +86,37 @@ class GlobalMessageListener {
     _tick();
   }
 
+  /// Adaptif interval: foreground 15s, background 60s, paused/detached stop.
+  static void _restartTimer() {
+    _pollTimer?.cancel();
+    _pollTimer = null;
+    final interval = _intervalForLifecycle(_lifecycle);
+    if (interval == null) return; // paused/detached → no timer
+    _pollTimer = Timer.periodic(interval, (_) => _tick());
+  }
+
+  static Duration? _intervalForLifecycle(AppLifecycleState s) {
+    switch (s) {
+      case AppLifecycleState.resumed:
+      case AppLifecycleState.inactive:
+        return _fgInterval;
+      case AppLifecycleState.hidden:
+        return _bgInterval;
+      case AppLifecycleState.paused:
+      case AppLifecycleState.detached:
+        return null;
+    }
+  }
+
+  static void _onLifecycleChanged(AppLifecycleState s) {
+    _lifecycle = s;
+    _restartTimer();
+    // Foreground'a döndüyse anında tick — kullanıcı 60s beklemesin.
+    if (s == AppLifecycleState.resumed) {
+      _tick();
+    }
+  }
+
   static void _disposeEvlumbaChannel() {
     final ch = _evlChannel;
     if (ch == null) return;
@@ -78,6 +129,8 @@ class GlobalMessageListener {
   }
 
   static Future<void> _tick() async {
+    if (_inFlight) return;
+    _inFlight = true;
     try {
       final uid = FirebaseAuth.instance.currentUser?.uid;
       if (uid == null) return;
@@ -117,6 +170,8 @@ class GlobalMessageListener {
       }
     } catch (e) {
       debugPrint('GlobalMessageListener._tick error: $e');
+    } finally {
+      _inFlight = false;
     }
   }
 
@@ -189,12 +244,30 @@ class GlobalMessageListener {
         event: PostgresChangeEvent.insert,
         schema: 'public',
         table: 'messages',
-        callback: (_) => _tick(),
+        callback: (_) {
+          // Event geldi → hemen tick. Sonra timer'ı reset et; bir sonraki
+          // tick interval süresi sonra olsun — arka arkaya gereksiz poll'u
+          // önler (coalesce).
+          _tick();
+          _restartTimer();
+        },
       ).subscribe();
       _evlChannel = ch;
       debugPrint('GlobalMessageListener: subscribed to Evlumba messages');
     } catch (e) {
       debugPrint('GlobalMessageListener: evlumba subscribe failed: $e');
     }
+  }
+}
+
+/// WidgetsBindingObserver alt-sınıflamak static context'te mümkün değil —
+/// küçük bir bridge class.
+class _LifecycleBridge with WidgetsBindingObserver {
+  _LifecycleBridge(this._onChange);
+  final void Function(AppLifecycleState) _onChange;
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _onChange(state);
   }
 }

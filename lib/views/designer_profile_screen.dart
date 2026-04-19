@@ -5,6 +5,7 @@ import '../helpers/auth_guard.dart';
 import '../services/evlumba_live_service.dart';
 import '../services/saved_items_service.dart';
 import '../widgets/chat/designer_chat_popup.dart';
+import '../widgets/koala_widgets.dart';
 import '../widgets/like_button.dart';
 import '../widgets/save_button.dart';
 import '../widgets/share_sheet.dart';
@@ -27,6 +28,7 @@ class _DesignerProfileScreenState extends State<DesignerProfileScreen> {
   Map<String, dynamic>? _designer;
   List<Map<String, dynamic>> _projects = [];
   bool _loading = true;
+  bool _hasError = false;
 
   @override
   void initState() {
@@ -35,13 +37,25 @@ class _DesignerProfileScreenState extends State<DesignerProfileScreen> {
   }
 
   Future<void> _loadDesigner() async {
+    if (mounted) {
+      setState(() {
+        _loading = true;
+        _hasError = false;
+      });
+    }
     try {
       final designer = await EvlumbaLiveService.getDesigner(widget.designerId);
-      List<Map<String, dynamic>> projects = [];
-      if (designer != null) {
-        projects =
-            await EvlumbaLiveService.getDesignerProjects(widget.designerId);
+      if (designer == null) {
+        if (mounted) {
+          setState(() {
+            _loading = false;
+            _hasError = true;
+          });
+        }
+        return;
       }
+      final projects =
+          await EvlumbaLiveService.getDesignerProjects(widget.designerId);
       if (mounted) {
         setState(() {
           _designer = designer;
@@ -50,7 +64,12 @@ class _DesignerProfileScreenState extends State<DesignerProfileScreen> {
         });
       }
     } catch (_) {
-      if (mounted) setState(() => _loading = false);
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _hasError = true;
+        });
+      }
     }
   }
 
@@ -107,6 +126,12 @@ class _DesignerProfileScreenState extends State<DesignerProfileScreen> {
       body: _loading
           ? const Center(
               child: CircularProgressIndicator(color: KoalaColors.accent))
+          : (_hasError || _designer == null)
+              ? ErrorState(
+                  message: 'Tasarımcı yüklenemedi',
+                  description: 'Bağlantını kontrol edip tekrar dene.',
+                  onRetry: _loadDesigner,
+                )
           : SingleChildScrollView(
               padding: const EdgeInsets.all(KoalaSpacing.lg),
               child: Column(

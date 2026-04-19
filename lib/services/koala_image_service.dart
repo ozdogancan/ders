@@ -12,6 +12,10 @@ class KoalaImageService {
   KoalaImageService({http.Client? client}) : _client = client ?? http.Client();
   final http.Client _client;
 
+  /// Safe substring for log lines — avoids RangeError when body < n chars.
+  String _truncForLog(String s, [int n = 200]) =>
+      s.length > n ? s.substring(0, n) : s;
+
   /// Proxy URL for image generation
   Uri get _proxyUri => Uri.parse('${Env.koalaApiUrl}/api/image');
 
@@ -86,7 +90,7 @@ Make it photorealistic, professional interior photography quality.
       );
 
       if (response.statusCode >= 300) {
-        debugPrint('Image gen error: ${response.statusCode} ${response.body.substring(0, 200)}');
+        debugPrint('Image gen error: ${response.statusCode} ${_truncForLog(response.body)}');
         return null;
       }
 

@@ -11,30 +11,47 @@ class ChatPersistence {
   // ── Conversation list ──
 
   static Future<List<ChatSummary>> loadConversations() async {
-    // Supabase'den dene
+    // Union merge: HEM Supabase HEM local'den oku; ID bazlı merge.
+    // Supabase kayıtları local'i override eder (server = source of truth).
+    // Local-only (henüz sync olmamış) sohbetler kaybolmasın.
+    final merged = <String, ChatSummary>{};
+
+    // 1) Local (SharedPreferences) — önce koy, Supabase varsa üzerine yazılır
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getStringList(_listKey) ?? [];
+      for (final json in raw) {
+        try {
+          final m = jsonDecode(json) as Map<String, dynamic>;
+          final summary = ChatSummary.fromJson(m);
+          if (summary.id.isNotEmpty) merged[summary.id] = summary;
+        } catch (_) {}
+      }
+    } catch (e) {
+      debugPrint('ChatPersistence: local load failed: $e');
+    }
+
+    // 2) Supabase — override
     try {
       final sessions = await AIChatHistoryService.getSessions();
-      if (sessions.isNotEmpty) {
-        return sessions.map((s) => ChatSummary(
-          id: s['id'] as String,
+      for (final s in sessions) {
+        final id = s['id'] as String? ?? '';
+        if (id.isEmpty) continue;
+        merged[id] = ChatSummary(
+          id: id,
           title: s['title'] as String? ?? 'Sohbet',
           intent: s['intent'] as String?,
           createdAt: DateTime.tryParse(s['created_at']?.toString() ?? ''),
           updatedAt: DateTime.tryParse(s['updated_at']?.toString() ?? ''),
-        )).toList();
+        );
       }
     } catch (e) {
-      debugPrint('ChatPersistence: Supabase load failed, falling back: $e');
+      debugPrint('ChatPersistence: Supabase load failed, using local only: $e');
     }
 
-    // Fallback: SharedPreferences
-    final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getStringList(_listKey) ?? [];
-    return raw.map((json) {
-      final m = jsonDecode(json) as Map<String, dynamic>;
-      return ChatSummary.fromJson(m);
-    }).toList()
+    final list = merged.values.toList()
       ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+    return list;
   }
 
   static Future<void> saveConversationSummary(ChatSummary summary) async {
@@ -185,7 +202,11 @@ class ChatSummary {
     title: m['title'] as String? ?? 'Sohbet',
     lastMessage: m['lastMessage'] as String?,
     intent: m['intent'] as String?,
-    createdAt: DateTime.tryParse(m['createdAt'] as String? ?? '') ?? DateTime.now(),
-    updatedAt: DateTime.tryParse(m['updatedAt'] as String? ?? '') ?? DateTime.now(),
+    createdAt: DateTime.tryParse(m['createdAt'] as String? ?? '') ??
+        DateTime.fromMillisecondsSinceEpoch(0),
+    // updatedAt null/parse-fail ise epoch(0) — böylece sort'ta her açılışta
+    // değişmez ve listenin sonuna düşer.
+    updatedAt: DateTime.tryParse(m['updatedAt'] as String? ?? '') ??
+        DateTime.fromMillisecondsSinceEpoch(0),
   );
 }

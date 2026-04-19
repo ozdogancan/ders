@@ -662,6 +662,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
   };
 
   void _onChipTap(String chipText) {
+    // AI yanıt verirken chip tap edilmesin — aksi halde "_loading=true"
+    // çiftleşiyor ve UI'daki send-butonu spinner'ı sıkışıyordu.
+    if (_loading) return;
     HapticFeedback.lightImpact();
     final lower = chipText.toLowerCase();
     for (final style in _knownStyles) {
@@ -1111,6 +1114,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
   /// styleAnalysisFromPhoto) üzerinden çağırır. null ise photoAnalysis (ürün/tasarımcı
   /// tool'lu genel vision).
   void _onPhotoChip(String text, {KoalaIntent? intent}) {
+    if (_loading) return;
     final latest = _latestUserPhoto();
     if (latest == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1213,6 +1217,8 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
             _quickChip(Icons.shopping_bag_rounded, productLabel,
               () => _onPhotoChip('Bu oda ve stile uygun ürün öner')),
             _quickChip(Icons.person_rounded, 'Uzman öner', () {
+              // Debounce: AI yanıt üretirken peş peşe tıklamayı yut.
+              if (_loading) return;
               // Direkt designerMatch intent'i — search_designers function call'ını garanti eder
               final ctx = _photoAnalysisContext;
               final style = ctx?['style'] ?? 'modern';
@@ -1627,6 +1633,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
               _fallbackChip(Icons.shopping_bag_rounded, 'Ürün bul',
                 () => _onPhotoChip('Bu oda ve stile uygun ürün öner')),
               _fallbackChip(Icons.person_rounded, 'Uzman bul', () {
+                if (_loading) return;
                 // Stil sırası: foto analizi > onboarding profili > varsayılan modern
                 final style = _photoAnalysisContext?['style'] ??
                     _ai.userStyle ??
@@ -1837,22 +1844,38 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                 onChanged: (_) => setState(() {}),
               ),
             ),
-            if (has)
+            if (has || _loading)
               GestureDetector(
-                onTap: _submitText,
+                // Loading iken tıklanabilir değil — _submitText zaten erken
+                // return eder ama görsel disabled state feedback için önemli.
+                onTap: _loading ? null : _submitText,
                 child: Padding(
                   padding: const EdgeInsets.only(right: 5),
                   child: Container(
                     width: 36,
                     height: 36,
-                    decoration: const BoxDecoration(
+                    decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: _accent,
+                      color: _loading
+                          ? _accent.withValues(alpha: 0.55)
+                          : _accent,
                     ),
-                    child: const Icon(
-                      Icons.arrow_upward_rounded,
-                      size: 18,
-                      color: Colors.white,
+                    child: Center(
+                      child: _loading
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                    Colors.white),
+                              ),
+                            )
+                          : const Icon(
+                              Icons.arrow_upward_rounded,
+                              size: 18,
+                              color: Colors.white,
+                            ),
                     ),
                   ),
                 ),

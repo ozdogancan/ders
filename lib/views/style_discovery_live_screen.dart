@@ -38,6 +38,8 @@ class _StyleDiscoveryLiveScreenState extends State<StyleDiscoveryLiveScreen>
 
   final List<Map<String, dynamic>> _deck = [];
   final Set<String> _seenIds = <String>{};
+  // Undo stack — her swipe'ta {index, liked, id} push.
+  final List<Map<String, dynamic>> _history = [];
   final math.Random _rng = math.Random();
   // designer_id → profile. Lazy cache — card için küçük avatar+isim chip'i.
   final Map<String, Map<String, dynamic>> _designerCache = {};
@@ -222,6 +224,12 @@ class _StyleDiscoveryLiveScreenState extends State<StyleDiscoveryLiveScreen>
   Future<void> _swipe({required bool liked}) async {
     final card = _currentCard;
     if (card == null) return;
+    // Undo için snapshot al — exit animasyonu bitince _index++ oluyor.
+    _history.add({
+      'index': _index,
+      'liked': liked,
+      'id': card['id']?.toString() ?? '',
+    });
     HapticFeedback.selectionClick();
     final w = MediaQuery.of(context).size.width;
     _exitStartDx = _dragDx;
@@ -258,6 +266,31 @@ class _StyleDiscoveryLiveScreenState extends State<StyleDiscoveryLiveScreen>
         'project_id': card['id'],
       }));
     }
+  }
+
+  Future<void> _undo() async {
+    if (_history.isEmpty || _animatingExit) return;
+    final last = _history.removeLast();
+    final liked = last['liked'] == true;
+    final id = (last['id'] ?? '').toString();
+    HapticFeedback.selectionClick();
+    setState(() {
+      if (_index > 0) _index--;
+      _dragDx = 0;
+      _dragDy = 0;
+    });
+    // Dedup set'inden çıkar — tekrar görünebilsin (ileride yeniden karışırsa).
+    if (id.isNotEmpty) _seenIds.remove(id);
+    // Beğeni geri alınırsa kayıtlardan da düş (taste profile undo metodu yok,
+    // sessiz geç — kritik değil, sadece save temizlensin).
+    if (liked && id.isNotEmpty) {
+      unawaited(SavedItemsService.removeItem(
+        type: SavedItemType.design,
+        itemId: id,
+      ));
+    }
+    _precacheNext();
+    _prefetchCurrentDesigner();
   }
 
   void _onExitComplete() {
@@ -623,11 +656,19 @@ class _StyleDiscoveryLiveScreenState extends State<StyleDiscoveryLiveScreen>
     final askDisabled = disabled ||
         ((_currentCard?['designer_id'] ?? '').toString().isEmpty) ||
         _askingInFlight;
+    final undoDisabled = _history.isEmpty || _animatingExit;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(32, 4, 32, 8),
+      padding: const EdgeInsets.fromLTRB(24, 4, 24, 8),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
+          _ActionBtn(
+            icon: Icons.undo_rounded,
+            label: 'Geri al',
+            onTap: undoDisabled ? null : _undo,
+            variant: _ActionVariant.outlined,
+            small: true,
+          ),
           _ActionBtn(
             icon: LucideIcons.x,
             label: 'Geç',
@@ -948,18 +989,20 @@ class _ActionBtn extends StatelessWidget {
     required this.variant,
     this.onTap,
     this.large = false,
+    this.small = false,
   });
   final IconData icon;
   final String label;
   final _ActionVariant variant;
   final VoidCallback? onTap;
   final bool large;
+  final bool small;
 
   @override
   Widget build(BuildContext context) {
     final disabled = onTap == null;
-    final size = large ? 68.0 : 56.0;
-    final iconSize = large ? 28.0 : 22.0;
+    final size = large ? 68.0 : (small ? 44.0 : 56.0);
+    final iconSize = large ? 28.0 : (small ? 18.0 : 22.0);
 
     Color bg;
     Color fg;
