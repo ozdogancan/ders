@@ -41,16 +41,15 @@ class _StyleDiscoveryLiveScreenState extends State<StyleDiscoveryLiveScreen>
   // Persist key: SharedPreferences üzerinden session'lar arası korunur.
   static const String _prefsCategoryKey = 'style_discovery_category';
   // Sıra burada UI'da kullanılan sıra — bottom sheet chip sırası.
+  // Key = DB'deki project_type değeri (Türkçe, ilike ile eşleştirilir).
+  // Sadece canlı verilerde gerçekten proje olan kategoriler listelenir.
   static const List<MapEntry<String, String>> _categoryOptions = [
     MapEntry('', 'Hepsi'),
-    MapEntry('living_room', 'Oturma Odası'),
-    MapEntry('bedroom', 'Yatak Odası'),
-    MapEntry('kitchen', 'Mutfak'),
-    MapEntry('bathroom', 'Banyo'),
-    MapEntry('kids_room', 'Çocuk Odası'),
-    MapEntry('office', 'Çalışma Odası'),
-    MapEntry('dining_room', 'Yemek Odası'),
-    MapEntry('hallway', 'Antre'),
+    MapEntry('Oturma Odası', 'Oturma Odası'),
+    MapEntry('Yatak Odası', 'Yatak Odası'),
+    MapEntry('Mutfak', 'Mutfak'),
+    MapEntry('Banyo', 'Banyo'),
+    MapEntry('Antre', 'Antre'),
   ];
   String? _selectedCategory; // null = Hepsi
 
@@ -95,7 +94,10 @@ class _StyleDiscoveryLiveScreenState extends State<StyleDiscoveryLiveScreen>
     try {
       final prefs = await SharedPreferences.getInstance();
       final v = prefs.getString(_prefsCategoryKey) ?? '';
-      if (v.isNotEmpty) _selectedCategory = v;
+      // Sadece mevcut kategori listesinde varsa set et — eski slug ('living_room' vs)
+      // kayıtları sessizce görmezden gel, "Hepsi" default kalsın.
+      final validKeys = _categoryOptions.map((e) => e.key).toSet();
+      if (v.isNotEmpty && validKeys.contains(v)) _selectedCategory = v;
     } catch (_) {/* sessiz geç — filtre yoksa "Hepsi" */}
   }
 
@@ -477,33 +479,6 @@ class _StyleDiscoveryLiveScreenState extends State<StyleDiscoveryLiveScreen>
           icon: const Icon(Icons.arrow_back_rounded),
         ),
         title: const Text('Tarzını Keşfet', style: KoalaText.h2),
-        actions: [
-          IconButton(
-            tooltip: 'Kategori filtresi',
-            onPressed: _openCategorySheet,
-            icon: Stack(
-              clipBehavior: Clip.none,
-              children: [
-                const Icon(Icons.tune_rounded),
-                if (_selectedCategory != null &&
-                    _selectedCategory!.isNotEmpty)
-                  Positioned(
-                    top: -1,
-                    right: -1,
-                    child: Container(
-                      width: 8,
-                      height: 8,
-                      decoration: const BoxDecoration(
-                        color: KoalaColors.accentDeep,
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 4),
-        ],
       ),
       body: SafeArea(
         top: false,
