@@ -201,8 +201,16 @@ class _ProjectsGalleryBodyState extends State<_ProjectsGalleryBody> {
     if (!mounted) return;
     setState(() => _askingInFlight = false);
     if (conv == null) {
+      final err = MessagingService.lastConvError;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Sohbet başlatılamadı, tekrar dene')),
+        SnackBar(
+          content: Text(
+            err == null || err.isEmpty
+                ? 'Sohbet başlatılamadı, tekrar dene'
+                : 'Sohbet başlatılamadı: $err',
+          ),
+          duration: const Duration(seconds: 4),
+        ),
       );
       return;
     }

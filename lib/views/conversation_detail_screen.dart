@@ -451,11 +451,16 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
       if (conv == null || _activeConvId == null) {
         if (!mounted) return;
         setState(() => _sending = false);
+        final err = MessagingService.lastConvError;
         ScaffoldMessenger.of(context)
           ..hideCurrentSnackBar()
           ..showSnackBar(
             SnackBar(
-              content: const Text('Sohbet başlatılamadı — tekrar deneyin'),
+              content: Text(
+                err == null || err.isEmpty
+                    ? 'Sohbet başlatılamadı — tekrar deneyin'
+                    : 'Sohbet başlatılamadı: $err',
+              ),
               backgroundColor: Colors.red.shade700,
               duration: const Duration(seconds: 6),
             ),

@@ -162,8 +162,16 @@ class _ChatExpertCard extends StatelessWidget {
     if (!context.mounted) return;
     final convId = conv?['id']?.toString();
     if (convId == null || convId.isEmpty) {
+      final err = MessagingService.lastConvError;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Sohbet başlatılamadı.')),
+        SnackBar(
+          content: Text(
+            err == null || err.isEmpty
+                ? 'Sohbet başlatılamadı. Lütfen birkaç saniye sonra tekrar deneyin.'
+                : 'Sohbet başlatılamadı: $err',
+          ),
+          duration: const Duration(seconds: 4),
+        ),
       );
       return;
     }

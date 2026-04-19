@@ -28,6 +28,10 @@ class MessagingService {
   /// Her çağrı başında temizlenir.
   static String? lastSendError;
 
+  /// Conversation (başlatma/bulma/detay) çağrıları null döndüğünde UI bu alandan
+  /// gerçek hatayı okur; "Sohbet başlatılamadı" yerine spesifik mesaj gösterir.
+  static String? lastConvError;
+
   /// Firebase auth henüz restore edilmemiş olabilir (özellikle hard refresh
   /// sonrası). currentUser null ise authStateChanges ile gelen ilk user'ı
   /// kısa bir timeout ile bekler; yoksa null döner.
@@ -47,6 +51,54 @@ class MessagingService {
     } catch (_) {
       return FirebaseAuth.instance.currentUser?.uid;
     }
+  }
+
+  /// Tek noktada auth + Supabase + RLS-header hazırlığı.
+  /// Bu metottan başarıyla dönüldüğünde:
+  ///   1. Supabase config yüklenmiş
+  ///   2. Firebase user var (gerekirse anonim sign-in burada tetiklenir)
+  ///   3. `x-user-id` header'ı uid ile set edildi
+  ///
+  /// Fail durumunda açıklayıcı [StateError] fırlatır — caller yakalayıp
+  /// [lastConvError]'a yazar, UI de gerçek mesajı snackbar'da gösterir.
+  /// Bu, sessiz null dönüşlerin yerini alır.
+  static Future<String> _ensureReady() async {
+    if (!Env.hasSupabaseConfig) {
+      throw StateError('Supabase yapılandırması yüklenemedi.');
+    }
+    // 1. Hazır uid varsa direkt
+    var uid = FirebaseAuth.instance.currentUser?.uid;
+    // 2. authStateChanges restore bekle (kısa: 3s)
+    if (uid == null) {
+      try {
+        final user = await FirebaseAuth.instance
+            .authStateChanges()
+            .firstWhere((u) => u != null)
+            .timeout(const Duration(seconds: 3));
+        uid = user?.uid;
+      } catch (_) {}
+    }
+    // 3. Hâlâ null → anonim sign-in'i KENDİMİZ tetikle.
+    //    main.dart'taki signInAnonymously sessizce fail etmiş olabilir
+    //    (network dip, guard flag, vs.). Burada retry garantisi.
+    if (uid == null) {
+      try {
+        final cred = await FirebaseAuth.instance
+            .signInAnonymously()
+            .timeout(const Duration(seconds: 8));
+        uid = cred.user?.uid;
+      } catch (e) {
+        throw StateError('Oturum açılamadı (anon sign-in): $e');
+      }
+    }
+    if (uid == null) {
+      throw StateError('Firebase oturumu yok.');
+    }
+    // 4. RLS için x-user-id header'ı — her çağrı öncesi emniyete al.
+    try {
+      _db.rest.headers['x-user-id'] = uid;
+    } catch (_) {}
+    return uid;
   }
 
   // Aktif realtime subscription'lar
@@ -87,19 +139,15 @@ class MessagingService {
     String? contextId,
     String? contextTitle,
   }) async {
-    if (!Env.hasSupabaseConfig) return null;
-    // Cold-start repro: kullanıcı uygulamayı ilk kez açtığında anonim Firebase
-    // auth henüz tamamlanmadan "Sor" butonuna basarsa _uid=null → fonksiyon
-    // anında null dönüp "Sohbet başlatılamadı" snackbar'ı tetikliyordu.
-    // _waitForUid anonim auth'un tamamlanması için kısa bir pencere bırakır.
-    final uid = await _waitForUid();
-    if (uid == null) return null;
-    // x-user-id header'ı RLS için kritik — authStateChanges callback'i ana
-    // main.dart'ta header'ı güncelliyor ama burada paralel yarıştaysak
-    // bir kez daha emniyete al.
+    lastConvError = null;
+    final String uid;
     try {
-      _db.rest.headers['x-user-id'] = uid;
-    } catch (_) {}
+      uid = await _ensureReady();
+    } catch (e) {
+      lastConvError = e.toString();
+      debugPrint('getOrCreateConversation: auth not ready: $e');
+      return null;
+    }
     try {
       // Onceden var mi kontrol et
       final existing = await _db
@@ -121,6 +169,7 @@ class MessagingService {
       return res;
     } catch (e) {
       debugPrint('MessagingService.getOrCreateConversation error: $e');
+      lastConvError = e.toString();
       return null;
     }
   }
@@ -130,16 +179,24 @@ class MessagingService {
   static Future<Map<String, dynamic>?> findExistingConversation({
     required String designerId,
   }) async {
-    if (_uid == null || !Env.hasSupabaseConfig) return null;
+    lastConvError = null;
+    final String uid;
+    try {
+      uid = await _ensureReady();
+    } catch (e) {
+      lastConvError = e.toString();
+      return null;
+    }
     try {
       return await _db
           .from('koala_conversations')
           .select()
-          .eq('user_id', _uid!)
+          .eq('user_id', uid)
           .eq('designer_id', designerId)
           .maybeSingle();
     } catch (e) {
       debugPrint('MessagingService.findExistingConversation error: $e');
+      lastConvError = e.toString();
       return null;
     }
   }
@@ -206,17 +263,25 @@ class MessagingService {
 
   /// Tek conversation detay
   static Future<Map<String, dynamic>?> getConversation(String id) async {
-    if (_uid == null || !Env.hasSupabaseConfig) return null;
+    lastConvError = null;
+    final String uid;
+    try {
+      uid = await _ensureReady();
+    } catch (e) {
+      lastConvError = e.toString();
+      return null;
+    }
     try {
       final res = await _db
           .from('koala_conversations')
           .select()
           .eq('id', id)
-          .or('user_id.eq.$_uid,designer_id.eq.$_uid')
+          .or('user_id.eq.$uid,designer_id.eq.$uid')
           .single();
       return res;
     } catch (e) {
       debugPrint('MessagingService.getConversation error: $e');
+      lastConvError = e.toString();
       return null;
     }
   }
@@ -250,26 +315,19 @@ class MessagingService {
     Map<String, dynamic>? metadata,
   }) async {
     lastSendError = null;
-    if (_uid == null || !Env.hasSupabaseConfig) {
-      lastSendError = _uid == null
-          ? 'Firebase auth yok (currentUser null)'
-          : 'Supabase env config yok';
+    final String uid;
+    try {
+      uid = await _ensureReady();
+    } catch (e) {
+      lastSendError = e.toString();
       return null;
     }
     try {
-      // Request bazlı x-user-id'yi garanti altına al.
-      // 050_security_hardening sonrası koala_conversations UPDATE policy'si
-      // get_user_id() = x-user-id header'ı bekliyor. main.dart'taki listener
-      // henüz set edememiş olabilir (hard refresh / auth restore race) —
-      // INSERT + UPDATE öncesi explicit set et ki RLS sessizce block etmesin.
-      try {
-        _db.rest.headers['x-user-id'] = _uid!;
-      } catch (_) {}
 
       // 1. Mesaji ekle
       final msg = await _db.from('koala_direct_messages').insert({
         'conversation_id': conversationId,
-        'sender_id': _uid,
+        'sender_id': uid,
         'content': content,
         'message_type': type.name,
         if (attachmentUrl != null) 'attachment_url': attachmentUrl,
@@ -283,7 +341,7 @@ class MessagingService {
           .eq('id', conversationId)
           .single();
 
-      final isUser = conv['user_id'] == _uid;
+      final isUser = conv['user_id'] == uid;
       final unreadField = isUser ? 'unread_count_designer' : 'unread_count_user';
 
       // RPC ile unread artır (yoksa sessizce geç)
@@ -323,11 +381,11 @@ class MessagingService {
               'updated_at': nowIso,
             })
             .eq('id', conversationId)
-            .or('user_id.eq.$_uid,designer_id.eq.$_uid')
+            .or('user_id.eq.$uid,designer_id.eq.$uid')
             .select('id, last_message_at');
         if ((upd as List).isEmpty) {
           debugPrint(
-              'sendMessage: koala_conversations UPDATE 0 rows (conv=$conversationId, uid=$_uid) — RLS block?');
+              'sendMessage: koala_conversations UPDATE 0 rows (conv=$conversationId, uid=$uid) — RLS block?');
         }
       } catch (e) {
         debugPrint('sendMessage: conv UPDATE failed: $e');

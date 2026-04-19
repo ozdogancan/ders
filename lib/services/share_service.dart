@@ -35,6 +35,8 @@ class ShareService {
         return 'https://www.evlumba.com/tasarimci/$itemId';
       case SavedItemType.product:
         return 'https://www.evlumba.com/urun/$itemId';
+      case SavedItemType.palette:
+        return 'https://www.evlumba.com/palet/$itemId';
     }
   }
 

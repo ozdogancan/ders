@@ -523,6 +523,16 @@ class KoalaAIService {
     };
     if (!disableTools) {
       firstPayload['tools'] = _toolDeclarations;
+      // Fotoğraf akışında modelin ÜRÜN önerirken MUTLAKA search_products'ı
+      // çağırmasını zorla — aksi halde Gemini halüsinasyonla "product_grid"
+      // kartı üretebiliyor (gerçek evlumba ürünü değil). Mode ANY ile
+      // sadece allowed fonksiyon çağrılabilir, halüsinasyonu engeller.
+      firstPayload['tool_config'] = {
+        'function_calling_config': {
+          'mode': 'ANY',
+          'allowed_function_names': ['search_products'],
+        },
+      };
     } else {
       debugPrint('KoalaAI: Image call with tools DISABLED (narrow-intent)');
     }
@@ -649,7 +659,16 @@ class KoalaAIService {
       mergedCards.addAll(imageFunctionCards);
       return KoalaResponse(message: parsed.message, cards: mergedCards);
     }
-    return parsed;
+    // HALÜSİNASYON KORUMASI: search_products/find_designers çağrılmamışsa
+    // Gemini'nin ürettiği product_grid/designer_card kartları halüsinasyondur
+    // (gerçek evlumba verisi değil). Bunları temizle.
+    final safeCards = parsed.cards
+        .where((c) => c.type != 'product_grid' && c.type != 'designer_card' && c.type != 'project_card')
+        .toList();
+    if (safeCards.length != parsed.cards.length) {
+      debugPrint('KoalaAI: Stripped ${parsed.cards.length - safeCards.length} hallucinated product/designer cards (no function call)');
+    }
+    return KoalaResponse(message: parsed.message, cards: safeCards);
   }
 
   String _extractText(String rawBody) {

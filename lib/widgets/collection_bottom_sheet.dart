@@ -73,7 +73,20 @@ class _CollectionBottomSheetState extends State<CollectionBottomSheet> {
       );
     }
 
-    if (mounted) Navigator.pop(context, id);
+    if (!mounted) return;
+    if (id == null) {
+      setState(() => _creating = false);
+      final err = CollectionsService.lastCreateError ?? 'Koleksiyon oluşturulamadı';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(err, maxLines: 3),
+          backgroundColor: KoalaColors.error,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+    Navigator.pop(context, id);
   }
 
   Future<void> _selectCollection(String collectionId) async {

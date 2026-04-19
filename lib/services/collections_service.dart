@@ -11,21 +11,58 @@ class CollectionsService {
   static String? get _uid => FirebaseAuth.instance.currentUser?.uid;
   static SupabaseClient get _db => Supabase.instance.client;
 
+  /// UI'da göstermek için son hata mesajı (create başarısız olursa).
+  static String? lastCreateError;
+
   // ─── OLUŞTUR ─────────────────────────────────────────
   static Future<String?> create({
     required String name,
     String? description,
   }) async {
-    if (_uid == null || !Env.hasSupabaseConfig) return null;
+    lastCreateError = null;
+    if (!Env.hasSupabaseConfig) {
+      lastCreateError = 'Supabase yapılandırması yüklenemedi.';
+      return null;
+    }
+    // Firebase auth hazır değilse 3 sn bekle, yoksa anon sign-in
+    var uid = _uid;
+    if (uid == null) {
+      try {
+        final user = await FirebaseAuth.instance
+            .authStateChanges()
+            .firstWhere((u) => u != null)
+            .timeout(const Duration(seconds: 3));
+        uid = user?.uid;
+      } catch (_) {}
+    }
+    if (uid == null) {
+      try {
+        final cred = await FirebaseAuth.instance
+            .signInAnonymously()
+            .timeout(const Duration(seconds: 8));
+        uid = cred.user?.uid;
+      } catch (e) {
+        lastCreateError = 'Oturum açılamadı: $e';
+        return null;
+      }
+    }
+    if (uid == null) {
+      lastCreateError = 'Firebase oturumu yok.';
+      return null;
+    }
+    try {
+      _db.rest.headers['x-user-id'] = uid;
+    } catch (_) {}
     try {
       final res = await _db.from('collections').insert({
-        'user_id': _uid,
+        'user_id': uid,
         'name': name,
         'description': description,
       }).select('id').single();
       return res['id'] as String;
     } catch (e) {
       debugPrint('CollectionsService.create error: $e');
+      lastCreateError = e.toString();
       return null;
     }
   }

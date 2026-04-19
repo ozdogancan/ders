@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
@@ -1871,13 +1872,46 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
         card.data['title'] as String? ??
         card.data['style_name'] as String? ??
         card.type;
+    // Stabil itemId — aynı title + type'ta tek satır (duplicate engeli).
+    // Palette için: title+stil birleşimi (aynı paleti 2× kaydetmesin).
+    final stableId = '${card.type}_${title.toLowerCase().replaceAll(RegExp(r"\s+"), "_")}';
+
+    // 1) Local SharedPreferences plan kayıt (geriye uyum — mevcut Planlarım ekranı)
     final plan = SavedPlan(
-      id: '${card.type}_${DateTime.now().millisecondsSinceEpoch}',
+      id: stableId,
       type: card.type,
       title: title,
       data: card.data,
     );
     await SavedPlansService.save(plan);
+
+    // 2) Supabase saved_items'a da yaz — "Kaydedilenler" ekranı buradan okuyor.
+    //    palette/color_palette → SavedItemType.palette; diğer tipler design'a
+    //    düşer (Tasarımlar tab'inde görünür). Böylece "Kaydedildi dedi ama
+    //    görmedim" bug'ı permanent çözülür.
+    final isPalette = card.type == 'color_palette' || card.type == 'palette';
+    final type = isPalette ? SavedItemType.palette : SavedItemType.design;
+    // Palette için ilk rengi thumbnail gibi kullan (küçük bir swatch).
+    String? thumb;
+    if (isPalette) {
+      final colors = card.data['colors'];
+      if (colors is List && colors.isNotEmpty) {
+        final first = colors.first;
+        if (first is Map) thumb = (first['hex'] ?? '').toString();
+      }
+    } else {
+      thumb = (card.data['image_url'] ?? card.data['cover_url'] ?? '').toString();
+      if (thumb.isEmpty) thumb = null;
+    }
+    unawaited(SavedItemsService.saveItem(
+      type: type,
+      itemId: stableId,
+      title: title,
+      imageUrl: thumb,
+      subtitle: card.type,
+      extraData: card.data,
+    ));
+
     if (mounted) {
       ScaffoldMessenger.of(context).clearSnackBars();
       ScaffoldMessenger.of(context).showSnackBar(

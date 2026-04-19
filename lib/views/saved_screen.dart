@@ -27,7 +27,7 @@ class _SavedScreenState extends State<SavedScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 4, vsync: this);
+    _tabController = TabController(length: 5, vsync: this);
   }
 
   @override
@@ -60,6 +60,7 @@ class _SavedScreenState extends State<SavedScreen>
           tabAlignment: TabAlignment.start,
           tabs: const [
             Tab(text: 'Tasarımlar'),
+            Tab(text: 'Paletler'),
             Tab(text: 'Tasarımcılar'),
             Tab(text: 'Ürünler'),
             Tab(text: 'Koleksiyonlar'),
@@ -70,6 +71,7 @@ class _SavedScreenState extends State<SavedScreen>
         controller: _tabController,
         children: const [
           _SavedList(type: SavedItemType.design),
+          _SavedList(type: SavedItemType.palette),
           _SavedList(type: SavedItemType.designer),
           _SavedList(type: SavedItemType.product),
           _CollectionsTab(),
@@ -379,6 +381,8 @@ class _SavedListState extends State<_SavedList>
         return 'Mesaj Gönder';
       case SavedItemType.design:
         return 'Tasarımı İncele';
+      case SavedItemType.palette:
+        return 'Paleti Gör';
     }
   }
 
@@ -430,7 +434,105 @@ class _SavedListState extends State<_SavedList>
           );
         }
         break;
+
+      case SavedItemType.palette:
+        // Palette'i bottom sheet'te renkleriyle göster — extra_data içinde
+        // colors listesi saklı, SavedPlans tarafında da mevcut.
+        _showPaletteDetail(item);
+        break;
     }
+  }
+
+  void _showPaletteDetail(Map<String, dynamic> item) {
+    final extra = item['extra_data'] as Map<String, dynamic>?;
+    final colorsRaw = extra?['colors'];
+    final colors = colorsRaw is List ? colorsRaw : const [];
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Container(
+              width: 36, height: 4,
+              margin: const EdgeInsets.only(bottom: 16),
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: KoalaColors.borderMed,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            Text(
+              (item['title'] as String?) ?? 'Palet',
+              style: KoalaText.h3,
+            ),
+            const SizedBox(height: 14),
+            if (colors.isEmpty)
+              const Text('Renk bilgisi yok', style: KoalaText.bodySec)
+            else
+              Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: [
+                  for (final c in colors)
+                    if (c is Map)
+                      _paletteSwatch(
+                        name: (c['name'] ?? '').toString(),
+                        hex: (c['hex'] ?? '').toString(),
+                        usage: (c['usage'] ?? '').toString(),
+                      ),
+                ],
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _paletteSwatch({
+    required String name,
+    required String hex,
+    required String usage,
+  }) {
+    Color? color;
+    if (hex.startsWith('#') && (hex.length == 7 || hex.length == 9)) {
+      try {
+        color = Color(int.parse(hex.substring(1), radix: 16) | 0xFF000000);
+      } catch (_) {}
+    }
+    return SizedBox(
+      width: 100,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 100,
+            height: 70,
+            decoration: BoxDecoration(
+              color: color ?? KoalaColors.surfaceAlt,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: KoalaColors.borderMed),
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(name.isEmpty ? hex : name,
+              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis),
+          if (usage.isNotEmpty)
+            Text(usage,
+                style: const TextStyle(fontSize: 10, color: KoalaColors.textSec),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis),
+        ],
+      ),
+    );
   }
 
   Future<void> _openDesignerChat(String designerId, String name) async {
@@ -464,6 +566,8 @@ class _SavedListState extends State<_SavedList>
         return Icons.chat_bubble_outline_rounded;
       case SavedItemType.design:
         return Icons.open_in_new_rounded;
+      case SavedItemType.palette:
+        return Icons.palette_rounded;
     }
   }
 
@@ -475,6 +579,8 @@ class _SavedListState extends State<_SavedList>
         return 'Henüz kaydettiğin tasarımcı yok';
       case SavedItemType.product:
         return 'Henüz kaydettiğin ürün yok';
+      case SavedItemType.palette:
+        return 'Henüz kaydettiğin palet yok';
     }
   }
 
@@ -486,6 +592,8 @@ class _SavedListState extends State<_SavedList>
         return 'Tasarımcı profillerinde kalp ikonuna bas';
       case SavedItemType.product:
         return 'AI önerdiği ürünleri kaydet';
+      case SavedItemType.palette:
+        return 'AI önerdiği renk paletlerini kaydet';
     }
   }
 
@@ -497,6 +605,8 @@ class _SavedListState extends State<_SavedList>
         return Icons.person_rounded;
       case SavedItemType.product:
         return Icons.shopping_bag_rounded;
+      case SavedItemType.palette:
+        return Icons.palette_rounded;
     }
   }
 
@@ -695,7 +805,19 @@ class _CollectionsTabState extends State<_CollectionsTab> {
     );
     if (name == null || name.isEmpty) return;
     final id = await CollectionsService.create(name: name);
-    if (id != null) _load();
+    if (!mounted) return;
+    if (id != null) {
+      _load();
+    } else {
+      final err = CollectionsService.lastCreateError ?? 'Koleksiyon oluşturulamadı';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(err, maxLines: 3),
+          backgroundColor: KoalaColors.error,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
   }
 
   @override

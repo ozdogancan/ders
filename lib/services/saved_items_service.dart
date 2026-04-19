@@ -9,7 +9,7 @@ import 'analytics_service.dart';
 import 'cache_service.dart';
 
 /// Kaydedilen öğe tipleri
-enum SavedItemType { design, designer, product }
+enum SavedItemType { design, designer, product, palette }
 
 /// Supabase saved_items tablosuyla CRUD
 class SavedItemsService {
@@ -165,12 +165,12 @@ class SavedItemsService {
   // ─── SAYILAR (profil sayfası için) ───────────────────
   static Future<Map<String, int>> getCounts() async {
     if (_uid == null || !Env.hasSupabaseConfig) {
-      return {'design': 0, 'designer': 0, 'product': 0};
+      return {'design': 0, 'designer': 0, 'product': 0, 'palette': 0};
     }
     final cached = CacheService.get<Map<String, int>>('saved_counts_$_uid');
     if (cached != null) return cached;
     try {
-      // 3 COUNT sorgusu paralel — sequential'dan 3x hızlı (~400-600ms kazanç)
+      // 4 COUNT sorgusu paralel — sequential'dan 4x hızlı
       final results = await Future.wait([
         _db
             .from('saved_items')
@@ -190,16 +190,23 @@ class SavedItemsService {
             .eq('user_id', _uid!)
             .eq('item_type', 'product')
             .count(CountOption.exact),
+        _db
+            .from('saved_items')
+            .select()
+            .eq('user_id', _uid!)
+            .eq('item_type', 'palette')
+            .count(CountOption.exact),
       ]);
       final counts = {
         'design': results[0].count,
         'designer': results[1].count,
         'product': results[2].count,
+        'palette': results[3].count,
       };
       CacheService.set('saved_counts_$_uid', counts, duration: const Duration(minutes: 2));
       return counts;
     } catch (e) {
-      return {'design': 0, 'designer': 0, 'product': 0};
+      return {'design': 0, 'designer': 0, 'product': 0, 'palette': 0};
     }
   }
 
