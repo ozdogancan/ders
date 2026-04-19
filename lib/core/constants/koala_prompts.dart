@@ -10,6 +10,7 @@ class KoalaPrompts {
     String? dislikedStyles,
     String? dislikedColors,
     String? likedDetailsText,
+    String? tasteHint,
   }) {
     final parts = <String>[];
     if (style != null && style.isNotEmpty) parts.add('- Tercih ettiği stil: $style');
@@ -22,7 +23,7 @@ class KoalaPrompts {
     if (dislikedColors != null && dislikedColors.isNotEmpty) {
       parts.add('- SEVMEDİĞİ renkler: $dislikedColors');
     }
-    if (parts.isEmpty) return '';
+    if (parts.isEmpty && (tasteHint == null || tasteHint.isEmpty)) return '';
     final buffer = StringBuffer('''
 
 KULLANICI PROFİLİ (onboarding'den):
@@ -37,6 +38,14 @@ Sevmediği stil ve renkleri önerme.
 BEĞENDİĞİ MEKANLAR (stil keşfinden):
 $likedDetailsText
 Bu mekanların ortak özelliklerini (renk, doku, atmosfer) önerilerinde referans al.
+''');
+    }
+    if (tasteHint != null && tasteHint.isNotEmpty) {
+      buffer.write('''
+
+SWIPE TERCİH PROFİLİ (Tarzını Keşfet'ten, arka planda öğrenildi):
+$tasteHint
+Bu bilgi bir ipucu — kullanıcının mevcut mesajı her zaman önceliklidir.
 ''');
     }
     return buffer.toString();

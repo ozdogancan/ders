@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import '../core/config/env.dart';
 import '../core/constants/koala_prompts.dart';
 import 'koala_tool_handler.dart';
+import 'taste_profile_service.dart';
 
 /// Card in Koala's response
 class KoalaCard {
@@ -240,6 +241,27 @@ class KoalaAIService {
     };
   }
 
+  // Cached taste profile — refreshed once per message send (≤10ms overhead).
+  String? _tasteHint;
+  DateTime? _tasteHintAt;
+
+  /// Warm the taste hint cache if stale (>60s). Safe to await each ask.
+  Future<void> _refreshTasteHintIfStale() async {
+    final now = DateTime.now();
+    if (_tasteHintAt != null &&
+        now.difference(_tasteHintAt!).inSeconds < 60) {
+      return;
+    }
+    try {
+      final profile = await TasteProfileService.computeProfile();
+      _tasteHint = profile.toPromptHint();
+      _tasteHintAt = now;
+    } catch (_) {
+      _tasteHint = null;
+      _tasteHintAt = now;
+    }
+  }
+
   /// Injects user profile into any prompt
   String _withProfile(String prompt) {
     final block = KoalaPrompts.userProfileBlock(
@@ -250,6 +272,7 @@ class KoalaAIService {
       dislikedStyles: _userPrefs['dislikedStyles'],
       dislikedColors: _userPrefs['dislikedColors'],
       likedDetailsText: _userPrefs['likedDetailsText'],
+      tasteHint: _tasteHint,
     );
     if (block.isEmpty) return prompt;
     return prompt + block;
@@ -263,6 +286,7 @@ class KoalaAIService {
     Uint8List? photo,
     List<Map<String, String>>? history,
   }) async {
+    await _refreshTasteHintIfStale();
     String prompt;
 
     switch (intent) {

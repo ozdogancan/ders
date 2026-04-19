@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 
 import '../core/config/env.dart';
 import 'evlumba_live_service.dart';
+import 'taste_profile_service.dart';
 
 /// Gemini Function Calling handler.
 /// AI'dan gelen tool çağrılarını alıp evlumba DB'den gerçek veri döndürür.
@@ -398,8 +399,22 @@ class KoalaToolHandler {
       final city = args['city'] as String?;
       final query = args['query'] as String?;
       final roomType = (args['room_type'] as String?)?.trim();
-      final style = (args['style'] as String?)?.trim();
+      var style = (args['style'] as String?)?.trim();
       final limit = (args['limit'] as num?)?.toInt().clamp(1, 5) ?? 3;
+
+      // Style arg boş ve query yoksa → swipe'tan öğrenilen dominant stili kullan.
+      // Sadece güçlü sinyal varsa döner (belirsizse null → dayatma yok).
+      if ((style == null || style.isEmpty) &&
+          (query == null || query.isEmpty)) {
+        try {
+          final profile = await TasteProfileService.computeProfile();
+          final fb = profile.fallbackStyle();
+          if (fb != null && fb.isNotEmpty) {
+            style = fb;
+            debugPrint('KoalaToolHandler: taste fallback style=$fb');
+          }
+        } catch (_) {}
+      }
 
       List<Map<String, dynamic>> designers = [];
 

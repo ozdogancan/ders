@@ -21,6 +21,7 @@ import '../services/evlumba_live_service.dart';
 import '../services/messaging_service.dart';
 import '../services/saved_items_service.dart';
 import '../services/analytics_service.dart';
+import '../services/taste_profile_service.dart';
 
 class StyleDiscoveryLiveScreen extends StatefulWidget {
   const StyleDiscoveryLiveScreen({super.key});
@@ -228,6 +229,13 @@ class _StyleDiscoveryLiveScreenState extends State<StyleDiscoveryLiveScreen>
     _exitTargetDy = _dragDy + 40;
     _animatingExit = true;
     _exitCtrl.forward(from: 0);
+
+    // Taste profile sinyali — arka planda, swipe animasyonunu bloklamaz.
+    if (liked) {
+      unawaited(TasteProfileService.recordLike(card));
+    } else {
+      unawaited(TasteProfileService.recordPass(card));
+    }
 
     if (liked) {
       unawaited(SavedItemsService.saveItem(
