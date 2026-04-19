@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' hide User;
@@ -442,15 +443,11 @@ class _ChatListScreenV1State extends State<ChatListScreenV1> {
           ? const ShimmerList(itemCount: 6, cardHeight: 72)
           : _hasError
               ? ErrorState(onRetry: _load)
-              : (_conversations.isEmpty &&
-                      _aiChats.isEmpty &&
-                      _searchQuery.isEmpty)
-                  ? _buildEmpty()
-                  : RefreshIndicator(
-                      onRefresh: _manualSync,
-                      color: KoalaColors.accent,
-                      child: _buildListBody(),
-                    ),
+              : RefreshIndicator(
+                  onRefresh: _manualSync,
+                  color: KoalaColors.accent,
+                  child: _buildListBody(),
+                ),
     );
   }
 
@@ -526,6 +523,7 @@ class _ChatListScreenV1State extends State<ChatListScreenV1> {
 
     // Normal mode — compact "hızlı erişim" services + sohbetler
     // (Koala AI panelinin büyük CTA'sı → bottom FAB'a taşındı)
+    final isTotallyEmpty = _aiChats.isEmpty && _conversations.isEmpty;
     return ListView(
       padding: const EdgeInsets.fromLTRB(
         KoalaSpacing.lg,
@@ -544,7 +542,85 @@ class _ChatListScreenV1State extends State<ChatListScreenV1> {
           _buildSoftSeparator(),
           ..._conversations.map(_buildConversationTile),
         ],
+        if (isTotallyEmpty) ...[
+          const SizedBox(height: KoalaSpacing.xl),
+          _buildEmptyPlaceholder(),
+        ],
       ],
+    );
+  }
+
+  /// Hiç mesaj/AI sohbeti yoksa services grid'in altında zarif bir
+  /// placeholder — büyük hero yerine ince, ince satırlı yönlendirme.
+  Widget _buildEmptyPlaceholder() {
+    return GestureDetector(
+      onTap: () {
+        HapticFeedback.lightImpact();
+        context.push('/style');
+      },
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        padding: const EdgeInsets.symmetric(
+          horizontal: 18,
+          vertical: 22,
+        ),
+        decoration: BoxDecoration(
+          color: KoalaColors.surface,
+          borderRadius: BorderRadius.circular(KoalaRadius.lg),
+          border: Border.all(
+            color: KoalaColors.accentDeep.withValues(alpha: 0.10),
+          ),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: KoalaColors.accentSoft,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(
+                Icons.auto_awesome_rounded,
+                size: 20,
+                color: KoalaColors.accentDeep,
+              ),
+            ),
+            const SizedBox(width: 14),
+            const Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Henüz bir sohbet yok',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: KoalaColors.ink,
+                      letterSpacing: -0.1,
+                    ),
+                  ),
+                  SizedBox(height: 3),
+                  Text(
+                    'Tarzını keşfet, beğendiğin tasarımı sor.',
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      color: KoalaColors.textTer,
+                      height: 1.35,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            const Icon(
+              Icons.chevron_right_rounded,
+              size: 22,
+              color: KoalaColors.textTer,
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -667,6 +743,7 @@ class _ChatListScreenV1State extends State<ChatListScreenV1> {
     context.go('/');
   }
 
+  // ignore: unused_element
   Widget _buildEmpty() {
     return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(horizontal: KoalaSpacing.lg),

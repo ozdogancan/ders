@@ -87,13 +87,25 @@ class MessagingService {
     String? contextId,
     String? contextTitle,
   }) async {
-    if (_uid == null || !Env.hasSupabaseConfig) return null;
+    if (!Env.hasSupabaseConfig) return null;
+    // Cold-start repro: kullanıcı uygulamayı ilk kez açtığında anonim Firebase
+    // auth henüz tamamlanmadan "Sor" butonuna basarsa _uid=null → fonksiyon
+    // anında null dönüp "Sohbet başlatılamadı" snackbar'ı tetikliyordu.
+    // _waitForUid anonim auth'un tamamlanması için kısa bir pencere bırakır.
+    final uid = await _waitForUid();
+    if (uid == null) return null;
+    // x-user-id header'ı RLS için kritik — authStateChanges callback'i ana
+    // main.dart'ta header'ı güncelliyor ama burada paralel yarıştaysak
+    // bir kez daha emniyete al.
+    try {
+      _db.rest.headers['x-user-id'] = uid;
+    } catch (_) {}
     try {
       // Onceden var mi kontrol et
       final existing = await _db
           .from('koala_conversations')
           .select()
-          .eq('user_id', _uid!)
+          .eq('user_id', uid)
           .eq('designer_id', designerId)
           .maybeSingle();
 
@@ -101,7 +113,7 @@ class MessagingService {
 
       // Yeni olustur — mesaj göndermeden, kullanıcıya bırak
       final res = await _db.from('koala_conversations').insert({
-        'user_id': _uid,
+        'user_id': uid,
         'designer_id': designerId,
         'title': contextTitle,
       }).select().single();
