@@ -72,6 +72,7 @@ KRİTİK KURALLAR:
    doğal bir şekilde şunu öner: "Bu konuda Evlumba Design uzmanlarımız 1 saat içinde detaylı dönüş yapabilir. Mesajlar ekranından ulaşabilirsin."
    AMA bunu her sohbette yapma, sadece gerçekten profesyonel desteğe ihtiyaç olduğunda organik olarak öner. Asla zorlayıcı olma.
 8. KLİŞE GİRİŞ YASAK: "Harika tercih!", "İşte önerilerim!", "Tabii ki!", "Süper!", "Hemen hazırlıyorum" gibi kalıp cümlelerle ASLA başlama. Kullanıcının son mesajına özgün, doğal bir referansla başla.
+9. İLK KELİME KURALI (mutlak): Mesajın ilk kelimesi ASLA şunlardan biri olamaz → "İşte", "Harika", "Tabii", "Elbette", "Tamam", "Peki", "Süper", "Muhteşem", "Mükemmel", "Hemen". Doğrudan içerikle, kullanıcının sorusuna özgün bir referansla başla. Bu kural TÜM intent'ler için geçerli (designer_match, designer_result, photo_analysis, free_chat, budget, vb. dahil).
 
 RESPONSE FORMAT — MUTLAKA BU JSON:
 {
@@ -250,31 +251,49 @@ SADECE JSON.
 ''';
 
   /// Kullanıcı TASARIMCI kartına bastı
-  static String designerMatch() => '''
+  static String designerMatch({String? room, String? style, String? city}) {
+    final roomLine = (room != null && room.isNotEmpty)
+        ? 'Oda tipi: "$room" — search_designers çağrısına `room_type: "$room"` MUTLAKA geçir.\n'
+        : '';
+    final styleLine = (style != null && style.isNotEmpty)
+        ? 'Stil: "$style" — search_designers çağrısına `style: "$style"` geçir.\n'
+        : '';
+    final cityLine = (city != null && city.isNotEmpty)
+        ? 'Şehir: "$city" — `city: "$city"` ekle.\n'
+        : '';
+    return '''
 ALLOWED_CARDS = [designer_card]
 
 Kullanıcı tasarımcı arıyor.
-
+$roomLine$styleLine$cityLine
 MUTLAKA search_designers fonksiyonunu çağır. ASLA tasarımcı bilgisi uydurma.
+KURAL: Çağrıya `min_projects: 2` ve `limit: 3` ekle (kaliteli portfolyolu min 2-3 tasarımcı dönsün).
 
-message: Max 1 cümle, özgün. KLİŞE GİRİŞ YASAK ('Harika', 'İşte', 'Tabii ki' vb. cümleye ASLA bunlarla başlama). UZUN açıklama, ipucu, tavsiye YAZMA. Kartlar bilgiyi gösteriyor.
+message: Max 1 cümle, özgün. KLİŞE GİRİŞ YASAK ('Harika', 'İşte', 'Tabii ki' vb. cümleye ASLA bunlarla başlama — İLK KELİME KURALI'na uy). UZUN açıklama, ipucu, tavsiye YAZMA. Kartlar bilgiyi gösteriyor.
 
 SADECE JSON.
 ''';
+  }
 
   /// Tasarımcı sonuç — function calling ile gerçek veri
-  static String designerResult(String style, String cityOrBudget) => '''
+  static String designerResult(String style, String cityOrBudget, {String? room}) {
+    final roomLine = (room != null && room.isNotEmpty)
+        ? 'Oda tipi: "$room" — search_designers çağrısına `room_type: "$room"` MUTLAKA geçir.\n'
+        : '';
+    return '''
 ALLOWED_CARDS = [designer_card]
 
 Kullanıcı "$style" tarzında tasarımcı arıyor. Filtre: "$cityOrBudget".
-
+$roomLine
 MUTLAKA search_designers fonksiyonunu çağır. ASLA tasarımcı bilgisi uydurma.
+KURAL: Çağrıya `style: "$style"`, `min_projects: 2`, `limit: 3` ekle.
 
 message: Max 1 cümle, özgün. Sadece kaç tasarımcı bulunduğunu ve neden uygun olduklarını KISA söyle.
-KLİŞE GİRİŞ YASAK ('Harika', 'İşte', 'Tabii ki' vb.). UZUN açıklama, ipucu, tavsiye YAZMA.
+KLİŞE GİRİŞ YASAK ('Harika', 'İşte', 'Tabii ki' vb. — İLK KELİME KURALI'na uy). UZUN açıklama, ipucu, tavsiye YAZMA.
 
 SADECE JSON.
 ''';
+  }
 
   /// Kullanıcı BÜTÇE kartına bastı
   static String budgetPlan() => '''
@@ -371,6 +390,11 @@ Eğer ODA fotoğrafıysa:
 3. Ürün önerisi İSTENDİYSE search_products function call yap; AKSİ HALDE "product_grid" ÜRETME.
 4. "quick_tips" — 3 iyileştirme ipucu
 5. "question_chips" — "Ne yapmak istersin?" seçenekleri: ["Bu odayı yeniden tasarla", "Renk paletini değiştir", "Bu oda için uzman öner", "Farklı bir stil dene"]
+
+ODA TİPİ TESPİTİ (kritik):
+- Fotoğraftaki odanın tipini ALGILA (salon/oturma odası, yatak odası, mutfak, banyo, çocuk odası, ofis, antre, balkon).
+- style_analysis kartına MUTLAKA `"room_type": "<algılanan_oda>"` alanını ekle (snake_case: "salon", "yatak_odasi", "mutfak", "banyo", "cocuk_odasi", "ofis", "antre", "balkon").
+- search_products veya search_designers çağırıyorsan `room_type` parametresine algılanan odayı MUTLAKA geçir. search_designers'a ayrıca `min_projects: 2` ekle.
 
 Eğer MOBİLYA/OBJE fotoğrafıysa:
 1. "style_analysis" — Bu objenin stili

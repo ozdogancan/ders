@@ -1222,6 +1222,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
               // Direkt designerMatch intent'i — search_designers function call'ını garanti eder
               final ctx = _photoAnalysisContext;
               final style = ctx?['style'] ?? 'modern';
+              final room = ctx?['room'];
               const userText = 'Bu oda için uzman tasarımcı öner';
               setState(() {
                 _msgs.add(_Msg(role: 'user', text: userText));
@@ -1233,7 +1234,10 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
               _scrollDown();
               _sendToAIWithIntent(
                 intent: KoalaIntent.designerMatch,
-                params: {'style': style},
+                params: {
+                  'style': style,
+                  if (room != null && room.isNotEmpty) 'room': room,
+                },
               );
             }),
             _quickChip(Icons.auto_awesome_rounded, 'Stil analizi',

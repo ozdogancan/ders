@@ -334,7 +334,24 @@ class KoalaToolHandler {
         projectType: roomType,
       );
 
-      final result = projects.map((p) {
+      final result = projects.where((p) {
+        // Test/placeholder başlıkları UI'dan gizle.
+        final rawTitle = (p['title'] ?? '').toString().trim();
+        if (_isLowQualityProjectTitle(rawTitle)) {
+          // Başlık kalitesizse bile eğer `project_type` anlamlıysa
+          // görselleri "Oturma Odası" gibi kategori etiketiyle gösterilebilir.
+          // Yine de tamamen boş / 1-2 karakter ise at.
+          final t = rawTitle;
+          if (t.length < 2) return false;
+          // test prefix'li başlıklar (abc evi...) tamamen dışlanır.
+          final lower = t.toLowerCase();
+          for (final pref in ['abc', 'test', 'deneme', 'xxx', 'qwe', 'asd',
+              'sample', 'demo', 'lorem', 'aaa', 'zzz']) {
+            if (lower.startsWith(pref)) return false;
+          }
+        }
+        return true;
+      }).map((p) {
         final images = (p['designer_project_images'] as List?) ?? [];
         final firstImage =
             images.isNotEmpty ? images.first['image_url'] : null;
@@ -401,6 +418,7 @@ class KoalaToolHandler {
       final roomType = (args['room_type'] as String?)?.trim();
       var style = (args['style'] as String?)?.trim();
       final limit = (args['limit'] as num?)?.toInt().clamp(1, 5) ?? 3;
+      final minProjects = (args['min_projects'] as num?)?.toInt().clamp(0, 10) ?? 2;
 
       // Style arg boş ve query yoksa → swipe'tan öğrenilen dominant stili kullan.
       // Sadece güçlü sinyal varsa döner (belirsizse null → dayatma yok).
@@ -496,16 +514,19 @@ class KoalaToolHandler {
         };
       }
 
-      // Her tasarımcıya portfolio görselleri ekle. Eskiden limit=3'tü;
-      // bazı projelerin görseli olmadığı için "Bilgehan: 3 proje → 2 geliyor"
-      // bug'ı oluşuyordu. 12'ye çıkardık; UI'da kart max 3 thumb gösterip
-      // geri kalanı "+N Tümünü gör" overlay ile profile yönlendiriyor.
-      final result = await Future.wait(
-        designers.take(limit).map((d) async {
+      // Her tasarımcıya portfolio görselleri ekle. Aday havuzu limit*2 —
+      // kalite filtresi (test data ayıkla + min_projects) sonrasında limit'e
+      // kırpacağız. Eskiden limit=3'tü; bazı projelerin görseli olmadığı için
+      // "Bilgehan: 3 proje → 2 geliyor" bug'ı oluşuyordu. 12'ye çıkardık;
+      // UI'da kart max 3 thumb gösterip geri kalanı "+N Tümünü gör" overlay
+      // ile profile yönlendiriyor.
+      final enriched = await Future.wait(
+        designers.take(limit * 2).map((d) async {
           final designerId = (d['id'] ?? '').toString();
           List<String> portfolioImages = [];
           List<Map<String, dynamic>> portfolioProjects = [];
           int totalProjects = 0;
+          int validProjects = 0;
           if (designerId.isNotEmpty) {
             try {
               final projects = await EvlumbaLiveService.getProjects(
@@ -514,6 +535,9 @@ class KoalaToolHandler {
               );
               totalProjects = projects.length;
               for (final p in projects) {
+                final rawTitle = (p['title'] ?? '').toString().trim();
+                // Test/placeholder proje filtresi — client-side kalite.
+                if (_isLowQualityProjectTitle(rawTitle)) continue;
                 final images = (p['designer_project_images'] as List?) ?? [];
                 final firstImg = images.isNotEmpty
                     ? images.first['image_url']?.toString()
@@ -526,10 +550,11 @@ class KoalaToolHandler {
                   if (cover != null && cover.isNotEmpty) img = cover;
                 }
                 if (img != null) {
+                  validProjects++;
                   portfolioImages.add(img);
                   portfolioProjects.add({
                     'id': (p['id'] ?? '').toString(),
-                    'title': (p['title'] ?? '').toString(),
+                    'title': rawTitle,
                     'project_type': (p['project_type'] ?? '').toString(),
                     'cover_image_url': img,
                     'image_url': img,
@@ -547,11 +572,34 @@ class KoalaToolHandler {
             'avatar_url': d['avatar_url'] ?? '',
             'business_name': d['business_name'] ?? '',
             'total_projects': totalProjects,
+            '_valid_projects': validProjects,
             if (portfolioImages.isNotEmpty) 'portfolio_images': portfolioImages,
             if (portfolioProjects.isNotEmpty) 'portfolio_projects': portfolioProjects,
           };
         }),
       );
+
+      // Progressive relaxation: önce min_projects eşiğinde filtrele,
+      // yeterli sonuç yoksa eşiği 1'e düşür.
+      List<Map<String, dynamic>> filtered = enriched
+          .where((d) => (d['_valid_projects'] as int) >= minProjects)
+          .toList();
+      if (filtered.length < 2 && minProjects > 1) {
+        debugPrint('KoalaToolHandler: relaxing min_projects $minProjects→1');
+        filtered = enriched
+            .where((d) => (d['_valid_projects'] as int) >= 1)
+            .toList();
+      }
+      // Hâlâ az ise portfolyosuz tasarımcıları da ekle (son çare, yine de listele).
+      if (filtered.isEmpty) {
+        filtered = List<Map<String, dynamic>>.from(enriched);
+      }
+
+      final result = filtered.take(limit).map((d) {
+        final copy = Map<String, dynamic>.from(d);
+        copy.remove('_valid_projects');
+        return copy;
+      }).toList();
 
       return {'designers': result, 'count': result.length};
     } catch (e) {
@@ -598,6 +646,31 @@ class KoalaToolHandler {
       debugPrint('KoalaToolHandler _compareProducts error: $e');
       return {'comparison': [], 'error': e.toString()};
     }
+  }
+
+  /// Test/placeholder proje başlığı mı? DB'de "abc evi", "test", "deneme"
+  /// gibi geliştirici test verileri olabiliyor — bunları UI'dan gizle.
+  /// Kural: başlık 3 karakterden kısa, veya belirgin test prefix'leri
+  /// ("abc", "test", "deneme", "xxx", "qwe", "asd", "sample", "demo") ile
+  /// başlıyor, veya tamamı rakam/karmaşa ise düşük kaliteli say.
+  static bool _isLowQualityProjectTitle(String title) {
+    final t = title.trim();
+    if (t.isEmpty) return true;
+    if (t.length < 4) return true;
+    final lower = t.toLowerCase();
+    const testPrefixes = [
+      'abc', 'test', 'deneme', 'xxx', 'qwe', 'asd', 'sample', 'demo',
+      'lorem', 'aaa', 'bbb', 'ccc', 'ddd', 'eee', 'zzz', 'fff',
+    ];
+    for (final prefix in testPrefixes) {
+      if (lower.startsWith(prefix)) return true;
+    }
+    // Tamamı rakam/tek harf karışımı — "a1", "12 ab" gibi
+    if (RegExp(r'^[\d\s]+$').hasMatch(t)) return true;
+    // Harf sayısı 3'ten az (anlamlı kelime yok)
+    final letterCount = RegExp(r'[A-Za-zÇĞİıÖŞÜçğıöşü]').allMatches(t).length;
+    if (letterCount < 4) return true;
+    return false;
   }
 
   /// Sorgu bir oda adı mı? Eğer öyleyse product_title aramasına ekleme,

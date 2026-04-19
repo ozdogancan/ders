@@ -180,6 +180,11 @@ class KoalaAIService {
                     'endüstriyel, boho, rustik, art_deco vb. Kullanıcının fotoğraf '
                     'analizinden ya da tercihinden bilinen stili geçir.',
               },
+              'min_projects': {
+                'type': 'integer',
+                'description': 'Tasarımcının portfolyosunda en az kaç geçerli proje olmalı. '
+                    'Kalite filtresi — varsayılan 2. Yeterli sonuç dönmezse 1\'e düşebilir.',
+              },
               'limit': {
                 'type': 'integer',
                 'description': 'Kaç tasarımcı dönsün (varsayılan 3, max 5)',
@@ -360,9 +365,14 @@ class KoalaAIService {
           prompt = KoalaPrompts.designerResult(
             params['style']!,
             params['budget'] ?? params['city'] ?? 'tümü',
+            room: params['room'],
           );
         } else {
-          prompt = KoalaPrompts.designerMatch();
+          prompt = KoalaPrompts.designerMatch(
+            room: params['room'],
+            style: params['style'],
+            city: params['city'],
+          );
         }
       case KoalaIntent.budgetPlan:
         if (params.containsKey('room') && params.containsKey('budget')) {
@@ -1421,6 +1431,33 @@ class KoalaAIService {
     clean = clean.replaceAll(RegExp(r'\\u[0-9a-fA-F]{4}'), '');
     // Birden fazla boşluk/newline temizle
     clean = clean.replaceAll(RegExp(r'\s{3,}'), '  ');
+    // KLİŞE GİRİŞ FİLTRESİ — prompt kuralına ek güvenlik.
+    // Mesajın ilk kelimesi klişe filler ise tüm ilk cümleyi at; arta kalan boşsa
+    // sadece ilk kelimeyi at ve kalanı Büyük harfle başlat.
+    const fillers = {
+      'işte', 'harika', 'tabii', 'elbette', 'tamam', 'peki', 'süper',
+      'muhteşem', 'mükemmel', 'hemen',
+    };
+    final stripped = clean.replaceFirst(RegExp(r'^[\s"\u{201C}\u{201D}]+', unicode: true), '');
+    final firstWordMatch = RegExp(r'^([A-Za-zÇĞİıÖŞÜçğıöşü]+)').firstMatch(stripped);
+    if (firstWordMatch != null) {
+      final firstWord = firstWordMatch.group(1)!.toLowerCase();
+      if (fillers.contains(firstWord)) {
+        // İlk cümle sonunu bul: `.`, `!`, `?`
+        final sentEnd = RegExp(r'[.!?]\s+').firstMatch(stripped);
+        String rest;
+        if (sentEnd != null && sentEnd.end < stripped.length) {
+          rest = stripped.substring(sentEnd.end).trim();
+        } else {
+          rest = stripped.substring(firstWordMatch.end).trim();
+          // Başındaki virgül/noktalama temizle
+          rest = rest.replaceFirst(RegExp(r'^[,;:\s]+'), '');
+        }
+        if (rest.isNotEmpty) {
+          clean = rest[0].toUpperCase() + rest.substring(1);
+        }
+      }
+    }
     return clean;
   }
 
