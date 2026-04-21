@@ -1,0 +1,129 @@
+@import "tailwindcss";
+
+/* ============================================
+   KOALA DESIGN TOKENS
+   Flutter KoalaTokens → CSS Custom Properties
+   ============================================ */
+
+:root {
+  /* --- Backgrounds --- */
+  --k-bg: #F6F1EB;
+  --k-surface: #FFFFFF;
+  --k-surface-alt: #F0EDE8;
+
+  /* --- Brand: Purple (Accent) --- */
+  --k-accent: #7C6EF2;
+  --k-accent-dark: #5A4DBF;
+  --k-accent-light: #EEDEFE;
+  --k-accent-soft: #F3F0FF;
+
+  /* --- Brand: Green (CTA / Positive) --- */
+  --k-green: #1D9E75;
+  --k-green-dark: #0F6E56;
+  --k-green-light: #E1F5EE;
+
+  /* --- Text --- */
+  --k-text: #1A1A1A;
+  --k-text-sec: #8E8E93;
+  --k-text-ter: #AEAEB2;
+  --k-text-inv: #FFFFFF;
+
+  /* --- Borders & Dividers --- */
+  --k-border: rgba(0, 0, 0, 0.06);
+  --k-border-light: rgba(0, 0, 0, 0.04);
+  --k-divider: rgba(0, 0, 0, 0.05);
+
+  /* --- Semantic --- */
+  --k-error: #E53935;
+  --k-warning: #F5A623;
+  --k-success: #1D9E75;
+
+  /* --- Spacing --- */
+  --k-space-xs: 4px;
+  --k-space-sm: 8px;
+  --k-space-md: 12px;
+  --k-space-lg: 16px;
+  --k-space-xl: 20px;
+  --k-space-2xl: 24px;
+  --k-space-3xl: 32px;
+
+  /* --- Radius --- */
+  --k-radius-xs: 8px;
+  --k-radius-sm: 12px;
+  --k-radius-md: 16px;
+  --k-radius-lg: 20px;
+  --k-radius-xl: 28px;
+  --k-radius-pill: 100px;
+
+  /* --- Shadows --- */
+  --k-shadow-card: 0 2px 12px rgba(0, 0, 0, 0.04);
+  --k-shadow-elevated: 0 8px 24px rgba(0, 0, 0, 0.08);
+  --k-shadow-accent-glow: 0 8px 32px rgba(124, 110, 242, 0.25);
+  --k-shadow-green-glow: 0 6px 20px rgba(29, 158, 117, 0.25);
+
+  /* --- Typography sizes --- */
+  --k-text-brand: 44px;
+  --k-text-h1: 24px;
+  --k-text-h2: 20px;
+  --k-text-h3: 16px;
+  --k-text-h4: 15px;
+  --k-text-body: 14px;
+  --k-text-label: 13px;
+  --k-text-label-sm: 11px;
+  --k-text-caption: 12px;
+  --k-text-button: 15px;
+  --k-text-price: 22px;
+}
+
+/* --- Utility: hide scrollbar --- */
+.scrollbar-hide::-webkit-scrollbar { display: none; }
+.scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* --- Base styles --- */
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: var(--font-inter), system-ui, -apple-system, sans-serif;
+  color: var(--k-text);
+  background: var(--k-bg);
+  font-size: var(--k-text-body);
+  line-height: 1.55;
+}
+
+/* --- Tailwind v4 @theme extension --- */
+@theme {
+  /* Colors */
+  --color-k-bg: #F6F1EB;
+  --color-k-surface: #FFFFFF;
+  --color-k-surface-alt: #F0EDE8;
+  --color-k-accent: #7C6EF2;
+  --color-k-accent-dark: #5A4DBF;
+  --color-k-accent-light: #EEDEFE;
+  --color-k-accent-soft: #F3F0FF;
+  --color-k-green: #1D9E75;
+  --color-k-green-dark: #0F6E56;
+  --color-k-green-light: #E1F5EE;
+  --color-k-text: #1A1A1A;
+  --color-k-text-sec: #8E8E93;
+  --color-k-text-ter: #AEAEB2;
+  --color-k-text-inv: #FFFFFF;
+  --color-k-error: #E53935;
+  --color-k-warning: #F5A623;
+  --color-k-success: #1D9E75;
+
+  /* Border radius */
+  --radius-k-xs: 8px;
+  --radius-k-sm: 12px;
+  --radius-k-md: 16px;
+  --radius-k-lg: 20px;
+  --radius-k-xl: 28px;
+  --radius-k-pill: 100px;
+
+  /* Shadows */
+  --shadow-k-card: 0 2px 12px rgba(0, 0, 0, 0.04);
+  --shadow-k-elevated: 0 8px 24px rgba(0, 0, 0, 0.08);
+  --shadow-k-accent-glow: 0 8px 32px rgba(124, 110, 242, 0.25);
+  --shadow-k-green-glow: 0 6px 20px rgba(29, 158, 117, 0.25);
+}
