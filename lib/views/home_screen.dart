@@ -26,6 +26,7 @@ import 'designers_screen.dart';
 import 'product_entry_screen.dart';
 import 'saved_screen.dart';
 import '../widgets/style_discovery_pull.dart';
+import '../widgets/style_discovery_strip.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key, this.openStyleDiscovery = false});
@@ -739,6 +740,27 @@ class _HomeScreenState extends State<HomeScreen>
 
             const SizedBox(height: 16),
                   ],
+                ),
+              ),
+            ),
+
+            // ─── Style Discovery Strip — 6 oda kartı, auto-scroll ───
+            // Pill'in hemen üstünde yaşıyor. Tap → pull'un aynı open akışı
+            // tetikleniyor (login/guest dallanması, fade transition vs. hep
+            // StyleDiscoveryPull tarafında). Yukarı swipe page-level
+            // Listener'dan geçtiği için strip ekstra gesture kodu taşımıyor.
+            _staggered(
+              6,
+              Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: StyleDiscoveryStrip(
+                  onCardTap: (category) async {
+                    // Prefs'e kategori yazıp live screen'in initState'te
+                    // okumasını sağlıyoruz — deck filtreli açılsın.
+                    await writeStyleDiscoveryCategory(category);
+                    if (!mounted) return;
+                    _pullKey.currentState?.openProgrammatically();
+                  },
                 ),
               ),
             ),
