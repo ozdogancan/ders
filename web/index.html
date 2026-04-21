@@ -127,7 +127,10 @@
       width: 72px;
       height: 72px;
       border-radius: 20px;
-      background-image: url('icons/Icon-192.png');
+      /* ?v=2 — Eski Flutter-default ikonu immutable cache'te kalmış
+         kullanıcılara yeni Koala ikonu zorla yüklet. Deploy başına
+         bir kez artır, gerekmedikçe değiştirme. */
+      background-image: url('icons/Icon-192.png?v=2');
       background-size: cover;
       background-position: center;
       box-shadow: 0 4px 14px rgba(99, 102, 241, 0.18);

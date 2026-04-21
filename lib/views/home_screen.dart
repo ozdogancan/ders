@@ -17,7 +17,6 @@ import '../services/analytics_service.dart';
 import '../services/koala_ai_service.dart';
 import '../services/global_message_listener.dart';
 import '../services/messaging_service.dart';
-import '../services/notifications_service.dart';
 import '../services/push_token_service.dart';
 import '../services/saved_items_service.dart';
 import '../services/evlumba_live_service.dart';
@@ -46,7 +45,6 @@ class _HomeScreenState extends State<HomeScreen>
   Offset? _pullPtrStart;
   Offset? _pullPtrLast;
   bool _pullEngaged = false;
-  int _notifCount = 0;
   int _unreadMsgCount = 0;
 
   late final AnimationController _staggerCtrl;
@@ -60,7 +58,6 @@ class _HomeScreenState extends State<HomeScreen>
       vsync: this,
       duration: const Duration(milliseconds: 1400),
     )..forward();
-    _loadNotifCount();
     _loadUnreadMsgCount();
     _migrateChatsOnce();
     _requestNotificationPermission();
@@ -224,18 +221,12 @@ class _HomeScreenState extends State<HomeScreen>
     } catch (_) {}
   }
 
-  Future<void> _loadNotifCount() async {
-    final count = await NotificationsService.getUnreadCount();
-    if (mounted) setState(() => _notifCount = count);
-  }
-
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       setState(() {});
-      // App foreground'a gelince anında inbound sync + unread refresh
+      // App foreground'a gelince anında inbound sync
       _kickInboundSync();
-      _loadNotifCount();
     }
   }
 
@@ -420,73 +411,38 @@ class _HomeScreenState extends State<HomeScreen>
                 child: Column(
                   children: [
             // ─── Top bar ───
+            // 2026 dil: greeting kaldırıldı (sol sadelik), sağda 3 ikon triplet'i.
+            // Sıra soldan sağa: Koleksiyon → Mesaj → Profil. Üçü de 36px soft
+            // daire chip — profil avatarı aynı ölçüde kalıyor ki tek kimlik
+            // öne çıkmasın, horizon ritmik hissedilsin.
             _staggered(
               0,
               Padding(
                 padding: const EdgeInsets.only(top: 12, left: 20, right: 20),
                 child: Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
                   children: [
-                    // Greeting
-                    Expanded(
-                      child: Text(
-                        'Merhaba${currentUser?.displayName != null ? ', ${currentUser!.displayName!.split(' ').first}' : ''} 👋',
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                          color: KoalaColors.ink,
+                    // Koleksiyon
+                    _Pressable(
+                      onTap: () => context.push('/collections').then(
+                        (_) => _inputKey.currentState?.clearAndReset(),
+                      ),
+                      child: Container(
+                        width: 36,
+                        height: 36,
+                        decoration: const BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: KoalaColors.accentSoft,
+                        ),
+                        child: const Icon(
+                          LucideIcons.bookmark,
+                          size: 18,
+                          color: KoalaColors.accentDeep,
                         ),
                       ),
                     ),
-                    // Bildirim zili
-                    _Pressable(
-                      onTap: () async {
-                        await context.push('/notifications');
-                        _loadNotifCount();
-                        _inputKey.currentState?.clearAndReset();
-                      },
-                      child: Stack(
-                        clipBehavior: Clip.none,
-                        children: [
-                          Container(
-                            width: 36,
-                            height: 36,
-                            decoration: const BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: KoalaColors.accentSoft,
-                            ),
-                            child: const Icon(
-                              LucideIcons.bell,
-                              size: 18,
-                              color: KoalaColors.accentDeep,
-                            ),
-                          ),
-                          if (_notifCount > 0)
-                            Positioned(
-                              top: -2,
-                              right: -2,
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 4,
-                                  vertical: 1,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: KoalaColors.error,
-                                  borderRadius: BorderRadius.circular(99),
-                                ),
-                                child: Text(
-                                  _notifCount > 9 ? '9+' : '$_notifCount',
-                                  style: const TextStyle(
-                                    fontSize: 9,
-                                    fontWeight: FontWeight.w700,
-                                    color: Colors.white,
-                                  ),
-                                ),
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
                     const SizedBox(width: 10),
+                    // Mesajlar
                     _Pressable(
                       onTap: () => Navigator.push(
                         context,
