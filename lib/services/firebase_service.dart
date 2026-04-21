@@ -84,7 +84,10 @@ class FirebaseService {
       if (token != null) {
         await PushTokenService.removeToken(token);
       }
-    } catch (_) {}
+    } catch (e) {
+      // Non-fatal: sign-out yine de devam eder, token eski kalırsa push gelmez.
+      debugPrint('FirebaseService: FCM token cleanup on sign-out failed: $e');
+    }
 
     await _auth.signOut();
     if (_googleInitFuture != null) {

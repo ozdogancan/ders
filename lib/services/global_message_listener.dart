@@ -79,7 +79,18 @@ class GlobalMessageListener {
     // hijyeni.
     _authSub ??= FirebaseAuth.instance.authStateChanges().listen((user) {
       if (user == null) {
+        // Sign-out: realtime channel kapat + per-conv state temizle ki bir
+        // sonraki kullanıcı eski imzaları miras almasın.
         _disposeEvlumbaChannel();
+        _lastShownSig.clear();
+        suppressConvId = null;
+      } else {
+        // Sign-in (veya user değişti): channel gittiyse tekrar subscribe ol.
+        // Aksi halde sign-out → sign-in cycle sonrası realtime bildirimleri
+        // kopuyor ve kullanıcı app restart'a kadar toast görmüyor.
+        if (_evlChannel == null) {
+          _subscribeEvlumbaRealtime();
+        }
       }
     });
     // İlk açılışta hızlı tick
