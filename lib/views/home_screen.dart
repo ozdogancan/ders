@@ -26,7 +26,6 @@ import 'designers_screen.dart';
 import 'product_entry_screen.dart';
 import 'saved_screen.dart';
 import '../widgets/style_discovery_pull.dart';
-import '../widgets/style_discovery_strip.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key, this.openStyleDiscovery = false});
@@ -737,29 +736,6 @@ class _HomeScreenState extends State<HomeScreen>
             ),
 
             const SizedBox(height: 12),
-
-            // ─── Style Discovery Strip — 6 oda kartı, auto-scroll ───
-            // ÖNEMLİ: Strip scrollview'İN İÇİNDE yaşıyor — önceki
-            // denemede Expanded'ın dışında sabit yerleştirildi ve
-            // Ürün Bul / Uzman Bul quick action kartlarının üstünü
-            // kapatıyordu (Expanded'ı sıkıştırıyor, kartlar clip
-            // oluyordu). Doğal scroll akışına koyunca hem görsel
-            // hiyerarşi korunuyor hem de quick action'lar her zaman
-            // tam render oluyor.
-            //
-            // Tap → prefs'e category yazılır + pull programatik açılır.
-            // Yukarı swipe page-level Listener'dan geçiyor — strip
-            // ekstra gesture kodu taşımıyor.
-            _staggered(
-              6,
-              StyleDiscoveryStrip(
-                onCardTap: (category) async {
-                  await writeStyleDiscoveryCategory(category);
-                  if (!mounted) return;
-                  _pullKey.currentState?.openProgrammatically();
-                },
-              ),
-            ),
 
             const SizedBox(height: 16),
                   ],
