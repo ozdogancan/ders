@@ -3,8 +3,8 @@ import { corsHeaders, checkRateLimit, isOriginAllowed, isBodyTooLarge } from '@/
 
 export const maxDuration = 30;
 
-const MOONDREAM_API_KEY = process.env.MOONDREAM_API_KEY || '';
-const MOONDREAM_BASE = 'https://api.moondream.ai/v1';
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
+const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.0-flash-exp';
 
 export async function OPTIONS(req: NextRequest) {
   return new NextResponse(null, {
@@ -13,189 +13,163 @@ export async function OPTIONS(req: NextRequest) {
   });
 }
 
-// Moondream API helper
-async function moondreamQuery(
-  imageDataUrl: string,
-  question: string
-): Promise<string> {
-  const res = await fetch(`${MOONDREAM_BASE}/query`, {
-    method: 'POST',
-    headers: {
-      'X-Moondream-Auth': `Key ${MOONDREAM_API_KEY}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      image_url: imageDataUrl,
-      question,
-      stream: false,
-    }),
-  });
-  if (!res.ok) throw new Error(`Moondream query failed: ${res.status}`);
-  const data = await res.json();
-  return data.answer || '';
+interface AnalyzeResult {
+  caption: string;
+  room_type: string;
+  style: string;
+  colors: string;
+  mood: string;
+  furniture: { label: string }[];
+  is_room: boolean;
 }
 
-async function moondreamCaption(imageDataUrl: string): Promise<string> {
-  const res = await fetch(`${MOONDREAM_BASE}/caption`, {
-    method: 'POST',
-    headers: {
-      'X-Moondream-Auth': `Key ${MOONDREAM_API_KEY}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      image_url: imageDataUrl,
-      length: 'long',
-      stream: false,
-    }),
-  });
-  if (!res.ok) throw new Error(`Moondream caption failed: ${res.status}`);
-  const data = await res.json();
-  return data.caption || '';
-}
-
-interface DetectedObject {
-  label: string;
-  x_min: number;
-  y_min: number;
-  x_max: number;
-  y_max: number;
-}
-
-async function moondreamDetect(
-  imageDataUrl: string,
-  object: string
-): Promise<DetectedObject[]> {
-  const res = await fetch(`${MOONDREAM_BASE}/detect`, {
-    method: 'POST',
-    headers: {
-      'X-Moondream-Auth': `Key ${MOONDREAM_API_KEY}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      image_url: imageDataUrl,
-      object,
-    }),
-  });
-  if (!res.ok) return [];
-  const data = await res.json();
-  return (data.objects || []).map((o: Record<string, number>) => ({
-    label: object,
-    ...o,
-  }));
+function extractJSON(text: string): Record<string, unknown> | null {
+  // Gemini sometimes wraps JSON in ```json ... ```
+  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/);
+  const raw = fenced ? fenced[1] : text;
+  try {
+    return JSON.parse(raw.trim());
+  } catch {
+    // Last resort: find first { ... }
+    const m = raw.match(/\{[\s\S]*\}/);
+    if (!m) return null;
+    try {
+      return JSON.parse(m[0]);
+    } catch {
+      return null;
+    }
+  }
 }
 
 /**
  * POST /api/analyze-room
  *
- * Moondream vision AI ile oda fotoğrafı analizi.
- * Oda tipi, stil, renkler, mobilyalar ve genel açıklama döndürür.
- *
- * Body: {
- *   image: string  // base64 encoded image (without data URL prefix, or with)
- * }
- *
- * Response: {
- *   caption: string,
- *   room_type: string,
- *   style: string,
- *   colors: string,
- *   furniture: DetectedObject[],
- *   mood: string,
- * }
+ * Gemini Vision ile oda fotoğrafı analizi.
+ * Body: { image: string (base64 ya da data URL) }
+ * Response: { caption, room_type, style, colors, mood, furniture[], is_room }
  */
 export async function POST(req: NextRequest) {
   const origin = req.headers.get('origin');
   const headers = corsHeaders(origin);
 
   if (!isOriginAllowed(req)) {
-    return NextResponse.json(
-      { error: 'Forbidden' },
-      { status: 403, headers }
-    );
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403, headers });
   }
-
   if (isBodyTooLarge(req, 15)) {
-    return NextResponse.json(
-      { error: 'Payload too large' },
-      { status: 413, headers }
-    );
+    return NextResponse.json({ error: 'Payload too large' }, { status: 413, headers });
   }
-
-  // Photo analysis is heavy — tight rate limit
   if (!checkRateLimit(req, 'analyze-room', 10)) {
     return NextResponse.json(
       { error: 'Rate limit exceeded. Please try again later.' },
       { status: 429, headers }
     );
   }
-
-  if (!MOONDREAM_API_KEY) {
+  if (!GEMINI_API_KEY) {
     return NextResponse.json(
-      { error: 'Moondream API key not configured' },
+      { error: 'Gemini API key not configured' },
       { status: 500, headers }
     );
   }
 
+  let body: { image?: string };
   try {
-    const body = await req.json();
-    let { image } = body as { image?: string };
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON' }, { status: 400, headers });
+  }
 
-    if (!image) {
+  let { image } = body;
+  if (!image) {
+    return NextResponse.json(
+      { error: 'image field required (base64)' },
+      { status: 400, headers }
+    );
+  }
+
+  // Normalize: strip data URL prefix for Gemini inlineData
+  let mimeType = 'image/jpeg';
+  if (image.startsWith('data:')) {
+    const match = image.match(/^data:([^;]+);base64,(.*)$/);
+    if (match) {
+      mimeType = match[1];
+      image = match[2];
+    }
+  }
+
+  const prompt = `Analiz et ve SADECE aşağıdaki JSON formatında cevap ver. Türkçe.
+
+{
+  "is_room": boolean,
+  "caption": "tek cümle açıklama",
+  "room_type": "living room|bedroom|kitchen|bathroom|dining room|office|hallway|other",
+  "style": "modern|minimalist|scandinavian|industrial|bohemian|classic|luxury|japandi|rustic|vintage|eclectic",
+  "colors": "3-5 hakim renk, format: 'renk_adı (#hexcode), renk_adı (#hexcode)'",
+  "mood": "atmosfer açıklaması tek cümle",
+  "furniture": ["mobilya_adı", "mobilya_adı"]
+}
+
+Kurallar:
+- "is_room" false olur eğer fotoğraf bir iç mekan DEĞİLSE (selfie, insan, dış mekan, hayvan, yemek, belge vb.).
+- "is_room" true olursa diğer tüm alanlar doldurulur.
+- is_room false ise caption kullanıcıya nazikçe ne gördüğünü söylesin ("Bu bir selfie gibi görünüyor").
+- Renk hex'leri gerçekten fotoğraftaki renklerden alınmalı, uydurma yok.
+- Sadece JSON döndür, başka metin yok, markdown yok.`;
+
+  try {
+    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
+    const geminiRes = await fetch(apiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [
+          {
+            role: 'user',
+            parts: [
+              { text: prompt },
+              { inlineData: { mimeType, data: image } },
+            ],
+          },
+        ],
+        generationConfig: {
+          temperature: 0.2,
+          responseMimeType: 'application/json',
+        },
+      }),
+    });
+
+    if (!geminiRes.ok) {
+      const txt = await geminiRes.text();
       return NextResponse.json(
-        { error: 'image field required (base64)' },
-        { status: 400, headers }
+        { error: 'Gemini analysis failed', detail: `${geminiRes.status}: ${txt.slice(0, 300)}` },
+        { status: 502, headers }
       );
     }
 
-    // Ensure data URL format
-    if (!image.startsWith('data:')) {
-      image = `data:image/jpeg;base64,${image}`;
+    const data = await geminiRes.json();
+    const text: string =
+      data?.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+    const parsed = extractJSON(text);
+    if (!parsed) {
+      return NextResponse.json(
+        { error: 'Gemini returned invalid JSON', detail: text.slice(0, 300) },
+        { status: 502, headers }
+      );
     }
 
-    // Run queries in parallel for speed
-    const [caption, roomType, style, colors, mood, furniture] =
-      await Promise.all([
-        moondreamCaption(image),
-        moondreamQuery(
-          image,
-          'What type of room is this? Answer with just the room type: living room, bedroom, kitchen, bathroom, hallway, office, or other.'
-        ),
-        moondreamQuery(
-          image,
-          'What interior design style is this room? Answer concisely: modern, minimalist, scandinavian, industrial, bohemian, classic, luxury, japandi, rustic, or eclectic.'
-        ),
-        moondreamQuery(
-          image,
-          'What are the dominant colors in this room? List 3-5 colors with their approximate hex codes, format: color_name (#hex)'
-        ),
-        moondreamQuery(
-          image,
-          'Describe the mood and atmosphere of this room in one sentence.'
-        ),
-        // Detect common furniture
-        Promise.all([
-          moondreamDetect(image, 'sofa'),
-          moondreamDetect(image, 'chair'),
-          moondreamDetect(image, 'table'),
-          moondreamDetect(image, 'bed'),
-          moondreamDetect(image, 'lamp'),
-          moondreamDetect(image, 'cabinet'),
-        ]).then((results) => results.flat()),
-      ]);
+    const result: AnalyzeResult = {
+      is_room: Boolean(parsed.is_room),
+      caption: String(parsed.caption ?? '').trim(),
+      room_type: String(parsed.room_type ?? 'other').trim(),
+      style: String(parsed.style ?? '').trim(),
+      colors: String(parsed.colors ?? '').trim(),
+      mood: String(parsed.mood ?? '').trim(),
+      furniture: Array.isArray(parsed.furniture)
+        ? (parsed.furniture as unknown[]).map((x) => ({ label: String(x) }))
+        : [],
+    };
 
-    return NextResponse.json(
-      {
-        caption,
-        room_type: roomType.trim(),
-        style: style.trim(),
-        colors: colors.trim(),
-        mood: mood.trim(),
-        furniture,
-      },
-      { headers }
-    );
+    return NextResponse.json(result, { headers });
   } catch (error) {
-    console.error('Moondream analyze-room error:', error);
     return NextResponse.json(
       {
         error: 'Room analysis failed',
