@@ -757,9 +757,23 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
     // Padding olarak SADECE safe-area'yı ekle, viewInsets.bottom'ı tekrar
     // eklersen "çift sayım" yapıp input klavyeden çok uzakta kalır.
 
-    return Scaffold(
-      backgroundColor: KoalaColors.bg,
-      body: SafeArea(
+    // Chat ekranı açıkken status bar arkaplanı BEYAZ olsun — SafeArea'nın üstünde
+     // Scaffold backgroundColor görünüyor; cream yerine white kullan + saat/şarj
+     // ikonları koyu (dark) olsun ki beyaz üzerinde net görünsün.
+     return AnnotatedRegion<SystemUiOverlayStyle>(
+       value: const SystemUiOverlayStyle(
+         statusBarColor: Colors.white,
+         statusBarIconBrightness: Brightness.dark, // Android
+         statusBarBrightness: Brightness.light,    // iOS
+       ),
+       child: Scaffold(
+      backgroundColor: Colors.white,
+      // ColoredBox = explicit white paint. Scaffold.backgroundColor bazen
+      // ThemeData.scaffoldBackgroundColor ile shadow-override oluyor; chat
+      // ekranı için bunu atlamak lazım (status bar'la bitişik beyaz şart).
+      body: ColoredBox(
+        color: Colors.white,
+        child: SafeArea(
         bottom: false,
         child: Column(
           children: [
@@ -846,7 +860,9 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
           ],
         ),
       ),
-    );
+      ),
+       ),
+     );
   }
 
   Widget _buildPhotoPreview() => Container(

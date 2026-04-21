@@ -89,8 +89,8 @@ class _MisconfiguredBuildApp extends StatelessWidget {
                 Text(
                   'SUPABASE_URL / SUPABASE_ANON_KEY were empty at build time.\n\n'
                   'This release was built without --dart-define values. '
-                  'Rebuild with .\\build_web.ps1 instead of running '
-                  '`flutter build web --release` directly.',
+                  'Rebuild using .\\build_web.ps1 (web) or .\\build_android.ps1 (Android) '
+                  'instead of running `flutter build` directly.',
                   style: TextStyle(color: Colors.white, fontSize: 16, height: 1.4),
                   textAlign: TextAlign.center,
                 ),

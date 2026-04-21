@@ -134,6 +134,12 @@ class MessagingService {
   /// [contextType]: hangi ekrandan gelindi (project, product, designer, ai_chat)
   /// [contextId]: ilgili kaynak ID'si
   /// [contextTitle]: ilgili kaynak basligi (inquiry mesajinda kullanilir)
+  ///
+  /// Öncelikle koala-api `/api/conversations/ensure` (service_role) çağırılır —
+  /// bu, Supabase RLS + x-user-id header race'ini tamamen devre dışı bırakır.
+  /// Anne/babanın Android cihazlarında sürekli "tekrar dene" hatası veren
+  /// sessiz RLS reject'i bu yolla çözülüyor. API fail olursa eski Supabase
+  /// direct path'i fallback olarak dener.
   static Future<Map<String, dynamic>?> getOrCreateConversation({
     required String designerId,
     String? contextType,
@@ -149,8 +155,52 @@ class MessagingService {
       debugPrint('getOrCreateConversation: auth not ready: $e');
       return null;
     }
+
+    // 1) Server-side ensure (primary path) — RLS bypass + users row upsert.
+    final apiUrl = Env.koalaApiUrl;
+    if (apiUrl.isNotEmpty) {
+      try {
+        final fbUser = FirebaseAuth.instance.currentUser;
+        final res = await http
+            .post(
+              Uri.parse('$apiUrl/api/conversations/ensure'),
+              headers: {'Content-Type': 'application/json'},
+              body: jsonEncode({
+                'firebaseUid': uid,
+                'designerId': designerId,
+                'title': contextTitle,
+                if (fbUser?.email != null) 'email': fbUser!.email,
+                if (fbUser?.displayName != null)
+                  'displayName': fbUser!.displayName,
+                if (fbUser?.photoURL != null) 'photoUrl': fbUser!.photoURL,
+              }),
+            )
+            .timeout(const Duration(seconds: 12));
+        if (res.statusCode >= 200 && res.statusCode < 300) {
+          final body = jsonDecode(res.body);
+          if (body is Map<String, dynamic>) return body;
+        } else {
+          debugPrint(
+              'getOrCreateConversation: API ${res.statusCode} ${res.body}');
+          try {
+            final errBody = jsonDecode(res.body);
+            if (errBody is Map && errBody['error'] is String) {
+              lastConvError = 'API: ${errBody['error']}';
+            } else {
+              lastConvError = 'API ${res.statusCode}';
+            }
+          } catch (_) {
+            lastConvError = 'API ${res.statusCode}';
+          }
+        }
+      } catch (e) {
+        debugPrint('getOrCreateConversation: API call failed: $e');
+        lastConvError = 'API: $e';
+      }
+    }
+
+    // 2) Fallback: Supabase direct (RLS'e tabi — API ulaşılamıyorsa son şans).
     try {
-      // Onceden var mi kontrol et
       final existing = await _db
           .from('koala_conversations')
           .select()
@@ -158,19 +208,25 @@ class MessagingService {
           .eq('designer_id', designerId)
           .maybeSingle();
 
-      if (existing != null) return existing;
+      if (existing != null) {
+        lastConvError = null;
+        return existing;
+      }
 
-      // Yeni olustur — mesaj göndermeden, kullanıcıya bırak
       final res = await _db.from('koala_conversations').insert({
         'user_id': uid,
         'designer_id': designerId,
         'title': contextTitle,
       }).select().single();
 
+      lastConvError = null;
       return res;
     } catch (e) {
-      debugPrint('MessagingService.getOrCreateConversation error: $e');
-      lastConvError = e.toString();
+      debugPrint('MessagingService.getOrCreateConversation fallback error: $e');
+      // API hatası zaten lastConvError'a yazıldı; fallback'in hatası üzerine
+      // yazılmasın ki UI hangi path'in fail ettiğini gösterebilsin. Yine de
+      // lastConvError null ise (API başarılı ama body parse etmedi vs.) yaz.
+      lastConvError ??= e.toString();
       return null;
     }
   }
