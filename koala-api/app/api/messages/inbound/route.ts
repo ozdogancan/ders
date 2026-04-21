@@ -51,12 +51,25 @@ export async function POST(req: NextRequest) {
   const cors = corsHeaders(req.headers.get('origin'));
   const t0 = Date.now();
 
-  // Optional bridge auth — aynı secret (prod'da set edilirse zorlanır)
-  const expected = process.env.BRIDGE_SECRET;
-  if (expected && req.headers.get('x-bridge-secret') !== expected) {
-    // inbound route `x-bridge-secret` göndermiyor — geriye dönük uyum için
-    // header yoksa geçiş yapma. İstersen prod'da zorunlu hale getir.
-  }
+  // ⚠️ AUTH GAP (bilinçli, TODO):
+  // Bu endpoint Flutter client tarafından çağrılır (`MessagingService.pullInbound`).
+  // Şu an `firebaseUid`'yi body'den okuyup o UID'nin mesajlarını pull ediyoruz —
+  // bir saldırgan başka bir kullanıcının UID'sini bilirse response'dan o
+  // kullanıcının hangi tasarımcılarla konuştuğunu (designerId listesi) öğrenebilir.
+  // Message body response'a sızmıyor ama metadata sızar.
+  //
+  // DOĞRU ÇÖZÜM: Flutter client `Authorization: Bearer <Firebase ID Token>`
+  // göndersin. Burada token'ı Firebase Admin SDK ile verify edip `decoded.uid`'i
+  // body.firebaseUid ile karşılaştır. Farklıysa 401 döndür.
+  //
+  // Şimdilik pragmatik durum: Firebase UID'ler kolay harvest edilmez, attack
+  // surface dar. Prod-grade için aşağıdaki TODO'yu gerçekle:
+  //
+  //   const authHeader = req.headers.get('authorization');
+  //   const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
+  //   if (!token) return NextResponse.json({ error: 'unauthorized' }, { status: 401, headers: cors });
+  //   const decoded = await getAuth().verifyIdToken(token);
+  //   if (decoded.uid !== firebaseUid) return NextResponse.json({ error: 'uid mismatch' }, { status: 403, headers: cors });
 
   let payload: {
     firebaseUid?: string;

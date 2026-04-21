@@ -23,6 +23,15 @@ void main() {
   PaintingBinding.instance.imageCache.maximumSizeBytes = 100 * 1024 * 1024;
   PaintingBinding.instance.imageCache.maximumSize = 200;
 
+  // Font'ları bundle'dan yükle — TTF'ler assets/google_fonts/ altında, pubspec'te
+  // declared. Package ÖNCE local'e bakar, bulamazsa CDN'e düşer. CLS düşer
+  // (ilk frame'de doğru font var), normal akışta 1 DNS+TLS handshake kaybolur,
+  // Google'a her sayfa açılışında IP sızmaz.
+  //
+  // allowRuntimeFetching=true bırakıldı (default) — bundle yüklenmezse eski
+  // davranışa fallback. Canlıyı bozmaz. İleride 1-2 release stabil gittikten
+  // sonra `false`a çevirip network path'ı tamamen kapatabiliriz.
+
   // Android: edge-to-edge + şeffaf status/navigation bar.
   // Aksi halde Samsung gibi bazı cihazlarda status bar OEM arkaplanıyla
   // koyu bir şerit olarak görünüp ekranla uyumsuz kalıyor.

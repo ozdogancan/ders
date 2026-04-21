@@ -376,7 +376,6 @@ class _StyleDiscoveryLiveScreenState extends State<StyleDiscoveryLiveScreen>
     if (card == null) return;
     final designerId = (card['designer_id'] ?? '').toString();
     if (designerId.isEmpty) return;
-    setState(() => _askingInFlight = true);
     final projectId = card['id']?.toString() ?? '';
     final cat = _prettyCategory((card['project_type'] ?? '').toString());
     final coverUrl = _coverOf(card);
@@ -385,43 +384,32 @@ class _StyleDiscoveryLiveScreenState extends State<StyleDiscoveryLiveScreen>
     final projectTitle = (card['title'] ?? '').toString().trim();
     final rawDesc = (card['description'] ?? '').toString().trim();
     final tagline = _quickFirstSentence(rawDesc);
-    final conv = await MessagingService.getOrCreateConversation(
-      designerId: designerId,
-      contextType: 'project',
-      contextId: projectId,
-      contextTitle: projectTitle.isNotEmpty ? projectTitle : cat,
-    );
-    if (!mounted) return;
-    setState(() => _askingInFlight = false);
-    if (conv == null) {
-      final err = MessagingService.lastConvError;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            err == null || err.isEmpty
-                ? 'Sohbet başlatılamadı, tekrar dene'
-                : 'Sohbet başlatılamadı: $err',
-          ),
-          duration: const Duration(seconds: 4),
-        ),
-      );
-      return;
-    }
-    final convId = (conv['id'] ?? '').toString();
-    if (convId.isEmpty) return;
-    // Tasarımcı profilini cache'den al — ismi/avatarı chat header'ına geçir.
-    // Yoksa hızlıca çek (blok süresi kısa, kullanıcı fark etmez).
-    Map<String, dynamic>? d = _designerCache[designerId];
-    d ??= await EvlumbaLiveService.getDesigner(designerId);
-    if (!mounted) return;
+
+    // ── Optimistic navigation ──
+    // Eskiden burada `getOrCreateConversation` await ediliyordu → 500-1500ms
+    // kullanıcıyı bekletiyordu ("Sor"a basınca buton spinner'da donuyordu).
+    // Artık: designer info cache'den sync al, navigation'ı HEMEN başlat,
+    // conversation'ı ConversationDetailScreen._ensureConversation() ilk
+    // mesaj gönderildiğinde lazy olarak yaratsın. /chat/dm/new sentinel
+    // router'da null convId'ye map ediliyor.
+    final d = _designerCache[designerId];
     final designerName =
         ((d?['full_name'] ?? d?['business_name'] ?? '') as String).trim();
     final designerAvatar = ((d?['avatar_url'] ?? '') as String).trim();
-    // /chat/dm'e push — swipe ekranı stack'te kalır, native back ile geri dönülür
-    context.push('/chat/dm/$convId', extra: {
+
+    // Çift-tap koruması: 600ms pencere yeterli — route transition animasyonu
+    // tamamlanana kadar buton dondurulur. Pop edince _askingInFlight zaten
+    // otomatik sıfırlanır (timer).
+    setState(() => _askingInFlight = true);
+    Future.delayed(const Duration(milliseconds: 600), () {
+      if (mounted) setState(() => _askingInFlight = false);
+    });
+
+    context.push('/chat/dm/new', extra: {
       'designerId': designerId,
       if (designerName.isNotEmpty) 'designerName': designerName,
       if (designerAvatar.isNotEmpty) 'designerAvatarUrl': designerAvatar,
+      'projectTitle': projectTitle.isNotEmpty ? projectTitle : cat,
       'pendingDesign': {
         'id': projectId,
         // Başlık önceliği: proje title → oda kategorisi → jenerik
@@ -432,6 +420,10 @@ class _StyleDiscoveryLiveScreenState extends State<StyleDiscoveryLiveScreen>
         if (cat.isNotEmpty) 'category': cat,
         'imageUrl': coverUrl,
         'designerId': designerId,
+        // Context bilgisi: _ensureConversation bu bilgileri
+        // getOrCreateConversation'a geçemez (sadece designerId + projectTitle
+        // kullanıyor) ama projectTitle yeterli — conversation.context_title
+        // doğru kayıt edilecek.
       },
     });
   }

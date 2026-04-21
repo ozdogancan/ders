@@ -123,8 +123,15 @@ final GoRouter appRouter = GoRouter(
       path: '/chat/dm/:conversationId',
       builder: (context, state) {
         final extra = state.extra as Map<String, dynamic>?;
+        // "new" sentinel → lazy conversation creation. designerId ile açılır,
+        // ilk mesaj gönderilince _ensureConversation() conv'u yaratır. Bu
+        // sayede "Sor" butonu tıklanışında `getOrCreateConversation` API
+        // çağrısını beklemeden navigation animasyonu başlar (500-1500ms
+        // kazanç). ConversationDetailScreen'in lazy mode'u zaten mevcut.
+        final convParam = state.pathParameters['conversationId']!;
+        final conversationId = convParam == 'new' ? null : convParam;
         return ConversationDetailScreen(
-          conversationId: state.pathParameters['conversationId']!,
+          conversationId: conversationId,
           designerId: extra?['designerId'] as String?,
           designerName: extra?['designerName'] as String? ?? 'Tasarımcı',
           designerAvatarUrl: extra?['designerAvatarUrl'] as String?,
