@@ -24,3 +24,4 @@ Required env vars (set in Vercel dashboard for prod):
 - `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`
 - `EVLUMBA_URL`, `EVLUMBA_SERVICE_ROLE_KEY`
 - `GEMINI_API_KEY`
+
