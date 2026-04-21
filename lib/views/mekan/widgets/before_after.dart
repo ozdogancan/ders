@@ -1,9 +1,9 @@
 import 'dart:typed_data';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
-import '../editorial_theme.dart';
+import '../../../core/theme/koala_tokens.dart';
 
-/// Önce/Sonra slider — paket yok, ~90 satır. Parmakla yatay sürükle.
+/// Önce/Sonra slider — paket yok. Parmakla yatay sürükle.
 /// Before: orijinal bytes. After: URL (Replicate) ya da data URL (mock).
 class BeforeAfter extends StatefulWidget {
   final Uint8List beforeBytes;
@@ -31,82 +31,90 @@ class _BeforeAfterState extends State<BeforeAfter> {
 
   @override
   Widget build(BuildContext context) {
-    return AspectRatio(
-      aspectRatio: 4 / 3,
-      child: LayoutBuilder(builder: (ctx, c) {
-        final w = c.maxWidth;
-        return Stack(
-          children: [
-            // After (alt katman, tam)
-            Positioned.fill(child: _afterImage()),
-            // Before (üst katman, sola kırpılmış)
-            Positioned(
-              left: 0,
-              top: 0,
-              bottom: 0,
-              width: w * _pos,
-              child: ClipRect(
-                child: OverflowBox(
-                  maxWidth: w,
-                  minWidth: w,
-                  alignment: Alignment.centerLeft,
-                  child: Image.memory(widget.beforeBytes, fit: BoxFit.cover),
-                ),
-              ),
-            ),
-            // Divider + handle
-            Positioned(
-              left: w * _pos - 0.5,
-              top: 0,
-              bottom: 0,
-              width: 1,
-              child: Container(color: MekanPalette.paper),
-            ),
-            Positioned(
-              left: w * _pos - 18,
-              top: 0,
-              bottom: 0,
-              child: Center(
-                child: Container(
-                  width: 36,
-                  height: 36,
-                  decoration: BoxDecoration(
-                    color: MekanPalette.paper,
-                    shape: BoxShape.circle,
-                    border: Border.all(color: MekanPalette.ink),
-                  ),
-                  alignment: Alignment.center,
-                  child: Text('↔', style: MekanType.mono(size: 12, color: MekanPalette.ink)),
-                ),
-              ),
-            ),
-            // Corner labels
-            _cornerLabel(top: 12, left: 12, text: 'Önce'),
-            _cornerLabel(top: 12, right: 12, text: 'Sonra'),
-            // Gesture layer
-            Positioned.fill(
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onHorizontalDragStart: (d) =>
-                    _updateFromGlobal(d.globalPosition, ctx),
-                onHorizontalDragUpdate: (d) =>
-                    _updateFromGlobal(d.globalPosition, ctx),
-                onTapDown: (d) => _updateFromGlobal(d.globalPosition, ctx),
-              ),
-            ),
-            // 1px frame üstünde
-            Positioned.fill(
-              child: IgnorePointer(
-                child: Container(
-                  decoration: BoxDecoration(
-                    border: Border.all(color: MekanPalette.line),
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(KoalaRadius.lg),
+      child: AspectRatio(
+        aspectRatio: 4 / 3,
+        child: LayoutBuilder(builder: (ctx, c) {
+          final w = c.maxWidth;
+          return Stack(
+            children: [
+              // After (alt katman, tam)
+              Positioned.fill(child: _afterImage()),
+              // Before (üst katman, sola kırpılmış)
+              Positioned(
+                left: 0,
+                top: 0,
+                bottom: 0,
+                width: w * _pos,
+                child: ClipRect(
+                  child: OverflowBox(
+                    maxWidth: w,
+                    minWidth: w,
+                    alignment: Alignment.centerLeft,
+                    child: Image.memory(widget.beforeBytes, fit: BoxFit.cover),
                   ),
                 ),
               ),
-            ),
-          ],
-        );
-      }),
+              // Divider + handle
+              Positioned(
+                left: w * _pos - 1,
+                top: 0,
+                bottom: 0,
+                width: 2,
+                child: Container(color: KoalaColors.surface),
+              ),
+              Positioned(
+                left: w * _pos - 20,
+                top: 0,
+                bottom: 0,
+                child: Center(
+                  child: Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: KoalaColors.surface,
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                          color: KoalaColors.borderSolid, width: 1),
+                      boxShadow: KoalaShadows.card,
+                    ),
+                    alignment: Alignment.center,
+                    child: const Icon(Icons.swap_horiz_rounded,
+                        size: 18, color: KoalaColors.text),
+                  ),
+                ),
+              ),
+              // Corner labels
+              _cornerLabel(top: 12, left: 12, text: 'Önce'),
+              _cornerLabel(top: 12, right: 12, text: 'Sonra'),
+              // Gesture layer
+              Positioned.fill(
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onHorizontalDragStart: (d) =>
+                      _updateFromGlobal(d.globalPosition, ctx),
+                  onHorizontalDragUpdate: (d) =>
+                      _updateFromGlobal(d.globalPosition, ctx),
+                  onTapDown: (d) => _updateFromGlobal(d.globalPosition, ctx),
+                ),
+              ),
+              // Çerçeve
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: Container(
+                    decoration: BoxDecoration(
+                      border:
+                          Border.all(color: KoalaColors.border, width: 0.5),
+                      borderRadius: BorderRadius.circular(KoalaRadius.lg),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          );
+        }),
+      ),
     );
   }
 
@@ -119,8 +127,8 @@ class _BeforeAfterState extends State<BeforeAfter> {
     return CachedNetworkImage(
       imageUrl: s,
       fit: BoxFit.cover,
-      placeholder: (_, __) => Container(color: MekanPalette.oat),
-      errorWidget: (_, __, ___) => Container(color: MekanPalette.oat),
+      placeholder: (_, _) => Container(color: KoalaColors.surfaceAlt),
+      errorWidget: (_, _, _) => Container(color: KoalaColors.surfaceAlt),
     );
   }
 
@@ -131,10 +139,21 @@ class _BeforeAfterState extends State<BeforeAfter> {
       Positioned(
         top: top, left: left, right: right,
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          color: MekanPalette.paper,
-          child: Text(text.toUpperCase(),
-              style: MekanType.caps(size: 9, color: MekanPalette.ink, tracking: 1.8)),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+          decoration: BoxDecoration(
+            color: KoalaColors.surface,
+            borderRadius: BorderRadius.circular(KoalaRadius.sm),
+            border: Border.all(color: KoalaColors.border, width: 0.5),
+          ),
+          child: Text(
+            text,
+            style: const TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: KoalaColors.text,
+              letterSpacing: 0.2,
+            ),
+          ),
         ),
       );
 }

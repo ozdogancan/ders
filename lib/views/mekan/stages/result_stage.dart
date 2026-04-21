@@ -1,8 +1,8 @@
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
-import '../editorial_theme.dart';
+import '../../../core/theme/koala_tokens.dart';
 import '../widgets/before_after.dart';
-import '../widgets/editorial_primitives.dart';
+import '../widgets/mekan_ui.dart';
 
 class ResultStage extends StatelessWidget {
   final Uint8List beforeBytes;
@@ -31,84 +31,103 @@ class ResultStage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const SizedBox(height: 28),
-            const Ordinal(n: '04', label: 'Sonuç'),
-            const SizedBox(height: 18),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Flexible(
-                  child: Text(
-                    theme,
-                    style: MekanType.display(size: 28, italic: true)
-                        .copyWith(letterSpacing: -0.5),
-                  ),
-                ),
-                Caps(room, size: 10),
-              ],
-            ),
-            const SizedBox(height: 14),
-            BeforeAfter(beforeBytes: beforeBytes, afterSrc: afterSrc),
-            if (mock) ...[
-              const SizedBox(height: 14),
-              Text(
-                'DEMO · sunucu env\'inde anahtar ayarlandığında gerçek görseller gelir.',
-                style: MekanType.mono(
-                    size: 10, color: MekanPalette.burnt, tracking: 1.5),
-              ),
+      padding: const EdgeInsets.fromLTRB(
+        KoalaSpacing.xl, KoalaSpacing.md, KoalaSpacing.xl, KoalaSpacing.xxl),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text('Yeni $room', style: KoalaText.h1),
+          const SizedBox(height: KoalaSpacing.sm),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              MekanChip(label: room, icon: Icons.home_outlined),
+              MekanChip(label: theme, tint: KoalaColors.surfaceAlt),
             ],
-            const SizedBox(height: 22),
-            const Hairline(),
-            IntrinsicHeight(
+          ),
+          const SizedBox(height: KoalaSpacing.lg),
+          BeforeAfter(beforeBytes: beforeBytes, afterSrc: afterSrc),
+          if (mock) ...[
+            const SizedBox(height: KoalaSpacing.md),
+            Container(
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: KoalaColors.warning.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(KoalaRadius.md),
+                border: Border.all(
+                    color: KoalaColors.warning.withValues(alpha: 0.45),
+                    width: 0.5),
+              ),
               child: Row(
                 children: [
+                  const Icon(Icons.info_outline,
+                      size: 16, color: KoalaColors.warning),
+                  const SizedBox(width: 8),
                   Expanded(
-                    child: EButton(
-                      label: 'Aynı tarzda tekrar',
-                      onTap: onRetry,
-                      fullWidth: true,
-                    ),
-                  ),
-                  Container(width: 1, color: MekanPalette.line),
-                  Expanded(
-                    child: EButton(
-                      label: 'Başka tarz dene',
-                      onTap: onNewStyle,
-                      fullWidth: true,
+                    child: Text(
+                      'Demo · sunucuda anahtar ayarlandığında gerçek görseller gelir.',
+                      style: KoalaText.bodySmall.copyWith(
+                        color: KoalaColors.warning,
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
                   ),
                 ],
               ),
             ),
-            const Hairline(),
-            const SizedBox(height: 22),
-            PrimaryPill(
-              label: 'Bu tasarımı gerçeğe dönüştür',
-              onTap: onPro,
-            ),
-            const SizedBox(height: 18),
-            Text(
-              'Bu odayı tasarlayabilecek iç mimarları sana getirelim — '
-              'şehrinden ve senin tarzından çalışanları önce gösteririz.',
-              style: MekanType.body(size: 14, italic: true, color: MekanPalette.fog),
-            ),
-            const SizedBox(height: 20),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: EButton(
-                label: 'Yeni bir fotoğrafla başla',
-                onTap: onRestart,
+          ],
+          const SizedBox(height: KoalaSpacing.xxl),
+          Row(
+            children: [
+              Expanded(
+                child: MekanSecondaryButton(
+                  label: 'Aynı tarzda tekrar',
+                  onTap: onRetry,
+                  fullWidth: true,
+                  icon: Icons.refresh_rounded,
+                ),
+              ),
+              const SizedBox(width: KoalaSpacing.md),
+              Expanded(
+                child: MekanSecondaryButton(
+                  label: 'Başka tarz',
+                  onTap: onNewStyle,
+                  fullWidth: true,
+                  icon: Icons.palette_outlined,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: KoalaSpacing.lg),
+          MekanPrimaryButton(
+            label: 'Bu tasarımı gerçeğe dönüştür',
+            onTap: onPro,
+            trailing: Icons.arrow_forward_rounded,
+          ),
+          const SizedBox(height: KoalaSpacing.md),
+          Text(
+            'Bu odayı tasarlayabilecek iç mimarları sana getirelim — '
+            'şehrinden ve senin tarzından çalışanları önce gösteririz.',
+            style: KoalaText.bodySec,
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: KoalaSpacing.xl),
+          Center(
+            child: TextButton(
+              onPressed: onRestart,
+              child: Text(
+                'Yeni fotoğrafla başla',
+                style: KoalaText.label.copyWith(
+                  color: KoalaColors.accentDeep,
+                  decoration: TextDecoration.underline,
+                  decorationColor: KoalaColors.accentDeep,
+                ),
               ),
             ),
-            const SizedBox(height: 36),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

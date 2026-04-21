@@ -1,4 +1,6 @@
 // Oda tipleri — Türkçe görünen etiket, İngilizce prompt değeri.
+// NOT: UI artık oda seçtirmiyor (otomatik tespit). Geriye dönük uyumluluk
+// için tip ve liste duruyor.
 class RoomOption {
   final String value; // prompt'a giden
   final String tr;    // UI'da görünen
@@ -23,6 +25,7 @@ class ThemeOption {
 }
 
 // Her tarzın "hissi" gradient olarak — asset'e bağımlı değiliz.
+// Kullanıcı isteği: en sevilen 6 tarzla sınırlı, ferah bir seçim.
 const kThemes = <ThemeOption>[
   ThemeOption('Minimalist', 'Minimalist', 'Temiz çizgi, az eşya',
       [0xFFF5F1EA, 0xFFE8DFCF, 0xFFCFC3AC]),
@@ -36,8 +39,4 @@ const kThemes = <ThemeOption>[
       [0xFFE8C9A5, 0xFFC56A47, 0xFF5E2C1F]),
   ThemeOption('Industrial', 'Endüstriyel', 'Tuğla, beton, koyu',
       [0xFFB3A99E, 0xFF5A4F46, 0xFF2A211B]),
-  ThemeOption('Vintage', 'Vintage', 'Patina, zengin doku',
-      [0xFFE8D5A8, 0xFFA67148, 0xFF4A2F1A]),
-  ThemeOption('Rustic', 'Rustik', 'Doğal taş, kütük, toprak',
-      [0xFFD6C2A2, 0xFF8B6A3E, 0xFF3C2A18]),
 ];
