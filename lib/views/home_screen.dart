@@ -738,29 +738,31 @@ class _HomeScreenState extends State<HomeScreen>
 
             const SizedBox(height: 12),
 
-            const SizedBox(height: 16),
-                  ],
-                ),
+            // ─── Style Discovery Strip — 6 oda kartı, auto-scroll ───
+            // ÖNEMLİ: Strip scrollview'İN İÇİNDE yaşıyor — önceki
+            // denemede Expanded'ın dışında sabit yerleştirildi ve
+            // Ürün Bul / Uzman Bul quick action kartlarının üstünü
+            // kapatıyordu (Expanded'ı sıkıştırıyor, kartlar clip
+            // oluyordu). Doğal scroll akışına koyunca hem görsel
+            // hiyerarşi korunuyor hem de quick action'lar her zaman
+            // tam render oluyor.
+            //
+            // Tap → prefs'e category yazılır + pull programatik açılır.
+            // Yukarı swipe page-level Listener'dan geçiyor — strip
+            // ekstra gesture kodu taşımıyor.
+            _staggered(
+              6,
+              StyleDiscoveryStrip(
+                onCardTap: (category) async {
+                  await writeStyleDiscoveryCategory(category);
+                  if (!mounted) return;
+                  _pullKey.currentState?.openProgrammatically();
+                },
               ),
             ),
 
-            // ─── Style Discovery Strip — 6 oda kartı, auto-scroll ───
-            // Pill'in hemen üstünde yaşıyor. Tap → pull'un aynı open akışı
-            // tetikleniyor (login/guest dallanması, fade transition vs. hep
-            // StyleDiscoveryPull tarafında). Yukarı swipe page-level
-            // Listener'dan geçtiği için strip ekstra gesture kodu taşımıyor.
-            _staggered(
-              6,
-              Padding(
-                padding: const EdgeInsets.only(bottom: 10),
-                child: StyleDiscoveryStrip(
-                  onCardTap: (category) async {
-                    // Prefs'e kategori yazıp live screen'in initState'te
-                    // okumasını sağlıyoruz — deck filtreli açılsın.
-                    await writeStyleDiscoveryCategory(category);
-                    if (!mounted) return;
-                    _pullKey.currentState?.openProgrammatically();
-                  },
+            const SizedBox(height: 16),
+                  ],
                 ),
               ),
             ),
