@@ -1,0 +1,76 @@
+name: Flutter Web Build
+
+# Her master push'ta çalışır, ama sadece web'e ait kaynak değiştiğinde.
+# koala-api/, .github/, docs, build/web çıktısı değişince tetiklenmez.
+on:
+  push:
+    branches: [master]
+    paths-ignore:
+      - 'build/web/**'
+      - 'koala-api/**'
+      - '.github/**'
+      - '**.md'
+      - 'android/**'
+      - 'ios/**'
+      - 'store_metadata/**'
+      - 'design_prototypes/**'
+      - 'n8n-workflows/**'
+      - 'n8n-docs/**'
+      - 'docs/**'
+  workflow_dispatch:  # elle de tetikleyebilirsin (Actions tab → Run workflow)
+
+concurrency:
+  group: flutter-web-build
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write  # build/web commit edebilmek için
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: '3.41.3'
+          cache: true
+
+      - name: Flutter doctor
+        run: flutter doctor -v
+
+      - name: Pub get
+        run: flutter pub get
+
+      - name: Build web (release, dart-defines)
+        run: |
+          flutter build web --release \
+            --dart-define=KOALA_API_URL=https://koala-api-olive.vercel.app \
+            --dart-define=SUPABASE_URL=https://xgefjepaqnghaotqybpi.supabase.co \
+            --dart-define=SUPABASE_ANON_KEY=sb_publishable_ogP9BmI1n7xxUCTz3xDijA_xeIDyl7k \
+            --dart-define=EVLUMBA_SUPABASE_URL=https://vgtgcjnrsladdharzkwn.supabase.co \
+            --dart-define=EVLUMBA_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZndGdjam5yc2xhZGRoYXJ6a3duIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM0MjU1NzEsImV4cCI6MjA4OTAwMTU3MX0.7P5QagZdPntMliL1m5Zte7DSDR0CYkgwoHR7js4wqPg
+
+      - name: Prune debug symbols
+        run: |
+          find build/web -name "*.symbols" -delete || true
+
+      - name: Commit and push build/web (if changed)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -f build/web
+          if git diff --cached --quiet; then
+            echo "No build/web changes — skipping commit."
+          else
+            git commit -m "ci: rebuild build/web [skip ci]"
+            git push
+          fi
