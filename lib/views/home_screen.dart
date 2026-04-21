@@ -22,6 +22,7 @@ import '../services/saved_items_service.dart';
 import '../services/evlumba_live_service.dart';
 import 'chat_detail_screen.dart';
 import 'chat_list_screen.dart';
+import 'mekan/mekan_flow_screen.dart';
 import 'designers_screen.dart';
 import 'product_entry_screen.dart';
 import 'saved_screen.dart';
@@ -327,10 +328,7 @@ class _HomeScreenState extends State<HomeScreen>
     if (intercepted || !mounted) return;
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => ChatDetailScreen(
-          intent: KoalaIntent.photoAnalysis,
-          initialPhoto: bytes,
-        ),
+        builder: (_) => MekanFlowScreen(initialBytes: bytes),
       ),
     );
   }
