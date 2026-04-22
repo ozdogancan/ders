@@ -13,6 +13,7 @@ class MekanColor {
 }
 
 class AnalyzeResult {
+  final bool isRoom;      // Gemini is_room — doğrudan model cevabı
   final String roomType;  // ör. "living_room", "bedroom", "other"
   final String style;     // ör. "minimalist"
   final List<MekanColor> colors;
@@ -20,6 +21,7 @@ class AnalyzeResult {
   final String mood;      // ör. "calm, warm"
 
   const AnalyzeResult({
+    required this.isRoom,
     required this.roomType,
     required this.style,
     required this.colors,
@@ -27,15 +29,12 @@ class AnalyzeResult {
     required this.mood,
   });
 
-  /// Fotoğraf mekan değilse (other / selfie / portre) ipucu ver.
+  /// Model is_room=false dediyse kesin mekan değil.
+  /// Heuristik: ek güvence için caption/roomType kontrolü.
   bool get isNotMekan {
+    if (!isRoom) return true;
     final rt = roomType.toLowerCase();
     if (rt.contains('other') || rt.isEmpty || rt == 'unknown') return true;
-    final cap = caption.toLowerCase();
-    const bad = ['selfie', 'portrait', 'person', 'man ', 'woman ', 'face', 'people'];
-    for (final b in bad) {
-      if (cap.contains(b)) return true;
-    }
     return false;
   }
 
@@ -95,6 +94,7 @@ class MekanAnalyzeService {
     }
 
     return AnalyzeResult(
+      isRoom: j['is_room'] == true,
       roomType: (j['room_type'] ?? '').toString(),
       style: (j['style'] ?? '').toString(),
       caption: (j['caption'] ?? '').toString(),

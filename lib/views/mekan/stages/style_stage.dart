@@ -8,6 +8,11 @@ import '../../style_discovery_screen.dart';
 import '../mekan_constants.dart';
 import '../widgets/mekan_ui.dart';
 
+/// Stil seçim ekranı — sakin, tek odaklı.
+/// Yapı: [foto + tespit] → [renk şeridi] → [stil grid] → [başlat]
+/// "Senin tarzın" iddialı kartını kaldırdık. Profilde kayıtlı stil varsa
+/// sadece ilgili karta küçük bir yıldız ve altta tek satır hatırlatma
+/// düşüyor — kullanıcıya dayatmıyoruz.
 class StyleStage extends StatefulWidget {
   final Uint8List bytes;
   final AnalyzeResult analysis;
@@ -50,11 +55,7 @@ class _StyleStageState extends State<StyleStage> {
       setState(() {
         _primaryStyle = primary;
         _loadedProfile = true;
-        // Eğer kullanıcı tarzını biliyorsak varsayılan olarak uygula.
-        if (primary != null) {
-          final match = _matchTheme(primary);
-          if (match != null) _theme = match;
-        }
+        // NOT: Otomatik seçim yapmıyoruz. Kullanıcı kendisi işaretlemeli.
       });
     } catch (_) {
       if (!mounted) return;
@@ -62,16 +63,15 @@ class _StyleStageState extends State<StyleStage> {
     }
   }
 
-  ThemeOption? _matchTheme(String key) {
+  ThemeOption? _matchTheme(String? key) {
+    if (key == null) return null;
     final k = key.toLowerCase().trim();
     for (final t in kThemes) {
       if (t.value.toLowerCase() == k) return t;
       if (t.tr.toLowerCase() == k) return t;
     }
-    // Yaygın eşleşmeler
     const aliases = {
       'minimal': 'Minimalist',
-      'minimalist': 'Minimalist',
       'scandinavian': 'Scandinavian',
       'skandinav': 'Scandinavian',
       'iskandinav': 'Scandinavian',
@@ -99,78 +99,55 @@ class _StyleStageState extends State<StyleStage> {
         builder: (_) => const StyleDiscoveryScreen(entryPoint: 'mekan_flow'),
       ),
     );
-    // Geri dönüşte profili tazele.
     await _loadProfile();
   }
 
   @override
   Widget build(BuildContext context) {
     final analysis = widget.analysis;
+    final matched = _matchTheme(_primaryStyle);
+
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(
         KoalaSpacing.xl, KoalaSpacing.md, KoalaSpacing.xl, KoalaSpacing.xxl),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // 1) Foto + tespit edilen oda
-          _photoAndDetection(analysis),
-          const SizedBox(height: KoalaSpacing.xxl),
-
-          // 2) Renk paleti analizi
-          if (analysis.colors.isNotEmpty) ...[
-            const Text('Renk paleti', style: KoalaText.h3),
-            const SizedBox(height: KoalaSpacing.sm),
-            _palette(analysis.colors),
-            const SizedBox(height: KoalaSpacing.xxl),
-          ],
-
-          // 3) Stil profili kartı
-          if (_loadedProfile) ...[
-            _styleProfileCard(),
-            const SizedBox(height: KoalaSpacing.sm),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: TextButton.icon(
-                onPressed: _openDiscovery,
-                style: TextButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 4),
-                  minimumSize: const Size(0, 0),
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  foregroundColor: KoalaColors.textSec,
-                ),
-                icon: const Icon(Icons.explore_outlined, size: 14),
-                label: Text(
-                  'Tarzını güncellemek ister misin?',
-                  style: KoalaText.bodySec.copyWith(
-                    decoration: TextDecoration.underline,
-                    decorationColor: KoalaColors.textSec,
-                    fontSize: 12,
-                  ),
-                ),
-              ),
-            ),
-          ],
-          const SizedBox(height: KoalaSpacing.xxl),
-
-          // 4) Tema seçici
-          const Text('Bir tarz seç', style: KoalaText.h3),
-          const SizedBox(height: KoalaSpacing.xs),
-          Text(
-            _theme == null
-                ? 'Odayı hangi havada yeniden hayal edelim?'
-                : 'Seçili · ${_theme!.tr}',
-            style: KoalaText.bodySec,
-          ),
+          // 1) Kullanıcı fotosu — ana odak
+          _heroPhoto(),
           const SizedBox(height: KoalaSpacing.lg),
-          _themeGrid(),
+
+          // 2) Tespit — tek satır
+          Text(analysis.roomLabelTr, style: KoalaText.h1),
+          const SizedBox(height: 4),
+          if (analysis.mood.isNotEmpty)
+            Text(
+              _firstSentence(analysis.mood),
+              style: KoalaText.bodySec,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+          const SizedBox(height: KoalaSpacing.lg),
+
+          // 3) Renk şeridi — sade daireler
+          if (analysis.colors.isNotEmpty) _colorStrip(analysis.colors),
+          if (analysis.colors.isNotEmpty)
+            const SizedBox(height: KoalaSpacing.xxl),
+
+          // 4) Stil seçimi
+          const Text('Hangi tarzda?', style: KoalaText.h3),
+          const SizedBox(height: KoalaSpacing.sm),
+          _themeGrid(matched),
+
+          // 5) Hafif hatırlatma — DAYATMA YOK
+          const SizedBox(height: KoalaSpacing.md),
+          if (_loadedProfile) _hint(matched),
 
           const SizedBox(height: KoalaSpacing.xxl),
 
-          // 5) Başlat
+          // 6) Başlat
           MekanPrimaryButton(
-            label: _theme == null
-                ? 'Bir tarz seç'
-                : 'Tasarımı başlat',
+            label: _theme == null ? 'Bir tarz seç' : 'Tasarımı başlat',
             onTap: _theme == null ? null : () => widget.onSubmit(_theme!),
             trailing: _theme == null ? null : Icons.auto_awesome_rounded,
           ),
@@ -179,247 +156,135 @@ class _StyleStageState extends State<StyleStage> {
     );
   }
 
-  Widget _photoAndDetection(AnalyzeResult a) {
+  Widget _heroPhoto() {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(KoalaRadius.lg),
+      child: AspectRatio(
+        aspectRatio: 16 / 10,
+        child: Image.memory(widget.bytes, fit: BoxFit.cover),
+      ),
+    );
+  }
+
+  String _firstSentence(String s) {
+    final t = s.trim();
+    final i = t.indexOf('.');
+    final cut = (i > 0 && i < 120) ? t.substring(0, i + 1) : t;
+    if (cut.length <= 120) return cut;
+    return '${cut.substring(0, 117)}…';
+  }
+
+  Widget _colorStrip(List<MekanColor> colors) {
     return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Container(
-          width: 96,
-          height: 96,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(KoalaRadius.md),
-            image: DecorationImage(
-              image: MemoryImage(widget.bytes),
-              fit: BoxFit.cover,
-            ),
-            border: Border.all(color: KoalaColors.border, width: 0.5),
-          ),
-        ),
-        const SizedBox(width: KoalaSpacing.lg),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(height: 4),
-              Text(
-                '${a.roomLabelTr} tespit edildi',
-                style: KoalaText.h2,
-              ),
-              const SizedBox(height: 6),
-              if (a.caption.isNotEmpty)
-                Text(
-                  _shorten(a.caption),
-                  style: KoalaText.bodySec,
-                  maxLines: 3,
-                  overflow: TextOverflow.ellipsis,
+        for (var i = 0; i < colors.length && i < 5; i++) ...[
+          if (i > 0) const SizedBox(width: 10),
+          Tooltip(
+            message: '${colors[i].name} · ${colors[i].hex}',
+            child: Container(
+              width: 28,
+              height: 28,
+              decoration: BoxDecoration(
+                color: colors[i].color,
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: KoalaColors.border,
+                  width: 0.5,
                 ),
-              const SizedBox(height: KoalaSpacing.sm),
-              Wrap(
-                spacing: 6,
-                runSpacing: 6,
-                children: [
-                  MekanChip(
-                    label: a.roomLabelTr,
-                    icon: Icons.check_circle_outline,
-                  ),
-                  if (a.mood.isNotEmpty)
-                    MekanChip(
-                      label: a.mood,
-                      tint: KoalaColors.surfaceAlt,
-                    ),
-                ],
               ),
-            ],
+            ),
+          ),
+        ],
+        const SizedBox(width: KoalaSpacing.md),
+        Expanded(
+          child: Text(
+            colors
+                .take(3)
+                .map((c) => c.name.toLowerCase())
+                .join(' · '),
+            style: KoalaText.bodySec.copyWith(fontSize: 12),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
         ),
       ],
     );
   }
 
-  String _shorten(String s) {
-    final t = s.trim();
-    if (t.length <= 140) return t;
-    return '${t.substring(0, 137)}…';
-  }
-
-  Widget _palette(List<MekanColor> colors) {
-    return Container(
-      padding: const EdgeInsets.all(KoalaSpacing.md),
-      decoration: KoalaDeco.card,
-      child: Wrap(
-        spacing: 10,
-        runSpacing: 10,
+  Widget _hint(ThemeOption? matched) {
+    if (matched != null) {
+      // Kullanıcının daha önce bulduğu tarz var — küçük satır, dayatma yok.
+      return Row(
         children: [
-          for (final c in colors) _swatchChip(c),
-        ],
-      ),
-    );
-  }
-
-  Widget _swatchChip(MekanColor c) {
-    return Container(
-      padding: const EdgeInsets.only(left: 6, right: 12, top: 6, bottom: 6),
-      decoration: BoxDecoration(
-        color: KoalaColors.surfaceMuted,
-        borderRadius: BorderRadius.circular(KoalaRadius.pill),
-        border: Border.all(color: KoalaColors.border, width: 0.5),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 22,
-            height: 22,
-            decoration: BoxDecoration(
-              color: c.color,
-              shape: BoxShape.circle,
-              border: Border.all(
-                  color: KoalaColors.border, width: 0.5),
-            ),
-          ),
-          const SizedBox(width: 8),
-          Text(
-            c.name,
-            style: const TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: KoalaColors.text,
-            ),
-          ),
+          const Icon(Icons.history_rounded,
+              size: 14, color: KoalaColors.textSec),
           const SizedBox(width: 6),
-          Text(
-            c.hex,
-            style: const TextStyle(
-              fontSize: 11,
-              color: KoalaColors.textSec,
-              fontFeatures: [FontFeature.tabularFigures()],
+          Expanded(
+            child: Text(
+              'Son keşfinde ${matched.tr} çıkmıştı · kartta ★',
+              style: KoalaText.bodySec.copyWith(fontSize: 12),
+            ),
+          ),
+          TextButton(
+            onPressed: _openDiscovery,
+            style: TextButton.styleFrom(
+              padding: EdgeInsets.zero,
+              minimumSize: const Size(0, 0),
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              foregroundColor: KoalaColors.accentDeep,
+            ),
+            child: const Text(
+              'Yenile',
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _styleProfileCard() {
-    final hasStyle = _primaryStyle != null;
-    if (hasStyle) {
-      final match = _matchTheme(_primaryStyle!);
-      final label = match?.tr ?? _primaryStyle!;
-      return Container(
-        padding: const EdgeInsets.all(KoalaSpacing.lg),
-        decoration: BoxDecoration(
-          color: KoalaColors.accentSoft,
-          borderRadius: BorderRadius.circular(KoalaRadius.lg),
-          border: Border.all(
-              color: KoalaColors.accent.withValues(alpha: 0.25), width: 0.8),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  width: 34,
-                  height: 34,
-                  decoration: const BoxDecoration(
-                    color: KoalaColors.accentDeep,
-                    shape: BoxShape.circle,
-                  ),
-                  alignment: Alignment.center,
-                  child: const Icon(Icons.star_rounded,
-                      color: Colors.white, size: 18),
-                ),
-                const SizedBox(width: KoalaSpacing.md),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text('Senin tarzın',
-                          style: KoalaText.caption),
-                      const SizedBox(height: 2),
-                      Text(label, style: KoalaText.h3),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: KoalaSpacing.md),
-            Text(
-              'Bu tarzı uygulayalım mı? Aşağıdan istersen başka tarz seçebilirsin.',
-              style: KoalaText.bodySec,
-            ),
-            const SizedBox(height: KoalaSpacing.md),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: TextButton.icon(
-                onPressed: _openDiscovery,
-                style: TextButton.styleFrom(
-                  padding: EdgeInsets.zero,
-                  minimumSize: const Size(0, 0),
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  foregroundColor: KoalaColors.accentDeep,
-                ),
-                icon: const Icon(Icons.refresh_rounded, size: 16),
-                label: const Text(
-                  'Tarzını tekrar keşfet',
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
       );
     }
-
-    // Stil bilinmiyor — keşif CTA'sı
-    return Container(
-      padding: const EdgeInsets.all(KoalaSpacing.lg),
-      decoration: BoxDecoration(
-        color: KoalaColors.surface,
-        borderRadius: BorderRadius.circular(KoalaRadius.lg),
-        border: Border.all(color: KoalaColors.hintBorder, width: 1),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('Tarzını henüz bilmiyoruz', style: KoalaText.h3),
-          const SizedBox(height: 6),
-          Text(
-            'Birkaç görsele göz at, sana yakın hissedeni işaretle — tarzını tanıyalım.',
-            style: KoalaText.bodySec,
-          ),
-          const SizedBox(height: KoalaSpacing.md),
-          MekanSecondaryButton(
-            label: 'Tarzını Keşfet',
-            onTap: _openDiscovery,
-            fullWidth: true,
-            icon: Icons.auto_awesome_outlined,
-          ),
-        ],
+    // Stil hiç yoksa — keşif davetini küçük tut.
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: TextButton.icon(
+        onPressed: _openDiscovery,
+        style: TextButton.styleFrom(
+          padding: EdgeInsets.zero,
+          minimumSize: const Size(0, 0),
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          foregroundColor: KoalaColors.accentDeep,
+        ),
+        icon: const Icon(Icons.auto_awesome_outlined, size: 14),
+        label: const Text(
+          'Tarzını keşfedelim mi?',
+          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+        ),
       ),
     );
   }
 
-  Widget _themeGrid() {
+  Widget _themeGrid(ThemeOption? matched) {
     return LayoutBuilder(builder: (ctx, c) {
       final cardW = (c.maxWidth - KoalaSpacing.md) / 2;
       return Wrap(
         spacing: KoalaSpacing.md,
         runSpacing: KoalaSpacing.md,
         children: [
-          for (final t in kThemes) _themeTile(t, cardW),
+          for (final t in kThemes)
+            _themeTile(
+              t,
+              cardW,
+              highlighted: matched?.value == t.value,
+            ),
         ],
       );
     });
   }
 
-  Widget _themeTile(ThemeOption t, double width) {
+  Widget _themeTile(
+    ThemeOption t,
+    double width, {
+    required bool highlighted,
+  }) {
     final active = _theme?.value == t.value;
-    final highlighted = _primaryStyle != null &&
-        _matchTheme(_primaryStyle!)?.value == t.value;
     return GestureDetector(
       onTap: () => setState(() => _theme = t),
       child: AnimatedContainer(
@@ -429,53 +294,26 @@ class _StyleStageState extends State<StyleStage> {
           color: KoalaColors.surface,
           borderRadius: BorderRadius.circular(KoalaRadius.lg),
           border: Border.all(
-            color: active
-                ? KoalaColors.accentDeep
-                : (highlighted
-                    ? KoalaColors.accent.withValues(alpha: 0.35)
-                    : KoalaColors.border),
-            width: active ? 2 : (highlighted ? 1 : 0.5),
+            color: active ? KoalaColors.accentDeep : KoalaColors.border,
+            width: active ? 2 : 0.5,
           ),
           boxShadow: active ? KoalaShadows.accentGlow : null,
         ),
-        padding: const EdgeInsets.all(10),
+        padding: const EdgeInsets.all(8),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Kart görseli: gerçek Unsplash fotoğrafı + gradient fallback.
             ClipRRect(
               borderRadius: BorderRadius.circular(KoalaRadius.md),
               child: AspectRatio(
                 aspectRatio: 5 / 4,
-                child: Stack(children: [
-                  Positioned.fill(
-                    child: Container(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          colors: t.swatch.map((c) => Color(c)).toList(),
-                          stops: _stops(t.swatch.length),
-                        ),
-                      ),
-                    ),
-                  ),
-                  if (active)
-                    Positioned(
-                      top: 8,
-                      right: 8,
-                      child: Container(
-                        width: 22,
-                        height: 22,
-                        decoration: const BoxDecoration(
-                          color: KoalaColors.accentDeep,
-                          shape: BoxShape.circle,
-                        ),
-                        alignment: Alignment.center,
-                        child: const Icon(Icons.check_rounded,
-                            color: Colors.white, size: 14),
-                      ),
-                    ),
-                ]),
+                child: _StyleImage(
+                  url: t.image,
+                  fallback: t.swatch,
+                  active: active,
+                  highlighted: highlighted,
+                ),
               ),
             ),
             const SizedBox(height: KoalaSpacing.sm),
@@ -484,30 +322,134 @@ class _StyleStageState extends State<StyleStage> {
                 Expanded(
                   child: Text(
                     t.tr,
-                    style: KoalaText.h4,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: KoalaColors.text,
+                    ),
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
-                if (highlighted && !active)
+                if (highlighted)
                   const Icon(Icons.star_rounded,
                       color: KoalaColors.accent, size: 14),
               ],
-            ),
-            const SizedBox(height: 2),
-            Text(
-              t.tag,
-              style: KoalaText.bodySmall,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
             ),
           ],
         ),
       ),
     );
   }
+}
 
-  List<double> _stops(int n) {
-    if (n <= 1) return const [0.0];
-    return [for (int i = 0; i < n; i++) i / (n - 1)];
+/// Network görseli + fallback gradient. Yükleme sırasında fade-in yapar;
+/// hata olursa gradient'a düşer. Aktif/işaretli kart için overlay ekler.
+class _StyleImage extends StatelessWidget {
+  final String url;
+  final List<int> fallback;
+  final bool active;
+  final bool highlighted;
+  const _StyleImage({
+    required this.url,
+    required this.fallback,
+    required this.active,
+    required this.highlighted,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final gradient = LinearGradient(
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+      colors: fallback.map((c) => Color(c)).toList(),
+    );
+
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        // Fallback — her zaman altta, görsel yüklenemese de bir şey gözüksün.
+        Container(decoration: BoxDecoration(gradient: gradient)),
+        Image.network(
+          url,
+          fit: BoxFit.cover,
+          loadingBuilder: (ctx, child, progress) {
+            if (progress == null) return child;
+            return AnimatedOpacity(
+              opacity: 0,
+              duration: const Duration(milliseconds: 1),
+              child: child,
+            );
+          },
+          frameBuilder: (ctx, child, frame, wasSync) {
+            return AnimatedOpacity(
+              opacity: frame == null ? 0 : 1,
+              duration: const Duration(milliseconds: 320),
+              curve: Curves.easeOut,
+              child: child,
+            );
+          },
+          errorBuilder: (ctx, err, stack) => const SizedBox.shrink(),
+        ),
+        // Hafif alt gradient — metin üstüne oturmasa da kart doygunlaşsın.
+        Positioned.fill(
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Colors.transparent,
+                  Colors.black.withValues(alpha: 0.06),
+                ],
+              ),
+            ),
+          ),
+        ),
+        if (active)
+          Positioned(
+            top: 6,
+            right: 6,
+            child: Container(
+              width: 22,
+              height: 22,
+              decoration: const BoxDecoration(
+                color: KoalaColors.accentDeep,
+                shape: BoxShape.circle,
+              ),
+              alignment: Alignment.center,
+              child: const Icon(Icons.check_rounded,
+                  color: Colors.white, size: 14),
+            ),
+          ),
+        if (!active && highlighted)
+          Positioned(
+            top: 6,
+            right: 6,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.92),
+                borderRadius: BorderRadius.circular(KoalaRadius.pill),
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.star_rounded,
+                      color: KoalaColors.accent, size: 12),
+                  SizedBox(width: 2),
+                  Text(
+                    'Son keşfin',
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      color: KoalaColors.text,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+      ],
+    );
   }
 }

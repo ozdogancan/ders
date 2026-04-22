@@ -222,6 +222,13 @@ class _MekanFlowScreenState extends State<MekanFlowScreen> {
   }
 
   Widget _notMekanView() {
+    final cap = _analysis?.caption.trim() ?? '';
+    // Gemini "Bu bir selfie gibi görünüyor" gibi nazik bir cümle döndürüyor.
+    // Varsa onu kullan, yoksa genel mesaj.
+    final msg = cap.isNotEmpty
+        ? cap
+        : 'İç mekan görmüyorum bu karede. Salonun, yatak odan, mutfağın — '
+            'bir oda fotoğrafı yükler misin?';
     return Padding(
       key: const ValueKey('notMekan'),
       padding: const EdgeInsets.fromLTRB(
@@ -230,31 +237,33 @@ class _MekanFlowScreenState extends State<MekanFlowScreen> {
         mainAxisAlignment: MainAxisAlignment.center,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          // Küçük foto önizleme — kullanıcı ne yüklediğini görsün.
           Center(
             child: Container(
-              width: 72,
-              height: 72,
+              width: 100,
+              height: 100,
               decoration: BoxDecoration(
-                color: KoalaColors.warning.withValues(alpha: 0.14),
-                shape: BoxShape.circle,
+                borderRadius: BorderRadius.circular(KoalaRadius.lg),
+                image: DecorationImage(
+                  image: MemoryImage(_bytes),
+                  fit: BoxFit.cover,
+                ),
+                border: Border.all(color: KoalaColors.border, width: 0.5),
               ),
-              alignment: Alignment.center,
-              child: const Icon(Icons.image_not_supported_outlined,
-                  color: KoalaColors.warning, size: 32),
             ),
           ),
           const SizedBox(height: KoalaSpacing.xl),
-          const Text('Bu bir mekan fotoğrafı değil gibi',
+          const Text('Bunu tasarlayamam 🐨',
               style: KoalaText.h1, textAlign: TextAlign.center),
-          const SizedBox(height: KoalaSpacing.md),
-          const Text(
-            'Salonu, yatak odanı, mutfağı gibi bir iç mekan fotoğrafı yükler misin?',
+          const SizedBox(height: KoalaSpacing.sm),
+          Text(
+            msg,
             style: KoalaText.bodySec,
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: KoalaSpacing.xxl),
           MekanPrimaryButton(
-            label: 'Tekrar seç',
+            label: 'Başka fotoğraf seç',
             onTap: () => Navigator.of(context).pop(),
             trailing: Icons.photo_library_outlined,
           ),
@@ -263,7 +272,41 @@ class _MekanFlowScreenState extends State<MekanFlowScreen> {
     );
   }
 
+  ({String title, String body}) _humanError() {
+    final m = _errorMsg ?? '';
+    final lower = m.toLowerCase();
+    if (lower.contains('insufficient credit') ||
+        lower.contains('402') ||
+        lower.contains('billing')) {
+      return (
+        title: 'Şu an tasarım yapamıyoruz',
+        body: 'Görsel üretimi için kapasite geçici olarak doldu. '
+            'Birazdan tekrar dener misin?',
+      );
+    }
+    if (lower.contains('429') || lower.contains('rate limit')) {
+      return (
+        title: 'Biraz yoğunuz',
+        body: 'Çok sayıda istek geldi. 30 saniye sonra tekrar dener misin?',
+      );
+    }
+    if (lower.contains('load failed') ||
+        lower.contains('clientexception') ||
+        lower.contains('network') ||
+        lower.contains('socketexception')) {
+      return (
+        title: 'İnternete ulaşamadım',
+        body: 'Bağlantını kontrol edip tekrar dener misin?',
+      );
+    }
+    return (
+      title: 'Bir şey ters gitti',
+      body: m.isEmpty ? 'Bilinmeyen hata' : m,
+    );
+  }
+
   Widget _errorView() {
+    final e = _humanError();
     return Padding(
       key: const ValueKey('error'),
       padding: const EdgeInsets.fromLTRB(
@@ -286,13 +329,15 @@ class _MekanFlowScreenState extends State<MekanFlowScreen> {
             ),
           ),
           const SizedBox(height: KoalaSpacing.xl),
-          const Text('Bir şey ters gitti',
+          Text(e.title,
               style: KoalaText.h1, textAlign: TextAlign.center),
           const SizedBox(height: KoalaSpacing.sm),
           Text(
-            _errorMsg ?? 'Bilinmeyen hata',
+            e.body,
             style: KoalaText.bodySec,
             textAlign: TextAlign.center,
+            maxLines: 4,
+            overflow: TextOverflow.ellipsis,
           ),
           const SizedBox(height: KoalaSpacing.xxl),
           MekanPrimaryButton(
