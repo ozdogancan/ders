@@ -101,7 +101,11 @@ const kThemes = <ThemeOption>[
     'Wabi-sabi, sade huzur',
     [0xFFE7DFD0, 0xFF8C7B68, 0xFF2F2A24],
     {
-      kRoomKeyLiving: 'https://images.unsplash.com/photo-1772797583328-f83bc3f94f80$_q',
+      // NOT: Japandi için ayrı foto aradık, Unsplash metaları yanılttı (yatak
+      // odaları çıktı). Skandinav salon fotosunu kullanıyoruz — Japandi zaten
+      // Japon+Skandinav füzyonu, stilistik olarak da uygun. İleride uygun
+      // bir Japandi salonu bulunca değiştirilebilir.
+      kRoomKeyLiving: 'https://images.unsplash.com/photo-1616486338812-3dadae4b4ace$_q',
       kRoomKeyKitchen: 'https://images.unsplash.com/photo-1556909172-54557c7e4fb7$_q',
       kRoomKeyBedroom: 'https://images.unsplash.com/photo-1540518614846-7eded433c457$_q',
       kRoomKeyBathroom: 'https://images.unsplash.com/photo-1584622650111-93e69d876a0c$_q',
