@@ -389,10 +389,12 @@ class _AnalyzingViewState extends State<_AnalyzingView>
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: KoalaSpacing.xl),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Spacer(),
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
           ScaleTransition(
             scale: Tween(begin: 0.985, end: 1.015).animate(
               CurvedAnimation(parent: _pulse, curve: Curves.easeInOut),
@@ -477,8 +479,8 @@ class _AnalyzingViewState extends State<_AnalyzingView>
               ),
             ),
           ),
-          const Spacer(flex: 2),
-        ],
+          ],
+        ),
       ),
     );
   }
