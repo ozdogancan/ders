@@ -262,6 +262,7 @@ class _StyleStageState extends State<StyleStage> {
   }
 
   Widget _themeGrid(ThemeOption? matched) {
+    final roomKey = widget.analysis.roomKey;
     return LayoutBuilder(builder: (ctx, c) {
       final cardW = (c.maxWidth - KoalaSpacing.md) / 2;
       return Wrap(
@@ -272,6 +273,7 @@ class _StyleStageState extends State<StyleStage> {
             _themeTile(
               t,
               cardW,
+              roomKey: roomKey,
               highlighted: matched?.value == t.value,
             ),
         ],
@@ -282,6 +284,7 @@ class _StyleStageState extends State<StyleStage> {
   Widget _themeTile(
     ThemeOption t,
     double width, {
+    required String roomKey,
     required bool highlighted,
   }) {
     final active = _theme?.value == t.value;
@@ -309,7 +312,7 @@ class _StyleStageState extends State<StyleStage> {
               child: AspectRatio(
                 aspectRatio: 5 / 4,
                 child: _StyleImage(
-                  url: t.image,
+                  url: t.imageFor(roomKey),
                   fallback: t.swatch,
                   active: active,
                   highlighted: highlighted,

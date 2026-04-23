@@ -38,6 +38,26 @@ class AnalyzeResult {
     return false;
   }
 
+  /// Standart oda anahtarı — Gemini'nin room_type çıktısını mekan_constants
+  /// anahtarlarına (living_room, kitchen, bedroom, bathroom, dining_room,
+  /// office) eşler. Eşleşme yoksa living_room döner (en güvenli fallback).
+  String get roomKey {
+    final rt = roomType.toLowerCase().replaceAll('-', '_');
+    if (rt.contains('living')) return 'living_room';
+    if (rt.contains('bed') || rt.contains('kids') || rt.contains('child')) {
+      return 'bedroom';
+    }
+    if (rt.contains('kitchen')) return 'kitchen';
+    if (rt.contains('bath') || rt.contains('wc') || rt.contains('toilet')) {
+      return 'bathroom';
+    }
+    if (rt.contains('dining')) return 'dining_room';
+    if (rt.contains('office') || rt.contains('study') || rt.contains('work')) {
+      return 'office';
+    }
+    return 'living_room';
+  }
+
   /// UI'da kullanılacak kısa Türkçe etiket.
   String get roomLabelTr {
     final rt = roomType.toLowerCase().replaceAll('_', ' ');
