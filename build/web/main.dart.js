@@ -112476,7 +112476,7 @@ m=t.GU
 l=t.Mq
 k=t.K
 j=A.z(["system_instruction",A.z(["parts",A.a([A.z(["text",c3],c4,c4)],o)],c4,n),"contents",A.a([A.z(["role","user","parts",A.a([A.z(["text",d0],c4,c4),A.z(["inline_data",A.z(["mime_type",c0,"data",c2],c4,c4)],c4,m)],l)],c4,k)],l),"generationConfig",c6],c4,c5)
-if(!c7){j.m(0,"tools",B.pC)
+if(!c7){j.m(0,"tools",B.pB)
 if(c1){j.m(0,"tool_config",A.z(["function_calling_config",A.z(["mode","ANY","allowed_function_names",A.a(["search_products"],t.s)],c4,k)],c4,t.nf))
 A.ag().$1("KoalaAI: Image \u2014 product intent detected, mode=ANY")}else{j.m(0,"tool_config",A.z(["function_calling_config",A.z(["mode","AUTO"],c4,c4)],c4,m))
 A.ag().$1("KoalaAI: Image \u2014 no product intent, mode=AUTO")}}else A.ag().$1("KoalaAI: Image call with tools DISABLED (narrow-intent)")
@@ -112538,7 +112538,7 @@ a2=a2.cL(a5,new A.asn(),a6)
 b0=A.S(a2,a2.$ti.i("ad.E"))
 b1=A.z(["temperature",0.4,"maxOutputTokens",2048],c4,c5)
 if(c9)b1.m(0,"responseMimeType","application/json")
-b2=A.z(["system_instruction",A.z(["parts",A.a([A.z(["text",c3],c4,c4)],o)],c4,n),"contents",A.a([A.z(["role","user","parts",A.a([A.z(["text",d0],c4,c4)],o)],c4,k),A.z(["role","model","parts",a9],c4,k),A.z(["role","user","parts",b0],c4,k)],l),"tools",B.pC,"tool_config",A.z(["function_calling_config",A.z(["mode","NONE"],c4,c4)],c4,m),"generationConfig",b1],c4,k)
+b2=A.z(["system_instruction",A.z(["parts",A.a([A.z(["text",c3],c4,c4)],o)],c4,n),"contents",A.a([A.z(["role","user","parts",A.a([A.z(["text",d0],c4,c4)],o)],c4,k),A.z(["role","model","parts",a9],c4,k),A.z(["role","user","parts",b0],c4,k)],l),"tools",B.pB,"tool_config",A.z(["function_calling_config",A.z(["mode","NONE"],c4,c4)],c4,m),"generationConfig",b1],c4,k)
 A.ag().$1("KoalaAI: Image turn2 (function result)...")
 s=15
 return A.c(h.hg("POST",A.c5(u.F,0,null),A.z(["Content-Type","application/json"],c4,c4),B.E.eA(b2,null),null).h5(0,B.iF),$async$qX)
@@ -112683,7 +112683,7 @@ break}if(g2)c0=f3?2048:800
 else c0=512
 c1=A.z(["temperature",0.7,"maxOutputTokens",c0],f4,f2)
 if(g2&&b9>0)c1.m(0,"responseMimeType","application/json")
-c2=A.z(["system_instruction",f6,"contents",f7,"tools",B.pC,"generationConfig",c1],f4,f2)
+c2=A.z(["system_instruction",f6,"contents",f7,"tools",B.pB,"generationConfig",c1],f4,f2)
 if(b9===0)c3=!b6||a7
 else c3=!1
 if(c3){c4=A.z(["mode","ANY"],f4,f2)
@@ -120605,11 +120605,11 @@ return A.n($async$yT,r)},
 awU(a){var s,r,q,p
 if(a==null)return null
 s=B.b.R(a.toLowerCase())
-for(r=0;r<6;++r){q=B.pB[r]
+for(r=0;r<6;++r){q=B.pC[r]
 if(q.a.toLowerCase()===s)return q
 if(q.b.toLowerCase()===s)return q}p=B.a37.h(0,s)
 if(p==null)return null
-for(r=0;r<6;++r){q=B.pB[r]
+for(r=0;r<6;++r){q=B.pC[r]
 if(q.a===p)return q}return null},
 z5(){var s=0,r=A.o(t.H),q=this,p,o
 var $async$z5=A.k(function(a,b){if(a===1)return A.l(b,r)
@@ -120699,7 +120699,7 @@ return r.Tt(0,s)},
 $S:0}
 A.b5M.prototype={
 $2(a,b){var s,r,q,p,o,n,m=(b.b-12)/2,l=A.a([],t.p)
-for(s=this.a,r=this.b,q=this.c,p=0;p<6;++p){o=B.pB[p]
+for(s=this.a,r=this.b,q=this.c,p=0;p<6;++p){o=B.pC[p]
 n=q==null?null:q.a
 l.push(s.aEI(o,m,n===o.a,r))}return A.jI(B.c_,l,12,12)},
 $S:815}
@@ -136248,26 +136248,6 @@ B.Zk=s([B.bP,B.cd,B.b4,B.cm,B.cn,B.co,B.aX,B.c0,B.dr,B.ds,B.eK],A.aT("N<hC>"))
 B.a0W=new A.pk("en",null,"US")
 B.pA=s([B.a0W],t.ss)
 B.xb=s([0,41,61,101,131,181,251,301,360],t.n)
-B.XI=s([4294308330,4293451727,4291806124],t.Y)
-B.hw={living_room:0,kitchen:1,bedroom:2,bathroom:3,dining_room:4,office:5}
-B.a2X=new A.aO(B.hw,["https://images.unsplash.com/photo-1586023492125-27b2c045efd7?auto=format&fit=crop&w=480&q=60","https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?auto=format&fit=crop&w=480&q=60","https://images.unsplash.com/photo-1522771739844-6a9f6d5f14af?auto=format&fit=crop&w=480&q=60","https://images.unsplash.com/photo-1552321554-5fefe8c9ef14?auto=format&fit=crop&w=480&q=60","https://images.unsplash.com/photo-1583847268964-b28dc8f51f92?auto=format&fit=crop&w=480&q=60","https://images.unsplash.com/photo-1593476550610-87baa860004a?auto=format&fit=crop&w=480&q=60"],t.l)
-B.akA=new A.mC("Minimalist","Minimalist",B.XI,B.a2X)
-B.XJ=s([4294768882,4293515192,4290349917],t.Y)
-B.a2W=new A.aO(B.hw,["https://images.unsplash.com/photo-1616486338812-3dadae4b4ace?auto=format&fit=crop&w=480&q=60","https://images.unsplash.com/photo-1565538810643-b5bdb714032a?auto=format&fit=crop&w=480&q=60","https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?auto=format&fit=crop&w=480&q=60","https://images.unsplash.com/photo-1620626011761-996317b8d101?auto=format&fit=crop&w=480&q=60","https://images.unsplash.com/photo-1617806118233-18e1de247200?auto=format&fit=crop&w=480&q=60","https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=480&q=60"],t.l)
-B.aky=new A.mC("Scandinavian","Skandinav",B.XJ,B.a2W)
-B.XG=s([4293386192,4287396712,4281281060],t.Y)
-B.a2V=new A.aO(B.hw,["https://images.unsplash.com/photo-1615874959474-d609969a20ed?auto=format&fit=crop&w=480&q=60","https://images.unsplash.com/photo-1556909172-54557c7e4fb7?auto=format&fit=crop&w=480&q=60","https://images.unsplash.com/photo-1540518614846-7eded433c457?auto=format&fit=crop&w=480&q=60","https://images.unsplash.com/photo-1584622650111-93e69d876a0c?auto=format&fit=crop&w=480&q=60","https://images.unsplash.com/photo-1595514535215-b58bd7ba70ab?auto=format&fit=crop&w=480&q=60","https://images.unsplash.com/photo-1519710164239-da123dc03ef4?auto=format&fit=crop&w=480&q=60"],t.l)
-B.akD=new A.mC("Japandi","Japandi",B.XG,B.a2V)
-B.XF=s([4292534244,4285231744,4280232247],t.Y)
-B.a2T=new A.aO(B.hw,["https://images.unsplash.com/photo-1600121848594-d8644e57abab?auto=format&fit=crop&w=480&q=60","https://images.unsplash.com/photo-1556911220-e15b29be8c8f?auto=format&fit=crop&w=480&q=60","https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?auto=format&fit=crop&w=480&q=60","https://images.unsplash.com/photo-1600566753190-17f0baa2a6c3?auto=format&fit=crop&w=480&q=60","https://images.unsplash.com/photo-1615529182904-14819c35db37?auto=format&fit=crop&w=480&q=60","https://images.unsplash.com/photo-1486946255434-2466348c2166?auto=format&fit=crop&w=480&q=60"],t.l)
-B.akB=new A.mC("Modern","Modern",B.XF,B.a2T)
-B.XH=s([4293446053,4291127879,4284361759],t.Y)
-B.a2Y=new A.aO(B.hw,["https://images.unsplash.com/photo-1600210491892-03d54c0aaf87?auto=format&fit=crop&w=480&q=60","https://images.unsplash.com/photo-1584622781564-1d987f7333c1?auto=format&fit=crop&w=480&q=60","https://images.unsplash.com/photo-1616627561950-9f746e330187?auto=format&fit=crop&w=480&q=60","https://images.unsplash.com/photo-1570129477492-45c003edd2be?auto=format&fit=crop&w=480&q=60","https://images.unsplash.com/photo-1600585154526-990dced4db0d?auto=format&fit=crop&w=480&q=60","https://images.unsplash.com/photo-1616137466211-f939a420be84?auto=format&fit=crop&w=480&q=60"],t.l)
-B.akz=new A.mC("Bohemian","Bohem",B.XH,B.a2Y)
-B.XE=s([4289964446,4284108614,4280951067],t.Y)
-B.a2U=new A.aO(B.hw,["https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?auto=format&fit=crop&w=480&q=60","https://images.unsplash.com/photo-1556909195-8a9def3dd6aa?auto=format&fit=crop&w=480&q=60","https://images.unsplash.com/photo-1595526114035-0d45ed16cfbf?auto=format&fit=crop&w=480&q=60","https://images.unsplash.com/photo-1603825471027-a7fc7b3e2057?auto=format&fit=crop&w=480&q=60","https://images.unsplash.com/photo-1551298370-9d3d53740c72?auto=format&fit=crop&w=480&q=60","https://images.unsplash.com/photo-1497366811353-6870744d04b2?auto=format&fit=crop&w=480&q=60"],t.l)
-B.akC=new A.mC("Industrial","End\xfcstriyel",B.XE,B.a2U)
-B.pB=s([B.akA,B.aky,B.akD,B.akB,B.akz,B.akC],A.aT("N<mC>"))
 B.Zn=s(["style_analysis","color_palette","product_grid","budget_plan","designer_card","before_after"],t.s)
 B.anH=new A.ql(0,0)
 B.anM=new A.ql(1,0.05)
@@ -136323,7 +136303,27 @@ B.a2Z=new A.aO(B.CQ,["object",B.a3Z,B.a0o],t.R)
 B.a3r=new A.aO(B.lO,["compare_products","Birden fazla \xfcr\xfcn\xfc kar\u015f\u0131la\u015ft\u0131r. Kullan\u0131c\u0131 iki veya daha fazla \xfcr\xfcn\xfc k\u0131yaslamak istedi\u011finde, hangisini tercih etmesi gerekti\u011fini sordu\u011funda \xe7a\u011f\u0131r.",B.a2Z],t.R)
 B.a_8=s([B.a3q,B.a3p,B.a3s,B.a3r],t.Mq)
 B.a2M=new A.aO(B.a4S,[B.a_8],t.yf)
-B.pC=s([B.a2M],t.t)
+B.pB=s([B.a2M],t.t)
+B.XI=s([4294308330,4293451727,4291806124],t.Y)
+B.hw={living_room:0,kitchen:1,bedroom:2,bathroom:3,dining_room:4,office:5}
+B.a2X=new A.aO(B.hw,["https://images.unsplash.com/photo-1586023492125-27b2c045efd7?auto=format&fit=crop&w=480&q=60","https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?auto=format&fit=crop&w=480&q=60","https://images.unsplash.com/photo-1522771739844-6a9f6d5f14af?auto=format&fit=crop&w=480&q=60","https://images.unsplash.com/photo-1552321554-5fefe8c9ef14?auto=format&fit=crop&w=480&q=60","https://images.unsplash.com/photo-1583847268964-b28dc8f51f92?auto=format&fit=crop&w=480&q=60","https://images.unsplash.com/photo-1593476550610-87baa860004a?auto=format&fit=crop&w=480&q=60"],t.l)
+B.akB=new A.mC("Minimalist","Minimalist",B.XI,B.a2X)
+B.XJ=s([4294768882,4293515192,4290349917],t.Y)
+B.a2V=new A.aO(B.hw,["https://images.unsplash.com/photo-1616486338812-3dadae4b4ace?auto=format&fit=crop&w=480&q=60","https://images.unsplash.com/photo-1565538810643-b5bdb714032a?auto=format&fit=crop&w=480&q=60","https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?auto=format&fit=crop&w=480&q=60","https://images.unsplash.com/photo-1620626011761-996317b8d101?auto=format&fit=crop&w=480&q=60","https://images.unsplash.com/photo-1617806118233-18e1de247200?auto=format&fit=crop&w=480&q=60","https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=480&q=60"],t.l)
+B.aky=new A.mC("Scandinavian","Skandinav",B.XJ,B.a2V)
+B.XG=s([4293386192,4287396712,4281281060],t.Y)
+B.a2W=new A.aO(B.hw,["https://images.unsplash.com/photo-1753800558596-9ad08a31413c?auto=format&fit=crop&w=480&q=60","https://images.unsplash.com/photo-1556909172-54557c7e4fb7?auto=format&fit=crop&w=480&q=60","https://images.unsplash.com/photo-1540518614846-7eded433c457?auto=format&fit=crop&w=480&q=60","https://images.unsplash.com/photo-1584622650111-93e69d876a0c?auto=format&fit=crop&w=480&q=60","https://images.unsplash.com/photo-1595514535215-b58bd7ba70ab?auto=format&fit=crop&w=480&q=60","https://images.unsplash.com/photo-1519710164239-da123dc03ef4?auto=format&fit=crop&w=480&q=60"],t.l)
+B.akA=new A.mC("Japandi","Japandi",B.XG,B.a2W)
+B.XF=s([4292534244,4285231744,4280232247],t.Y)
+B.a2T=new A.aO(B.hw,["https://images.unsplash.com/photo-1600121848594-d8644e57abab?auto=format&fit=crop&w=480&q=60","https://images.unsplash.com/photo-1556911220-e15b29be8c8f?auto=format&fit=crop&w=480&q=60","https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?auto=format&fit=crop&w=480&q=60","https://images.unsplash.com/photo-1600566753190-17f0baa2a6c3?auto=format&fit=crop&w=480&q=60","https://images.unsplash.com/photo-1615529182904-14819c35db37?auto=format&fit=crop&w=480&q=60","https://images.unsplash.com/photo-1486946255434-2466348c2166?auto=format&fit=crop&w=480&q=60"],t.l)
+B.akC=new A.mC("Modern","Modern",B.XF,B.a2T)
+B.XH=s([4293446053,4291127879,4284361759],t.Y)
+B.a2Y=new A.aO(B.hw,["https://images.unsplash.com/photo-1600210491892-03d54c0aaf87?auto=format&fit=crop&w=480&q=60","https://images.unsplash.com/photo-1584622781564-1d987f7333c1?auto=format&fit=crop&w=480&q=60","https://images.unsplash.com/photo-1616627561950-9f746e330187?auto=format&fit=crop&w=480&q=60","https://images.unsplash.com/photo-1570129477492-45c003edd2be?auto=format&fit=crop&w=480&q=60","https://images.unsplash.com/photo-1600585154526-990dced4db0d?auto=format&fit=crop&w=480&q=60","https://images.unsplash.com/photo-1616137466211-f939a420be84?auto=format&fit=crop&w=480&q=60"],t.l)
+B.akz=new A.mC("Bohemian","Bohem",B.XH,B.a2Y)
+B.XE=s([4289964446,4284108614,4280951067],t.Y)
+B.a2U=new A.aO(B.hw,["https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?auto=format&fit=crop&w=480&q=60","https://images.unsplash.com/photo-1556909195-8a9def3dd6aa?auto=format&fit=crop&w=480&q=60","https://images.unsplash.com/photo-1595526114035-0d45ed16cfbf?auto=format&fit=crop&w=480&q=60","https://images.unsplash.com/photo-1603825471027-a7fc7b3e2057?auto=format&fit=crop&w=480&q=60","https://images.unsplash.com/photo-1551298370-9d3d53740c72?auto=format&fit=crop&w=480&q=60","https://images.unsplash.com/photo-1497366811353-6870744d04b2?auto=format&fit=crop&w=480&q=60"],t.l)
+B.akD=new A.mC("Industrial","End\xfcstriyel",B.XE,B.a2U)
+B.pC=s([B.akB,B.aky,B.akA,B.akC,B.akz,B.akD],A.aT("N<mC>"))
 B.xd=s([0,21,51,121,151,191,271,321,360],t.n)
 B.ZL=s(["K\u0131r\u0131k beyaz","A\xe7\u0131k ah\u015fap","Ta\u015f beji"],t.s)
 B.Oe=new A.E(1,0.9607843137254902,0.9411764705882353,0.9098039215686274,B.l)
