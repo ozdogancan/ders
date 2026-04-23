@@ -134,9 +134,14 @@ class _StyleStageState extends State<StyleStage> {
           if (analysis.colors.isNotEmpty)
             const SizedBox(height: KoalaSpacing.xxl),
 
-          // 4) Stil seçimi
-          const Text('Hangi tarzda?', style: KoalaText.h3),
-          const SizedBox(height: KoalaSpacing.sm),
+          // 4) Stil seçimi — oda adına göre kişiselleştirilmiş başlık
+          Text(_styleHeading(analysis.roomLabelTr), style: KoalaText.h3),
+          const SizedBox(height: 4),
+          Text(
+            'Seçtiğin tarza göre yeniden tasarlayacağım.',
+            style: KoalaText.bodySec.copyWith(fontSize: 13),
+          ),
+          const SizedBox(height: KoalaSpacing.md),
           _themeGrid(matched),
 
           // 5) Hafif hatırlatma — DAYATMA YOK
@@ -166,6 +171,12 @@ class _StyleStageState extends State<StyleStage> {
     );
   }
 
+  String _styleHeading(String roomLabel) {
+    final r = roomLabel.toLowerCase();
+    if (r == 'mekan' || r.isEmpty) return 'Hangi tarzda yeniden tasarlansın?';
+    return '$roomLabel hangi tarzda olsun?';
+  }
+
   String _firstSentence(String s) {
     final t = s.trim();
     final i = t.indexOf('.');
@@ -175,12 +186,13 @@ class _StyleStageState extends State<StyleStage> {
   }
 
   Widget _colorStrip(List<MekanColor> colors) {
+    // Yalın daireler — isim yok. Tooltip'te hex kalıyor (hover/long-press).
     return Row(
       children: [
-        for (var i = 0; i < colors.length && i < 5; i++) ...[
+        for (var i = 0; i < colors.length && i < 6; i++) ...[
           if (i > 0) const SizedBox(width: 10),
           Tooltip(
-            message: '${colors[i].name} · ${colors[i].hex}',
+            message: colors[i].hex,
             child: Container(
               width: 28,
               height: 28,
@@ -195,18 +207,6 @@ class _StyleStageState extends State<StyleStage> {
             ),
           ),
         ],
-        const SizedBox(width: KoalaSpacing.md),
-        Expanded(
-          child: Text(
-            colors
-                .take(3)
-                .map((c) => c.name.toLowerCase())
-                .join(' · '),
-            style: KoalaText.bodySec.copyWith(fontSize: 12),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ),
       ],
     );
   }
