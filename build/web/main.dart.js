@@ -32938,22 +32938,22 @@ s=A.kJ(r,16)
 if(s==null)return null
 return A.bL(s)},
 axS(a){return A.bDd(a)},
-bDd(a){var s=0,r=A.o(t.Cp),q,p=2,o=[],n,m,l,k,j,i,h,g,f
+bDd(a){var s=0,r=A.o(t.Cp),q,p=2,o=[],n,m,l,k,j,i,h,g,f,e
 var $async$axS=A.k(function(b,c){if(b===1){o.push(c)
-s=p}for(;;)switch(s){case 0:g=null
+s=p}for(;;)switch(s){case 0:f=null
 p=4
 l=A.c8(u.C,0,null)
 k=t.N
 j=A.C(["Content-Type","application/json"],k,k)
 s=7
 return A.d(A.n6(l,B.H.e6(A.C(["image",a],k,k),null),null,j).fs(0,B.hj),$async$axS)
-case 7:g=c
+case 7:f=c
 p=2
 s=6
 break
 case 4:p=3
-f=o.pop()
-n=A.Q(f)
+e=o.pop()
+n=A.Q(e)
 l=A.a_w("network",J.B(n))
 throw A.f(l)
 s=6
@@ -32961,15 +32961,16 @@ break
 case 3:s=2
 break
 case 6:m=null
-try{l=g
-m=t.P.a(B.H.d6(0,A.dh(A.dg(l.e)).b9(0,l.w),null))}catch(e){l=A.a_w("bad_response","HTTP "+g.b)
-throw A.f(l)}if(g.b>=400){l=J.p(m,"error")
-l=J.B(l==null?"http_"+g.b:l)
+try{l=f
+m=t.P.a(B.H.d6(0,A.dh(A.dg(l.e)).b9(0,l.w),null))}catch(d){l=A.a_w("bad_response","HTTP "+f.b)
+throw A.f(l)}if(f.b>=400){l=J.p(m,"error")
+l=J.B(l==null?"http_"+f.b:l)
 k=J.p(m,"detail")
-throw A.f(A.a_w(l,J.B(k==null?J.UX(g):k)))}l=A.dS(J.p(m,"latency_ms"))
+throw A.f(A.a_w(l,J.B(k==null?J.UX(f):k)))}l=A.dS(J.p(m,"latency_ms"))
 h=l==null?null:B.f.cj(l)
-if(J.e(J.p(m,"valid"),!0)){l=t.f
-q=new A.LJ(A.bGs(l.b(J.p(m,"style"))?J.ij(l.a(J.p(m,"style")),t.N,t.z):B.fH),h)
+if(J.e(J.p(m,"valid"),!0)){g=J.p(m,"style_hints")
+if(g==null)g=J.p(m,"style")
+q=new A.LJ(A.bGs(t.f.b(g)?J.ij(g,t.N,t.z):B.fH),h)
 s=1
 break}l=J.p(m,"reason")
 l=J.B(l==null?"unknown":l)
