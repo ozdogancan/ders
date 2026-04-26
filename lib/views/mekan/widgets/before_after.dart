@@ -1,7 +1,9 @@
+import 'dart:convert';
 import 'dart:typed_data';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import '../../../core/theme/koala_tokens.dart';
+import 'package:lucide_icons/lucide_icons.dart';
 
 /// Önce/Sonra slider — paket yok. Parmakla yatay sürükle.
 /// Before: orijinal bytes. After: URL (Replicate) ya da data URL (mock).
@@ -80,7 +82,7 @@ class _BeforeAfterState extends State<BeforeAfter> {
                       boxShadow: KoalaShadows.card,
                     ),
                     alignment: Alignment.center,
-                    child: const Icon(Icons.swap_horiz_rounded,
+                    child: const Icon(LucideIcons.arrowLeftRight,
                         size: 18, color: KoalaColors.text),
                   ),
                 ),
@@ -121,8 +123,20 @@ class _BeforeAfterState extends State<BeforeAfter> {
   Widget _afterImage() {
     final s = widget.afterSrc;
     if (s.startsWith('data:image')) {
-      final b = UriData.fromString(s).contentAsBytes();
-      return Image.memory(b, fit: BoxFit.cover);
+      // Flutter web'de UriData.fromString().contentAsBytes() base64'ü decode
+      // etmeden ham UTF-8 string bytes döndürüyor (ImageCodecException:
+      // "File header was [0x64 0x61 0x74 0x61...]" = ASCII "data:image").
+      // Manuel base64 decode tek garanti yol.
+      final commaIdx = s.indexOf(',');
+      if (commaIdx < 0) {
+        return Container(color: KoalaColors.surfaceAlt);
+      }
+      try {
+        final b = base64Decode(s.substring(commaIdx + 1));
+        return Image.memory(b, fit: BoxFit.cover, gaplessPlayback: true);
+      } catch (_) {
+        return Container(color: KoalaColors.surfaceAlt);
+      }
     }
     return CachedNetworkImage(
       imageUrl: s,
