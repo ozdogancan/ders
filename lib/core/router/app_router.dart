@@ -4,7 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../views/home_screen.dart';
 import '../../views/explore_screen.dart';
-import '../../views/saved_screen.dart';
+import '../../views/saved/saved_screen_v2.dart';
 import '../../views/chat_list_screen.dart';
 import '../../views/profile_screen.dart';
 import '../../views/chat_detail_screen.dart';
@@ -16,10 +16,12 @@ import '../../views/notifications_screen.dart';
 import '../../views/onboarding_screen.dart';
 import '../../views/style_discovery_screen.dart';
 import '../../views/style_profile_screen.dart';
+import '../../views/mekan/swipe_screen.dart' as mekan_swipe;
 import '../../views/designer_profile_screen.dart';
 import '../../views/auth_common.dart';
 import '../../views/auth_entry_screen.dart';
 import '../../views/admin/admin_shell.dart';
+import '../../views/my_designs/my_designs_screen.dart';
 
 /// Onboarding tamamlandı mı? AuthGate ve goToHome tarafından set ediliyor.
 bool onboardingComplete = false;
@@ -68,7 +70,7 @@ final GoRouter appRouter = GoRouter(
     ),
     GoRoute(
       path: '/saved',
-      builder: (context, state) => const SavedScreen(),
+      builder: (context, state) => const SavedScreenV2(),
     ),
     GoRoute(
       path: '/chat',
@@ -88,6 +90,17 @@ final GoRouter appRouter = GoRouter(
         final extra = state.extra as Map<String, dynamic>?;
         return StyleDiscoveryScreen(
           entryPoint: extra?['entryPoint'] as String? ?? 'manual',
+        );
+      },
+    ),
+    // Mekan akışı içi "zevkimi keşfet" — caller `Navigator.pop` ile
+    // `SwipeResult?` alır.
+    GoRoute(
+      path: '/swipe',
+      builder: (context, state) {
+        final extra = state.extra as Map<String, dynamic>?;
+        return mekan_swipe.SwipeScreen(
+          roomTypeHint: extra?['roomTypeHint'] as String?,
         );
       },
     ),
@@ -170,6 +183,10 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: '/admin',
       builder: (context, state) => const AdminShell(),
+    ),
+    GoRoute(
+      path: '/my-designs',
+      builder: (context, state) => const MyDesignsScreen(),
     ),
   ],
 );

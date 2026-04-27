@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import '../core/theme/koala_tokens.dart';
 import '../services/saved_plans_service.dart';
 import '../widgets/koala_widgets.dart';
+import 'package:lucide_icons/lucide_icons.dart';
 
 class SavedPlansScreen extends StatefulWidget {
   const SavedPlansScreen({super.key});
@@ -35,12 +36,12 @@ class _SavedPlansScreenState extends State<SavedPlansScreen> {
 
   IconData _typeIcon(String type) {
     switch (type) {
-      case 'style_analysis': return Icons.style_rounded;
-      case 'color_palette': return Icons.palette_rounded;
-      case 'product_grid': return Icons.shopping_bag_rounded;
-      case 'budget_plan': return Icons.account_balance_wallet_rounded;
-      case 'designer_card': return Icons.person_rounded;
-      default: return Icons.bookmark_rounded;
+      case 'style_analysis': return LucideIcons.sparkles;
+      case 'color_palette': return LucideIcons.palette;
+      case 'product_grid': return LucideIcons.shoppingBag;
+      case 'budget_plan': return LucideIcons.wallet;
+      case 'designer_card': return LucideIcons.user;
+      default: return LucideIcons.bookmark;
     }
   }
 
@@ -61,7 +62,7 @@ class _SavedPlansScreenState extends State<SavedPlansScreen> {
       backgroundColor: KoalaColors.surfaceMuted,
       appBar: AppBar(
         backgroundColor: Colors.white, elevation: 0, scrolledUnderElevation: 0.5,
-        leading: IconButton(icon: Icon(Icons.arrow_back_rounded, color: KoalaColors.ink),
+        leading: IconButton(icon: Icon(LucideIcons.arrowLeft, color: KoalaColors.ink),
           onPressed: () => Navigator.pop(context)),
         title: Text('Kaydedilen Planlar', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: KoalaColors.ink)),
       ),
@@ -69,7 +70,7 @@ class _SavedPlansScreenState extends State<SavedPlansScreen> {
         ? const LoadingState()
         : _plans.isEmpty
           ? Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
-              Icon(Icons.bookmark_border_rounded, size: 48, color: Colors.grey.shade300),
+              Icon(LucideIcons.bookmark, size: 48, color: Colors.grey.shade300),
               const SizedBox(height: 12),
               Text('Henüz kayıtlı plan yok', style: TextStyle(fontSize: 16, color: Colors.grey.shade400)),
               const SizedBox(height: 4),
@@ -89,7 +90,7 @@ class _SavedPlansScreenState extends State<SavedPlansScreen> {
                     decoration: BoxDecoration(borderRadius: BorderRadius.circular(16), color: Colors.red.shade50),
                     alignment: Alignment.centerRight,
                     padding: const EdgeInsets.only(right: 20),
-                    child: const Icon(Icons.delete_rounded, color: Colors.red)),
+                    child: const Icon(LucideIcons.trash2, color: Colors.red)),
                   onDismissed: (_) async {
                     await SavedPlansService.remove(plan.id);
                     _load();
@@ -125,7 +126,7 @@ class _SavedPlansScreenState extends State<SavedPlansScreen> {
                         },
                         child: Container(width: 36, height: 36,
                           decoration: BoxDecoration(borderRadius: BorderRadius.circular(10), color: KoalaColors.accentSoft),
-                          child: Icon(Icons.share_rounded, size: 16, color: KoalaColors.accentDeep))),
+                          child: Icon(LucideIcons.share2, size: 16, color: KoalaColors.accentDeep))),
                     ])));
               }),
     );

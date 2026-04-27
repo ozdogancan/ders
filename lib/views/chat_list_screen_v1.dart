@@ -389,7 +389,7 @@ class _ChatListScreenV1State extends State<ChatListScreenV1> {
         elevation: 0,
         leading: IconButton(
           onPressed: _goBackHome,
-          icon: const Icon(Icons.arrow_back_rounded),
+          icon: const Icon(LucideIcons.arrowLeft),
         ),
         title: GestureDetector(
           // Title'a 5x tıklama → debug dialog (gizli — user'ı rahatsız etmez)
@@ -450,7 +450,7 @@ class _ChatListScreenV1State extends State<ChatListScreenV1> {
             Center(
               child: Column(
                 children: [
-                  Icon(Icons.search_off_rounded,
+                  Icon(LucideIcons.searchX,
                       size: 48, color: KoalaColors.textTer),
                   const SizedBox(height: KoalaSpacing.md),
                   Text('"$_searchQuery" için sonuç yok',
@@ -548,7 +548,7 @@ class _ChatListScreenV1State extends State<ChatListScreenV1> {
                 borderRadius: BorderRadius.circular(12),
               ),
               child: const Icon(
-                Icons.auto_awesome_rounded,
+                LucideIcons.sparkles,
                 size: 20,
                 color: KoalaColors.accentDeep,
               ),
@@ -581,7 +581,7 @@ class _ChatListScreenV1State extends State<ChatListScreenV1> {
             ),
             const SizedBox(width: 8),
             const Icon(
-              Icons.chevron_right_rounded,
+              LucideIcons.chevronRight,
               size: 22,
               color: KoalaColors.textTer,
             ),
@@ -617,7 +617,7 @@ class _ChatListScreenV1State extends State<ChatListScreenV1> {
           hintText: 'Ara — tasarımcı, sohbet, mesaj...',
           hintStyle: KoalaText.hint.copyWith(fontSize: 13.5),
           prefixIcon: const Icon(
-            Icons.search_rounded,
+            LucideIcons.search,
             size: 18,
             color: KoalaColors.textTer,
           ),
@@ -631,7 +631,7 @@ class _ChatListScreenV1State extends State<ChatListScreenV1> {
                     setState(() => _searchQuery = '');
                   },
                   child: const Icon(
-                    Icons.close_rounded,
+                    LucideIcons.x,
                     size: 16,
                     color: KoalaColors.textTer,
                   ),
@@ -746,7 +746,7 @@ class _ChatListScreenV1State extends State<ChatListScreenV1> {
                       child: Image.asset(
                         'assets/images/koalas.webp',
                         width: 48, height: 48,
-                        errorBuilder: (_, _, _) => const Icon(Icons.auto_awesome_rounded, size: 32, color: Colors.white),
+                        errorBuilder: (_, _, _) => const Icon(LucideIcons.sparkles, size: 32, color: Colors.white),
                       ),
                     ),
                   ),
@@ -772,7 +772,7 @@ class _ChatListScreenV1State extends State<ChatListScreenV1> {
                     child: const Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.chat_rounded, size: 16, color: KoalaColors.accentDeep),
+                        Icon(LucideIcons.messageCircle, size: 16, color: KoalaColors.accentDeep),
                         SizedBox(width: 8),
                         Text(
                           'Sohbet Başlat',
@@ -793,7 +793,7 @@ class _ChatListScreenV1State extends State<ChatListScreenV1> {
             children: [
               Expanded(
                 child: _emptyActionCard(
-                  icon: Icons.camera_alt_rounded,
+                  icon: LucideIcons.camera,
                   label: 'Odamı Analiz Et',
                   color: KoalaColors.accent,
                   onTap: () => Navigator.push(
@@ -809,7 +809,7 @@ class _ChatListScreenV1State extends State<ChatListScreenV1> {
               const SizedBox(width: 12),
               Expanded(
                 child: _emptyActionCard(
-                  icon: Icons.person_search_rounded,
+                  icon: LucideIcons.users,
                   label: 'Tasarımcı Bul',
                   color: KoalaColors.greenAlt,
                   onTap: () => Navigator.push(
@@ -1008,7 +1008,7 @@ class _ChatListScreenV1State extends State<ChatListScreenV1> {
               const SizedBox(width: KoalaSpacing.sm),
               Expanded(
                 child: _koalaActionButton(
-                  icon: Icons.history_rounded,
+                  icon: LucideIcons.history,
                   label: hasHistory ? 'Geçmiş · ${_aiChats.length}' : 'Geçmiş',
                   primary: false,
                   onTap: hasHistory ? _openAiHistorySheet : null,
@@ -1117,7 +1117,7 @@ class _ChatListScreenV1State extends State<ChatListScreenV1> {
               // aşağıdaki "Koala AI sohbet geçmişi · 36" chip'inde zaten var.
               trailing: latestAi != null ? timeAgo(latestAi.updatedAt) : null,
               trailingIcon: latestAi != null
-                  ? Icons.schedule_rounded
+                  ? LucideIcons.clock
                   : null,
               highlightBg: KoalaColors.accentLight,
               borderColor: KoalaColors.accent.withValues(alpha: 0.18),
@@ -1267,7 +1267,7 @@ class _ChatListScreenV1State extends State<ChatListScreenV1> {
                   // (Evlumba "≤1 sa yanıt" gibi). Trailing sadece zaman
                   // bilgisiyse (trailingIcon var) ok eklenmez.
                   if (trailingIcon == null)
-                    const Icon(Icons.arrow_forward_rounded,
+                    const Icon(LucideIcons.arrowRight,
                         size: 12, color: KoalaColors.textTer),
                 ],
               ),
@@ -1307,7 +1307,7 @@ class _ChatListScreenV1State extends State<ChatListScreenV1> {
             ),
             const SizedBox(width: 2),
             const Icon(
-              Icons.chevron_right_rounded,
+              LucideIcons.chevronRight,
               size: 15,
               color: KoalaColors.textTer,
             ),
@@ -1448,7 +1448,7 @@ class _ChatListScreenV1State extends State<ChatListScreenV1> {
                 color: KoalaColors.error.withValues(alpha: 0.1),
                 shape: BoxShape.circle,
               ),
-              child: const Icon(Icons.delete_outline_rounded,
+              child: const Icon(LucideIcons.trash2,
                   color: KoalaColors.error, size: 28),
             ),
             const SizedBox(height: KoalaSpacing.md),
@@ -1554,7 +1554,7 @@ class _ChatListScreenV1State extends State<ChatListScreenV1> {
                     'assets/images/koalas.webp',
                     fit: BoxFit.contain,
                     errorBuilder: (_, _, _) => const Icon(
-                      Icons.auto_awesome_rounded,
+                      LucideIcons.sparkles,
                       color: Colors.white,
                       size: 22,
                     ),
@@ -1572,7 +1572,7 @@ class _ChatListScreenV1State extends State<ChatListScreenV1> {
                     children: const [
                       Text('Koala AI', style: KoalaText.h4),
                       SizedBox(width: 6),
-                      Icon(Icons.auto_awesome_rounded,
+                      Icon(LucideIcons.sparkles,
                           size: 13, color: KoalaColors.accent),
                     ],
                   ),
@@ -1609,7 +1609,7 @@ class _ChatListScreenV1State extends State<ChatListScreenV1> {
           padding: EdgeInsets.only(top: KoalaSpacing.sm, bottom: KoalaSpacing.sm),
           child: Row(
             children: [
-              Icon(Icons.auto_awesome_rounded, size: 14, color: KoalaColors.textTer),
+              Icon(LucideIcons.sparkles, size: 14, color: KoalaColors.textTer),
               SizedBox(width: 6),
               Text('AI Asistan', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: KoalaColors.textTer, letterSpacing: 0.5)),
             ],
@@ -1630,7 +1630,7 @@ class _ChatListScreenV1State extends State<ChatListScreenV1> {
             ),
             child: const Row(
               children: [
-                Icon(Icons.auto_awesome_rounded, color: Colors.white, size: 22),
+                Icon(LucideIcons.sparkles, color: Colors.white, size: 22),
                 SizedBox(width: KoalaSpacing.md),
                 Expanded(
                   child: Column(
@@ -1652,7 +1652,7 @@ class _ChatListScreenV1State extends State<ChatListScreenV1> {
                     ],
                   ),
                 ),
-                Icon(Icons.chevron_right_rounded, color: Colors.white70),
+                Icon(LucideIcons.chevronRight, color: Colors.white70),
               ],
             ),
           ),
@@ -1680,7 +1680,7 @@ class _ChatListScreenV1State extends State<ChatListScreenV1> {
                           color: KoalaColors.accentSoft,
                           borderRadius: BorderRadius.circular(KoalaRadius.sm),
                         ),
-                        child: const Icon(Icons.chat_rounded,
+                        child: const Icon(LucideIcons.messageCircle,
                             size: 16, color: KoalaColors.accent),
                       ),
                       const SizedBox(width: KoalaSpacing.md),
@@ -1762,7 +1762,7 @@ class _ChatListScreenV1State extends State<ChatListScreenV1> {
                   end: Alignment.bottomRight,
                 ),
               ),
-              child: const Icon(Icons.diamond_rounded,
+              child: const Icon(LucideIcons.gem,
                   color: Colors.white, size: 22),
             ),
             const SizedBox(width: KoalaSpacing.md),
@@ -1775,7 +1775,7 @@ class _ChatListScreenV1State extends State<ChatListScreenV1> {
                     children: const [
                       Text('Evlumba Design', style: KoalaText.h4),
                       SizedBox(width: 6),
-                      Icon(Icons.verified_rounded, size: 13, color: gold),
+                      Icon(LucideIcons.badgeCheck, size: 13, color: gold),
                     ],
                   ),
                   const SizedBox(height: 2),
@@ -1799,7 +1799,7 @@ class _ChatListScreenV1State extends State<ChatListScreenV1> {
               child: const Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.schedule_rounded, size: 10, color: gold),
+                  Icon(LucideIcons.clock, size: 10, color: gold),
                   SizedBox(width: 3),
                   Text('1 sa',
                       style: TextStyle(
@@ -1831,7 +1831,7 @@ class _ChatListScreenV1State extends State<ChatListScreenV1> {
             horizontal: KoalaSpacing.lg, vertical: KoalaSpacing.md),
         child: Row(
           children: [
-            const Icon(Icons.history_rounded,
+            const Icon(LucideIcons.history,
                 size: 16, color: KoalaColors.textTer),
             const SizedBox(width: 8),
             Expanded(
@@ -1847,7 +1847,7 @@ class _ChatListScreenV1State extends State<ChatListScreenV1> {
                 style: KoalaText.labelSmall.copyWith(
                     fontWeight: FontWeight.w600, color: KoalaColors.textSec)),
             const SizedBox(width: 4),
-            const Icon(Icons.chevron_right_rounded,
+            const Icon(LucideIcons.chevronRight,
                 size: 18, color: KoalaColors.textTer),
           ],
         ),
@@ -1903,7 +1903,7 @@ class _ChatListScreenV1State extends State<ChatListScreenV1> {
         children: [
           const Row(
             children: [
-              Icon(Icons.verified_rounded, size: 14, color: Color(0xFFD4A853)),
+              Icon(LucideIcons.badgeCheck, size: 14, color: Color(0xFFD4A853)),
               SizedBox(width: 6),
               Text('Evlumba Design', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFFD4A853), letterSpacing: 0.5)),
             ],
@@ -1939,7 +1939,7 @@ class _ChatListScreenV1State extends State<ChatListScreenV1> {
                       ),
                       borderRadius: BorderRadius.circular(KoalaRadius.sm),
                     ),
-                    child: const Icon(Icons.diamond_rounded, color: Colors.white, size: 24),
+                    child: const Icon(LucideIcons.gem, color: Colors.white, size: 24),
                   ),
                   const SizedBox(width: KoalaSpacing.md),
                   // Text
@@ -1977,14 +1977,14 @@ class _ChatListScreenV1State extends State<ChatListScreenV1> {
                         child: const Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(Icons.schedule_rounded, size: 11, color: Color(0xFFD4A853)),
+                            Icon(LucideIcons.clock, size: 11, color: Color(0xFFD4A853)),
                             SizedBox(width: 3),
                             Text('1 saat', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Color(0xFFD4A853))),
                           ],
                         ),
                       ),
                       const SizedBox(height: 6),
-                      const Icon(Icons.chevron_right_rounded, size: 20, color: Color(0xFFD4A853)),
+                      const Icon(LucideIcons.chevronRight, size: 20, color: Color(0xFFD4A853)),
                     ],
                   ),
                 ],
@@ -2087,7 +2087,7 @@ class _ChatListScreenV1State extends State<ChatListScreenV1> {
           mainAxisAlignment: MainAxisAlignment.end,
           mainAxisSize: MainAxisSize.min,
           children: const [
-            Icon(Icons.delete_outline_rounded, color: Colors.white, size: 22),
+            Icon(LucideIcons.trash2, color: Colors.white, size: 22),
             SizedBox(width: 8),
             Text(
               'Sil',
@@ -2469,7 +2469,7 @@ class _AiHistorySheetState extends State<_AiHistorySheet> {
                 color: KoalaColors.error.withValues(alpha: 0.1),
                 shape: BoxShape.circle,
               ),
-              child: const Icon(Icons.delete_outline_rounded,
+              child: const Icon(LucideIcons.trash2,
                   color: KoalaColors.error, size: 28),
             ),
             const SizedBox(height: KoalaSpacing.md),
@@ -2567,7 +2567,7 @@ class _AiHistorySheetState extends State<_AiHistorySheet> {
                 KoalaSpacing.lg, KoalaSpacing.md, KoalaSpacing.lg, KoalaSpacing.sm),
             child: Row(
               children: [
-                const Icon(Icons.history_rounded,
+                const Icon(LucideIcons.history,
                     size: 18, color: KoalaColors.accent),
                 const SizedBox(width: 8),
                 const Text('AI Sohbet Geçmişi', style: KoalaText.h3),
@@ -2584,7 +2584,7 @@ class _AiHistorySheetState extends State<_AiHistorySheet> {
                 KoalaSpacing.lg, 0, KoalaSpacing.lg, KoalaSpacing.sm),
             child: Row(
               children: const [
-                Icon(Icons.swipe_left_rounded,
+                Icon(LucideIcons.arrowLeft,
                     size: 13, color: KoalaColors.textTer),
                 SizedBox(width: 6),
                 Text(
@@ -2610,7 +2610,7 @@ class _AiHistorySheetState extends State<_AiHistorySheet> {
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(Icons.chat_bubble_outline_rounded,
+                          const Icon(LucideIcons.messageCircle,
                               size: 40, color: KoalaColors.textTer),
                           const SizedBox(height: KoalaSpacing.sm),
                           Text('Henüz sohbet yok',
@@ -2660,7 +2660,7 @@ class _AiHistorySheetState extends State<_AiHistorySheet> {
                             mainAxisAlignment: MainAxisAlignment.end,
                             mainAxisSize: MainAxisSize.min,
                             children: const [
-                              Icon(Icons.delete_outline_rounded,
+                              Icon(LucideIcons.trash2,
                                   color: Colors.white, size: 20),
                               SizedBox(width: 6),
                               Text(

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../core/theme/koala_tokens.dart';
 import '../services/collections_service.dart';
+import 'package:lucide_icons/lucide_icons.dart';
 
 /// Koleksiyon oluşturma / seçme bottom sheet.
 /// SaveButton'dan veya herhangi bir kaydetme akışından çağrılır.
@@ -148,7 +149,7 @@ class _CollectionBottomSheetState extends State<CollectionBottomSheet> {
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.add_rounded, size: 16, color: KoalaColors.accent),
+                          Icon(LucideIcons.plus, size: 16, color: KoalaColors.accent),
                           const SizedBox(width: 4),
                           Text('Yeni', style: KoalaText.label.copyWith(color: KoalaColors.accent)),
                         ],
@@ -300,7 +301,7 @@ class _CollectionBottomSheetState extends State<CollectionBottomSheet> {
         padding: const EdgeInsets.all(KoalaSpacing.xxl),
         child: Column(
           children: [
-            Icon(Icons.collections_bookmark_rounded,
+            Icon(LucideIcons.folderHeart,
                 size: 48, color: KoalaColors.textTer),
             const SizedBox(height: KoalaSpacing.md),
             Text('Henüz koleksiyonun yok', style: KoalaText.bodySec),
@@ -336,7 +337,7 @@ class _CollectionBottomSheetState extends State<CollectionBottomSheet> {
                       borderRadius: BorderRadius.circular(KoalaRadius.sm),
                     ),
                     child: const Icon(
-                      Icons.folder_rounded,
+                      LucideIcons.folder,
                       color: KoalaColors.accent,
                       size: 22,
                     ),
@@ -361,7 +362,7 @@ class _CollectionBottomSheetState extends State<CollectionBottomSheet> {
                     ),
                   ),
                   const Icon(
-                    Icons.chevron_right_rounded,
+                    LucideIcons.chevronRight,
                     color: KoalaColors.textTer,
                   ),
                 ],

@@ -1256,7 +1256,7 @@ class _ExpertCard extends StatelessWidget {
                     Row(
                       children: [
                         if (expert.rating > 0) ...[
-                          const Icon(Icons.star_rounded, size: 16, color: KoalaColors.star),
+                          const Icon(LucideIcons.star, size: 16, color: KoalaColors.star),
                           const SizedBox(width: 4),
                           Text(
                             expert.rating.toStringAsFixed(1),
@@ -1582,7 +1582,7 @@ class _ExpertDetailSheetState extends State<_ExpertDetailSheet> {
                               Row(
                                 children: [
                                   if (expert.rating > 0) ...[
-                                    const Icon(Icons.star_rounded, size: 16, color: KoalaColors.star),
+                                    const Icon(LucideIcons.star, size: 16, color: KoalaColors.star),
                                     const SizedBox(width: 4),
                                     Text(
                                       expert.rating.toStringAsFixed(1),

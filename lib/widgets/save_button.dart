@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../core/theme/koala_tokens.dart';
 import '../services/saved_items_service.dart';
+import 'package:lucide_icons/lucide_icons.dart';
 
 /// Reusable kaydet butonu — kalp/bookmark ikonu.
 /// Design, designer veya product kartlarına eklenir.
@@ -99,10 +100,10 @@ class _SaveButtonState extends State<SaveButton>
   @override
   Widget build(BuildContext context) {
     final IconData filledIcon =
-        widget.useBookmark ? Icons.bookmark_rounded : Icons.favorite_rounded;
+        widget.useBookmark ? LucideIcons.bookmark : LucideIcons.heart;
     final IconData outlinedIcon = widget.useBookmark
-        ? Icons.bookmark_border_rounded
-        : Icons.favorite_border_rounded;
+        ? LucideIcons.bookmark
+        : LucideIcons.heart;
 
     return ScaleTransition(
       scale: _scaleAnim,

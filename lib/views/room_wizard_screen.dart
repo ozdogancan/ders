@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../core/theme/koala_tokens.dart';
+import 'package:lucide_icons/lucide_icons.dart';
 
 class RoomWizardScreen extends StatelessWidget {
   const RoomWizardScreen({super.key});
@@ -10,7 +11,7 @@ class RoomWizardScreen extends StatelessWidget {
       appBar: AppBar(
         title: const Text('Odanı Tasarla'),
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
+          icon: const Icon(LucideIcons.arrowLeft),
           onPressed: () => Navigator.of(context).pop(),
         ),
       ),
@@ -21,7 +22,7 @@ class RoomWizardScreen extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               const Icon(
-                Icons.room_preferences_rounded,
+                LucideIcons.slidersHorizontal,
                 size: 64,
                 color: KoalaColors.accentDeep,
               ),

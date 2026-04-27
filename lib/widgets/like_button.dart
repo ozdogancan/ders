@@ -119,7 +119,7 @@ class _LikeButtonState extends State<LikeButton>
               // overlay etmek yerine state'e göre birini gösteriyoruz.
               if (_liked)
                 Icon(
-                  Icons.favorite_rounded,
+                  LucideIcons.heart,
                   size: widget.size,
                   color: const Color(0xFFEF4444),
                 )

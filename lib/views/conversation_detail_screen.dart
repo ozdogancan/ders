@@ -15,6 +15,7 @@ import '../services/saved_items_service.dart';
 import '../services/share_service.dart';
 import '../widgets/koala_widgets.dart';
 import '../widgets/media_upload_helper.dart';
+import 'chat/widgets/quote_card.dart';
 
 /// Tasarımcı ile mesaj detay ekranı — gerçek zamanlı
 class ConversationDetailScreen extends StatefulWidget {
@@ -107,6 +108,11 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
   /// ilk mesajda _ensureConversation() ile doldurulur. Null iken mesaj
   /// listesi/realtime/markRead çağrıları atlanır — henüz sohbet yok.
   String? _activeConvId;
+
+  /// koala_conversations.accepted_quote_id — Sprint 4. Null ise henüz teklif
+  /// kabul edilmemiş; QuoteCard onay butonlarını gösterebilir. Doluysa bu id'ye
+  /// eşit kart "Onaylandı", diğerleri "Başka teklif kabul edildi" gösterir.
+  String? _acceptedQuoteId;
 
   // Conversation-level realtime listener — backend pullInbound her 3s unread'i
   // yeniden hesapladığından, biz bu ekrana bakarken unread>0 bump olursa
@@ -270,6 +276,7 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
             unreadOnEntry = isUser
                 ? ((conv['unread_count_user'] as int?) ?? 0)
                 : ((conv['unread_count_designer'] as int?) ?? 0);
+            _acceptedQuoteId = conv['accepted_quote_id']?.toString();
           }
         } catch (_) {}
       }
@@ -414,6 +421,12 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
           : ((record['unread_count_designer'] as int?) ?? 0);
       if (unreadNow > 0 && _activeConvId != null) {
         MessagingService.markAsRead(_activeConvId!);
+      }
+      // Sprint 4 — teklif kabulü realtime yansısın: accepted_quote_id diğer
+      // taraftan değiştiyse tüm QuoteCard'lar durumunu günceller.
+      final acc = record['accepted_quote_id']?.toString();
+      if (acc != _acceptedQuoteId) {
+        setState(() => _acceptedQuoteId = acc);
       }
     };
     MessagingService.subscribeToConversations(onUpdate: _convListener!);
@@ -621,14 +634,14 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
             Row(
               children: [
                 Expanded(
-                  child: _pickBtn(Icons.camera_alt_rounded, 'Kamera', () {
+                  child: _pickBtn(LucideIcons.camera, 'Kamera', () {
                     Navigator.pop(context);
                     _doPick(ImageSource.camera);
                   }),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: _pickBtn(Icons.photo_library_rounded, 'Galeri', () {
+                  child: _pickBtn(LucideIcons.image, 'Galeri', () {
                     Navigator.pop(context);
                     _doPick(ImageSource.gallery);
                   }),
@@ -839,11 +852,25 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
                                 crossAxisAlignment: CrossAxisAlignment.stretch,
                                 children: [
                                   const _NewMessagesDivider(),
-                                  _MessageBubble(message: m, isMe: isMe),
+                                  _MessageBubble(
+                                    message: m,
+                                    isMe: isMe,
+                                    conversationId: _activeConvId,
+                                    acceptedQuoteId: _acceptedQuoteId,
+                                    onQuoteAccepted: (id) => setState(
+                                        () => _acceptedQuoteId = id),
+                                  ),
                                 ],
                               );
                             }
-                            return _MessageBubble(message: m, isMe: isMe);
+                            return _MessageBubble(
+                              message: m,
+                              isMe: isMe,
+                              conversationId: _activeConvId,
+                              acceptedQuoteId: _acceptedQuoteId,
+                              onQuoteAccepted: (id) =>
+                                  setState(() => _acceptedQuoteId = id),
+                            );
                           },
                         ),
             ),
@@ -909,7 +936,7 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
                             width: 64,
                             height: 64,
                             color: KoalaColors.surfaceAlt,
-                            child: const Icon(Icons.image_rounded,
+                            child: const Icon(LucideIcons.image,
                                 size: 24, color: KoalaColors.textTer),
                           ),
                         ),
@@ -932,7 +959,7 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
                         color: Colors.black.withValues(alpha: 0.55),
                       ),
                       child: const Icon(
-                        Icons.close_rounded,
+                        LucideIcons.x,
                         size: 14,
                         color: Colors.white,
                       ),
@@ -1165,7 +1192,7 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
               children: [
                 IconButton(
                   onPressed: () => Navigator.of(context).pop(),
-                  icon: const Icon(Icons.arrow_back_rounded,
+                  icon: const Icon(LucideIcons.arrowLeft,
                       color: KoalaColors.text, size: 22),
                 ),
                 // Avatar
@@ -1277,7 +1304,7 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
             padding: const EdgeInsets.fromLTRB(20, 4, 14, 8),
             child: Row(
               children: [
-                const Icon(Icons.collections_rounded,
+                const Icon(LucideIcons.layers,
                     size: 14, color: KoalaColors.textTer),
                 const SizedBox(width: 6),
                 Text(
@@ -1319,7 +1346,7 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
                                   ? Image.network(img,
                                       fit: BoxFit.cover,
                                       errorBuilder: (_, __, ___) => const SizedBox())
-                                  : const Icon(Icons.image_outlined,
+                                  : const Icon(LucideIcons.image,
                                       size: 12, color: KoalaColors.textTer),
                             ),
                           ),
@@ -1331,8 +1358,8 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
                   SizedBox(width: (previewCount * 18.0) + 6),
                 Icon(
                   _portfolioExpanded
-                      ? Icons.keyboard_arrow_up_rounded
-                      : Icons.keyboard_arrow_down_rounded,
+                      ? LucideIcons.chevronUp
+                      : LucideIcons.chevronDown,
                   size: 20,
                   color: KoalaColors.textSec,
                 ),
@@ -1386,7 +1413,7 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
                                               height: 86,
                                               color: KoalaColors.surfaceAlt,
                                               child: const Icon(
-                                                  Icons.image_not_supported_outlined,
+                                                  LucideIcons.imageOff,
                                                   size: 20,
                                                   color: KoalaColors.textTer),
                                             ),
@@ -1395,7 +1422,7 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
                                             width: 130,
                                             height: 86,
                                             color: KoalaColors.surfaceAlt,
-                                            child: const Icon(Icons.image_outlined,
+                                            child: const Icon(LucideIcons.image,
                                                 size: 20,
                                                 color: KoalaColors.textTer),
                                           ),
@@ -1596,14 +1623,14 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
                         width: 52,
                         height: 52,
                         color: KoalaColors.surfaceAlt,
-                        child: const Icon(Icons.image_outlined, size: 18, color: KoalaColors.textTer),
+                        child: const Icon(LucideIcons.image, size: 18, color: KoalaColors.textTer),
                       ),
                     )
                   : Container(
                       width: 52,
                       height: 52,
                       color: KoalaColors.surfaceAlt,
-                      child: const Icon(Icons.image_outlined, size: 18, color: KoalaColors.textTer),
+                      child: const Icon(LucideIcons.image, size: 18, color: KoalaColors.textTer),
                     ),
             ),
             const SizedBox(width: 10),
@@ -1614,7 +1641,7 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
                 children: [
                   const Row(
                     children: [
-                      Icon(Icons.push_pin_rounded, size: 11, color: KoalaColors.accent),
+                      Icon(LucideIcons.pin, size: 11, color: KoalaColors.accent),
                       SizedBox(width: 4),
                       Text(
                         'Mesajlaştığınız proje',
@@ -1654,7 +1681,7 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
                 ],
               ),
             ),
-            const Icon(Icons.chevron_right_rounded, size: 20, color: KoalaColors.accent),
+            const Icon(LucideIcons.chevronRight, size: 20, color: KoalaColors.accent),
           ],
         ),
       ),
@@ -1790,7 +1817,7 @@ class _ProjectViewerSheetState extends State<_ProjectViewerSheet> {
             padding: const EdgeInsets.symmetric(horizontal: 8),
             child: Row(
               children: [
-                IconButton(onPressed: () => Navigator.of(context).pop(), icon: const Icon(Icons.close_rounded, color: KoalaColors.textSec, size: 22)),
+                IconButton(onPressed: () => Navigator.of(context).pop(), icon: const Icon(LucideIcons.x, color: KoalaColors.textSec, size: 22)),
                 Expanded(child: Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: KoalaColors.text), textAlign: TextAlign.center, overflow: TextOverflow.ellipsis)),
                 Text('${_currentIndex + 1}/${widget.allProjects.length}', style: const TextStyle(fontSize: 13, color: KoalaColors.textTer)),
                 const SizedBox(width: 12),
@@ -1807,7 +1834,7 @@ class _ProjectViewerSheetState extends State<_ProjectViewerSheet> {
               },
               itemBuilder: (_, i) {
                 final url = _coverUrl(widget.allProjects[i]);
-                if (url.isEmpty) return Container(color: KoalaColors.surfaceAlt, alignment: Alignment.center, child: const Icon(Icons.image_rounded, size: 48, color: KoalaColors.textTer));
+                if (url.isEmpty) return Container(color: KoalaColors.surfaceAlt, alignment: Alignment.center, child: const Icon(LucideIcons.image, size: 48, color: KoalaColors.textTer));
                 return Padding(padding: const EdgeInsets.symmetric(horizontal: 16), child: ClipRRect(borderRadius: BorderRadius.circular(20), child: Image.network(url, fit: BoxFit.cover, errorBuilder: (_, __, ___) => Container(color: KoalaColors.surfaceAlt))));
               },
             ),
@@ -1876,9 +1903,20 @@ class _ProjectViewerSheetState extends State<_ProjectViewerSheet> {
 // MESSAGE BUBBLE
 // ═══════════════════════════════════════════════════════
 class _MessageBubble extends StatelessWidget {
-  const _MessageBubble({required this.message, required this.isMe});
+  const _MessageBubble({
+    required this.message,
+    required this.isMe,
+    this.conversationId,
+    this.acceptedQuoteId,
+    this.onQuoteAccepted,
+  });
   final Map<String, dynamic> message;
   final bool isMe;
+
+  /// Sprint 4 — QuoteCard accept flow için. Null ise kart salt-gösterim.
+  final String? conversationId;
+  final String? acceptedQuoteId;
+  final void Function(String messageId)? onQuoteAccepted;
 
   @override
   Widget build(BuildContext context) {
@@ -1887,6 +1925,31 @@ class _MessageBubble extends StatelessWidget {
     final createdAt = DateTime.tryParse(message['created_at']?.toString() ?? '');
     // Supabase UTC döner; HH:MM lokale göre gösterilmeli.
     final timeStr = createdAt != null ? formatHM(createdAt) : '';
+
+    // Sprint 4 — Structured quote mesajı. is_quote + quote_json doluysa
+    // normal bubble yerine QuoteCard render et.
+    final isQuote = message['is_quote'] == true;
+    final quoteJson = message['quote_json'];
+    final messageId = message['id']?.toString();
+    if (isQuote &&
+        quoteJson is Map &&
+        conversationId != null &&
+        messageId != null) {
+      return Align(
+        alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+        child: Container(
+          margin: const EdgeInsets.only(bottom: KoalaSpacing.sm),
+          child: QuoteCard(
+            messageId: messageId,
+            conversationId: conversationId!,
+            quoteJson: Map<String, dynamic>.from(quoteJson),
+            isOwnMessage: isMe,
+            acceptedQuoteId: acceptedQuoteId,
+            onAccepted: () => onQuoteAccepted?.call(messageId),
+          ),
+        ),
+      );
+    }
 
     return Align(
       alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
@@ -1990,7 +2053,7 @@ class _BubbleImage extends StatelessWidget {
             width: 200,
             fit: BoxFit.cover,
             errorBuilder: (_, _, _) => const Icon(
-              Icons.broken_image_rounded,
+              LucideIcons.imageOff,
               color: KoalaColors.textTer,
             ),
           ),
@@ -2053,7 +2116,7 @@ class _PhotoViewerScreenState extends State<_PhotoViewerScreen> {
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.close_rounded, color: Colors.white, size: 28),
+          icon: const Icon(LucideIcons.x, color: Colors.white, size: 28),
           onPressed: () => Navigator.of(context).pop(),
         ),
       ),
@@ -2084,7 +2147,7 @@ class _PhotoViewerScreenState extends State<_PhotoViewerScreen> {
                         );
                       },
                       errorBuilder: (_, _, _) => const Icon(
-                        Icons.broken_image_rounded,
+                        LucideIcons.imageOff,
                         color: Colors.white54,
                         size: 64,
                       ),

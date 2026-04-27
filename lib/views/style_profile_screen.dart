@@ -7,6 +7,7 @@ import 'package:supabase_flutter/supabase_flutter.dart' hide User;
 
 import '../core/config/env.dart';
 import '../core/theme/koala_tokens.dart';
+import 'package:lucide_icons/lucide_icons.dart';
 
 class StyleProfileScreen extends StatefulWidget {
   const StyleProfileScreen({super.key});
@@ -79,7 +80,7 @@ class _StyleProfileScreenState extends State<StyleProfileScreen> {
       backgroundColor: Colors.white,
       appBar: AppBar(
         backgroundColor: Colors.white, elevation: 0,
-        leading: IconButton(icon: const Icon(Icons.close_rounded, color: KoalaColors.ink),
+        leading: IconButton(icon: const Icon(LucideIcons.x, color: KoalaColors.ink),
           onPressed: () => Navigator.pop(context)),
         title: const Text('Stil Profilim', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: KoalaColors.ink)),
       ),
@@ -106,7 +107,7 @@ class _StyleProfileScreenState extends State<StyleProfileScreen> {
                       side: const BorderSide(color: KoalaColors.borderMed),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                       padding: EdgeInsets.zero),
-                    child: const Icon(Icons.arrow_back_rounded, color: KoalaColors.accentDeep)))),
+                    child: const Icon(LucideIcons.arrowLeft, color: KoalaColors.accentDeep)))),
             Expanded(child: SizedBox(height: 52,
               child: ElevatedButton(
                 onPressed: _canProceed() ? () {
@@ -191,7 +192,7 @@ class _StyleProfileScreenState extends State<StyleProfileScreen> {
               width: 56, height: 56,
               decoration: BoxDecoration(borderRadius: BorderRadius.circular(16), color: color,
                 border: Border.all(color: selected ? KoalaColors.accentDeep : KoalaColors.borderMed, width: selected ? 3 : 1)),
-              child: selected ? const Icon(Icons.check_rounded, color: KoalaColors.accentDeep, size: 22) : null),
+              child: selected ? const Icon(LucideIcons.check, color: KoalaColors.accentDeep, size: 22) : null),
             const SizedBox(height: 4),
             Text(c['name'] as String, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: Colors.grey.shade600)),
           ]));

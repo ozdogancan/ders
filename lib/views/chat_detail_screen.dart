@@ -996,7 +996,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
               ),
               child: const Row(
                 children: [
-                  Icon(Icons.auto_awesome, size: 18, color: _accent),
+                  Icon(LucideIcons.sparkles, size: 18, color: _accent),
                   SizedBox(width: 10),
                   Expanded(
                     child: Text(
@@ -1011,14 +1011,14 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
             Row(
               children: [
                 Expanded(
-                  child: _pickBtn(Icons.camera_alt_rounded, 'Kamera', () {
+                  child: _pickBtn(LucideIcons.camera, 'Kamera', () {
                     Navigator.pop(context);
                     _doPick(ImageSource.camera);
                   }),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: _pickBtn(Icons.photo_library_rounded, 'Galeri', () {
+                  child: _pickBtn(LucideIcons.image, 'Galeri', () {
                     Navigator.pop(context);
                     _doPick(ImageSource.gallery);
                   }),
@@ -1091,7 +1091,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
         elevation: 0,
         scrolledUnderElevation: 0.5,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded, color: _ink),
+          icon: const Icon(LucideIcons.arrowLeft, color: _ink),
           onPressed: () => Navigator.pop(context),
         ),
         actions: const [],
@@ -1112,7 +1112,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                   ),
                 ),
                 child: const Icon(
-                  Icons.auto_awesome,
+                  LucideIcons.sparkles,
                   color: Colors.white,
                   size: 14,
                 ),
@@ -1177,7 +1177,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                           ],
                         ),
                         child: const Icon(
-                          Icons.keyboard_arrow_down_rounded,
+                          LucideIcons.chevronDown,
                           size: 22,
                           color: _accent,
                         ),
@@ -1217,7 +1217,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                       child: const Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.add_photo_alternate_rounded,
+                          Icon(LucideIcons.imagePlus,
                               size: 48, color: _accent),
                           SizedBox(height: 12),
                           Text(
@@ -1345,12 +1345,12 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
         physics: const BouncingScrollPhysics(),
         child: Row(
           children: [
-            _quickChip(Icons.color_lens_rounded, colorLabel,
+            _quickChip(LucideIcons.palette, colorLabel,
               () => _onPhotoChip('Bu odaya uygun renk paleti öner',
                   intent: KoalaIntent.colorPaletteFromPhoto)),
-            _quickChip(Icons.shopping_bag_rounded, productLabel,
+            _quickChip(LucideIcons.shoppingBag, productLabel,
               () => _onPhotoChip('Bu oda ve stile uygun ürün öner')),
-            _quickChip(Icons.person_rounded, 'Uzman öner', () {
+            _quickChip(LucideIcons.user, 'Uzman öner', () {
               // Debounce: AI yanıt üretirken peş peşe tıklamayı yut.
               if (_loading) return;
               // Direkt designerMatch intent'i — search_designers function call'ını garanti eder
@@ -1374,11 +1374,11 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                 },
               );
             }),
-            _quickChip(Icons.auto_awesome_rounded, 'Stil analizi',
+            _quickChip(LucideIcons.sparkles, 'Stil analizi',
               () => _onPhotoChip('Bu odanın stilini detaylı analiz et',
                   intent: KoalaIntent.styleAnalysisFromPhoto)),
             if (_hasRecentImage())
-              _quickChip(Icons.auto_fix_high_rounded, 'Önce / Sonra',
+              _quickChip(LucideIcons.wand2, 'Önce / Sonra',
                   _onBeforeAfterTap),
           ],
         ),
@@ -1466,7 +1466,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                       ),
                       child: Row(
                         children: [
-                          const Icon(Icons.auto_fix_high_rounded,
+                          const Icon(LucideIcons.wand2,
                               size: 18, color: _accent),
                           const SizedBox(width: 10),
                           Text(s,
@@ -1587,7 +1587,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
               height: 64,
               filterQuality: FilterQuality.high,
               errorBuilder: (_, _, _) =>
-                  const Icon(Icons.auto_awesome, size: 48, color: _accent),
+                  const Icon(LucideIcons.sparkles, size: 48, color: _accent),
             ),
             const SizedBox(height: 16),
             const Text(
@@ -1619,7 +1619,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                 child: const Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.camera_alt_rounded, size: 18, color: Colors.white),
+                    Icon(LucideIcons.camera, size: 18, color: Colors.white),
                     SizedBox(width: 8),
                     Text('Odanın fotoğrafını çek, analiz edeyim',
                       style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.white)),
@@ -1650,27 +1650,27 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     if (style != null && style.isNotEmpty) {
       final roomLabel = room ?? 'Odamı';
       return [
-        _suggestionChip(Icons.palette_rounded, '$style tarzda $roomLabel yenile', KoalaColors.accentDeep,
+        _suggestionChip(LucideIcons.palette, '$style tarzda $roomLabel yenile', KoalaColors.accentDeep,
           () => _onChipTap('$roomLabel $style tarzda yeniden tasarla')),
-        _suggestionChip(Icons.color_lens_rounded, '$roomLabel için 3 renk öner', KoalaColors.pink,
+        _suggestionChip(LucideIcons.palette, '$roomLabel için 3 renk öner', KoalaColors.pink,
           () => _onChipTap('$roomLabel için $style tarzıma uygun renk paleti öner')),
         if (budget != null && budget.isNotEmpty)
-          _suggestionChip(Icons.account_balance_wallet_rounded, '$budget bütçeyle plan', KoalaColors.greenAlt,
+          _suggestionChip(LucideIcons.wallet, '$budget bütçeyle plan', KoalaColors.greenAlt,
             () => _onChipTap('$roomLabel için $budget bütçeyle $style dekorasyon bütçe planı çıkar')),
-        _suggestionChip(Icons.person_search_rounded, 'Bana uygun tasarımcı', KoalaColors.blue,
+        _suggestionChip(LucideIcons.users, 'Bana uygun tasarımcı', KoalaColors.blue,
           () => _onChipTap('$style tarzda çalışan bir iç mimar öner')),
       ];
     }
 
     // Default starters (no profile) — _onChipTap intent router'a gidiyor
     return [
-      _suggestionChip(Icons.home_rounded, 'Odamı yenile', KoalaColors.accentDeep,
+      _suggestionChip(LucideIcons.home, 'Odamı yenile', KoalaColors.accentDeep,
         () => _onChipTap('Odamı yeniden tasarla')),
-      _suggestionChip(Icons.color_lens_rounded, 'Renk öner', KoalaColors.pink,
+      _suggestionChip(LucideIcons.palette, 'Renk öner', KoalaColors.pink,
         () => _onChipTap('Odama uygun renk paleti öner')),
-      _suggestionChip(Icons.account_balance_wallet_rounded, 'Bütçe planla', KoalaColors.greenAlt,
+      _suggestionChip(LucideIcons.wallet, 'Bütçe planla', KoalaColors.greenAlt,
         () => _onChipTap('Bütçe planı çıkar')),
-      _suggestionChip(Icons.person_search_rounded, 'Tasarımcı bul', KoalaColors.blue,
+      _suggestionChip(LucideIcons.users, 'Tasarımcı bul', KoalaColors.blue,
         () => _onChipTap('Bana uygun tasarımcı öner')),
     ];
   }
@@ -1770,7 +1770,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                         color: Colors.grey.shade200,
                         borderRadius: BorderRadius.circular(16),
                       ),
-                      child: const Icon(Icons.broken_image, color: Colors.grey),
+                      child: const Icon(LucideIcons.imageOff, color: Colors.grey),
                     ),
                   ),
                 ),
@@ -1911,7 +1911,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
         children: [
           Row(
             children: [
-              const Icon(Icons.sentiment_neutral_rounded, size: 20, color: Color(0xFFEA580C)),
+              const Icon(LucideIcons.meh, size: 20, color: Color(0xFFEA580C)),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
@@ -1926,13 +1926,13 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
             spacing: 8,
             runSpacing: 8,
             children: [
-              _fallbackChip(Icons.refresh_rounded, 'Tekrar dene', _retry),
-              _fallbackChip(Icons.color_lens_rounded, 'Renk öner',
+              _fallbackChip(LucideIcons.refreshCw, 'Tekrar dene', _retry),
+              _fallbackChip(LucideIcons.palette, 'Renk öner',
                 () => _onPhotoChip('Bu odaya uygun renk paleti öner',
                     intent: KoalaIntent.colorPaletteFromPhoto)),
-              _fallbackChip(Icons.shopping_bag_rounded, 'Ürün bul',
+              _fallbackChip(LucideIcons.shoppingBag, 'Ürün bul',
                 () => _onPhotoChip('Bu oda ve stile uygun ürün öner')),
-              _fallbackChip(Icons.person_rounded, 'Uzman bul', () {
+              _fallbackChip(LucideIcons.user, 'Uzman bul', () {
                 if (_loading) return;
                 // Stil sırası: foto analizi > onboarding profili > varsayılan modern
                 final style = _photoAnalysisContext?['style'] ??
@@ -1996,7 +1996,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
           shape: BoxShape.circle,
           gradient: LinearGradient(colors: [_accent, KoalaColors.accentMuted]),
         ),
-        child: const Icon(Icons.auto_awesome, size: 14, color: Colors.white),
+        child: const Icon(LucideIcons.sparkles, size: 14, color: Colors.white),
       ),
     ),
   );
@@ -2044,7 +2044,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                     color: Colors.black.withValues(alpha: 0.55),
                   ),
                   child: const Icon(
-                    Icons.close_rounded,
+                    LucideIcons.x,
                     size: 14,
                     color: Colors.white,
                   ),
@@ -2063,7 +2063,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
               const SizedBox(height: 4),
               Row(
                 children: [
-                  Icon(Icons.check_circle_rounded, size: 14, color: _accent),
+                  Icon(LucideIcons.checkCircle, size: 14, color: _accent),
                   const SizedBox(width: 5),
                   Text(
                     'Fotoğraf seçildi',
@@ -2112,7 +2112,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                     color: Colors.white.withValues(alpha:0.7),
                   ),
                   child: Icon(
-                    Icons.camera_alt_rounded,
+                    LucideIcons.camera,
                     size: 18,
                     color: Colors.grey.shade600,
                   ),
@@ -2184,7 +2184,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                               ),
                             )
                           : const Icon(
-                              Icons.arrow_upward_rounded,
+                              LucideIcons.arrowUp,
                               size: 18,
                               color: Colors.white,
                             ),
@@ -2318,9 +2318,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
       child: Row(
         mainAxisAlignment: MainAxisAlignment.end,
         children: [
-          _miniAction(Icons.favorite_border_rounded, 'Kaydet', KoalaColors.accentDeep, () => _saveCard(card)),
+          _miniAction(LucideIcons.heart, 'Kaydet', KoalaColors.accentDeep, () => _saveCard(card)),
           const SizedBox(width: 6),
-          _miniAction(Icons.copy_rounded, 'Paylaş', KoalaColors.greenAlt, () => _shareCard(card)),
+          _miniAction(LucideIcons.copy, 'Paylaş', KoalaColors.greenAlt, () => _shareCard(card)),
         ],
       ),
     );
@@ -2768,7 +2768,7 @@ class _ProjectCardInline extends StatelessWidget {
                   fit: BoxFit.cover,
                   errorBuilder: (_, __, ___) => Container(
                     color: KoalaColors.surfaceMuted,
-                    child: const Icon(Icons.image_not_supported_outlined,
+                    child: const Icon(LucideIcons.imageOff,
                         color: KoalaColors.textMuted),
                   ),
                 ),
@@ -2800,7 +2800,7 @@ class _ProjectCardInline extends StatelessWidget {
                   const SizedBox(height: 6),
                   Row(
                     children: [
-                      const Icon(Icons.person_outline_rounded,
+                      const Icon(LucideIcons.user,
                           size: 14, color: KoalaColors.textMuted),
                       const SizedBox(width: 4),
                       Flexible(

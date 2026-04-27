@@ -10,6 +10,7 @@ import '../services/messaging_service.dart';
 import '../widgets/error_state.dart';
 import '../widgets/shimmer_loading.dart';
 import 'chat_detail_screen.dart';
+import 'package:lucide_icons/lucide_icons.dart';
 
 // ═══════════════════════════════════════════════════════════════════
 // ChatListScreenV2 — "Editorial Warmth"
@@ -416,7 +417,7 @@ class _ChatListScreenV2State extends State<ChatListScreenV2> {
           children: [
             IconButton(
               onPressed: _goBackHome,
-              icon: const Icon(Icons.arrow_back_rounded, size: 22, color: _V2.ink),
+              icon: const Icon(LucideIcons.arrowLeft, size: 22, color: _V2.ink),
               style: IconButton.styleFrom(
                 padding: const EdgeInsets.all(10),
                 minimumSize: const Size(40, 40),
@@ -489,7 +490,7 @@ class _ChatListScreenV2State extends State<ChatListScreenV2> {
                       'assets/images/koalas.webp',
                       fit: BoxFit.cover,
                       errorBuilder: (_, __, ___) => const Icon(
-                        Icons.auto_awesome,
+                        LucideIcons.sparkles,
                         color: _V2.goldSoft,
                         size: 20,
                       ),
@@ -541,7 +542,7 @@ class _ChatListScreenV2State extends State<ChatListScreenV2> {
                     shape: BoxShape.circle,
                     border: Border.all(color: _V2.goldSoft.withValues(alpha: 0.5), width: 0.8),
                   ),
-                  child: const Icon(Icons.arrow_outward_rounded, size: 15, color: _V2.ink),
+                  child: const Icon(LucideIcons.arrowUpRight, size: 15, color: _V2.ink),
                 ),
               ],
             ),
@@ -573,7 +574,7 @@ class _ChatListScreenV2State extends State<ChatListScreenV2> {
             child: Row(
               children: [
                 // Diamond glyph
-                Icon(Icons.auto_awesome_outlined, size: 14, color: _V2.gold),
+                Icon(LucideIcons.sparkles, size: 14, color: _V2.gold),
                 const SizedBox(width: 10),
                 Text(
                   'Evlumba Design',
@@ -594,7 +595,7 @@ class _ChatListScreenV2State extends State<ChatListScreenV2> {
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
-                const Icon(Icons.chevron_right_rounded, size: 18, color: _V2.gold),
+                const Icon(LucideIcons.chevronRight, size: 18, color: _V2.gold),
               ],
             ),
           ),
@@ -965,7 +966,7 @@ class _ChatListScreenV2State extends State<ChatListScreenV2> {
                 child: Image.asset(
                   'assets/images/koalas.webp',
                   fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => const Icon(Icons.auto_awesome, color: _V2.goldSoft, size: 20),
+                  errorBuilder: (_, __, ___) => const Icon(LucideIcons.sparkles, color: _V2.goldSoft, size: 20),
                 ),
               ),
             ),
@@ -983,7 +984,7 @@ class _ChatListScreenV2State extends State<ChatListScreenV2> {
                 ],
               ),
             ),
-            const Icon(Icons.arrow_outward_rounded, size: 18, color: _V2.ink),
+            const Icon(LucideIcons.arrowUpRight, size: 18, color: _V2.ink),
           ],
         ),
       ),
@@ -1006,14 +1007,14 @@ class _ChatListScreenV2State extends State<ChatListScreenV2> {
         ),
         child: Row(
           children: [
-            const Icon(Icons.auto_awesome_outlined, size: 14, color: _V2.gold),
+            const Icon(LucideIcons.sparkles, size: 14, color: _V2.gold),
             const SizedBox(width: 10),
             Text(
               'Evlumba Design',
               style: _V2.body(size: 12.5, weight: FontWeight.w700, color: _V2.gold, spacing: 0.2),
             ),
             const Spacer(),
-            const Icon(Icons.chevron_right_rounded, size: 18, color: _V2.gold),
+            const Icon(LucideIcons.chevronRight, size: 18, color: _V2.gold),
           ],
         ),
       ),

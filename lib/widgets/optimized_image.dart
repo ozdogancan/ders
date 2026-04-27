@@ -1,6 +1,7 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import '../core/theme/koala_tokens.dart';
+import 'package:lucide_icons/lucide_icons.dart';
 
 /// CachedNetworkImage wrapper — lazy loading, fade-in, memory cache boyutu
 class OptimizedImage extends StatelessWidget {
@@ -40,7 +41,7 @@ class OptimizedImage extends StatelessWidget {
           width: width,
           height: height,
           color: KoalaColors.surfaceAlt,
-          child: const Icon(Icons.broken_image_rounded, color: KoalaColors.textTer, size: 24),
+          child: const Icon(LucideIcons.imageOff, color: KoalaColors.textTer, size: 24),
         ),
       ),
     );

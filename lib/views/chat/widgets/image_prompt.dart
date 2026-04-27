@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../core/theme/koala_tokens.dart';
 import 'chat_constants.dart';
+import 'package:lucide_icons/lucide_icons.dart';
 
 class ImagePrompt extends StatelessWidget {
   const ImagePrompt(this.d, {super.key, required this.onGenerate});
@@ -25,7 +26,7 @@ class ImagePrompt extends StatelessWidget {
         children: [
           Row(
             children: [
-              const Icon(Icons.auto_awesome, size: 18, color: accent),
+              const Icon(LucideIcons.sparkles, size: 18, color: accent),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
@@ -45,7 +46,7 @@ class ImagePrompt extends StatelessWidget {
             height: 44,
             child: ElevatedButton.icon(
               onPressed: () => onGenerate(prompt),
-              icon: const Icon(Icons.brush_rounded, size: 18),
+              icon: const Icon(LucideIcons.brush, size: 18),
               label: const Text(
                 'G\u00F6rseli Olu\u015Ftur',
                 style: TextStyle(fontWeight: FontWeight.w700),

@@ -4,6 +4,7 @@ import '../core/utils/format_utils.dart';
 import '../services/notifications_service.dart';
 import '../widgets/koala_widgets.dart';
 import 'conversation_detail_screen.dart';
+import 'package:lucide_icons/lucide_icons.dart';
 
 /// In-app bildirim ekranı
 class NotificationsScreen extends StatefulWidget {
@@ -123,22 +124,22 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   IconData _iconForType(String? type) {
     switch (type) {
       case 'new_message':
-        return Icons.chat_rounded;
+        return LucideIcons.messageCircle;
       case 'designer_match':
-        return Icons.person_search_rounded;
+        return LucideIcons.users;
       case 'product_recommend':
-        return Icons.shopping_bag_rounded;
+        return LucideIcons.shoppingBag;
       case 'style_result':
-        return Icons.palette_rounded;
+        return LucideIcons.palette;
       case 'budget_ready':
-        return Icons.account_balance_wallet_rounded;
+        return LucideIcons.wallet;
       case 'collection_update':
-        return Icons.collections_bookmark_rounded;
+        return LucideIcons.folderHeart;
       case 'promo':
-        return Icons.local_offer_rounded;
+        return LucideIcons.tag;
       case 'system':
       default:
-        return Icons.notifications_rounded;
+        return LucideIcons.bell;
     }
   }
 
@@ -188,7 +189,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.notifications_none_rounded,
+                      Icon(LucideIcons.bell,
                           size: 64, color: KoalaColors.textTer),
                       SizedBox(height: KoalaSpacing.lg),
                       Text('Bildirim yok', style: KoalaText.bodySec),

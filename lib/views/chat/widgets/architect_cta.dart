@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../../core/theme/koala_tokens.dart';
 import '../../designers_screen.dart';
+import 'package:lucide_icons/lucide_icons.dart';
 
 class ArchitectCTA extends StatelessWidget {
   const ArchitectCTA(this.d, {super.key});
@@ -31,7 +32,7 @@ class ArchitectCTA extends StatelessWidget {
                   color: Colors.white.withValues(alpha:0.2),
                 ),
                 child: const Icon(
-                  Icons.videocam_rounded,
+                  LucideIcons.video,
                   size: 20,
                   color: Colors.white,
                 ),
@@ -125,7 +126,7 @@ class ArchitectCTA extends StatelessWidget {
         color: color,
         border: Border.all(color: Colors.white.withValues(alpha:0.3), width: 2),
       ),
-      child: const Icon(Icons.person_rounded, size: 14, color: Colors.white),
+      child: const Icon(LucideIcons.user, size: 14, color: Colors.white),
     ),
   );
 }

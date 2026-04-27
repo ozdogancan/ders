@@ -273,7 +273,7 @@ class _ChatExpertCard extends StatelessWidget {
                     Row(
                       children: [
                         if (_rating > 0) ...[
-                          const Icon(Icons.star_rounded,
+                          const Icon(LucideIcons.star,
                               size: 16, color: KoalaColors.star),
                           const SizedBox(width: 4),
                           Text(
@@ -400,7 +400,7 @@ class _ChatExpertCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Icon(
-                    Icons.auto_awesome,
+                    LucideIcons.sparkles,
                     size: 12,
                     color: KoalaColors.accentDeep.withValues(alpha: 0.7),
                   ),

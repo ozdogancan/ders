@@ -13,6 +13,15 @@ import '../widgets/share_sheet.dart';
 import 'collections_screen.dart';
 import 'conversation_detail_screen.dart';
 
+/// ⚠️ DEPRECATED — bu ekran Sprint 6'da `saved/saved_screen_v2.dart` ile
+/// tamamen değiştirildi. Artık hiçbir yerden referans edilmiyor (router +
+/// home + profile hepsi V2'ye point ediyor). Sonraki temizlik turunda
+/// SİLİNECEK. O güne kadar git history için burada bekliyor.
+///
+/// Yeni dosya: `lib/views/saved/saved_screen_v2.dart` (editorial sectioned
+/// rails + sticky serif word-nav + per-type cinematic card language).
+///
+/// --- Eski header (tarihsel kayıt) ---
 /// Kaydedilenler ekranı — 5 tab: Tasarımlar / Ürünler / Tasarımcılar / Paletler / Koleksiyonlar.
 /// Ürünler tab'ını ilk ekranda görünür tutmak için sıra ayarlandı; son aktif tab
 /// SharedPreferences'a yazılıp tekrar açılınca restore edilir.

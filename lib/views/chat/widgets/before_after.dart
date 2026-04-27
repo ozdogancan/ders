@@ -4,6 +4,7 @@ import '../../../core/theme/koala_tokens.dart';
 import '../../../services/messaging_service.dart';
 import '../../conversation_detail_screen.dart';
 import 'chat_constants.dart';
+import 'package:lucide_icons/lucide_icons.dart';
 
 class BeforeAfter extends StatelessWidget {
   const BeforeAfter(this.d, {super.key});
@@ -55,7 +56,7 @@ class BeforeAfter extends StatelessWidget {
               child: Row(
                 children: [
                   const Icon(
-                    Icons.check_circle_rounded,
+                    LucideIcons.checkCircle,
                     size: 16,
                     color: KoalaColors.greenDark,
                   ),
@@ -122,7 +123,7 @@ class BeforeAfter extends StatelessWidget {
                   child: const Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.chat_bubble_rounded, size: 14, color: Colors.white),
+                      Icon(LucideIcons.messageCircle, size: 14, color: Colors.white),
                       SizedBox(width: 6),
                       Text(
                         'Bu Tasar\u0131mc\u0131yla \u00C7al\u0131\u015F',

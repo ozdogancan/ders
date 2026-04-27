@@ -11,7 +11,7 @@ class KoalaLogo extends StatelessWidget {
       width: size,
       height: size,
       fit: BoxFit.contain,
-      errorBuilder: (_, _, _) => Icon(Icons.school, size: size, color: Colors.grey),
+      errorBuilder: (_, _, _) => Icon(Icons.school, size: size, color: Colors.grey), // lucide-miss
     );
   }
 }
@@ -27,7 +27,7 @@ class KoalaHero extends StatelessWidget {
       width: size,
       height: size,
       fit: BoxFit.contain,
-      errorBuilder: (_, _, _) => Icon(Icons.school, size: size, color: Colors.grey),
+      errorBuilder: (_, _, _) => Icon(Icons.school, size: size, color: Colors.grey), // lucide-miss
     );
   }
 }

@@ -9,6 +9,7 @@ import '../widgets/koala_widgets.dart';
 import '../widgets/like_button.dart';
 import '../widgets/save_button.dart';
 import '../widgets/share_sheet.dart';
+import 'package:lucide_icons/lucide_icons.dart';
 
 class DesignerProfileScreen extends StatefulWidget {
   final String designerId;
@@ -119,7 +120,7 @@ class _DesignerProfileScreenState extends State<DesignerProfileScreen> {
         elevation: 0,
         title: Text(name, style: KoalaText.h3),
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded),
+          icon: const Icon(LucideIcons.arrowLeft),
           onPressed: () => Navigator.of(context).pop(),
         ),
       ),
@@ -198,7 +199,7 @@ class _DesignerProfileScreenState extends State<DesignerProfileScreen> {
                           height: 48,
                           child: ElevatedButton.icon(
                             onPressed: _openChat,
-                            icon: const Icon(Icons.chat_bubble_outline_rounded,
+                            icon: const Icon(LucideIcons.messageCircle,
                                 size: 20),
                             label: const Text('Mesaj At',
                                 style: TextStyle(
@@ -251,7 +252,7 @@ class _DesignerProfileScreenState extends State<DesignerProfileScreen> {
                                 title: name,
                                 imageUrl: _designer?['avatar_url'] as String?,
                               ),
-                              child: const Icon(Icons.ios_share_rounded,
+                              child: const Icon(LucideIcons.share2,
                                   size: 22, color: KoalaColors.text),
                               label: 'Paylaş',
                             ),
@@ -383,7 +384,7 @@ class _ProjectCard extends StatelessWidget {
                 height: 180,
                 color: KoalaColors.surfaceAlt,
                 child: const Center(
-                    child: Icon(Icons.image_rounded,
+                    child: Icon(LucideIcons.image,
                         color: KoalaColors.textTer, size: 40)),
               ),
             ),

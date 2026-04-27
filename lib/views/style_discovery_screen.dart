@@ -11,6 +11,7 @@ import 'package:supabase_flutter/supabase_flutter.dart' hide User;
 
 import '../core/config/env.dart';
 import '../core/theme/koala_tokens.dart';
+import 'package:lucide_icons/lucide_icons.dart';
 
 class StyleDiscoveryScreen extends StatefulWidget {
   const StyleDiscoveryScreen({super.key, this.entryPoint = 'first_run'});
@@ -441,7 +442,7 @@ class _StyleDiscoveryScreenState extends State<StyleDiscoveryScreen>
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: const Icon(
-                            Icons.auto_awesome_rounded,
+                            LucideIcons.sparkles,
                             color: Colors.white,
                             size: 20,
                           ),
@@ -664,12 +665,12 @@ class _StyleDiscoveryScreenState extends State<StyleDiscoveryScreen>
                                                     mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                                                     children: [
                                                       _TutorialHint(
-                                                        icon: Icons.arrow_back_rounded,
+                                                        icon: LucideIcons.arrowLeft,
                                                         label: 'PAS',
                                                         color: KoalaColors.dislike,
                                                       ),
                                                       _TutorialHint(
-                                                        icon: Icons.arrow_forward_rounded,
+                                                        icon: LucideIcons.arrowRight,
                                                         label: 'SEVERiM',
                                                         color: KoalaColors.like,
                                                       ),
@@ -1098,7 +1099,7 @@ class _SwipeControls extends StatelessWidget {
       children: [
         // Pass button
         _CircleActionButton(
-          icon: Icons.close_rounded,
+          icon: LucideIcons.x,
           color: KoalaColors.dislike,
           size: 56,
           iconSize: 28,
@@ -1108,7 +1109,7 @@ class _SwipeControls extends StatelessWidget {
         const SizedBox(width: 24),
         // Like button
         _CircleActionButton(
-          icon: Icons.favorite_rounded,
+          icon: LucideIcons.heart,
           color: KoalaColors.like,
           size: 72,
           iconSize: 32,
@@ -1122,7 +1123,7 @@ class _SwipeControls extends StatelessWidget {
           opacity: onUndo != null ? 1.0 : 0.3,
           duration: const Duration(milliseconds: 200),
           child: _CircleActionButton(
-            icon: Icons.undo_rounded,
+            icon: LucideIcons.undo2,
             color: KoalaColors.textTer,
             size: 56,
             iconSize: 24,
@@ -1226,7 +1227,7 @@ class _FinishCta extends StatelessWidget {
         child: const Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.auto_awesome_rounded, color: Colors.white, size: 20),
+            Icon(LucideIcons.sparkles, color: Colors.white, size: 20),
             SizedBox(width: 10),
             Text(
               'Tarzım Hazır, Sohbete Gecelim',
@@ -1296,7 +1297,7 @@ class _DoneState extends StatelessWidget {
                   ),
                 ),
                 child: const Icon(
-                  Icons.auto_awesome_rounded,
+                  LucideIcons.sparkles,
                   size: 36,
                   color: KoalaColors.accentDeep,
                 ),
@@ -1335,7 +1336,7 @@ class _DoneState extends StatelessWidget {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       const Icon(
-                        Icons.favorite_rounded,
+                        LucideIcons.heart,
                         size: 16,
                         color: KoalaColors.like,
                       ),
@@ -1497,7 +1498,7 @@ List<_DiscoveryCard> _buildFullPool() {
       colors: ['Kırık beyaz', 'Açık ahşap', 'Taş beji'],
       colorHexes: [Color(0xFFF5F0E8), Color(0xFFCDB68E), Color(0xFFD4C5A9)],
       palette: [Color(0xFFDDD2C1), Color(0xFFAA9275)],
-      icon: Icons.weekend_rounded,
+      icon: LucideIcons.sofa,
     ),
     _DiscoveryCard(
       id: 'minimal_bedroom',
@@ -1514,7 +1515,7 @@ List<_DiscoveryCard> _buildFullPool() {
       colors: ['Beyaz', 'Kum beji', 'Yumuşak gri'],
       colorHexes: [Color(0xFFFAFAFA), Color(0xFFD9CBB8), Color(0xFFBDB8B0)],
       palette: [Color(0xFFE8E3D8), Color(0xFF96908B)],
-      icon: Icons.bed_rounded,
+      icon: LucideIcons.bed,
     ),
     _DiscoveryCard(
       id: 'boho_bedroom',
@@ -1531,7 +1532,7 @@ List<_DiscoveryCard> _buildFullPool() {
       colors: ['Terracotta', 'Keten', 'Adaçayı'],
       colorHexes: [Color(0xFFC97A58), Color(0xFFD4C5A9), Color(0xFF8FA585)],
       palette: [Color(0xFFC97A58), Color(0xFF6C8C74)],
-      icon: Icons.self_improvement_rounded,
+      icon: LucideIcons.personStanding,
     ),
     _DiscoveryCard(
       id: 'modern_kitchen',
@@ -1548,7 +1549,7 @@ List<_DiscoveryCard> _buildFullPool() {
       colors: ['Antrasit', 'Sıcak gri', 'Beyaz'],
       colorHexes: [Color(0xFF454B52), Color(0xFF9A9590), Color(0xFFF5F5F5)],
       palette: [Color(0xFF62676C), Color(0xFFC5C2BE)],
-      icon: Icons.kitchen_rounded,
+      icon: LucideIcons.utensilsCrossed,
     ),
     _DiscoveryCard(
       id: 'scandi_living',
@@ -1565,7 +1566,7 @@ List<_DiscoveryCard> _buildFullPool() {
       colors: ['Açık gri', 'Krem', 'Toz mavi'],
       colorHexes: [Color(0xFFD9DDE2), Color(0xFFF2EBE0), Color(0xFF9BB8D6)],
       palette: [Color(0xFFD9DDE2), Color(0xFF7F9BB6)],
-      icon: Icons.wb_sunny_rounded,
+      icon: LucideIcons.sun,
     ),
     _DiscoveryCard(
       id: 'industrial_office',
@@ -1582,7 +1583,7 @@ List<_DiscoveryCard> _buildFullPool() {
       colors: ['Kömür', 'Pas kahve', 'Beton'],
       colorHexes: [Color(0xFF3C3E42), Color(0xFF9D6646), Color(0xFFACA8A3)],
       palette: [Color(0xFF52555A), Color(0xFF9D6646)],
-      icon: Icons.desktop_windows_rounded,
+      icon: LucideIcons.monitor,
     ),
     _DiscoveryCard(
       id: 'classic_dining',
@@ -1599,7 +1600,7 @@ List<_DiscoveryCard> _buildFullPool() {
       colors: ['Fildişi', 'Ceviz', 'Altın beji'],
       colorHexes: [Color(0xFFF0E8D8), Color(0xFF6B4F38), Color(0xFFD4B896)],
       palette: [Color(0xFFE7DCC6), Color(0xFF8B684D)],
-      icon: Icons.chair_alt_rounded,
+      icon: LucideIcons.armchair,
     ),
     _DiscoveryCard(
       id: 'luxury_bathroom',
@@ -1616,7 +1617,7 @@ List<_DiscoveryCard> _buildFullPool() {
       colors: ['Mermer', 'Kum taşı', 'Koyu bronz'],
       colorHexes: [Color(0xFFE8E2DA), Color(0xFFC5B9A8), Color(0xFF6B5D52)],
       palette: [Color(0xFFD8D1CB), Color(0xFF74655C)],
-      icon: Icons.bathtub_rounded,
+      icon: LucideIcons.bath,
     ),
     _DiscoveryCard(
       id: 'japandi_bathroom',
@@ -1633,7 +1634,7 @@ List<_DiscoveryCard> _buildFullPool() {
       colors: ['Taş beji', 'Keten', 'Bambu'],
       colorHexes: [Color(0xFFD2C5B3), Color(0xFFD4C5A9), Color(0xFFB5A882)],
       palette: [Color(0xFFD2C5B3), Color(0xFF9A856B)],
-      icon: Icons.spa_rounded,
+      icon: LucideIcons.flower,
     ),
     _DiscoveryCard(
       id: 'modern_bedroom',
@@ -1650,7 +1651,7 @@ List<_DiscoveryCard> _buildFullPool() {
       colors: ['Koyu taş', 'Buz grisi', 'Siyah'],
       colorHexes: [Color(0xFF5A5E64), Color(0xFFC5CCD6), Color(0xFF2A2D32)],
       palette: [Color(0xFF5A5E64), Color(0xFF9FA7B3)],
-      icon: Icons.nightlight_round,
+      icon: LucideIcons.moon,
     ),
   ];
 }
@@ -1687,7 +1688,7 @@ class _CardImage extends StatelessWidget {
               ),
               errorWidget: (_, __, ___) => const Center(
                 child: Icon(
-                  Icons.image_not_supported_outlined,
+                  LucideIcons.imageOff,
                   size: 40,
                   color: KoalaColors.textTer,
                 ),
@@ -1794,7 +1795,7 @@ class _ImagePlaceholderState extends State<_ImagePlaceholder>
                         color: Colors.white.withValues(alpha: opacity),
                       ),
                       child: Icon(
-                        Icons.image_rounded,
+                        LucideIcons.image,
                         size: 24,
                         color: Colors.white.withValues(alpha: opacity + 0.1),
                       ),

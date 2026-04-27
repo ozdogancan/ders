@@ -9,6 +9,7 @@ import '../../services/product_analytics_service.dart';
 import '../../services/saved_items_service.dart';
 import '../../services/profile_feedback_service.dart';
 import '../share_sheet.dart';
+import 'package:lucide_icons/lucide_icons.dart';
 
 /// Ürün veri modeli — AI function call sonucundan parse
 class ProductCarouselItem {
@@ -108,7 +109,7 @@ class _ProductCarouselState extends State<ProductCarousel> {
         ),
         child: const Row(
           children: [
-            Icon(Icons.shopping_bag_outlined, size: 20, color: KoalaColors.accentDeep),
+            Icon(LucideIcons.shoppingBag, size: 20, color: KoalaColors.accentDeep),
             SizedBox(width: 10),
             Expanded(
               child: Text(
@@ -495,7 +496,7 @@ class _ProductCardState extends State<_ProductCard> {
                           boxShadow: [BoxShadow(color: Colors.black.withValues(alpha:0.1), blurRadius: 4)],
                         ),
                         child: Icon(
-                          _isSaved ? Icons.favorite : Icons.favorite_border,
+                          _isSaved ? LucideIcons.heart : LucideIcons.heart,
                           size: 18,
                           color: _isSaved ? KoalaColors.error : KoalaColors.textSec,
                         ),
@@ -557,7 +558,7 @@ class _ProductCardState extends State<_ProductCard> {
                               child: const Row(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                  Icon(Icons.open_in_new_rounded, size: 13, color: Colors.white),
+                                  Icon(LucideIcons.externalLink, size: 13, color: Colors.white),
                                   SizedBox(width: 5),
                                   Text('İncele', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.white)),
                                 ],
@@ -578,7 +579,7 @@ class _ProductCardState extends State<_ProductCard> {
                               child: const Row(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                  Icon(Icons.ios_share_rounded, size: 13, color: KoalaColors.accent),
+                                  Icon(LucideIcons.share2, size: 13, color: KoalaColors.accent),
                                   SizedBox(width: 5),
                                   Text('Paylaş', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: KoalaColors.accent)),
                                 ],
@@ -642,7 +643,7 @@ class _ProductCardState extends State<_ProductCard> {
     return Container(
       width: 180, height: 140,
       color: KoalaColors.surfaceMuted,
-      child: const Center(child: Icon(Icons.shopping_bag_outlined, color: Colors.grey, size: 32)),
+      child: const Center(child: Icon(LucideIcons.shoppingBag, color: Colors.grey, size: 32)),
     );
   }
 }

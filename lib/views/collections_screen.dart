@@ -4,6 +4,7 @@ import '../services/collections_service.dart';
 import '../services/saved_items_service.dart';
 import '../widgets/collection_bottom_sheet.dart';
 import '../widgets/koala_widgets.dart';
+import 'package:lucide_icons/lucide_icons.dart';
 
 /// Koleksiyonlar ekranı — grid görünümü
 class CollectionsScreen extends StatefulWidget {
@@ -73,7 +74,7 @@ class _CollectionsScreenState extends State<CollectionsScreen> {
           if (id != null) _load();
         },
         backgroundColor: KoalaColors.accent,
-        child: const Icon(Icons.add_rounded, color: Colors.white),
+        child: const Icon(LucideIcons.plus, color: Colors.white),
       ),
       body: _loading
           ? const ShimmerGrid(itemCount: 4)
@@ -113,7 +114,7 @@ class _CollectionsScreenState extends State<CollectionsScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.collections_bookmark_rounded,
+            const Icon(LucideIcons.folderHeart,
                 size: 64, color: KoalaColors.textTer),
             const SizedBox(height: KoalaSpacing.lg),
             const Text('Henüz koleksiyonun yok', style: KoalaText.h3),
@@ -166,7 +167,7 @@ class _CollectionsScreenState extends State<CollectionsScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             ListTile(
-              leading: const Icon(Icons.edit_rounded, color: KoalaColors.accent),
+              leading: const Icon(LucideIcons.pencil, color: KoalaColors.accent),
               title: const Text('Düzenle', style: KoalaText.label),
               onTap: () {
                 Navigator.pop(ctx);
@@ -174,7 +175,7 @@ class _CollectionsScreenState extends State<CollectionsScreen> {
               },
             ),
             ListTile(
-              leading: const Icon(Icons.delete_rounded, color: KoalaColors.error),
+              leading: const Icon(LucideIcons.trash2, color: KoalaColors.error),
               title: Text('Sil', style: KoalaText.label.copyWith(color: KoalaColors.error)),
               onTap: () {
                 Navigator.pop(ctx);
@@ -246,7 +247,7 @@ class _CollectionCard extends StatelessWidget {
 
   Widget _placeholder() {
     return const Center(
-      child: Icon(Icons.collections_bookmark_rounded,
+      child: Icon(LucideIcons.folderHeart,
           size: 36, color: KoalaColors.textTer),
     );
   }
@@ -300,7 +301,7 @@ class _CollectionDetailScreenState extends State<_CollectionDetailScreen> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.inbox_rounded,
+                      const Icon(LucideIcons.inbox,
                           size: 48, color: KoalaColors.textTer),
                       const SizedBox(height: KoalaSpacing.md),
                       const Text('Bu koleksiyon boş', style: KoalaText.bodySec),
@@ -333,10 +334,10 @@ class _CollectionDetailScreenState extends State<_CollectionDetailScreen> {
                                         item['image_url'] as String,
                                         fit: BoxFit.cover,
                                         errorBuilder: (_, __, ___) =>
-                                            const Icon(Icons.image_rounded,
+                                            const Icon(LucideIcons.image,
                                                 color: KoalaColors.textTer),
                                       )
-                                    : const Icon(Icons.image_rounded,
+                                    : const Icon(LucideIcons.image,
                                         color: KoalaColors.textTer),
                               ),
                             ),

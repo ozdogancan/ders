@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../core/theme/koala_tokens.dart';
+import 'package:lucide_icons/lucide_icons.dart';
 
 /// Hata durumu widget'ı — veri yüklenemediğinde gösterilir
 class ErrorState extends StatelessWidget {
@@ -22,7 +23,7 @@ class ErrorState extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.cloud_off_rounded, size: 56, color: KoalaColors.textTer),
+            Icon(LucideIcons.cloudOff, size: 56, color: KoalaColors.textTer),
             const SizedBox(height: KoalaSpacing.lg),
             Text(
               message,

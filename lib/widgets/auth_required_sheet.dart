@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../views/auth_common.dart';
 import '../views/auth_entry_screen.dart';
+import 'package:lucide_icons/lucide_icons.dart';
 
 Future<void> showAuthRequiredSheet(BuildContext context) async {
   final bool? shouldLogin = await showModalBottomSheet<bool>(
@@ -22,7 +23,7 @@ Future<void> showAuthRequiredSheet(BuildContext context) async {
               const SizedBox(height: 14),
               FilledButton.icon(
                 onPressed: () => Navigator.of(context).pop(true),
-                icon: const Icon(Icons.login),
+                icon: const Icon(LucideIcons.logIn),
                 label: const Text('Giriş Yap'),
               ),
             ],

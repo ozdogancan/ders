@@ -14,8 +14,9 @@ import 'auth_common.dart';
 import 'auth_entry_screen.dart';
 import 'collections_screen.dart';
 import 'notifications_screen.dart';
-import 'saved_screen.dart';
+import 'saved/saved_screen_v2.dart';
 import 'style_profile_screen.dart';
+import 'package:lucide_icons/lucide_icons.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -180,7 +181,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           color: KoalaColors.surfaceCool,
                         ),
                         child: const Icon(
-                          Icons.arrow_back_rounded,
+                          LucideIcons.arrowLeft,
                           size: 18,
                           color: KoalaColors.textMed,
                         ),
@@ -245,14 +246,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                       width: 96,
                                       height: 96,
                                       errorBuilder: (_, _, _) => const Icon(
-                                        Icons.person_rounded,
+                                        LucideIcons.user,
                                         color: Colors.white,
                                         size: 44,
                                       ),
                                     ),
                                   )
                                 : const Icon(
-                                    Icons.person_rounded,
+                                    LucideIcons.user,
                                     color: Colors.white,
                                     size: 44,
                                   ),
@@ -272,7 +273,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 ),
                               ),
                               child: const Icon(
-                                Icons.camera_alt_rounded,
+                                LucideIcons.camera,
                                 size: 14,
                                 color: KoalaColors.accent,
                               ),
@@ -339,17 +340,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   child: Column(
                     children: [
                       _ActionTile(
-                        icon: Icons.bookmark_rounded,
+                        icon: LucideIcons.bookmark,
                         label: 'Kaydedilenlerim',
                         color: KoalaColors.accent,
                         onTap: () => Navigator.push(
                           context,
-                          MaterialPageRoute(builder: (_) => const SavedScreen()),
+                          MaterialPageRoute(builder: (_) => const SavedScreenV2()),
                         ),
                       ),
                       const Divider(height: 1),
                       _ActionTile(
-                        icon: Icons.collections_bookmark_rounded,
+                        icon: LucideIcons.folderHeart,
                         label: 'Koleksiyonlarım',
                         color: KoalaColors.pink,
                         onTap: () => Navigator.push(
@@ -361,7 +362,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                       const Divider(height: 1),
                       _ActionTile(
-                        icon: Icons.notifications_rounded,
+                        icon: LucideIcons.bell,
                         label: 'Bildirimler',
                         color: KoalaColors.warning,
                         onTap: () => Navigator.push(
@@ -373,7 +374,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                       const Divider(height: 1),
                       _ActionTile(
-                        icon: Icons.palette_rounded,
+                        icon: LucideIcons.palette,
                         label: 'Stil Profilim',
                         color: KoalaColors.accent,
                         onTap: () => Navigator.push(
@@ -406,7 +407,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                       const SizedBox(height: 12),
                       _SettingTile(
-                        icon: Icons.person_rounded,
+                        icon: LucideIcons.user,
                         label: 'İsim',
                         value: _displayName.isNotEmpty
                             ? _displayName
@@ -414,7 +415,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         onTap: _editName,
                       ),
                       _SettingTile(
-                        icon: Icons.email_rounded,
+                        icon: LucideIcons.mail,
                         label: 'E-posta',
                         value: _email,
                         editable: false,
@@ -441,7 +442,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     const SizedBox(height: 12),
                     if (_isAnonymous)
                       _SettingTile(
-                        icon: Icons.login_rounded,
+                        icon: LucideIcons.logIn,
                         label: 'Giriş Yap',
                         value: 'Google veya telefon ile',
                         color: KoalaColors.accent,
@@ -449,7 +450,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       )
                     else
                       _SettingTile(
-                        icon: Icons.logout_rounded,
+                        icon: LucideIcons.logOut,
                         label: 'Çıkış Yap',
                         value: '',
                         color: KoalaColors.warning,
@@ -500,7 +501,7 @@ class _ActionTile extends StatelessWidget {
           child: Icon(icon, size: 18, color: color)),
         const SizedBox(width: 14),
         Expanded(child: Text(label, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: KoalaColors.text))),
-        Icon(Icons.chevron_right_rounded, size: 20, color: Colors.grey.shade300),
+        Icon(LucideIcons.chevronRight, size: 20, color: Colors.grey.shade300),
       ])));
 }
 
@@ -522,7 +523,7 @@ class _SettingTile extends StatelessWidget {
             Text(label, style: TextStyle(fontSize: 12, color: Colors.grey.shade500, fontWeight: FontWeight.w600)),
             if (value.isNotEmpty) Text(value, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: KoalaColors.text)),
           ])),
-          if (editable && onTap != null) Icon(Icons.chevron_right_rounded, size: 20, color: Colors.grey.shade300),
+          if (editable && onTap != null) Icon(LucideIcons.chevronRight, size: 20, color: Colors.grey.shade300),
         ])));
   }
 }

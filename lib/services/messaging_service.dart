@@ -471,6 +471,116 @@ class MessagingService {
     }
   }
 
+  /// ═══════════════════════════════════════════════════════════════════
+  /// QUOTE API — Sprint 4
+  /// Pro bir teklif gönderir (is_quote=true, quote_json=yapı). Kullanıcı
+  /// kartta "Onayla / Pazarlık / Reddet" görür. Onaylarsa conversation
+  /// üstünde accepted_quote_id + total tutulur; gerçek ödeme Stripe Sprint 5.
+  /// ═══════════════════════════════════════════════════════════════════
+
+  /// Pro → kullanıcı teklif mesajı. [quoteJson] yapısı:
+  /// ```
+  /// {
+  ///   "items": [{"label": "Boya + Duvar kağıdı", "qty": 45, "unit": "m²", "unit_price": 280}, ...],
+  ///   "total": 42500,
+  ///   "currency": "TRY",
+  ///   "duration_days": 14,
+  ///   "valid_until": "2026-05-10T00:00:00Z",
+  ///   "notes": "İşçilik dahil, malzeme hariç."
+  /// }
+  /// ```
+  static Future<Map<String, dynamic>?> sendQuote({
+    required String conversationId,
+    required Map<String, dynamic> quoteJson,
+    String? headline,
+  }) async {
+    lastSendError = null;
+    final String uid;
+    try {
+      uid = await _ensureReady();
+    } catch (e) {
+      lastSendError = e.toString();
+      return null;
+    }
+    try {
+      final content = headline ??
+          'Teklif gönderildi — ₺${(quoteJson['total'] ?? 0).toString()}';
+      final msg = await _db.from('koala_direct_messages').insert({
+        'conversation_id': conversationId,
+        'sender_id': uid,
+        'content': content,
+        'message_type': MessageType.text.name,
+        'is_quote': true,
+        'quote_json': quoteJson,
+      }).select().single();
+
+      // Conversation last_message güncelle (RLS match için or filter ile).
+      try {
+        final nowIso = DateTime.now().toUtc().toIso8601String();
+        await _db
+            .from('koala_conversations')
+            .update({
+              'last_message': '[quote] $content',
+              'last_message_at': nowIso,
+              'updated_at': nowIso,
+            })
+            .eq('id', conversationId)
+            .or('user_id.eq.$uid,designer_id.eq.$uid')
+            .select('id');
+      } catch (e) {
+        debugPrint('sendQuote: conv UPDATE failed: $e');
+      }
+      return msg;
+    } catch (e) {
+      debugPrint('MessagingService.sendQuote error: $e');
+      lastSendError = e.toString();
+      return null;
+    }
+  }
+
+  /// Kullanıcı teklifi onayladı — conversation üstünde kabul kaydı aç.
+  /// Commission hesabı (%10) şimdi yazılmıyor, Stripe tetiklendiğinde
+  /// `transactions` tablosuna o an yazılacak (Sprint 5).
+  ///
+  /// Returns true on success.
+  static Future<bool> acceptQuote({
+    required String conversationId,
+    required String messageId,
+    required double totalAmount,
+    String currency = 'TRY',
+  }) async {
+    lastSendError = null;
+    try {
+      await _ensureReady();
+    } catch (e) {
+      lastSendError = e.toString();
+      return false;
+    }
+    try {
+      final nowIso = DateTime.now().toUtc().toIso8601String();
+      await _db.from('koala_conversations').update({
+        'accepted_quote_id': messageId,
+        'quote_accepted_at': nowIso,
+        'quote_total_amount': totalAmount,
+        'quote_currency': currency,
+        'updated_at': nowIso,
+      }).eq('id', conversationId);
+
+      // Sistem mesajı — chat'te "Teklif onaylandı" bildirimi olarak görünsün.
+      await _db.from('koala_direct_messages').insert({
+        'conversation_id': conversationId,
+        'sender_id': _uid,
+        'content': 'Teklif onaylandı ✅ · ₺${totalAmount.round()}',
+        'message_type': MessageType.system.name,
+      });
+      return true;
+    } catch (e) {
+      debugPrint('MessagingService.acceptQuote error: $e');
+      lastSendError = e.toString();
+      return false;
+    }
+  }
+
   /// Bir sohbetin mesajlarini getir (sayfalamali, en yeniden).
   /// [beforeId] verilirse o mesajdan onceki mesajlari getirir (cursor pagination).
   static Future<List<Map<String, dynamic>>> getMessages({

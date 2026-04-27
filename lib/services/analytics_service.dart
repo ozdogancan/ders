@@ -217,4 +217,188 @@ class Analytics {
   static Future<void> wizardStarted() => log('wizard_started');
   static Future<void> wizardCompleted(String room, String style, String budget) =>
       log('wizard_completed', {'room': room, 'style': style, 'budget': budget});
+
+  // ═══════════════════════════════════════════
+  // MEKAN FLOW SIGNALS — Phase 1 quality telemetry
+  // ═══════════════════════════════════════════
+
+  /// Cihaz-tarafı ContentGate verdict (selfie/food/pet block).
+  /// reason: 'selfie' | 'food' | 'pet' | 'vehicle' | 'document' | 'screen' | 'clothing' | 'outdoor' | 'other'
+  static Future<void> mekanContentBlocked(String reason) =>
+      log('mekan_content_blocked', {'reason': reason});
+
+  /// Backend analyze sonucu — qualityScore + issues + band dağılımı.
+  /// Bu event olmadan Phase 2 (Restyle v2) kalibrasyonu kör uçuş.
+  static Future<void> mekanAnalyzed({
+    required bool isRoom,
+    required String roomType,
+    required String style,
+    required double qualityScore,
+    required List<String> issues,
+    required String band, // 'good' | 'soft' | 'reject'
+    required int latencyMs,
+  }) => log('mekan_analyzed', {
+        'is_room': isRoom,
+        'room_type': roomType,
+        'style': style,
+        'quality_score': qualityScore,
+        'issues': issues,
+        'band': band,
+        'latency_ms': latencyMs,
+      });
+
+  /// Kalite hint sheet kullanıcıya gösterildi.
+  static Future<void> mekanQualityHintShown({
+    required List<String> issues,
+    required double qualityScore,
+  }) => log('mekan_quality_hint_shown', {
+        'issues': issues,
+        'quality_score': qualityScore,
+      });
+
+  /// Kalite hint sheet'inde kullanıcı kararı.
+  /// choice: 'retake' | 'continue'
+  static Future<void> mekanQualityHintChoice({
+    required String choice,
+    required List<String> issues,
+    required double qualityScore,
+  }) => log('mekan_quality_hint_choice', {
+        'choice': choice,
+        'issues': issues,
+        'quality_score': qualityScore,
+      });
+
+  /// Restyle başarı/başarısızlık sinyali.
+  /// outcome: 'success' | 'error' | 'rejected_by_user'
+  ///
+  /// v2 alanları (batch/3-variant):
+  ///   variant: kullanıcıya gösterilen prompt_kind ('faithful'|'editorial'|'bold')
+  ///   judgeScore: Gemini judge skoru (0-1) — kalite kalibrasyonu için
+  ///   variantCount: judge'tan geçen toplam variant (1-3); v1'de her zaman 1
+  ///   rejectedCount: judge'ın elediği variant sayısı (0-2); v2 only
+  static Future<void> mekanRestyleOutcome({
+    required String outcome,
+    required String theme,
+    required String roomType,
+    required int latencyMs,
+    String? errorCode,
+    String? variant,
+    double? judgeScore,
+    int? variantCount,
+    int? rejectedCount,
+  }) => log('mekan_restyle_outcome', {
+        'outcome': outcome,
+        'theme': theme,
+        'room_type': roomType,
+        'latency_ms': latencyMs,
+        if (errorCode != null) 'error_code': errorCode,
+        if (variant != null) 'variant': variant,
+        if (judgeScore != null) 'judge_score': judgeScore,
+        if (variantCount != null) 'variant_count': variantCount,
+        if (rejectedCount != null) 'rejected_count': rejectedCount,
+      });
+
+  /// /api/analyze-room çağrısı başladı — kaynak: 'camera' | 'gallery'.
+  /// Outcome event'i ile birlikte CLIP gate'in funnel'daki etkisini ölçer.
+  static Future<void> mekanAnalyzeStarted({required String source}) =>
+      log('mekan_analyze_started', {'source': source});
+
+  /// /api/analyze-room sonucu — valid + reject reason + latency.
+  /// rejectReason: backend "reason" alanı (ör. "person's face / selfie").
+  static Future<void> mekanAnalyzeOutcome({
+    required bool valid,
+    String? rejectReason,
+    double? confidence,
+    int? latencyMs,
+  }) => log('mekan_analyze_outcome', {
+        'valid': valid,
+        if (rejectReason != null) 'reject_reason': rejectReason,
+        if (confidence != null) 'confidence': confidence,
+        if (latencyMs != null) 'latency_ms': latencyMs,
+      });
+
+  /// Pro CTA tıklandı — restyle sonucundan profesyonele.
+  static Future<void> mekanProCtaTapped({
+    required String theme,
+    required String roomType,
+  }) => log('mekan_pro_cta_tapped', {
+        'theme': theme,
+        'room_type': roomType,
+      });
+
+  // ─── Style Discovery (taste-discovery swipe + reveal) ───
+  // /views/mekan/style_discovery_screen.dart akışı için event'ler.
+  // Funnel: started → swipe (×N) → finished → revealOpened → accepted | refined.
+
+  static Future<void> styleDiscoveryStarted({
+    required String roomTypeGuess,
+  }) =>
+      log('style_discovery_started', {'room_type_guess': roomTypeGuess});
+
+  static Future<void> styleDiscoverySwipe({
+    required int index,
+    required bool liked,
+    required String cardId,
+  }) =>
+      log('style_discovery_swipe', {
+        'index': index,
+        'liked': liked,
+        'card_id': cardId,
+      });
+
+  static Future<void> styleDiscoveryFinished({
+    required int swipeCount,
+    required List<String> topTags,
+  }) =>
+      log('style_discovery_finished', {
+        'swipe_count': swipeCount,
+        'top_tags': topTags,
+      });
+
+  static Future<void> styleDiscoveryRevealOpened() =>
+      log('style_discovery_reveal_opened');
+
+  static Future<void> styleDiscoveryAccepted() =>
+      log('style_discovery_accepted');
+
+  static Future<void> styleDiscoveryRefined() =>
+      log('style_discovery_refined');
+
+  // ─── Swipe Deck (mekan zevkimi keşfet) ───
+  // /views/mekan/swipe_screen.dart akışı için event'ler.
+  // Funnel: opened → swipeCard (×N) → revealed → ctaTapped(restyle|skip).
+
+  static Future<void> swipeDeckOpened({
+    String? roomType,
+    int? deckSize,
+  }) =>
+      log('swipe_deck_opened', {
+        if (roomType != null) 'room_type': roomType,
+        if (deckSize != null) 'deck_size': deckSize,
+      });
+
+  static Future<void> swipeCard({
+    required String projectId,
+    required bool liked,
+    required int index,
+  }) =>
+      log('swipe_card', {
+        'project_id': projectId,
+        'liked': liked,
+        'index': index,
+      });
+
+  static Future<void> swipeRevealed({
+    required int liked,
+    required int total,
+    required List<String> topTags,
+  }) =>
+      log('swipe_revealed', {
+        'liked': liked,
+        'total': total,
+        'top_tags': topTags,
+      });
+
+  static Future<void> swipeCtaTapped({required String action}) =>
+      log('swipe_cta_tapped', {'action': action});
 }

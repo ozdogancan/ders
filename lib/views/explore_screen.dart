@@ -8,6 +8,7 @@ import '../widgets/save_button.dart';
 import '../widgets/error_state.dart';
 import '../widgets/projects_gallery_popup.dart';
 import '../widgets/shimmer_loading.dart';
+import 'package:lucide_icons/lucide_icons.dart';
 
 /// Keşfet ekranı — evlumba tasarımlarını grid'de göster
 class ExploreScreen extends StatefulWidget {
@@ -143,7 +144,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
         elevation: 0,
         leading: IconButton(
           onPressed: _goBackHome,
-          icon: const Icon(Icons.arrow_back_rounded),
+          icon: const Icon(LucideIcons.arrowLeft),
         ),
         title: const Text('Keşfet', style: KoalaText.h2),
       ),
@@ -164,7 +165,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
               decoration: InputDecoration(
                 hintText: 'Tasarım veya tasarımcı ara...',
                 hintStyle: KoalaText.hint,
-                prefixIcon: const Icon(Icons.search_rounded, color: KoalaColors.textTer),
+                prefixIcon: const Icon(LucideIcons.search, color: KoalaColors.textTer),
                 filled: true,
                 fillColor: KoalaColors.surface,
                 border: OutlineInputBorder(
@@ -229,7 +230,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(Icons.search_off_rounded, size: 48, color: KoalaColors.textTer),
+                            Icon(LucideIcons.searchX, size: 48, color: KoalaColors.textTer),
                             SizedBox(height: KoalaSpacing.md),
                             Text('Bu kategoride tasarım bulunamadı', style: KoalaText.bodySec),
                           ],
@@ -301,8 +302,8 @@ class _ProjectCard extends StatelessWidget {
                     color: KoalaColors.surfaceAlt,
                     child: imageUrl != null
                         ? Image.network(imageUrl, fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => const Icon(Icons.image_rounded, color: KoalaColors.textTer))
-                        : const Icon(Icons.image_rounded, size: 36, color: KoalaColors.textTer),
+                            errorBuilder: (_, __, ___) => const Icon(LucideIcons.image, color: KoalaColors.textTer))
+                        : const Icon(LucideIcons.image, size: 36, color: KoalaColors.textTer),
                   ),
                   // Save button
                   Positioned(

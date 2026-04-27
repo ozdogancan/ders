@@ -468,7 +468,7 @@ class _StyleDiscoveryLiveScreenState extends State<StyleDiscoveryLiveScreen>
         elevation: 0,
         leading: IconButton(
           onPressed: _onBack,
-          icon: const Icon(Icons.arrow_back_rounded),
+          icon: const Icon(LucideIcons.arrowLeft),
         ),
         title: const Text('Tarzını Keşfet', style: KoalaText.h2),
       ),
@@ -505,7 +505,7 @@ class _StyleDiscoveryLiveScreenState extends State<StyleDiscoveryLiveScreen>
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.style_outlined,
+            const Icon(LucideIcons.sparkles,
                 size: 48, color: KoalaColors.textTer),
             const SizedBox(height: 12),
             Text(
@@ -663,7 +663,7 @@ class _StyleDiscoveryLiveScreenState extends State<StyleDiscoveryLiveScreen>
         children: [
           IconButton(
             onPressed: _onBack,
-            icon: const Icon(Icons.arrow_back_rounded,
+            icon: const Icon(LucideIcons.arrowLeft,
                 color: KoalaColors.text, size: 22),
           ),
           const Expanded(
@@ -829,7 +829,7 @@ class _StyleDiscoveryLiveScreenState extends State<StyleDiscoveryLiveScreen>
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
           _ActionBtn(
-            icon: Icons.undo_rounded,
+            icon: LucideIcons.undo2,
             label: 'Geri al',
             onTap: undoDisabled ? null : _undo,
             variant: _ActionVariant.outlined,
@@ -842,7 +842,7 @@ class _StyleDiscoveryLiveScreenState extends State<StyleDiscoveryLiveScreen>
             variant: _ActionVariant.outlined,
           ),
           _ActionBtn(
-            icon: Icons.favorite_rounded,
+            icon: LucideIcons.heart,
             label: 'Beğen',
             onTap: disabled ? null : () => _swipe(liked: true),
             variant: _ActionVariant.primary,
@@ -878,23 +878,23 @@ class _Card extends StatelessWidget {
   IconData _roomIcon(String raw) {
     switch (raw.trim().toLowerCase()) {
       case 'living_room':
-        return Icons.weekend_outlined;
+        return LucideIcons.sofa;
       case 'bedroom':
-        return Icons.bed_outlined;
+        return LucideIcons.bed;
       case 'kitchen':
-        return Icons.countertops_outlined;
+        return LucideIcons.squareStack;
       case 'bathroom':
-        return Icons.bathtub_outlined;
+        return LucideIcons.bath;
       case 'kids_room':
-        return Icons.child_care_outlined;
+        return LucideIcons.baby;
       case 'office':
-        return Icons.desk_outlined;
+        return LucideIcons.briefcase;
       case 'dining_room':
-        return Icons.dining_outlined;
+        return LucideIcons.utensils;
       case 'hallway':
-        return Icons.door_front_door_outlined;
+        return LucideIcons.doorOpen;
       default:
-        return Icons.home_outlined;
+        return LucideIcons.home;
     }
   }
 
@@ -966,13 +966,13 @@ class _Card extends StatelessWidget {
               placeholder: (_, __) =>
                   Container(color: KoalaColors.surfaceAlt),
               errorWidget: (_, __, ___) => const Center(
-                child: Icon(Icons.image_not_supported_outlined,
+                child: Icon(LucideIcons.imageOff,
                     color: KoalaColors.textTer),
               ),
             )
           else
             const Center(
-              child: Icon(Icons.image_outlined,
+              child: Icon(LucideIcons.image,
                   color: KoalaColors.textTer, size: 48),
             ),
           // Gradient overlay - alttan üste (merkez 60% görsel kalsın)

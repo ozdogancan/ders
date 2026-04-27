@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../providers/swipe_feed_provider.dart';
 import '../widgets/swipe/feed_swipe_deck.dart';
 import '../widgets/swipe/swipe_onboarding_overlay.dart';
+import 'package:lucide_icons/lucide_icons.dart';
 
 /// Fullscreen swipe discovery route (`/swipe`).
 ///
@@ -75,7 +76,7 @@ class _SwipeScreenState extends ConsumerState<SwipeScreen>
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.close_rounded),
+          icon: const Icon(LucideIcons.x),
           onPressed: () {
             if (context.canPop()) {
               context.pop();
@@ -87,7 +88,7 @@ class _SwipeScreenState extends ConsumerState<SwipeScreen>
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.refresh_rounded),
+            icon: const Icon(LucideIcons.refreshCw),
             tooltip: 'Yenile',
             onPressed: () =>
                 ref.read(swipeFeedProvider.notifier).refresh(),

@@ -1851,7 +1851,7 @@ class _ProjectCard extends StatelessWidget {
                                 ),
                                 if (card.rating != null) ...[
                                   const SizedBox(width: 8),
-                                  const Icon(Icons.star_rounded, size: 16, color: _K.primary),
+                                  const Icon(LucideIcons.star, size: 16, color: _K.primary),
                                   const SizedBox(width: 2),
                                   Text(
                                     card.rating!.toStringAsFixed(1),
@@ -2265,7 +2265,7 @@ class _ProjectDetailSheetState extends State<_ProjectDetailSheet> {
                                         ),
                                         child: Row(
                                           children: [
-                                            const Icon(Icons.star_rounded, size: 16, color: _K.primary),
+                                            const Icon(LucideIcons.star, size: 16, color: _K.primary),
                                             const SizedBox(width: 4),
                                             Text(
                                               widget.card.rating!.toStringAsFixed(1),

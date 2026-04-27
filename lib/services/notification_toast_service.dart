@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../core/router/app_router.dart';
 import '../core/theme/koala_tokens.dart';
+import 'package:lucide_icons/lucide_icons.dart';
 
 /// Uygulamanın herhangi bir yerinden SnackBar toast göstermek için global
 /// servis. MaterialApp.scaffoldMessengerKey olarak [messengerKey] verildiğinde,
@@ -138,7 +139,7 @@ class NotificationToastService {
               ),
               const SizedBox(width: 8),
               const Icon(
-                Icons.chat_bubble_rounded,
+                LucideIcons.messageCircle,
                 size: 18,
                 color: KoalaColors.accent,
               ),

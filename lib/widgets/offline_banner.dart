@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../services/connectivity_service.dart';
+import 'package:lucide_icons/lucide_icons.dart';
 
 /// Compact offline banner — shows when device has no internet.
 /// Place at the top of any screen body with Column([OfflineBanner(), Expanded(...)]).
@@ -24,7 +25,7 @@ class OfflineBanner extends StatelessWidget {
           ),
           child: Row(
             children: [
-              const Icon(Icons.wifi_off_rounded, size: 18, color: Color(0xFFEA580C)),
+              const Icon(LucideIcons.wifiOff, size: 18, color: Color(0xFFEA580C)),
               const SizedBox(width: 10),
               const Expanded(
                 child: Text(

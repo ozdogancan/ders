@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../core/theme/koala_tokens.dart';
+import 'package:lucide_icons/lucide_icons.dart';
 
 /// Global error widget — network, server, timeout hataları
 class ErrorView extends StatelessWidget {
@@ -34,10 +35,10 @@ class ErrorView extends StatelessWidget {
 
   IconData get _icon {
     switch (type) {
-      case ErrorType.network: return Icons.wifi_off_rounded;
-      case ErrorType.server: return Icons.cloud_off_rounded;
-      case ErrorType.timeout: return Icons.timer_off_rounded;
-      case ErrorType.general: return Icons.error_outline_rounded;
+      case ErrorType.network: return LucideIcons.wifiOff;
+      case ErrorType.server: return LucideIcons.cloudOff;
+      case ErrorType.timeout: return LucideIcons.timerOff;
+      case ErrorType.general: return LucideIcons.alertCircle;
     }
   }
 

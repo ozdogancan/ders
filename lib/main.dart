@@ -1,6 +1,7 @@
 import 'dart:ui';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -17,9 +18,26 @@ import 'services/push_token_service.dart';
 import 'core/config/env.dart';
 import 'widgets/experience_ui.dart';
 import 'firebase_options.dart';
+import 'package:lucide_icons/lucide_icons.dart';
+
+/// FCM background handler — uygulama kill edildiğinde (ya da terminated state'te)
+/// gelen data mesajlarını işlemek için top-level fonksiyon OLMAK ZORUNDA.
+/// Şimdilik sadece log atıyor; iş akışı tarafı PushHandlerService foreground
+/// içinde navigate ediyor. Sprint 5.5'te burada unread badge bump'layabiliriz.
+@pragma('vm:entry-point')
+Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  // Background'da tam Firebase env yok — initializeApp gerekirse lazım olur.
+  // Şu an no-op yeterli; notification payload zaten system bar'da göstiriliyor.
+  debugPrint('[fcm/bg] ${message.messageId}: ${message.notification?.title}');
+}
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
+  // Background message handler'ı runApp'tan ÖNCE register et — Android'de
+  // terminated state'te gelen mesajlar için zorunlu. kIsWeb'de no-op.
+  if (!kIsWeb) {
+    FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+  }
   PaintingBinding.instance.imageCache.maximumSizeBytes = 100 * 1024 * 1024;
   PaintingBinding.instance.imageCache.maximumSize = 200;
 
@@ -47,13 +65,23 @@ void main() {
     ),
   );
 
-  // Global error handler — unhandled exceptions don't crash the app
+  // Global error handler — unhandled exceptions don't crash the app.
+  // Sprint 5 — mobile (Android/iOS) release builds forward Flutter + platform
+  // errors to Firebase Crashlytics. Web skips (firebase_crashlytics has no web
+  // implementation) and debug builds just print.
+  final crashlyticsActive = !kIsWeb && kReleaseMode;
   FlutterError.onError = (details) {
     FlutterError.presentError(details);
     debugPrint('FlutterError: ${details.exceptionAsString()}');
+    if (crashlyticsActive) {
+      FirebaseCrashlytics.instance.recordFlutterFatalError(details);
+    }
   };
   PlatformDispatcher.instance.onError = (error, stack) {
     debugPrint('Unhandled: $error\n$stack');
+    if (crashlyticsActive) {
+      FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
+    }
     return true; // prevents crash
   };
 
@@ -83,7 +111,7 @@ class _MisconfiguredBuildApp extends StatelessWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: const [
-                Icon(Icons.error_outline, color: Colors.white, size: 72),
+                Icon(LucideIcons.alertCircle, color: Colors.white, size: 72),
                 SizedBox(height: 24),
                 Text(
                   'Build misconfigured',
@@ -132,6 +160,16 @@ class _BootstrapAppState extends State<_BootstrapApp> {
       await Firebase.initializeApp(
         options: DefaultFirebaseOptions.currentPlatform,
       );
+      // Crashlytics collection: sadece mobil release build'de aç. Debug'da
+      // false tutarak geliştirme sırasında fake crash flood'u engelle.
+      if (!kIsWeb) {
+        try {
+          await FirebaseCrashlytics.instance
+              .setCrashlyticsCollectionEnabled(kReleaseMode);
+        } catch (e) {
+          debugPrint('Crashlytics toggle skipped: $e');
+        }
+      }
     } catch (error) {
       debugPrint('Firebase init skipped: $error');
     }
@@ -240,45 +278,10 @@ class _BootstrapAppState extends State<_BootstrapApp> {
     );
   }
 
-  Future<void> _initPushNotifications() async {
-    try {
-      final messaging = FirebaseMessaging.instance;
-      final settings = await messaging.requestPermission(
-        alert: true,
-        badge: true,
-        sound: true,
-      );
-      if (settings.authorizationStatus == AuthorizationStatus.authorized ||
-          settings.authorizationStatus == AuthorizationStatus.provisional) {
-        final token = await messaging.getToken();
-        if (token != null) {
-          final platform = kIsWeb
-              ? TokenPlatform.web
-              : defaultTargetPlatform == TargetPlatform.iOS
-                  ? TokenPlatform.ios
-                  : TokenPlatform.android;
-          await PushTokenService.registerToken(
-            deviceToken: token,
-            platform: platform,
-          );
-        }
-        // Listen for token refresh
-        messaging.onTokenRefresh.listen((newToken) {
-          final platform = kIsWeb
-              ? TokenPlatform.web
-              : defaultTargetPlatform == TargetPlatform.iOS
-                  ? TokenPlatform.ios
-                  : TokenPlatform.android;
-          PushTokenService.registerToken(
-            deviceToken: newToken,
-            platform: platform,
-          );
-        });
-      }
-    } catch (e) {
-      debugPrint('Push notification init skipped: $e');
-    }
-  }
+  // NOT: Push notification token registration tek bir yerde:
+  // `firebase_service.dart:_registerFcmToken`. Eski duplicate `_initPushNotifications`
+  // Sprint 5'te kaldırıldı (analyzer "unused_element" warning'i + iki farklı
+  // yerde aynı token register kodunun sync'siz tutulma riski vardı).
 
   String _platformName() {
     if (kIsWeb) return 'web';
