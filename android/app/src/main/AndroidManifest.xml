@@ -1,6 +1,12 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- Android 13+ (API 33): scoped photo access. image_picker + image_cropper
+         + ML Kit labeling gallery'den foto okurken bu permission'ı ister.
+         READ_EXTERNAL_STORAGE Android 10+ için gerekli değil (scoped storage). -->
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <!-- Firebase Messaging (Sprint 5) runtime push permission — Android 13+ -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-feature android:name="android.hardware.camera.any" android:required="false" />
 
     <application

@@ -2,6 +2,7 @@ plugins {
     id("com.android.application")
     // START: FlutterFire Configuration
     id("com.google.gms.google-services")
+    id("com.google.firebase.crashlytics")
     // END: FlutterFire Configuration
     id("kotlin-android")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
@@ -37,7 +38,9 @@ android {
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion
-        targetSdk = flutter.targetSdkVersion
+        // Play Store 2024 Aug requirement: targetSdk >= 34. Flutter default is
+        // 34 as of 3.24+ but pin explicitly so bumps don't drift.
+        targetSdk = 34
         versionCode = flutter.versionCode
         versionName = flutter.versionName
     }
@@ -65,4 +68,11 @@ android {
 
 flutter {
     source = "../.."
+}
+
+// firebase-iid (legacy, deprecated) firebase-messaging 25.x ile duplicate class
+// hatasına yol açıyor. firebase-messaging kendi içinde aynı sınıfları içerdiği
+// için iid'yi tüm config'lerden çıkarıyoruz.
+configurations.all {
+    exclude(group = "com.google.firebase", module = "firebase-iid")
 }

@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import '../core/theme/koala_tokens.dart';
 import 'auth_common.dart';
 import 'phone_auth_screen.dart';
+import 'package:lucide_icons/lucide_icons.dart';
 
 class AuthEntryScreen extends StatefulWidget {
   const AuthEntryScreen({
@@ -62,7 +63,7 @@ class _AuthEntryScreenState extends State<AuthEntryScreen>
             duration: const Duration(seconds: 4),
             content: Row(
               children: [
-                const Icon(Icons.login_rounded, color: Colors.white, size: 18),
+                const Icon(LucideIcons.logIn, color: Colors.white, size: 18),
                 const SizedBox(width: 8),
                 Expanded(child: Text(widget.toastMessage!, style: const TextStyle(color: Colors.white, fontSize: 13))),
               ],
@@ -244,7 +245,7 @@ class _AuthEntryScreenState extends State<AuthEntryScreen>
                                 foregroundColor: KoalaColors.textMed,
                                 minimumSize: const Size(40, 40),
                               ),
-                              icon: const Icon(Icons.close_rounded, size: 20),
+                              icon: const Icon(LucideIcons.x, size: 20),
                             ),
                           )
                         else
@@ -337,7 +338,7 @@ class _AuthEntryScreenState extends State<AuthEntryScreen>
                               AuthActionButton(
                                 label: 'Telefon ile devam et',
                                 leading: const Icon(
-                                  Icons.smartphone_rounded,
+                                  LucideIcons.smartphone,
                                   color: KoalaColors.brand,
                                   size: 20,
                                 ),

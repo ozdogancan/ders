@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 
 import '../core/theme/koala_tokens.dart';
 import 'auth_common.dart';
+import 'package:lucide_icons/lucide_icons.dart';
 
 enum _PhoneAuthStage { enterPhone, verifyCode }
 
@@ -294,7 +295,7 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
                         // Geri butonu
                         IconButton(
                           onPressed: _isVerifyingCode ? null : _handleBackPressed,
-                          icon: const Icon(Icons.arrow_back_rounded),
+                          icon: const Icon(LucideIcons.arrowLeft),
                           style: IconButton.styleFrom(
                             backgroundColor: Colors.white,
                             foregroundColor: KoalaColors.inkSoft,

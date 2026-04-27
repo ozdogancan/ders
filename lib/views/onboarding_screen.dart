@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/router/app_router.dart';
 import '../core/theme/koala_tokens.dart';
+import 'package:lucide_icons/lucide_icons.dart';
 
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
@@ -357,7 +358,7 @@ class _Page1State extends State<_Page1> with SingleTickerProviderStateMixin {
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Icon(
-                              Icons.auto_awesome,
+                              LucideIcons.sparkles,
                               size: 16,
                               color: KoalaColors.accent,
                             ),
@@ -384,9 +385,9 @@ class _Page1State extends State<_Page1> with SingleTickerProviderStateMixin {
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: const [
-            _FeatureChip(Icons.home_work_rounded, 'Mekan analizi'),
+            _FeatureChip(LucideIcons.home, 'Mekan analizi'),
             SizedBox(width: 10),
-            _FeatureChip(Icons.auto_awesome_rounded, 'Stil önerileri'),
+            _FeatureChip(LucideIcons.sparkles, 'Stil önerileri'),
           ],
         ),
         const Spacer(flex: 2),
@@ -677,7 +678,7 @@ class _Page2State extends State<_Page2>
                                     const Row(
                                       children: [
                                         Icon(
-                                          Icons.auto_awesome,
+                                          LucideIcons.sparkles,
                                           size: 14,
                                           color: KoalaColors.accent,
                                         ),
@@ -748,7 +749,7 @@ class _Page2State extends State<_Page2>
                                           Row(
                                             children: [
                                               Icon(
-                                                Icons.shopping_bag_rounded,
+                                                LucideIcons.shoppingBag,
                                                 size: 14,
                                                 color: KoalaColors.accentMuted,
                                               ),
@@ -776,9 +777,9 @@ class _Page2State extends State<_Page2>
                                       ),
                                     ),
                                     ...[
-                                      (KoalaColors.accent, Icons.weekend_rounded),
-                                      (KoalaColors.accentMuted, Icons.light_rounded),
-                                      (KoalaColors.accentMuted, Icons.table_bar_rounded),
+                                      (KoalaColors.accent, LucideIcons.sofa),
+                                      (KoalaColors.accentMuted, LucideIcons.lightbulb),
+                                      (KoalaColors.accentMuted, LucideIcons.martini),
                                     ].map(
                                       (e) => Container(
                                         width: 32,

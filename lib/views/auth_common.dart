@@ -14,6 +14,7 @@ import 'package:go_router/go_router.dart';
 import '../core/config/env.dart';
 import '../core/router/app_router.dart';
 import '../core/theme/koala_tokens.dart';
+import 'package:lucide_icons/lucide_icons.dart';
 
 const String _kTermsUrl = 'https://www.evlumba.com/terms';
 const String _kPrivacyUrl = 'https://www.evlumba.com/privacy';
@@ -99,7 +100,11 @@ class AuthCoordinator {
       existing = null;
     }
 
-    await supabase.from('users').upsert(<String, dynamic>{
+    // 2026-04-27: Schema-drift koruması. `last_active_at` gibi opsiyonel
+    // analytics kolonu prod'da yoksa PGRST204 dönüyor ve login UX'inde
+    // kırmızı banner basıyor. Login kritik, analytics değil → fail-soft.
+    // İlk denemede full payload, schema cache hatasıysa minimal payload'a düş.
+    final fullPayload = <String, dynamic>{
       'id': user.uid,
       'email': user.email ?? '',
       'display_name': user.displayName ?? '',
@@ -110,18 +115,43 @@ class AuthCoordinator {
       'created_at': existing?['created_at'] ?? now,
       'updated_at': now,
       'last_active_at': now,
-    }, onConflict: 'id');
+    };
+    try {
+      await supabase.from('users').upsert(fullPayload, onConflict: 'id');
+    } on PostgrestException catch (e) {
+      // PGRST204 = schema cache'te kolon yok. Bilinen "opsiyonel" kolonları
+      // çıkarıp tekrar dene. Login bloke etmesin.
+      if (e.code == 'PGRST204') {
+        final minimal = Map<String, dynamic>.from(fullPayload)
+          ..remove('last_active_at')
+          ..remove('updated_at')
+          ..remove('photo_url');
+        try {
+          await supabase.from('users').upsert(minimal, onConflict: 'id');
+        } catch (_) {
+          // Yine patlarsa swallow — Firebase auth zaten geçerli, profil
+          // satırı sonradan oluşturulabilir.
+        }
+      }
+      // Diğer hataları da swallow et — login akışı bloke olmasın.
+    } catch (_) {
+      // Network/timeout vs. — login geçerli, sessiz devam.
+    }
   }
 
   static Future<void> touchLogin(User user) async {
     if (!Env.hasSupabaseConfig) return;
     final SupabaseClient supabase = Supabase.instance.client;
-    await supabase
-        .from('users')
-        .update(<String, dynamic>{
-          'last_active_at': DateTime.now().toIso8601String(),
-        })
-        .eq('id', user.uid);
+    try {
+      await supabase
+          .from('users')
+          .update(<String, dynamic>{
+            'last_active_at': DateTime.now().toIso8601String(),
+          })
+          .eq('id', user.uid);
+    } catch (_) {
+      // Analytics — sessiz başarısızlık.
+    }
   }
 
   static Future<void> goToHome(BuildContext context) async {
@@ -184,8 +214,8 @@ class AuthCoordinator {
                               ),
                               child: Icon(
                                 isTerms
-                                    ? Icons.description_outlined
-                                    : Icons.shield_outlined,
+                                    ? LucideIcons.fileText
+                                    : LucideIcons.shield,
                                 color: KoalaColors.brand,
                                 size: 18,
                               ),
@@ -204,7 +234,7 @@ class AuthCoordinator {
                             ),
                             IconButton(
                               onPressed: () => Navigator.of(context).pop(),
-                              icon: const Icon(Icons.close_rounded),
+                              icon: const Icon(LucideIcons.x),
                               style: IconButton.styleFrom(
                                 backgroundColor: KoalaColors.surfaceCool,
                                 foregroundColor: KoalaColors.textMed,
@@ -455,7 +485,7 @@ class KoalaHeroLogo extends StatelessWidget {
           ],
         ),
         child: Icon(
-          Icons.auto_awesome_rounded,
+          LucideIcons.sparkles,
           color: Colors.white,
           size: size * 0.42,
         ),
@@ -606,7 +636,7 @@ class AuthErrorBanner extends StatelessWidget {
       child: Row(
         children: <Widget>[
           const Icon(
-            Icons.error_outline_rounded,
+            LucideIcons.alertCircle,
             color: KoalaColors.errorBright,
             size: 18,
           ),
@@ -857,7 +887,7 @@ class _Bullet extends StatelessWidget {
         children: <Widget>[
           const Padding(
             padding: EdgeInsets.only(top: 8),
-            child: Icon(Icons.circle, size: 5, color: KoalaColors.textMuted),
+            child: Icon(LucideIcons.circle, size: 5, color: KoalaColors.textMuted),
           ),
           const SizedBox(width: 10),
           Expanded(
