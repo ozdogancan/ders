@@ -3,7 +3,10 @@ node_modules/
 .env
 .env.local
 .env.*.local
+.env.production
+.env.development
 *.tsbuildinfo
 next-env.d.ts
 
 .vercel
+.env*.local

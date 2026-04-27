@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/admin/backfill-embeddings",
+      "schedule": "0 3 * * *"
+    }
+  ]
+}
