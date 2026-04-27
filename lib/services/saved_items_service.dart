@@ -117,7 +117,7 @@ class SavedItemsService {
     try {
       final res = await _db
           .from('saved_items')
-          .select('id, item_id, item_type, title, image_url, subtitle, created_at')
+          .select('id, item_id, item_type, title, image_url, subtitle, extra_data, created_at')
           .eq('user_id', _uid!)
           .eq('item_type', type.name)
           .order('created_at', ascending: false)

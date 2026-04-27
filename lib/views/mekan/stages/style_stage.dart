@@ -7,6 +7,7 @@ import '../../../services/mekan_analyze_service.dart';
 import '../../style_discovery_screen.dart';
 import '../mekan_constants.dart';
 import '../widgets/mekan_ui.dart';
+import 'package:lucide_icons/lucide_icons.dart';
 
 /// Stil seçim ekranı — sakin, tek odaklı.
 /// Yapı: [foto + tespit] → [renk şeridi] → [stil grid] → [başlat]
@@ -129,10 +130,11 @@ class _StyleStageState extends State<StyleStage> {
             ),
           const SizedBox(height: KoalaSpacing.lg),
 
-          // 3) Renk şeridi — sade daireler
-          if (analysis.colors.isNotEmpty) _colorStrip(analysis.colors),
-          if (analysis.colors.isNotEmpty)
-            const SizedBox(height: KoalaSpacing.xxl),
+          // 3) Analiz özeti — tek satırda renk + stil rozeti, KAOS YARATMAZ.
+          // Sol: renk daireleri (6 adet max). Sağ: tespit edilen stil chip'i.
+          // Kullanıcı "AI ne gördü" hissini 1 bakışta alır.
+          _analysisStrip(analysis),
+          const SizedBox(height: KoalaSpacing.xxl),
 
           // 4) Stil seçimi — oda adına göre kişiselleştirilmiş başlık
           Text(_styleHeading(analysis.roomLabelTr), style: KoalaText.h3),
@@ -154,7 +156,7 @@ class _StyleStageState extends State<StyleStage> {
           MekanPrimaryButton(
             label: _theme == null ? 'Bir tarz seç' : 'Tasarımı başlat',
             onTap: _theme == null ? null : () => widget.onSubmit(_theme!),
-            trailing: _theme == null ? null : Icons.auto_awesome_rounded,
+            trailing: _theme == null ? null : LucideIcons.sparkles,
           ),
         ],
       ),
@@ -185,30 +187,99 @@ class _StyleStageState extends State<StyleStage> {
     return '${cut.substring(0, 117)}…';
   }
 
-  Widget _colorStrip(List<MekanColor> colors) {
-    // Yalın daireler — isim yok. Tooltip'te hex kalıyor (hover/long-press).
-    return Row(
-      children: [
-        for (var i = 0; i < colors.length && i < 6; i++) ...[
-          if (i > 0) const SizedBox(width: 10),
-          Tooltip(
-            message: colors[i].hex,
-            child: Container(
-              width: 28,
-              height: 28,
-              decoration: BoxDecoration(
-                color: colors[i].color,
-                shape: BoxShape.circle,
-                border: Border.all(
-                  color: KoalaColors.border,
-                  width: 0.5,
+  Widget _analysisStrip(AnalyzeResult a) {
+    // Renk daireleri — sol blok.
+    final colors = a.colors;
+    final colorRow = colors.isEmpty
+        ? const SizedBox.shrink()
+        : Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              for (var i = 0; i < colors.length && i < 6; i++) ...[
+                if (i > 0) const SizedBox(width: 8),
+                Tooltip(
+                  message: colors[i].hex,
+                  child: Container(
+                    width: 22,
+                    height: 22,
+                    decoration: BoxDecoration(
+                      color: colors[i].color,
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: KoalaColors.border,
+                        width: 0.5,
+                      ),
+                    ),
+                  ),
                 ),
+              ],
+            ],
+          );
+
+    // Stil chip'i — sağ blok. Gemini boş döndüyse "—" yerine hiç gösterme.
+    final styleLabel = _prettyStyle(a.style);
+    final styleChip = styleLabel.isEmpty
+        ? const SizedBox.shrink()
+        : Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: KoalaColors.accentDeep.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(KoalaRadius.pill),
+              border: Border.all(
+                color: KoalaColors.accentDeep.withValues(alpha: 0.18),
+                width: 0.5,
               ),
             ),
-          ),
-        ],
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(LucideIcons.sparkles,
+                    size: 12, color: KoalaColors.accentDeep),
+                const SizedBox(width: 4),
+                Text(
+                  styleLabel,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: KoalaColors.accentDeep,
+                  ),
+                ),
+              ],
+            ),
+          );
+
+    if (colors.isEmpty && styleLabel.isEmpty) return const SizedBox.shrink();
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Expanded(child: colorRow),
+        if (styleLabel.isNotEmpty) styleChip,
       ],
     );
+  }
+
+  String _prettyStyle(String raw) {
+    final s = raw.trim();
+    if (s.isEmpty) return '';
+    // Gemini "minimalist", "scandinavian" gibi lowercase döner.
+    // İlk harf büyük + TR aliases.
+    const tr = {
+      'minimalist': 'Minimalist',
+      'scandinavian': 'Skandinav',
+      'japandi': 'Japandi',
+      'modern': 'Modern',
+      'contemporary': 'Çağdaş',
+      'bohemian': 'Bohem',
+      'industrial': 'Endüstriyel',
+      'rustic': 'Rustik',
+      'traditional': 'Geleneksel',
+      'mid-century': 'Orta Yüzyıl',
+      'mid century': 'Orta Yüzyıl',
+    };
+    final k = s.toLowerCase();
+    if (tr.containsKey(k)) return tr[k]!;
+    return s[0].toUpperCase() + s.substring(1);
   }
 
   Widget _hint(ThemeOption? matched) {
@@ -216,7 +287,7 @@ class _StyleStageState extends State<StyleStage> {
       // Kullanıcının daha önce bulduğu tarz var — küçük satır, dayatma yok.
       return Row(
         children: [
-          const Icon(Icons.history_rounded,
+          const Icon(LucideIcons.history,
               size: 14, color: KoalaColors.textSec),
           const SizedBox(width: 6),
           Expanded(
@@ -252,7 +323,7 @@ class _StyleStageState extends State<StyleStage> {
           tapTargetSize: MaterialTapTargetSize.shrinkWrap,
           foregroundColor: KoalaColors.accentDeep,
         ),
-        icon: const Icon(Icons.auto_awesome_outlined, size: 14),
+        icon: const Icon(LucideIcons.sparkles, size: 14),
         label: const Text(
           'Tarzını keşfedelim mi?',
           style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
@@ -334,7 +405,7 @@ class _StyleStageState extends State<StyleStage> {
                   ),
                 ),
                 if (highlighted)
-                  const Icon(Icons.star_rounded,
+                  const Icon(LucideIcons.star,
                       color: KoalaColors.accent, size: 14),
               ],
             ),
@@ -420,7 +491,7 @@ class _StyleImage extends StatelessWidget {
                 shape: BoxShape.circle,
               ),
               alignment: Alignment.center,
-              child: const Icon(Icons.check_rounded,
+              child: const Icon(LucideIcons.check,
                   color: Colors.white, size: 14),
             ),
           ),
@@ -437,7 +508,7 @@ class _StyleImage extends StatelessWidget {
               child: const Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.star_rounded,
+                  Icon(LucideIcons.star,
                       color: KoalaColors.accent, size: 12),
                   SizedBox(width: 2),
                   Text(

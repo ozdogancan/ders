@@ -1,14 +1,28 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import '../../core/theme/koala_tokens.dart';
+import '../../services/analytics_service.dart';
+import '../../services/content_gate_service.dart';
 import '../../services/mekan_analyze_service.dart';
 import '../../services/replicate_service.dart';
+import '../../services/restyle_prefetch_service.dart';
+import '../../services/swipe_deck_service.dart';
+import '../../services/taste_service.dart';
+import '../style_discovery_screen.dart';
 import 'mekan_constants.dart';
+import 'swipe_screen.dart' as mekan_swipe;
+import 'stages/analysis_reveal_stage.dart';
 import 'stages/generating_stage.dart';
+import 'stages/moodboard_stage.dart';
 import 'stages/result_stage.dart';
 import 'stages/style_stage.dart';
 import 'widgets/mekan_ui.dart';
+import 'widgets/pro_match_sheet.dart';
+import 'widgets/quality_hint_sheet.dart';
+import 'widgets/style_swipe_sheet.dart';
+import 'package:lucide_icons/lucide_icons.dart';
 
 /// Mekan akışı state machine — foto HomeScreen'den geliyor.
 /// Açılışta /api/analyze-room ile oda tespiti → style → generating → result.
@@ -20,7 +34,10 @@ class MekanFlowScreen extends StatefulWidget {
   State<MekanFlowScreen> createState() => _MekanFlowScreenState();
 }
 
-enum _Phase { analyzing, notMekan, style, generating, result, error }
+enum _Phase { analyzing, notMekan, reveal, moodboard, style, generating, result, error }
+
+/// "Bu bir mekan değil" reddi için sebep — mesaj tonlaması için.
+enum _RejectReason { selfie, food, pet, vehicle, document, screen, clothing, outdoor, other }
 
 class _MekanFlowScreenState extends State<MekanFlowScreen> {
   _Phase _phase = _Phase.analyzing;
@@ -30,6 +47,27 @@ class _MekanFlowScreenState extends State<MekanFlowScreen> {
   String? _afterSrc;
   bool _mock = false;
   String? _errorMsg;
+  _RejectReason _rejectReason = _RejectReason.other;
+
+  /// Taste'a göre çıkarılan inferred theme — moodboard'dan direkt tasarla'ya
+  /// geçince kullanılır. Null ise kullanıcı manuel stil seçer.
+  ThemeOption? _inferredTheme;
+
+  /// Son hesaplanan taste kararı — reveal CTA'sında doğru rotayı seçmek için.
+  /// Analiz ile paralel hesaplanır; CTA basılana kadar hazır olur çoğu durumda.
+  /// Hazır değilse CTA anında bekler (genelde <200ms).
+  TasteDecision? _tasteDecision;
+  Future<TasteDecision>? _tasteFuture;
+
+  /// `StyleSwipeSheet`'ten dönen "loved tags". Restyle prompt'unu
+  /// zenginleştirmek için saklıyoruz — parent style stage / generate
+  /// adımı bu listeyi okuyup prompt'a iliştirebilir. Boş ise enrich yok.
+  List<String> _swipeLovedTags = const [];
+
+  /// /api/analyze-room çağrısının döndürdüğü stil sinyalleri. Restyle
+  /// hand-off'undan hemen önce hesaplanır, theme metnine sessizce
+  /// appendlenir. Kullanıcıya görünmez — sadece prompt enrichment.
+  StyleHints? _styleHints;
 
   @override
   void initState() {
@@ -42,21 +80,104 @@ class _MekanFlowScreenState extends State<MekanFlowScreen> {
     setState(() {
       _phase = _Phase.analyzing;
       _errorMsg = null;
+      // Retry senaryosunda cache'ı sıfırla — eski taste kararını kullanıp
+      // yanlış rotaya sapmayalım.
+      _tasteDecision = null;
+      _tasteFuture = null;
+      _inferredTheme = null;
     });
+    final analyzeStartedAt = DateTime.now();
     try {
-      final r = await MekanAnalyzeService.analyze(_bytes);
-      if (!mounted) return;
-      if (r.isNotMekan) {
+      // 1) Cihaz-tarafı ContentGate v2 — face + image labeling paralel.
+      // Selfie, kedi, yemek, araba, belge, ekran, giysi, manzara fotolarını
+      // 80-150ms'de eler. Her ret Gemini'de ~$0.003 tasarruf.
+      final gate = await ContentGateService.check(_bytes);
+      if (gate.shouldBlock) {
+        if (!mounted) return;
+        unawaited(
+          Analytics.mekanContentBlocked(_mapRejectReason(gate).name),
+        );
         setState(() {
-          _analysis = r;
+          _rejectReason = _mapRejectReason(gate);
           _phase = _Phase.notMekan;
         });
         return;
       }
+
+      // 2) Gemini ile ayrıntılı analiz — oda mı, renk, stil.
+      final r = await MekanAnalyzeService.analyze(_bytes);
+      if (!mounted) return;
+
+      // Telemetry: backend analyze sonucu — Phase 2 kalibrasyonu için kritik.
+      final latencyMs = DateTime.now().difference(analyzeStartedAt).inMilliseconds;
+      unawaited(
+        Analytics.mekanAnalyzed(
+          isRoom: r.isRoom,
+          roomType: r.roomType,
+          style: r.style,
+          qualityScore: r.qualityScore,
+          issues: r.issues.map((i) => i.name).toList(),
+          band: r.qualityBand.name,
+          latencyMs: latencyMs,
+        ),
+      );
+
+      if (r.isNotMekan) {
+        setState(() {
+          _analysis = r;
+          _rejectReason = _RejectReason.other;
+          _phase = _Phase.notMekan;
+        });
+        return;
+      }
+
+      // 3) Kalite kontrolü — oda kabul edildi ama foto bulanık/karanlık/parçalı
+      // olabilir. Soft band ise kullanıcıya öneri sun, ama "yine de devam et"
+      // hep açık. Hard-block etmiyoruz: agency kullanıcıda, telemetrede
+      // restyle output skoruyla korelasyon takip edilecek.
+      if (r.qualityBand == QualityBand.soft && mounted) {
+        final issueNames = r.issues.map((i) => i.name).toList();
+        unawaited(
+          Analytics.mekanQualityHintShown(
+            issues: issueNames,
+            qualityScore: r.qualityScore,
+          ),
+        );
+        final shouldContinue = await QualityHintSheet.show(
+          context,
+          bytes: _bytes,
+          issues: r.issues,
+          qualityScore: r.qualityScore,
+        );
+        if (!mounted) return;
+        unawaited(
+          Analytics.mekanQualityHintChoice(
+            choice: shouldContinue == true ? 'continue' : 'retake',
+            issues: issueNames,
+            qualityScore: r.qualityScore,
+          ),
+        );
+        if (shouldContinue != true) {
+          // Kullanıcı "Yeniden çek" dedi → flow'dan çık. HomeScreen'in picker'ı
+          // yeni foto için tekrar açılacak. State'i bırak (sayfa kapanıyor).
+          Navigator.of(context).pop();
+          return;
+        }
+        // shouldContinue == true → user override, normal akışa devam.
+      }
+
+      // 4) Analiz başarılı → önce REVEAL ekranı. Taste kararı ve prefetch
+      // kullanıcı foto'yu okurken ARKA PLANDA hesaplanır, CTA'ya basınca
+      // doğru rotaya atılır. Böylece analiz sonucu "wow" anı taste yüküyle
+      // karışmaz ve tek sayfa editorial hisse dönüşür.
       setState(() {
         _analysis = r;
-        _phase = _Phase.style;
+        _phase = _Phase.reveal;
       });
+
+      // Arka plan: taste + prefetch (sessiz başarısızlık).
+      final roomKey = r.roomType.isNotEmpty ? r.roomType : 'living_room';
+      unawaited(_prepareTasteAndPrefetch(roomKey));
     } on MekanAnalyzeException catch (e) {
       if (!mounted) return;
       setState(() {
@@ -72,23 +193,284 @@ class _MekanFlowScreenState extends State<MekanFlowScreen> {
     }
   }
 
+  /// Analiz başarılı olunca arka planda taste karar + prefetch hazırla.
+  /// Kullanıcı reveal ekranında foto okurken bu iş paralel döner; CTA'ya
+  /// basıldığında (genelde 1-2 sn sonra) veri hazırdır → 0ms latency.
+  Future<void> _prepareTasteAndPrefetch(String roomKey) async {
+    // Aynı anda çoğaltma — _tasteFuture varsa tekrar başlatma.
+    if (_tasteFuture != null) return;
+    final future = TasteService.decideForRoom(roomKey);
+    _tasteFuture = future;
+    try {
+      final decision = await future;
+      if (!mounted) return;
+      ThemeOption? inferred;
+      if (decision.style != null) {
+        final themeValue = TasteService.tasteKeyToThemeValue(decision.style!);
+        if (themeValue != null) {
+          for (final t in kThemes) {
+            if (t.value == themeValue) {
+              inferred = t;
+              break;
+            }
+          }
+        }
+      }
+      _tasteDecision = decision;
+      _inferredTheme = inferred;
+
+      // Prefetch — taste güçlü (>=%55) ise kullanıcı reveal + moodboard
+      // izlerken arkada restyle hazırlansın. "Tasarla"da 0 ms.
+      //
+      // KALİTE GATE: foto kalitesi soft band'da ise prefetch atla. Sebep:
+      // (a) düşük kalite input → output da zayıf çıkacak, prefetch'i kullanıcı
+      //     muhtemelen reddedecek (boşa $0.04)
+      // (b) kullanıcı "yine de devam et" dedi ama tek shot için bekleyebilir
+      // (c) Phase 2'de 3-variant'a geçince soft band → 1 variant'a düşürülecek
+      final qualityOk = _analysis?.qualityBand == QualityBand.good;
+      if (decision.shouldPrefetch && inferred != null && qualityOk) {
+        final roomLabel = roomKey.replaceAll('_', ' ');
+        unawaited(
+          RestylePrefetchService.prefetch(
+            imageBytes: _bytes,
+            room: roomLabel,
+            theme: inferred.value,
+          ).catchError((_) {
+            return RestyleResult(output: '', mock: false);
+          }),
+        );
+      }
+    } catch (_) {
+      // Taste pipeline hata verirse swipe'a düşeceğiz — sessiz kal.
+    }
+  }
+
+  /// Reveal ekranından "Zevkime göre yeniden tasarla" aksiyonu.
+  /// Taste kararına göre:
+  ///   - Confident + inferred theme → moodboard reveal (doğrudan üretime yakın)
+  ///   - Low confidence                → swipe (style discovery), dönüşte
+  ///                                      tekrar decide + moodboard
+  ///   - Taste henüz gelmediyse        → bekle (genelde <200ms)
+  Future<void> _onAutoDesign() async {
+    // Taste henüz yoksa bekle — geç gelenin kullanıcıyı yanıltmasın diye
+    // kısa bir loading state'ine geçiyoruz.
+    var decision = _tasteDecision;
+    if (decision == null && _tasteFuture != null) {
+      try {
+        decision = await _tasteFuture;
+      } catch (_) {
+        decision = null;
+      }
+      if (!mounted) return;
+    }
+
+    if (decision != null && decision.isConfident && _inferredTheme != null) {
+      setState(() => _phase = _Phase.moodboard);
+      return;
+    }
+
+    // Düşük güven → "Tarzını Keşfedelim" swipe-sheet'i. Inline modal,
+    // 6 kart, sevdim/atla; reveal'da prefetch zaten arkada koşuyor.
+    // Sheet null dönerse (atla) mevcut taste-swipe akışına düşeriz.
+    final swiped = await _maybeShowStyleSwipe();
+    if (!mounted) return;
+    if (swiped != null) {
+      // Sheet onaylandı → enrich + moodboard'a geç. Restyle prefetch
+      // zaten 5. swipe'tan sonra fire edildi.
+      setState(() {
+        _swipeLovedTags = swiped.preview.lovedTags;
+        // Inferred theme yoksa style picker'a düşmeyelim — moodboard kullanıcıya
+        // daha düşük yük; theme inference parent tarafından sonradan eklenecek.
+        _phase = _inferredTheme != null ? _Phase.moodboard : _Phase.style;
+      });
+      return;
+    }
+
+    // Sheet açılmadı veya kullanıcı atladı → eski taste-swipe akışı.
+    await _navigateToSwipeForTaste();
+  }
+
+  /// Stil güveni düşükse `StyleSwipeSheet`'i göster. Yeterli aday yoksa
+  /// (TODO: API hazır olunca dolacak), sessizce null dön — caller fallback
+  /// akışına yönlensin.
+  ///
+  /// "Düşük güven" şu an `style.isEmpty` heuristiği — backend `confidence`
+  /// alanı ekleyene dek. Hedef eşik: `confidence < 0.65`.
+  Future<StyleSwipeResult?> _maybeShowStyleSwipe() async {
+    final a = _analysis;
+    if (a == null) return null;
+
+    // TODO(confidence): /api/analyze-room `confidence` alanı eklensin;
+    // burada `a.confidence < 0.65` kontrolü yapılacak. Şimdilik style
+    // boşsa düşük güven kabul ediyoruz.
+    final lowConfidence = a.style.trim().isEmpty;
+    if (!lowConfidence) return null;
+
+    // /api/swipe-deck hayata geçti → kullanıcıyı yeni full-screen
+    // SwipeScreen'e yönlendir. Eski `StyleSwipeSheet` (modal candidate
+    // listesiyle) artık dead path; aşağıdaki dönüş onun yerine geçiyor.
+    // Hand-off: SwipeResult? gelir → loved tags'i swipe state'ine yaz,
+    // theme prompt'una caller tarafından eklenir.
+    final roomKeyTr = _mapRoomKeyToTr(a.roomType);
+    final result = await Navigator.of(context).push<SwipeResult>(
+      MaterialPageRoute(
+        builder: (_) => mekan_swipe.SwipeScreen(
+          roomTypeHint: roomKeyTr,
+          prefetchTrigger: () {
+            // 5. like'ta tetiklenir — mevcut prefetch kuralları aynı.
+            final qualityOk = _analysis?.qualityBand == QualityBand.good;
+            final theme = _inferredTheme;
+            if (theme == null || !qualityOk) return;
+            final roomKey = a.roomType.isNotEmpty
+                ? a.roomType
+                : 'living_room';
+            unawaited(
+              RestylePrefetchService.prefetch(
+                imageBytes: _bytes,
+                room: roomKey.replaceAll('_', ' '),
+                theme: theme.value,
+              ).catchError((_) => RestyleResult(output: '', mock: false)),
+            );
+          },
+        ),
+      ),
+    );
+    if (!mounted) return null;
+    if (result == null) return null;
+    // SwipeResult → eski StyleSwipeResult shape'ine adapte et. Caller
+    // sadece preview.lovedTags okuyor; diğer alanları dolduruyoruz.
+    return StyleSwipeResult(
+      confirmed: true,
+      preview: StyleDiscoveryPreview(lovedTags: result.lovedTags),
+      lovedProjectIds: result.lovedProjectIds,
+    );
+  }
+
+  Future<void> _navigateToSwipeForTaste() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => const StyleDiscoveryScreen(entryPoint: 'mekan_flow'),
+      ),
+    );
+    if (!mounted) return;
+
+    // Swipe'tan dönünce taste'i yeniden hesapla.
+    final roomKey = _analysis?.roomType.isNotEmpty == true
+        ? _analysis!.roomType
+        : 'living_room';
+    try {
+      final decision = await TasteService.decideForRoom(roomKey);
+      if (!mounted) return;
+      ThemeOption? inferred;
+      if (decision.style != null) {
+        final themeValue = TasteService.tasteKeyToThemeValue(decision.style!);
+        if (themeValue != null) {
+          for (final t in kThemes) {
+            if (t.value == themeValue) {
+              inferred = t;
+              break;
+            }
+          }
+        }
+      }
+      _tasteDecision = decision;
+      _inferredTheme = inferred;
+
+      // Prefetch tetikle — swipe sonrası taste güçlendiyse moodboard izlenirken
+      // restyle hazırlansın. (Kalite gate: yukarıdaki ile aynı mantık.)
+      final qualityOk = _analysis?.qualityBand == QualityBand.good;
+      if (decision.shouldPrefetch && inferred != null && qualityOk) {
+        unawaited(
+          RestylePrefetchService.prefetch(
+            imageBytes: _bytes,
+            room: roomKey.replaceAll('_', ' '),
+            theme: inferred.value,
+          ).catchError((_) => RestyleResult(output: '', mock: false)),
+        );
+      }
+
+      setState(() {
+        // Artık güven varsa moodboard'a çık; hâlâ belirsizse kullanıcıya manuel
+        // picker ver — boş swipe loop'una sokmayalım.
+        _phase = (decision.isConfident && inferred != null)
+            ? _Phase.moodboard
+            : _Phase.style;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      // Hata durumunda manuel picker — kullanıcı akışta tıkanmasın.
+      setState(() => _phase = _Phase.style);
+    }
+  }
+
   Future<void> _generate(ThemeOption theme) async {
     final a = _analysis;
     if (a == null) return;
+
+    // ───── /api/analyze-room (stil sinyalleri) ─────
+    // Restyle hand-off'undan HEMEN önce. Kullanıcı stil seçti, görsel restyle
+    // edilmeden önce CLIP gate + style hints çek. valid:true → sessizce stash,
+    // valid:false → dostane Türkçe sheet ile picker'a yönlendir, network/500
+    // → aynı sheet ama "Tekrar dene" callback'i bu çağrıyı retry eder.
+    if (_styleHints == null) {
+      final ok = await _ensureRoomAnalysis(theme);
+      if (!mounted || !ok) return;
+    }
+
     setState(() {
       _phase = _Phase.generating;
       _theme = theme;
       _errorMsg = null;
     });
+    final restyleStartedAt = DateTime.now();
     try {
       // Oda tipi analyze'dan gelir; boşsa "living room" varsayılanı.
       final room = a.roomType.isNotEmpty ? a.roomType : 'living room';
-      final r = await ReplicateService.restyle(
+
+      // Prefetch hit → arka tarafta bitmişse anında sonuç, çalışıyorsa bekle.
+      // Miss → taze çağrı. Her durumda cache'e yazar.
+      final cached = RestylePrefetchService.take(
         imageBytes: _bytes,
-        room: room.replaceAll('_', ' '),
         theme: theme.value,
       );
+      final RestyleResult r;
+      if (cached != null) {
+        r = cached;
+      } else {
+        final pending = RestylePrefetchService.pending(
+          imageBytes: _bytes,
+          theme: theme.value,
+        );
+        r = pending != null
+            ? await pending
+            : await RestylePrefetchService.prefetch(
+                imageBytes: _bytes,
+                room: room.replaceAll('_', ' '),
+                theme: theme.value,
+                styleHints: _styleHints,
+              );
+      }
       if (!mounted) return;
+      final restyleLatencyMs =
+          DateTime.now().difference(restyleStartedAt).inMilliseconds;
+      // v2 batch hazırsa zenginleştirilmiş telemetri al — judge skoru kalite
+      // kalibrasyonu için en kritik sinyal.
+      final batch = RestylePrefetchService.takeBatch(
+        imageBytes: _bytes,
+        theme: theme.value,
+      );
+      unawaited(
+        Analytics.mekanRestyleOutcome(
+          outcome: 'success',
+          theme: theme.value,
+          roomType: a.roomType,
+          latencyMs: restyleLatencyMs,
+          variant: batch?.best.promptKind,
+          judgeScore: batch?.best.judgeScore,
+          variantCount: batch?.variants.length,
+          rejectedCount: batch?.rejectedCount,
+        ),
+      );
       setState(() {
         _afterSrc = r.output;
         _mock = r.mock;
@@ -96,12 +478,34 @@ class _MekanFlowScreenState extends State<MekanFlowScreen> {
       });
     } on ReplicateException catch (e) {
       if (!mounted) return;
+      final restyleLatencyMs =
+          DateTime.now().difference(restyleStartedAt).inMilliseconds;
+      unawaited(
+        Analytics.mekanRestyleOutcome(
+          outcome: 'error',
+          theme: theme.value,
+          roomType: a.roomType,
+          latencyMs: restyleLatencyMs,
+          errorCode: e.code,
+        ),
+      );
       setState(() {
         _errorMsg = '${e.code} · ${e.detail}';
         _phase = _Phase.error;
       });
     } catch (e) {
       if (!mounted) return;
+      final restyleLatencyMs =
+          DateTime.now().difference(restyleStartedAt).inMilliseconds;
+      unawaited(
+        Analytics.mekanRestyleOutcome(
+          outcome: 'error',
+          theme: theme.value,
+          roomType: a.roomType,
+          latencyMs: restyleLatencyMs,
+          errorCode: 'unknown',
+        ),
+      );
       setState(() {
         _errorMsg = e.toString();
         _phase = _Phase.error;
@@ -109,8 +513,223 @@ class _MekanFlowScreenState extends State<MekanFlowScreen> {
     }
   }
 
+  /// /api/analyze-room çağrısı + valid/invalid/error UI rotası.
+  /// true dönerse caller restyle'e devam edebilir; false ise sheet
+  /// kullanıcıyı zaten yönlendirdi (picker'a pop ya da retry).
+  Future<bool> _ensureRoomAnalysis(ThemeOption theme) async {
+    while (true) {
+      // Loading: mevcut analiz shimmer'ını yeniden kullan (fotonun üstünde
+      // mor tarama çizgisi). Yeni component icat etmiyoruz.
+      setState(() {
+        _phase = _Phase.analyzing;
+        _errorMsg = null;
+      });
+
+      final dataUrl = 'data:image/jpeg;base64,${base64Encode(_bytes)}';
+      final analyzeStartedAt = DateTime.now();
+      // Picker kaynağı parent'tan taşınmıyor — default 'gallery'.
+      // Camera/gallery ayrımı eklenirse widget param olarak iletilmeli.
+      unawaited(Analytics.mekanAnalyzeStarted(source: 'gallery'));
+
+      try {
+        final result = await MekanAnalyzeService.analyzeRoom(
+          imageDataUrlOrHttps: dataUrl,
+        );
+        if (!mounted) return false;
+        final latencyMs =
+            DateTime.now().difference(analyzeStartedAt).inMilliseconds;
+
+        if (result is RoomAnalysisValid) {
+          unawaited(
+            Analytics.mekanAnalyzeOutcome(
+              valid: true,
+              confidence: result.style.confidence,
+              latencyMs: result.latencyMs ?? latencyMs,
+            ),
+          );
+          // Sessizce stash — kullanıcıya görünmez, restyle prompt'unda kullanılacak.
+          _styleHints = result.style;
+          return true;
+        }
+
+        if (result is RoomAnalysisInvalid) {
+          unawaited(
+            Analytics.mekanAnalyzeOutcome(
+              valid: false,
+              rejectReason: result.reason,
+              confidence: result.confidence,
+              latencyMs: result.latencyMs ?? latencyMs,
+            ),
+          );
+          await _showAnalyzeRejectSheet(
+            body: 'Bir iç mekan fotoğrafı dene — geniş açı, oda görünür olsun.',
+          );
+          if (!mounted) return false;
+          // Picker'a geri dön.
+          Navigator.of(context).pop();
+          return false;
+        }
+        return false;
+      } catch (e) {
+        if (!mounted) return false;
+        final latencyMs =
+            DateTime.now().difference(analyzeStartedAt).inMilliseconds;
+        unawaited(
+          Analytics.mekanAnalyzeOutcome(
+            valid: false,
+            rejectReason: 'error:${e.runtimeType}',
+            latencyMs: latencyMs,
+          ),
+        );
+        final retry = await _showAnalyzeRejectSheet(
+          body: 'Bir şey ters gitti, internet bağlantını kontrol et.',
+        );
+        if (!mounted) return false;
+        if (retry == true) {
+          // Aynı çağrıyı tekrar dene — while loop bir sonraki turda.
+          continue;
+        }
+        Navigator.of(context).pop();
+        return false;
+      }
+    }
+  }
+
+  /// Ortak reject/error sheet — başlık sabit, body değişken.
+  /// `true` → tekrar dene, `false`/null → kapatıldı.
+  Future<bool?> _showAnalyzeRejectSheet({required String body}) {
+    return showModalBottomSheet<bool>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      barrierColor: Colors.black.withValues(alpha: 0.55),
+      builder: (ctx) => Container(
+        decoration: const BoxDecoration(
+          color: KoalaColors.surface,
+          borderRadius: BorderRadius.vertical(
+            top: Radius.circular(KoalaRadius.xl),
+          ),
+        ),
+        padding: const EdgeInsets.fromLTRB(
+          KoalaSpacing.xl,
+          KoalaSpacing.xl,
+          KoalaSpacing.xl,
+          KoalaSpacing.xxl,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Drag handle — diğer Koala sheet'leri ile tutarlı.
+            Center(
+              child: Container(
+                width: 36,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: KoalaColors.border,
+                  borderRadius: BorderRadius.circular(KoalaRadius.pill),
+                ),
+              ),
+            ),
+            const SizedBox(height: KoalaSpacing.lg),
+            const Text(
+              'Görsel mekan olarak okunmadı',
+              style: KoalaText.h2,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: KoalaSpacing.sm),
+            Text(
+              body,
+              style: KoalaText.bodySec,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: KoalaSpacing.xl),
+            MekanPrimaryButton(
+              label: 'Tekrar dene',
+              onTap: () => Navigator.of(ctx).pop(true),
+              trailing: LucideIcons.refreshCw,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   void _onPro() {
-    Navigator.of(context).pop();
+    // Kullanıcı "Bu tasarımı gerçeğe dönüştür" bastı → pro match sheet.
+    // Yeni v2: image-similarity match (`/api/match-designers`). Restyle
+    // çıktısı görseli + Türkçe oda tipi + theme ile en yakın iç mimarları
+    // bulur ve kullanıcıyı tek tık ile mesaj akışına alır.
+    final restyle = _afterSrc;
+    final theme = _theme?.value ?? _inferredTheme?.value;
+    if (restyle == null || restyle.isEmpty || theme == null) {
+      // Tasarım veya tema yoksa açma.
+      return;
+    }
+    final roomTypeTr = _mapRoomKeyToTr(_analysis?.roomType);
+    unawaited(
+      Analytics.mekanProCtaTapped(
+        theme: theme,
+        roomType: _analysis?.roomType ?? 'unknown',
+      ),
+    );
+    ProMatchSheet.show(
+      context,
+      restyleUrl: restyle,
+      roomType: roomTypeTr,
+      theme: theme.toLowerCase(),
+      city: null,
+    );
+  }
+
+  /// _analysis.roomType (English snake) → match-designers'ın beklediği
+  /// Türkçe etiket. Bilinmeyen değerlerde Oturma Odası fallback'i — agresif
+  /// filtrelemekten ziyade kullanıcıya bir liste sunmak öncelik.
+  String _mapRoomKeyToTr(String? key) {
+    switch (key?.toLowerCase()) {
+      case 'living_room':
+        return 'Oturma Odası';
+      case 'bedroom':
+        return 'Yatak Odası';
+      case 'kitchen':
+        return 'Mutfak';
+      case 'bathroom':
+        return 'Banyo';
+      case 'dining_room':
+        return 'Oturma Odası'; // evlumba'da yok, en yakın eşleşme
+      case 'office':
+        return 'Konut';
+      case 'entry':
+      case 'hallway':
+        return 'Antre';
+      default:
+        return 'Oturma Odası';
+    }
+  }
+
+  /// ContentGate verdict → UX reject reason map'i.
+  _RejectReason _mapRejectReason(ContentVerdict v) {
+    if (v.kind == ContentKind.selfie) return _RejectReason.selfie;
+    switch (v.nonRoomCategory) {
+      case 'person':
+        return _RejectReason.selfie;
+      case 'food':
+        return _RejectReason.food;
+      case 'pet':
+        return _RejectReason.pet;
+      case 'vehicle':
+        return _RejectReason.vehicle;
+      case 'document':
+        return _RejectReason.document;
+      case 'screen':
+        return _RejectReason.screen;
+      case 'clothing':
+        return _RejectReason.clothing;
+      case 'outdoor':
+        return _RejectReason.outdoor;
+      default:
+        return _RejectReason.other;
+    }
   }
 
   @override
@@ -124,7 +743,7 @@ class _MekanFlowScreenState extends State<MekanFlowScreen> {
         elevation: 0,
         leading: IconButton(
           onPressed: () => Navigator.of(context).pop(),
-          icon: const Icon(Icons.arrow_back_rounded),
+          icon: const Icon(LucideIcons.arrowLeft),
         ),
         title: const Text('Mekan', style: KoalaText.h2),
       ),
@@ -146,6 +765,27 @@ class _MekanFlowScreenState extends State<MekanFlowScreen> {
         return _analyzingView();
       case _Phase.notMekan:
         return _notMekanView();
+      case _Phase.reveal:
+        return AnalysisRevealStage(
+          key: const ValueKey('reveal'),
+          bytes: _bytes,
+          analysis: _analysis!,
+          onAutoDesign: _onAutoDesign,
+          onManualPick: () => setState(() => _phase = _Phase.style),
+        );
+      case _Phase.moodboard:
+        return MoodboardStage(
+          key: const ValueKey('moodboard'),
+          onContinue: () {
+            // Inferred theme varsa direkt generate — zaten prefetch edildi.
+            if (_inferredTheme != null) {
+              _generate(_inferredTheme!);
+            } else {
+              setState(() => _phase = _Phase.style);
+            }
+          },
+          onRefine: () => setState(() => _phase = _Phase.style),
+        );
       case _Phase.style:
         return StyleStage(
           key: const ValueKey('style'),
@@ -186,13 +826,57 @@ class _MekanFlowScreenState extends State<MekanFlowScreen> {
   }
 
   Widget _notMekanView() {
-    final cap = _analysis?.caption.trim() ?? '';
-    // Gemini "Bu bir selfie gibi görünüyor" gibi nazik bir cümle döndürüyor.
-    // Varsa onu kullan, yoksa genel mesaj.
-    final msg = cap.isNotEmpty
-        ? cap
-        : 'İç mekan görmüyorum bu karede. Salonun, yatak odan, mutfağın — '
-            'bir oda fotoğrafı yükler misin?';
+    // ContentGate kategoriye göre espirili ton ayarla. Hepsi aynı mesaj
+    // tek tip "bu bir oda değil" değil; kullanıcıyla göz kırpıyoruz.
+    final (title, msg) = switch (_rejectReason) {
+      _RejectReason.selfie => (
+          'Yakışıklısın ama 😄',
+          'Burada bir yüz görüyorum — Koala\'nın tasarladığı şey oda. '
+              'Salonun, yatak odan, mutfağın bir fotoğrafını çek.'
+        ),
+      _RejectReason.food => (
+          'Afiyet olsun 🍽️',
+          'Yemek fotoğrafını tasarlayamam ama mutfağını restyle edebilirim. '
+              'Mutfağın geniş bir fotoğrafını yükler misin?'
+        ),
+      _RejectReason.pet => (
+          'Sevimli dostun var 🐾',
+          'Evcil hayvanın tasarımcısı değilim ama odanınkiyim. Onun '
+              'uyuduğu odanın bir fotoğrafını dener misin?'
+        ),
+      _RejectReason.vehicle => (
+          'Garaj mı tasarlayalım? 🚗',
+          'Araç fotoğrafı görüyorum. Koala iç mekanlarda daha iyi — salon, '
+              'yatak odası, mutfak dener misin?'
+        ),
+      _RejectReason.document => (
+          'Bu bir belge 📄',
+          'Metin/belge fotoğrafı görüyorum. Bir odanın geniş açı '
+              'fotoğrafını yüklersen seni daha iyi anlarım.'
+        ),
+      _RejectReason.screen => (
+          'Ekrana zoom 📱',
+          'Bir ekran fotoğrafı görüyorum. Ekran yerine odanın kendisini '
+              'çekmeyi dener misin?'
+        ),
+      _RejectReason.clothing => (
+          'Stil iyi ama ben oda stilistim 👗',
+          'Kıyafet fotoğrafını tasarlayamam — gardırobunun açık hali mi '
+              'olsun? Dolap odanı bütün haliyle çekebilirsin.'
+        ),
+      _RejectReason.outdoor => (
+          'Güzel manzara 🌄',
+          'Dış mekan görüyorum — Koala şimdilik iç mekan uzmanı. '
+              'Evin içinden bir fotoğraf yükler misin?'
+        ),
+      _RejectReason.other => (
+          'Bunu tasarlayamam 🐨',
+          (_analysis?.caption.trim().isNotEmpty ?? false)
+              ? _analysis!.caption.trim()
+              : 'İç mekan görmüyorum bu karede. Salonun, yatak odan, '
+                  'mutfağın — bir oda fotoğrafı yükler misin?'
+        ),
+    };
     return Padding(
       key: const ValueKey('notMekan'),
       padding: const EdgeInsets.fromLTRB(
@@ -217,7 +901,7 @@ class _MekanFlowScreenState extends State<MekanFlowScreen> {
             ),
           ),
           const SizedBox(height: KoalaSpacing.xl),
-          const Text('Bunu tasarlayamam 🐨',
+          Text(title,
               style: KoalaText.h1, textAlign: TextAlign.center),
           const SizedBox(height: KoalaSpacing.sm),
           Text(
@@ -229,7 +913,7 @@ class _MekanFlowScreenState extends State<MekanFlowScreen> {
           MekanPrimaryButton(
             label: 'Başka fotoğraf seç',
             onTap: () => Navigator.of(context).pop(),
-            trailing: Icons.photo_library_outlined,
+            trailing: LucideIcons.image,
           ),
         ],
       ),
@@ -288,7 +972,7 @@ class _MekanFlowScreenState extends State<MekanFlowScreen> {
                 shape: BoxShape.circle,
               ),
               alignment: Alignment.center,
-              child: const Icon(Icons.error_outline,
+              child: const Icon(LucideIcons.alertCircle,
                   color: KoalaColors.error, size: 32),
             ),
           ),
@@ -315,7 +999,7 @@ class _MekanFlowScreenState extends State<MekanFlowScreen> {
                 _analyze();
               }
             },
-            trailing: Icons.refresh_rounded,
+            trailing: LucideIcons.refreshCw,
           ),
           const SizedBox(height: KoalaSpacing.md),
           Center(

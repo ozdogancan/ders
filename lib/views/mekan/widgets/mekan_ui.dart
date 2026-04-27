@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../core/theme/koala_tokens.dart';
+import 'package:lucide_icons/lucide_icons.dart';
 
 /// Ana aksiyon — dolgulu mor pill.
 class MekanPrimaryButton extends StatelessWidget {
@@ -183,7 +184,7 @@ class MekanAppBar extends StatelessWidget {
           if (onBack != null)
             IconButton(
               onPressed: onBack,
-              icon: const Icon(Icons.arrow_back_ios_new_rounded,
+              icon: const Icon(LucideIcons.arrowLeft,
                   size: 20, color: KoalaColors.text),
               splashRadius: 22,
             )

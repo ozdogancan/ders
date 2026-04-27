@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 
+import 'mekan_analyze_service.dart' show StyleHints;
+
 /// Mekan restyle servisi — koala-api proxy üzerinden Replicate.
 /// Key Flutter'a gömülmez; sadece koala-api (Vercel) env var'ında durur.
 /// MOCK_MEKAN=true ile mock moda alınır (API çağrısı yapılmaz, orijinal foto döner).
@@ -19,6 +21,7 @@ class ReplicateService {
     required Uint8List imageBytes,
     required String room,
     required String theme,
+    StyleHints? styleHints,
   }) async {
     final b64 = base64Encode(imageBytes);
     final dataUrl = 'data:image/jpeg;base64,$b64';
@@ -28,13 +31,17 @@ class ReplicateService {
       return RestyleResult(output: dataUrl, mock: true);
     }
 
+    // Style hints varsa theme metnine tek satır enrichment append et.
+    final enrichedTheme =
+        '${theme.toLowerCase()}${styleHints?.toPromptSuffix() ?? ''}';
+
     final resp = await http.post(
       Uri.parse('$_apiBase/api/restyle'),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({
         'image': dataUrl,
         'room': room.toLowerCase(),
-        'theme': theme.toLowerCase(),
+        'theme': enrichedTheme,
       }),
     );
 
