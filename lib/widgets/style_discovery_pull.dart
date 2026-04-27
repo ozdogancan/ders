@@ -31,10 +31,16 @@ class StyleDiscoveryPull extends StatefulWidget {
     super.key,
     required this.child,
     this.totalCountBuilder,
+    this.showHandleStrip = true,
   });
 
   final Widget child;
   final Future<int> Function()? totalCountBuilder;
+
+  /// Görünür "Tarzını Keşfet" chip'ini gösterip göstermeyeceği.
+  /// false ise gesture sistemi (whole-page swipe-up) çalışmaya devam eder
+  /// ama visible chip kaybolur. 2026-04-27 ana sayfa redesign'da kapatıldı.
+  final bool showHandleStrip;
 
   @override
   State<StyleDiscoveryPull> createState() => StyleDiscoveryPullState();
@@ -293,56 +299,38 @@ class StyleDiscoveryPullState extends State<StyleDiscoveryPull>
 
   @override
   Widget build(BuildContext context) {
-    final screenH = MediaQuery.of(context).size.height;
     final th = _threshold(context);
     final progress = (_dragY / th).clamp(0.0, 1.0);
-    final atThreshold = _dragY >= th;
 
-    return Stack(
-      clipBehavior: Clip.none,
+    // Handle CARD'ın kendisi yukarı doğru büyür — kullanıcı drag yaparken
+    // kartın yüksekliği _dragY kadar artar. Yeni sheet ÇIKMAZ; mevcut
+    // alan genişler. _RisingSheet kullanımı tamamen kaldırıldı.
+    return Column(
+      mainAxisSize: MainAxisSize.min,
       children: [
-        Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Transform.translate(
-              offset: Offset(0, -_hintY),
-              child: _HandleStrip(
-                idleCtrl: _idleCtrl,
-                bumpCtrl: _bumpCtrl,
-                active: _dragging || _dragY > 4,
-                progress: progress,
-                showHandIcon: _playingHint,
-                onTap: _onChipTap,
-                onDragStart: (_) => _onDragStart(),
-                onDragUpdate: _onDragUpdate,
-                onDragEnd: _onDragEndDetails,
-              ),
-            ),
-            widget.child,
-          ],
-        ),
-
-        // ── SHEET ──
-        if (_dragY > 0)
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: 0,
-            height: _dragY.clamp(0.0, screenH),
-            child: IgnorePointer(
-              child: _RisingSheet(
-                height: _dragY,
-                atThreshold: atThreshold,
-                progress: progress,
-              ),
+        if (widget.showHandleStrip)
+          Transform.translate(
+            offset: Offset(0, -_hintY),
+            child: _HandleStrip(
+              idleCtrl: _idleCtrl,
+              bumpCtrl: _bumpCtrl,
+              active: _dragging || _dragY > 4,
+              progress: progress,
+              showHandIcon: _playingHint,
+              dragY: _dragY,
+              onTap: _onChipTap,
+              onDragStart: (_) => _onDragStart(),
+              onDragUpdate: _onDragUpdate,
+              onDragEnd: _onDragEndDetails,
             ),
           ),
+        widget.child,
       ],
     );
   }
 }
 
-// ─── HANDLE STRIP ───
+// ─── HANDLE STRIP — yukarı doğru kendisi büyüyen kart ───
 class _HandleStrip extends StatelessWidget {
   const _HandleStrip({
     required this.idleCtrl,
@@ -350,6 +338,7 @@ class _HandleStrip extends StatelessWidget {
     required this.active,
     required this.progress,
     required this.showHandIcon,
+    required this.dragY,
     required this.onTap,
     required this.onDragStart,
     required this.onDragUpdate,
@@ -361,6 +350,9 @@ class _HandleStrip extends StatelessWidget {
   final bool active;
   final double progress;
   final bool showHandIcon;
+  // dragY = kullanıcının yukarı çekmiş olduğu mesafe. Card'ın yüksekliğini
+  // bu kadar büyütür → kart "yukarı doğru genişler" hissi.
+  final double dragY;
   final VoidCallback onTap;
   final GestureDragStartCallback onDragStart;
   final GestureDragUpdateCallback onDragUpdate;
@@ -374,76 +366,267 @@ class _HandleStrip extends StatelessWidget {
       onVerticalDragStart: onDragStart,
       onVerticalDragUpdate: onDragUpdate,
       onVerticalDragEnd: onDragEnd,
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 6),
-        color: Colors.transparent,
-        child: AnimatedBuilder(
-          animation: Listenable.merge([idleCtrl, bumpCtrl]),
-          builder: (_, _) {
-            final floaty =
-                active ? 0.0 : math.sin(idleCtrl.value * math.pi) * 2;
-            // Bump: 0→1→0 ease. value 0-1, peak at 0.5
-            final bv = bumpCtrl.value;
-            final bump = bv == 0 ? 0.0 : math.sin(bv * math.pi) * 0.3;
-            // Chevron scale: drag progress 0→1 → 1.0→1.2, + bump
-            final chevScale = 1.0 + progress * 0.2 + bump;
-            return Transform.translate(
-              offset: Offset(0, -floaty),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 180),
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 12, vertical: 5),
+      child: AnimatedBuilder(
+        animation: bumpCtrl,
+        builder: (_, _) {
+          // 2026-04-27: Idle floaty oscillation kaldırıldı (user "yukarı
+          // aşağı oynamasın" dedi). Sadece threshold-cross bump kaldı.
+          final bv = bumpCtrl.value;
+          final bump = bv == 0 ? 0.0 : math.sin(bv * math.pi) * 4;
+          final scale = 1.0 + progress * 0.02;
+
+          return Transform.translate(
+            offset: Offset(0, -bump),
+            child: Transform.scale(
+              scale: scale,
+              alignment: Alignment.bottomCenter,
+              child: Container(
+                margin: const EdgeInsets.fromLTRB(12, 4, 12, 8),
+                // KART KENDİSİ YUKARI BÜYÜR — dragY arttıkça height artar.
+                // Min 94 (collapsed), max screenH * 0.55 (kullanıcı drag eder
+                // ama kartı tüm ekranı kaplamamasını sağlamak için cap).
+                height: (94.0 + dragY).clamp(
+                  94.0,
+                  MediaQuery.of(context).size.height * 0.6,
+                ),
                 decoration: BoxDecoration(
-                  color: active
-                      ? KoalaColors.accentDeep.withValues(alpha: 0.14)
-                      : KoalaColors.accentSoft,
-                  borderRadius: BorderRadius.circular(99),
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(22),
                   border: Border.all(
-                    color: KoalaColors.accentDeep.withValues(alpha: 0.18),
+                    color: KoalaColors.accentDeep.withValues(alpha: 0.10),
                     width: 0.8,
                   ),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (showHandIcon) ...[
-                      const Icon(
-                        LucideIcons.hand,
-                        size: 14,
-                        color: KoalaColors.accentDeep,
-                      ),
-                      const SizedBox(width: 5),
-                    ],
-                    Transform.scale(
-                      scale: chevScale,
-                      child: const Icon(
-                        LucideIcons.chevronUp,
-                        size: 14,
-                        color: KoalaColors.accentDeep,
-                      ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: KoalaColors.accentDeep.withValues(alpha: 0.10),
+                      blurRadius: 22,
+                      offset: const Offset(0, -4),
                     ),
-                    const SizedBox(width: 5),
-                    const Text(
-                      'Tarzını Keşfet',
-                      style: TextStyle(
-                        fontSize: 11.5,
-                        fontWeight: FontWeight.w700,
-                        color: KoalaColors.accentDeep,
-                        letterSpacing: 0.3,
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    const Icon(
-                      Icons.auto_awesome,
-                      size: 11,
-                      color: KoalaColors.accentDeep,
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.06),
+                      blurRadius: 16,
+                      offset: const Offset(0, 6),
                     ),
                   ],
                 ),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 14),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.max,
+                    children: [
+                      // Drag indicator (handle bar) — tap+drag affordance
+                      Container(
+                        width: 40,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: active
+                              ? KoalaColors.accentDeep
+                                  .withValues(alpha: 0.45)
+                              : Colors.black.withValues(alpha: 0.14),
+                          borderRadius: BorderRadius.circular(99),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      // Content row — sparkle tile + title + subtitle
+                      Row(
+                        children: [
+                          // Sparkles icon tile (accent gradient square)
+                          Container(
+                            width: 44,
+                            height: 44,
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(13),
+                              gradient: KoalaColors.accentGradientV,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: KoalaColors.accentDeep
+                                      .withValues(alpha: 0.32),
+                                  blurRadius: 14,
+                                  offset: const Offset(0, 4),
+                                ),
+                              ],
+                            ),
+                            child: const Icon(
+                              LucideIcons.sparkles,
+                              size: 20,
+                              color: Colors.white,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          const Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Tarzını Keşfedelim',
+                                  style: TextStyle(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w700,
+                                    color: KoalaColors.text,
+                                    letterSpacing: -0.3,
+                                    height: 1.15,
+                                  ),
+                                ),
+                                SizedBox(height: 2),
+                                Text(
+                                  'Tasarımlar seni bekliyor',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w400,
+                                    color: KoalaColors.textSec,
+                                    letterSpacing: -0.1,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          // Pulsing chevron — "yukarı çek" sinyali
+                          Transform.scale(
+                            scale: 1.0 + progress * 0.25,
+                            child: Container(
+                              width: 32,
+                              height: 32,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: KoalaColors.accent
+                                    .withValues(alpha: 0.10),
+                              ),
+                              child: Icon(
+                                showHandIcon
+                                    ? LucideIcons.hand
+                                    : LucideIcons.chevronUp,
+                                size: 16,
+                                color: KoalaColors.accentDeep,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      // ── Drag ile büyüyen alan: discovery preview ──
+                      // dragY > 0 oldukça progress ile fade-in. İçerik:
+                      // sıcak hero gradient + "Tarzlarını keşfet" başlığı
+                      // + 2x2 görsel grid teaser. Threshold'a yaklaşırken
+                      // tam görünür → kullanıcı parmağı kaldırınca açılır.
+                      if (dragY > 4)
+                        Expanded(
+                          child: Padding(
+                            padding: const EdgeInsets.only(top: 14),
+                            child: Opacity(
+                              opacity: progress.clamp(0.0, 1.0),
+                              child: _DiscoveryPreviewInline(
+                                progress: progress,
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
               ),
-            );
-          },
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+/// Card büyüdükçe açılan inline preview — discovery sheet'in mini'si.
+/// Hero başlığı + 2x2 görsel grid (style mosaic). Kullanıcı görünce
+/// "yukarı çekersem buradan devam ederim" hissi alır, sonra threshold'da
+/// gerçek discovery screen'e geçer.
+class _DiscoveryPreviewInline extends StatelessWidget {
+  const _DiscoveryPreviewInline({required this.progress});
+  final double progress;
+
+  static const _styleRefs = [
+    'https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?w=300&q=80&auto=format&fit=crop',
+    'https://images.unsplash.com/photo-1567538096630-e0c55bd6374c?w=300&q=80&auto=format&fit=crop',
+    'https://images.unsplash.com/photo-1586023492125-27b2c045efd7?w=300&q=80&auto=format&fit=crop',
+    'https://images.unsplash.com/photo-1493663284031-b7e3aefcae8e?w=300&q=80&auto=format&fit=crop',
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            KoalaColors.accent.withValues(alpha: 0.06),
+            Colors.transparent,
+          ],
         ),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      padding: const EdgeInsets.all(10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                LucideIcons.sparkles,
+                size: 12,
+                color: KoalaColors.accentDeep,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                'Hayalindeki tarzı keşfet',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: KoalaColors.text.withValues(alpha: 0.85),
+                  letterSpacing: -0.2,
+                ),
+              ),
+              const Spacer(),
+              if (progress > 0.85)
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: KoalaColors.accentDeep,
+                    borderRadius: BorderRadius.circular(99),
+                  ),
+                  child: const Text(
+                    'Bırak ↑',
+                    style: TextStyle(
+                      fontSize: 9.5,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white,
+                      letterSpacing: 0.3,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Expanded(
+            child: GridView.count(
+              physics: const NeverScrollableScrollPhysics(),
+              padding: EdgeInsets.zero,
+              crossAxisCount: 4,
+              crossAxisSpacing: 6,
+              mainAxisSpacing: 6,
+              children: _styleRefs
+                  .map((url) => ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: CachedNetworkImage(
+                          imageUrl: url,
+                          fit: BoxFit.cover,
+                          placeholder: (_, _) =>
+                              Container(color: const Color(0xFFEFEAE3)),
+                          errorWidget: (_, _, _) =>
+                              Container(color: const Color(0xFFEFEAE3)),
+                        ),
+                      ))
+                  .toList(),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -538,7 +721,7 @@ class _SheetBody extends StatelessWidget {
                   ),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: const Icon(Icons.auto_awesome,
+                child: const Icon(LucideIcons.sparkles,
                     color: Colors.white, size: 18),
               ),
               const SizedBox(width: 10),

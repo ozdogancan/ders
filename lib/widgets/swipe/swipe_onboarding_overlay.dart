@@ -10,6 +10,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/theme/koala_tokens.dart';
+import 'package:lucide_icons/lucide_icons.dart';
 
 /// Full-screen onboarding overlay for the `/swipe` route.
 ///
@@ -35,17 +36,17 @@ class _SwipeOnboardingOverlayState extends State<SwipeOnboardingOverlay> {
   static const _steps = [
     _StepData(
       title: 'Beğen',
-      icon: Icons.arrow_forward_rounded,
+      icon: LucideIcons.arrowRight,
       subtitle: 'Sağa çek →',
     ),
     _StepData(
       title: 'Geç',
-      icon: Icons.arrow_back_rounded,
+      icon: LucideIcons.arrowLeft,
       subtitle: '← Sola çek',
     ),
     _StepData(
       title: 'Kaydet',
-      icon: Icons.arrow_upward_rounded,
+      icon: LucideIcons.arrowUp,
       subtitle: 'Yukarı çek ↑',
     ),
   ];
@@ -181,7 +182,7 @@ class _SwipeOnboardingOverlayState extends State<SwipeOnboardingOverlay> {
                     onTap: _dismiss,
                     behavior: HitTestBehavior.opaque,
                     child: const Icon(
-                      Icons.close_rounded,
+                      LucideIcons.x,
                       size: 32,
                       color: Colors.white70,
                     ),

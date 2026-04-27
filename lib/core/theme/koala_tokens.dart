@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 // ═══════════════════════════════════════════════════════════
 // KOALA by evlumba — Design Tokens
@@ -178,13 +179,43 @@ abstract final class KoalaDeco {
 }
 
 // ─── Text Styles ───
+//
+// NOT: `brand` + `serif` eskiden `fontFamily: 'Georgia'` idi — ancak Georgia
+// pubspec'te declared DEĞİL, Flutter web'de sessizce browser serif'ine (Times)
+// fallback ediyordu. Cihaz/OS'ye göre aynı kelime farklı görünüyordu, marka
+// tutarsızlığı yaratıyordu.
+//
+// Çözüm: `google_fonts` paketi zaten dep. Fraunces editorial serif, Koala'nın
+// sıcak-krem estetiğine Georgia'dan daha iyi oturuyor. İlk web load'da ufak
+// CDN fetch (~40KB), cache'leniyor. Mobile'da package otomatik local cache'e
+// yazıyor. `const` kaybını kabul ediyoruz — brand style'ı zaten sık kullanılmaz.
 abstract final class KoalaText {
-  // Brand
-  static const brand = TextStyle(
-    fontSize: 44, fontWeight: FontWeight.w700,
-    fontFamily: 'Georgia', color: KoalaColors.text,
-    letterSpacing: -1.9,
-  );
+  // Brand — hero lockup (44px serif)
+  static TextStyle get brand => GoogleFonts.fraunces(
+        fontSize: 44,
+        fontWeight: FontWeight.w700,
+        color: KoalaColors.text,
+        letterSpacing: -1.9,
+      );
+
+  /// Editorial serif helper — h1/h2 seviyesinde "magazine" his vermek için.
+  /// Eski `fontFamily: 'Georgia'` kullanımlarının yerine geçer.
+  static TextStyle serif({
+    double fontSize = 18,
+    FontWeight fontWeight = FontWeight.w600,
+    Color color = KoalaColors.text,
+    double letterSpacing = -0.2,
+    double? height,
+    FontStyle? fontStyle,
+  }) =>
+      GoogleFonts.fraunces(
+        fontSize: fontSize,
+        fontWeight: fontWeight,
+        color: color,
+        letterSpacing: letterSpacing,
+        height: height,
+        fontStyle: fontStyle,
+      );
 
   // Headings
   static const h1 = TextStyle(fontSize: 24, fontWeight: FontWeight.w700, color: KoalaColors.text, letterSpacing: -0.3);

@@ -10,6 +10,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/koala_card.dart';
 import '../../providers/swipe_feed_provider.dart';
 import 'swipe_math.dart';
+import 'package:lucide_icons/lucide_icons.dart';
 
 /// Stack-of-cards deck that drives [swipeFeedProvider].
 ///
@@ -596,7 +597,7 @@ class _CardFace extends StatelessWidget {
             fadeInDuration: const Duration(milliseconds: 180),
             placeholder: (_, _) => const _ImagePlaceholder(),
             errorWidget: (_, _, _) => const _ImagePlaceholder(
-              icon: Icons.broken_image_outlined,
+              icon: LucideIcons.imageOff,
             ),
           ),
           Positioned(
@@ -730,7 +731,7 @@ class _SaveStamp extends StatelessWidget {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: const [
-                    Icon(Icons.bookmark_add_rounded,
+                    Icon(LucideIcons.bookmarkPlus,
                         color: color, size: 22),
                     SizedBox(width: 8),
                     Text(
@@ -877,19 +878,19 @@ class _PeekOverlay extends StatelessWidget {
                 spacing: 14,
                 children: [
                   _PeekChip(
-                    icon: Icons.close_rounded,
+                    icon: LucideIcons.x,
                     label: 'Geç',
                     color: const Color(0xFFEF4444),
                     onTap: onPass,
                   ),
                   _PeekChip(
-                    icon: Icons.bookmark_add_rounded,
+                    icon: LucideIcons.bookmarkPlus,
                     label: 'Kaydet',
                     color: const Color(0xFF2563EB),
                     onTap: onSave,
                   ),
                   _PeekChip(
-                    icon: Icons.favorite_rounded,
+                    icon: LucideIcons.heart,
                     label: 'Beğen',
                     color: const Color(0xFF22C55E),
                     onTap: onLike,
@@ -1172,28 +1173,28 @@ class _ActionBar extends StatelessWidget {
       children: [
         _ActionButton(
           onPressed: onPass,
-          icon: Icons.close_rounded,
+          icon: LucideIcons.x,
           color: const Color(0xFFEF4444),
           size: 56,
         ),
         const SizedBox(width: 14),
         _ActionButton(
           onPressed: onUndo,
-          icon: Icons.undo_rounded,
+          icon: LucideIcons.undo2,
           color: const Color(0xFFF59E0B),
           size: 42,
         ),
         const SizedBox(width: 14),
         _ActionButton(
           onPressed: onSave,
-          icon: Icons.bookmark_add_rounded,
+          icon: LucideIcons.bookmarkPlus,
           color: const Color(0xFF2563EB),
           size: 48,
         ),
         const SizedBox(width: 14),
         _ActionButton(
           onPressed: onLike,
-          icon: Icons.favorite_rounded,
+          icon: LucideIcons.heart,
           color: const Color(0xFF22C55E),
           size: 56,
         ),
@@ -1279,7 +1280,7 @@ class _EmptyDeck extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.auto_awesome_outlined, size: 40),
+            const Icon(LucideIcons.sparkles, size: 40),
             const SizedBox(height: 12),
             const Text(
               'Şimdilik bu kadar',
@@ -1294,7 +1295,7 @@ class _EmptyDeck extends StatelessWidget {
             const SizedBox(height: 18),
             TextButton.icon(
               onPressed: onRetry,
-              icon: const Icon(Icons.refresh_rounded),
+              icon: const Icon(LucideIcons.refreshCw),
               label: const Text('Tekrar dene'),
             ),
           ],
@@ -1321,7 +1322,7 @@ class _ErrorDeck extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.wifi_off_rounded, size: 40),
+            const Icon(LucideIcons.wifiOff, size: 40),
             const SizedBox(height: 12),
             const Text(
               'Bağlanamadık',
@@ -1336,7 +1337,7 @@ class _ErrorDeck extends StatelessWidget {
             const SizedBox(height: 18),
             TextButton.icon(
               onPressed: onRetry,
-              icon: const Icon(Icons.refresh_rounded),
+              icon: const Icon(LucideIcons.refreshCw),
               label: const Text('Tekrar dene'),
             ),
           ],
