@@ -17,7 +17,16 @@ import 'package:go_router/go_router.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:http/http.dart' as http;
+import 'package:image_picker/image_picker.dart';
+
 import '../core/theme/koala_tokens.dart';
+import '../widgets/koala_bottom_nav.dart';
+import 'main_shell.dart';
+import 'mekan/mekan_flow_screen.dart';
+import 'mekan/wizard/mekan_wizard_screen.dart';
+import 'chat_list_screen.dart';
+import 'projeler_screen.dart';
 import '../services/evlumba_live_service.dart';
 import '../services/messaging_service.dart';
 import '../services/saved_items_service.dart';
@@ -43,18 +52,20 @@ class _StyleDiscoveryLiveScreenState extends State<StyleDiscoveryLiveScreen>
   // Sıra burada UI'da kullanılan sıra — bottom sheet chip sırası.
   // Key = DB'deki project_type değeri (Türkçe, ilike ile eşleştirilir).
   // Sadece canlı verilerde gerçekten proje olan kategoriler listelenir.
-  static const List<MapEntry<String, String>> _categoryOptions = [
-    MapEntry('', 'Hepsi'),
-    MapEntry('Oturma Odası', 'Oturma Odası'),
-    MapEntry('Yatak Odası', 'Yatak Odası'),
-    MapEntry('Mutfak', 'Mutfak'),
-    MapEntry('Banyo', 'Banyo'),
-    MapEntry('Antre', 'Antre'),
+  static const List<({String key, String label, IconData icon})>
+      _categoryOptions = [
+    (key: '', label: 'Hepsi', icon: LucideIcons.sparkles),
+    (key: 'Oturma Odası', label: 'Oturma Odası', icon: LucideIcons.sofa),
+    (key: 'Yatak Odası', label: 'Yatak Odası', icon: LucideIcons.bed),
+    (key: 'Mutfak', label: 'Mutfak', icon: LucideIcons.chefHat),
+    (key: 'Banyo', label: 'Banyo', icon: LucideIcons.bath),
+    (key: 'Antre', label: 'Antre', icon: LucideIcons.doorOpen),
   ];
   String? _selectedCategory; // null = Hepsi
 
   final List<Map<String, dynamic>> _deck = [];
   final Set<String> _seenIds = <String>{};
+  // Tap hint kaldırıldı — direktif gereği hiçbir tutorial gösterilmiyor.
   // Undo stack — her swipe'ta {index, liked, id} push.
   final List<Map<String, dynamic>> _history = [];
   final math.Random _rng = math.Random();
@@ -88,17 +99,62 @@ class _StyleDiscoveryLiveScreenState extends State<StyleDiscoveryLiveScreen>
       });
     _loadSavedCategory().then((_) => _bootstrap());
     Analytics.screenViewed('style_discovery_live');
+    // Tab her aktive olduğunda "Hepsi"ye reset et.
+    MainShell.activeTab.addListener(_onTabActivate);
   }
 
   Future<void> _loadSavedCategory() async {
+    _selectedCategory = null;
+    // Tutorial gif kaldırıldı — kullanıcı kart tap'ini kendi keşfedecek.
+  }
+
+  Future<void> _onCardTap(Map<String, dynamic> project) async {
+    // Tap hint overlay tamamen kaldırıldı — direktif gereği.
+    HapticFeedback.selectionClick();
+    final url = _coverOf(project);
+    if (url.isEmpty) return;
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (_) => const _SwipePhotoSheet(),
+    );
+    if (source == null || !mounted) return;
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final v = prefs.getString(_prefsCategoryKey) ?? '';
-      // Sadece mevcut kategori listesinde varsa set et — eski slug ('living_room' vs)
-      // kayıtları sessizce görmezden gel, "Hepsi" default kalsın.
-      final validKeys = _categoryOptions.map((e) => e.key).toSet();
-      if (v.isNotEmpty && validKeys.contains(v)) _selectedCategory = v;
-    } catch (_) {/* sessiz geç — filtre yoksa "Hepsi" */}
+      final picker = ImagePicker();
+      final f = await picker.pickImage(
+        source: source,
+        maxWidth: 1024,
+        imageQuality: 60,
+      );
+      if (f == null || !mounted) return;
+      final bytes = await f.readAsBytes();
+      if (!mounted) return;
+      // Swipe akışı — wizard'ı ATLA, direkt MekanFlowScreen'e git.
+      // Synthetic wizard sonucu üret: oda otomatik tespit edilecek, theme
+      // referenceMatch (gerçek prompt backend'de buildVariants(refMode=true)).
+      final synthWizard = MekanWizardResult(
+        roomKey: '',
+        roomTr: 'Mekanım',
+        styleValue: 'reference',
+        styleTr: 'Bu Tasarım',
+        styleCustomPrompt: null,
+        paletteKey: 'reference',
+        paletteTr: 'Referans',
+        paletteColors: const [],
+        layout: LayoutMode.preserve,
+      );
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => MekanFlowScreen(
+            initialBytes: bytes,
+            wizard: synthWizard,
+            targetDesignUrl: url,
+            targetDesignerId:
+                (project['designer_id'] ?? '').toString(),
+          ),
+        ),
+      );
+    } catch (_) {}
   }
 
   Future<void> _bootstrap() async {
@@ -453,24 +509,40 @@ class _StyleDiscoveryLiveScreenState extends State<StyleDiscoveryLiveScreen>
 
   @override
   void dispose() {
+    MainShell.activeTab.removeListener(_onTabActivate);
     _exitCtrl.dispose();
     super.dispose();
+  }
+
+  void _onTabActivate() {
+    if (MainShell.activeTab.value != KoalaTab.swipe) return;
+    if (_selectedCategory != null) _applyCategory('');
+    // Tutorial sadece ilk açılışta gösterilsin — tab her girişinde değil.
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: KoalaColors.bg,
+      extendBody: true,
+      // bottomNavigationBar MainShell tarafından sağlanıyor.
       // Mesajlar ekranı ile birebir aynı AppBar — leading/title hizası app genelinde tutarlı.
       appBar: AppBar(
         backgroundColor: KoalaColors.bg,
         surfaceTintColor: KoalaColors.bg,
         elevation: 0,
-        leading: IconButton(
-          onPressed: _onBack,
-          icon: const Icon(LucideIcons.arrowLeft),
+        automaticallyImplyLeading: false,
+        titleSpacing: 20,
+        toolbarHeight: 64,
+        title: const Text(
+          'Tarzını Keşfet',
+          style: TextStyle(
+            fontSize: 24,
+            fontWeight: FontWeight.w700,
+            color: KoalaColors.text,
+            letterSpacing: -0.5,
+          ),
         ),
-        title: const Text('Tarzını Keşfet', style: KoalaText.h2),
       ),
       body: SafeArea(
         top: false,
@@ -578,7 +650,8 @@ class _StyleDiscoveryLiveScreenState extends State<StyleDiscoveryLiveScreen>
                   children: [
                     for (final e in _categoryOptions)
                       _CategoryChip(
-                        label: e.value,
+                        label: e.label,
+                        icon: e.icon,
                         active: current == e.key,
                         onTap: () {
                           Navigator.of(ctx).pop();
@@ -598,25 +671,19 @@ class _StyleDiscoveryLiveScreenState extends State<StyleDiscoveryLiveScreen>
   /// AppBar'ın hemen altında — net, her zaman görünür yatay kategori bar'ı.
   /// Kullanıcı AppBar süzgeç ikonunu gözden kaçırırsa bile buradan seçebilir.
   Widget _buildCategoryBar() {
-    return Container(
-      height: 48,
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      decoration: const BoxDecoration(
-        color: KoalaColors.bg,
-        border: Border(
-          bottom: BorderSide(color: KoalaColors.border, width: 0.5),
-        ),
-      ),
+    return SizedBox(
+      height: 56,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(vertical: 8),
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 4),
         itemCount: _categoryOptions.length,
         separatorBuilder: (_, __) => const SizedBox(width: 8),
         itemBuilder: (_, i) {
           final e = _categoryOptions[i];
           final active = (_selectedCategory ?? '') == e.key;
           return _CategoryChip(
-            label: e.value,
+            label: e.label,
+            icon: e.icon,
             active: active,
             onTap: () => _applyCategory(e.key),
           );
@@ -741,6 +808,7 @@ class _StyleDiscoveryLiveScreenState extends State<StyleDiscoveryLiveScreen>
                         child: GestureDetector(
                           onPanUpdate: _onPanUpdate,
                           onPanEnd: _onPanEnd,
+                          onTap: () => _onCardTap(current),
                           child: Stack(
                             children: [
                               _Card(
@@ -750,6 +818,8 @@ class _StyleDiscoveryLiveScreenState extends State<StyleDiscoveryLiveScreen>
                                 designer: _designerCache[
                                     (current['designer_id'] ?? '').toString()],
                               ),
+                              // Tap hint kalıcı olarak kaldırıldı — kullanıcı
+                              // direktifi: hiçbir tutorial/hint gösterilmesin.
                               Positioned(
                                 top: 28,
                                 left: 20,
@@ -1344,10 +1414,12 @@ class _DesignerChip extends StatelessWidget {
 // Aktif durumda accentDeep arka plan + beyaz label; pasifte surfaceAlt + border.
 class _CategoryChip extends StatelessWidget {
   final String label;
+  final IconData icon;
   final bool active;
   final VoidCallback onTap;
   const _CategoryChip({
     required this.label,
+    required this.icon,
     required this.active,
     required this.onTap,
   });
@@ -1360,22 +1432,156 @@ class _CategoryChip extends StatelessWidget {
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 180),
         curve: Curves.easeOut,
-        height: 40,
+        height: 42,
         padding: const EdgeInsets.symmetric(horizontal: 16),
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: active ? KoalaColors.accentDeep : KoalaColors.surfaceAlt,
+          color: active ? KoalaColors.accentDeep : KoalaColors.surface,
           borderRadius: BorderRadius.circular(100),
           border: Border.all(
-            color: active ? KoalaColors.accentDeep : KoalaColors.border,
+            color:
+                active ? KoalaColors.accentDeep : KoalaColors.border,
+            width: 0.8,
           ),
         ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w600,
-            color: active ? Colors.white : KoalaColors.textMed,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              size: 16,
+              color: active ? Colors.white : KoalaColors.textSec,
+            ),
+            const SizedBox(width: 8),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 13.5,
+                fontWeight: FontWeight.w700,
+                color: active ? Colors.white : KoalaColors.text,
+                letterSpacing: -0.1,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// _TapHintOverlay kaldırıldı — direktif gereği hiçbir tutorial gösterilmiyor.
+
+class _SwipePhotoSheet extends StatelessWidget {
+  const _SwipePhotoSheet();
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: const BoxDecoration(
+        color: KoalaColors.bg,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      padding: EdgeInsets.fromLTRB(
+          16, 16, 16, MediaQuery.of(context).padding.bottom + 16),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+              color: KoalaColors.border,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(height: 16),
+          const Text(
+            'Mekanını yükle',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w700,
+              color: KoalaColors.text,
+              letterSpacing: -0.3,
+            ),
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'AI bu tasarımı senin mekanına uygulayacak.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 13,
+              color: KoalaColors.textSec,
+              height: 1.4,
+            ),
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: _SwipeOpt(
+                  icon: LucideIcons.camera,
+                  label: 'Kamera',
+                  onTap: () => Navigator.of(context).pop(ImageSource.camera),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _SwipeOpt(
+                  icon: LucideIcons.image,
+                  label: 'Galeri',
+                  onTap: () => Navigator.of(context).pop(ImageSource.gallery),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SwipeOpt extends StatelessWidget {
+  const _SwipeOpt({required this.icon, required this.label, required this.onTap});
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: KoalaColors.surface,
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          height: 96,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: KoalaColors.border, width: 0.6),
+          ),
+          alignment: Alignment.center,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: KoalaColors.accentSoft,
+                ),
+                child: Icon(icon, size: 22, color: KoalaColors.accentDeep),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                label,
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: KoalaColors.text,
+                  letterSpacing: -0.2,
+                ),
+              ),
+            ],
           ),
         ),
       ),

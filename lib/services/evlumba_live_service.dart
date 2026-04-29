@@ -4,6 +4,8 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'cache_service.dart';
+
 /// Evlumba DB'den gerçek tasarımcı, proje ve ürün çeken servis.
 /// Koala'nın Supabase'inden AYRI — read-only bağlantı.
 class EvlumbaLiveService {
@@ -207,11 +209,20 @@ class EvlumbaLiveService {
 
   /// Tek tasarımcı detay (role filtresi yok — proje sahibi zaten tasarımcı)
   static Future<Map<String, dynamic>?> getDesigner(String id) async {
+    // perf: in-memory cache 5dk — designer profile değişmez sıklıkta, aynı id
+    // birden çok ekranda tekrar çağrılıyor (chat, projects, designer detail).
+    final cacheKey = 'evlumba_designer_$id';
+    final cached = CacheService.get<Map<String, dynamic>>(cacheKey);
+    if (cached != null) return cached;
     final data = await client
         .from('profiles')
         .select()
         .eq('id', id)
         .maybeSingle();
+    if (data != null) {
+      CacheService.set(cacheKey, Map<String, dynamic>.from(data),
+          duration: const Duration(minutes: 5));
+    }
     return data;
   }
 
@@ -221,24 +232,45 @@ class EvlumbaLiveService {
     List<String> ids,
   ) async {
     if (ids.isEmpty) return [];
+    // perf: cache hit'leri ayır, sadece eksik id'leri DB'den çek.
+    final results = <Map<String, dynamic>>[];
+    final missing = <String>[];
+    for (final id in ids) {
+      final c = CacheService.get<Map<String, dynamic>>('evlumba_designer_$id');
+      if (c != null) {
+        results.add(c);
+      } else {
+        missing.add(id);
+      }
+    }
+    if (missing.isEmpty) {
+      debugPrint('EvlumbaLive: getDesignersByIds all cache hit → ${results.length}');
+      return results;
+    }
     try {
       // Chunk: PostgREST URL uzunluğu aşılmasın (max 15 ID per chunk)
-      final results = <Map<String, dynamic>>[];
-      for (var i = 0; i < ids.length; i += 15) {
-        final chunk = ids.sublist(i, (i + 15).clamp(0, ids.length));
+      for (var i = 0; i < missing.length; i += 15) {
+        final chunk = missing.sublist(i, (i + 15).clamp(0, missing.length));
         final data = await client
             .from('profiles')
             .select()
             .inFilter('id', chunk);
-        results.addAll(List<Map<String, dynamic>>.from(data));
+        for (final row in List<Map<String, dynamic>>.from(data)) {
+          final id = row['id']?.toString();
+          if (id != null && id.isNotEmpty) {
+            CacheService.set('evlumba_designer_$id', row,
+                duration: const Duration(minutes: 5));
+          }
+          results.add(row);
+        }
       }
-      debugPrint('EvlumbaLive: getDesignersByIds batch OK → ${results.length}/${ids.length}');
+      debugPrint('EvlumbaLive: getDesignersByIds batch OK → ${results.length}/${ids.length} (cache hit ${ids.length - missing.length})');
       return results;
     } catch (e) {
       debugPrint('EvlumbaLive: getDesignersByIds batch failed ($e), falling back to individual queries');
-      // Fallback: tek tek çek (N+1 ama en azından çalışır)
-      final results = <Map<String, dynamic>>[];
-      for (final id in ids) {
+      // Fallback: tek tek çek (N+1 ama en azından çalışır). Cache hit'leri
+      // koru, eksikleri tek tek getDesigner ile çek (kendisi cache'liyor).
+      for (final id in missing) {
         try {
           final d = await getDesigner(id);
           if (d != null) results.add(d);
@@ -411,12 +443,20 @@ class EvlumbaLiveService {
 
   /// Tek tasarımcı bilgisi
   static Future<Map<String, dynamic>?> getDesignerById(String designerId) async {
+    // perf: getDesigner ile aynı cache key'i paylaş — duplicate fetch'leri ele.
+    final cacheKey = 'evlumba_designer_$designerId';
+    final cached = CacheService.get<Map<String, dynamic>>(cacheKey);
+    if (cached != null) return cached;
     try {
       final data = await client
           .from('profiles')
           .select()
           .eq('id', designerId)
           .maybeSingle();
+      if (data != null) {
+        CacheService.set(cacheKey, Map<String, dynamic>.from(data),
+            duration: const Duration(minutes: 5));
+      }
       return data;
     } catch (e) {
       debugPrint('EvlumbaLive: getDesignerById($designerId) failed: $e');

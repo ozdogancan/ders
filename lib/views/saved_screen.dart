@@ -423,6 +423,8 @@ class _SavedListState extends State<_SavedList>
         return 'Tasarımı İncele';
       case SavedItemType.palette:
         return 'Paleti Gör';
+      case SavedItemType.project:
+        return 'Projeyi Aç';
     }
   }
 
@@ -479,6 +481,36 @@ class _SavedListState extends State<_SavedList>
         // Palette'i bottom sheet'te renkleriyle göster — extra_data içinde
         // colors listesi saklı, SavedPlans tarafında da mevcut.
         _showPaletteDetail(item);
+        break;
+
+      case SavedItemType.project:
+        // Kullanıcının kendi projesi (AI üretimi veya tasarımcı portföyünden
+        // kaydedilen). Şu an Projelerim sekmesi ayrı ekran kullanıyor —
+        // saved_screen üzerinden gelinmesi atipik. Tasarım gibi davran.
+        final projectId = extraData?['project_id'] as String? ?? itemId;
+        if (projectId.isNotEmpty) {
+          final designerId = extraData?['designer_id'] as String? ?? '';
+          ProjectsGalleryPopup.show(
+            context,
+            projects: [
+              {
+                'id': projectId,
+                'title': item['title'] as String? ?? '',
+                'cover_image_url': item['image_url'] as String? ?? '',
+                'image_url': item['image_url'] as String? ?? '',
+                'project_type': '',
+                'designer_id': designerId,
+                'designer_name': item['subtitle'] as String? ?? '',
+              }
+            ],
+            designer: designerId.isEmpty
+                ? null
+                : {
+                    'id': designerId,
+                    'full_name': item['subtitle'] as String? ?? '',
+                  },
+          );
+        }
         break;
     }
   }
@@ -608,6 +640,8 @@ class _SavedListState extends State<_SavedList>
         return Icons.open_in_new_rounded;
       case SavedItemType.palette:
         return Icons.palette_rounded;
+      case SavedItemType.project:
+        return Icons.open_in_new_rounded;
     }
   }
 
@@ -621,6 +655,8 @@ class _SavedListState extends State<_SavedList>
         return 'Henüz kaydettiğin ürün yok';
       case SavedItemType.palette:
         return 'Henüz kaydettiğin palet yok';
+      case SavedItemType.project:
+        return 'Henüz projen yok';
     }
   }
 
@@ -634,6 +670,8 @@ class _SavedListState extends State<_SavedList>
         return 'AI önerdiği ürünleri kaydet';
       case SavedItemType.palette:
         return 'AI önerdiği renk paletlerini kaydet';
+      case SavedItemType.project:
+        return 'AI ile tasarım yap veya tasarımcı portföyünden ekle';
     }
   }
 
@@ -647,6 +685,8 @@ class _SavedListState extends State<_SavedList>
         return Icons.shopping_bag_rounded;
       case SavedItemType.palette:
         return Icons.palette_rounded;
+      case SavedItemType.project:
+        return Icons.image_outlined;
     }
   }
 

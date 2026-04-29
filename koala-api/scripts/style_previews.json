@@ -1,0 +1,50 @@
+{
+  "minimalist": {
+    "living_room": "https://xgefjepaqnghaotqybpi.supabase.co/storage/v1/object/public/style-previews/minimalist-living_room.png",
+    "bedroom": "https://xgefjepaqnghaotqybpi.supabase.co/storage/v1/object/public/style-previews/minimalist-bedroom.png",
+    "kitchen": "https://xgefjepaqnghaotqybpi.supabase.co/storage/v1/object/public/style-previews/minimalist-kitchen.png",
+    "bathroom": "https://xgefjepaqnghaotqybpi.supabase.co/storage/v1/object/public/style-previews/minimalist-bathroom.png",
+    "dining_room": "https://xgefjepaqnghaotqybpi.supabase.co/storage/v1/object/public/style-previews/minimalist-dining_room.png",
+    "office": "https://xgefjepaqnghaotqybpi.supabase.co/storage/v1/object/public/style-previews/minimalist-office.png"
+  },
+  "scandinavian": {
+    "living_room": "https://xgefjepaqnghaotqybpi.supabase.co/storage/v1/object/public/style-previews/scandinavian-living_room.png",
+    "bedroom": "https://xgefjepaqnghaotqybpi.supabase.co/storage/v1/object/public/style-previews/scandinavian-bedroom.png",
+    "kitchen": "https://xgefjepaqnghaotqybpi.supabase.co/storage/v1/object/public/style-previews/scandinavian-kitchen.png",
+    "bathroom": "https://xgefjepaqnghaotqybpi.supabase.co/storage/v1/object/public/style-previews/scandinavian-bathroom.png",
+    "dining_room": "https://xgefjepaqnghaotqybpi.supabase.co/storage/v1/object/public/style-previews/scandinavian-dining_room.png",
+    "office": "https://xgefjepaqnghaotqybpi.supabase.co/storage/v1/object/public/style-previews/scandinavian-office.png"
+  },
+  "japandi": {
+    "living_room": "https://xgefjepaqnghaotqybpi.supabase.co/storage/v1/object/public/style-previews/japandi-living_room.png",
+    "bedroom": "https://xgefjepaqnghaotqybpi.supabase.co/storage/v1/object/public/style-previews/japandi-bedroom.png",
+    "kitchen": "https://xgefjepaqnghaotqybpi.supabase.co/storage/v1/object/public/style-previews/japandi-kitchen.png",
+    "bathroom": "https://xgefjepaqnghaotqybpi.supabase.co/storage/v1/object/public/style-previews/japandi-bathroom.png",
+    "dining_room": "https://xgefjepaqnghaotqybpi.supabase.co/storage/v1/object/public/style-previews/japandi-dining_room.png",
+    "office": "https://xgefjepaqnghaotqybpi.supabase.co/storage/v1/object/public/style-previews/japandi-office.png"
+  },
+  "modern": {
+    "living_room": "https://xgefjepaqnghaotqybpi.supabase.co/storage/v1/object/public/style-previews/modern-living_room.png",
+    "bedroom": "https://xgefjepaqnghaotqybpi.supabase.co/storage/v1/object/public/style-previews/modern-bedroom.png",
+    "kitchen": "https://xgefjepaqnghaotqybpi.supabase.co/storage/v1/object/public/style-previews/modern-kitchen.png",
+    "bathroom": "https://xgefjepaqnghaotqybpi.supabase.co/storage/v1/object/public/style-previews/modern-bathroom.png",
+    "dining_room": "https://xgefjepaqnghaotqybpi.supabase.co/storage/v1/object/public/style-previews/modern-dining_room.png",
+    "office": "https://xgefjepaqnghaotqybpi.supabase.co/storage/v1/object/public/style-previews/modern-office.png"
+  },
+  "bohemian": {
+    "living_room": "https://xgefjepaqnghaotqybpi.supabase.co/storage/v1/object/public/style-previews/bohemian-living_room.png",
+    "bedroom": "https://xgefjepaqnghaotqybpi.supabase.co/storage/v1/object/public/style-previews/bohemian-bedroom.png",
+    "kitchen": "https://xgefjepaqnghaotqybpi.supabase.co/storage/v1/object/public/style-previews/bohemian-kitchen.png",
+    "bathroom": "https://xgefjepaqnghaotqybpi.supabase.co/storage/v1/object/public/style-previews/bohemian-bathroom.png",
+    "dining_room": "https://xgefjepaqnghaotqybpi.supabase.co/storage/v1/object/public/style-previews/bohemian-dining_room.png",
+    "office": "https://xgefjepaqnghaotqybpi.supabase.co/storage/v1/object/public/style-previews/bohemian-office.png"
+  },
+  "industrial": {
+    "living_room": "https://xgefjepaqnghaotqybpi.supabase.co/storage/v1/object/public/style-previews/industrial-living_room.png",
+    "bedroom": "https://xgefjepaqnghaotqybpi.supabase.co/storage/v1/object/public/style-previews/industrial-bedroom.png",
+    "kitchen": "https://xgefjepaqnghaotqybpi.supabase.co/storage/v1/object/public/style-previews/industrial-kitchen.png",
+    "bathroom": "https://xgefjepaqnghaotqybpi.supabase.co/storage/v1/object/public/style-previews/industrial-bathroom.png",
+    "dining_room": "https://xgefjepaqnghaotqybpi.supabase.co/storage/v1/object/public/style-previews/industrial-dining_room.png",
+    "office": "https://xgefjepaqnghaotqybpi.supabase.co/storage/v1/object/public/style-previews/industrial-office.png"
+  }
+}

@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:typed_data';
+import 'dart:ui' as ui show ImageFilter;
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import '../../../core/theme/koala_tokens.dart';
@@ -47,13 +48,22 @@ class _BeforeAfterState extends State<BeforeAfter> {
   }
 
   void _openZoom(BuildContext context) {
-    showDialog<void>(
-      context: context,
-      barrierColor: Colors.black.withValues(alpha: 0.92),
-      builder: (_) => _ZoomModal(
-        beforeBytes: widget.beforeBytes,
-        afterSrc: widget.afterSrc,
-        initialAfter: _mode != _CompareMode.before,
+    Navigator.of(context).push(
+      PageRouteBuilder<void>(
+        opaque: false,
+        barrierColor: Colors.black.withValues(alpha: 0.94),
+        transitionDuration: const Duration(milliseconds: 280),
+        reverseTransitionDuration: const Duration(milliseconds: 240),
+        pageBuilder: (_, anim, _) {
+          return FadeTransition(
+            opacity: anim,
+            child: _ZoomModal(
+              beforeBytes: widget.beforeBytes,
+              afterSrc: widget.afterSrc,
+              initialAfter: _mode != _CompareMode.before,
+            ),
+          );
+        },
       ),
     );
   }
@@ -64,7 +74,7 @@ class _BeforeAfterState extends State<BeforeAfter> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         ClipRRect(
-          borderRadius: BorderRadius.circular(KoalaRadius.lg),
+          borderRadius: BorderRadius.circular(24),
           child: AspectRatio(
             aspectRatio: 4 / 3,
             child: LayoutBuilder(builder: (ctx, c) {
@@ -127,26 +137,8 @@ class _BeforeAfterState extends State<BeforeAfter> {
                     ),
                   ],
 
-                  // Corner labels — moda göre
-                  if (_mode == _CompareMode.slider) ...[
-                    _cornerLabel(top: 12, left: 12, text: 'Önce'),
-                    _cornerLabel(top: 12, right: 12, text: 'Sonra'),
-                  ] else if (_mode == _CompareMode.after)
-                    _cornerLabel(top: 12, left: 12, text: 'Sonra')
-                  else
-                    _cornerLabel(top: 12, left: 12, text: 'Önce'),
-
-                  // Zoom (büyüteç) butonu — sağ alt
-                  Positioned(
-                    right: 12,
-                    bottom: 12,
-                    child: _IconButtonChip(
-                      icon: LucideIcons.maximize2,
-                      onTap: () => _openZoom(context),
-                    ),
-                  ),
-
-                  // Gesture layer — sadece slider modunda sürükle aktif
+                  // Gesture layer — ÖNCE (alt katman) ki üstüne gelen
+                  // butonlar tap eat'lemesin.
                   if (_mode == _CompareMode.slider)
                     Positioned.fill(
                       child: GestureDetector(
@@ -159,8 +151,6 @@ class _BeforeAfterState extends State<BeforeAfter> {
                       ),
                     )
                   else
-                    // After/Before odak modunda: çift tıkla zoom, tek tıkla
-                    // slider'a dön.
                     Positioned.fill(
                       child: GestureDetector(
                         behavior: HitTestBehavior.opaque,
@@ -168,6 +158,22 @@ class _BeforeAfterState extends State<BeforeAfter> {
                         onDoubleTap: () => _openZoom(context),
                       ),
                     ),
+
+                  // Köşe etiketleri — Önce: koyu cam, Sonra: mor accent
+                  if (_mode == _CompareMode.slider) ...[
+                    _darkLabel(top: 14, left: 14, text: 'Önce'),
+                    _accentLabel(top: 14, right: 14, text: 'Sonra'),
+                  ] else if (_mode == _CompareMode.after)
+                    _accentLabel(top: 14, left: 14, text: 'Sonra')
+                  else
+                    _darkLabel(top: 14, left: 14, text: 'Önce'),
+
+                  // Zoom (büyüteç) butonu — gesture'dan sonra ki tap'i alır
+                  Positioned(
+                    right: 10,
+                    bottom: 10,
+                    child: _ZoomFab(onTap: () => _openZoom(context)),
+                  ),
 
                   // Çerçeve
                   Positioned.fill(
@@ -245,26 +251,69 @@ class _BeforeAfterState extends State<BeforeAfter> {
     );
   }
 
-  Widget _cornerLabel({
+  /// "Önce" — koyu cam pill (siyahımsı, hafif blur).
+  Widget _darkLabel({
+    double? top, double? left, double? right,
+    required String text,
+  }) =>
+      Positioned(
+        top: top, left: left, right: right,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(22),
+          child: BackdropFilter(
+            filter: ui.ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+            child: Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: 0.55),
+                borderRadius: BorderRadius.circular(22),
+                border: Border.all(
+                  color: Colors.white.withValues(alpha: 0.18),
+                  width: 0.6,
+                ),
+              ),
+              child: Text(
+                text,
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.white,
+                  letterSpacing: 0.1,
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+
+  /// "Sonra" — mor accent pill (brand'in dili).
+  Widget _accentLabel({
     double? top, double? left, double? right,
     required String text,
   }) =>
       Positioned(
         top: top, left: left, right: right,
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
           decoration: BoxDecoration(
-            color: KoalaColors.surface,
-            borderRadius: BorderRadius.circular(KoalaRadius.sm),
-            border: Border.all(color: KoalaColors.border, width: 0.5),
+            color: KoalaColors.accentSoft,
+            borderRadius: BorderRadius.circular(22),
+            boxShadow: [
+              BoxShadow(
+                color: KoalaColors.accent.withValues(alpha: 0.32),
+                blurRadius: 10,
+                offset: const Offset(0, 3),
+              ),
+            ],
           ),
           child: Text(
             text,
             style: const TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-              color: KoalaColors.text,
-              letterSpacing: 0.2,
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              color: KoalaColors.accentDeep,
+              letterSpacing: 0.1,
             ),
           ),
         ),
@@ -298,6 +347,11 @@ class _ModeSegment extends StatelessWidget {
 
   Widget _segItem(_CompareMode m, String label, IconData icon) {
     final active = mode == m;
+    // Karşılaştır seçili olduğunda mor accent (brand vurgusu); diğer
+    // ikisi (Önce/Sonra) seçili iken koyu metin — daha sakin görünür.
+    final isCompare = m == _CompareMode.slider;
+    final activeColor =
+        isCompare ? KoalaColors.accentDeep : KoalaColors.text;
     return Expanded(
       child: GestureDetector(
         onTap: () => onChanged(m),
@@ -305,7 +359,7 @@ class _ModeSegment extends StatelessWidget {
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 220),
           curve: Curves.easeOutCubic,
-          padding: const EdgeInsets.symmetric(vertical: 9),
+          padding: const EdgeInsets.symmetric(vertical: 11),
           decoration: BoxDecoration(
             color: active ? KoalaColors.surface : Colors.transparent,
             borderRadius: BorderRadius.circular(KoalaRadius.pill),
@@ -315,16 +369,16 @@ class _ModeSegment extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Icon(icon,
-                  size: 13,
-                  color: active ? KoalaColors.text : KoalaColors.textSec),
+                  size: 14,
+                  color: active ? activeColor : KoalaColors.textSec),
               const SizedBox(width: 6),
               Text(
                 label,
                 style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: active ? KoalaColors.text : KoalaColors.textSec,
-                  letterSpacing: 0.2,
+                  fontSize: 13,
+                  fontWeight: active ? FontWeight.w700 : FontWeight.w600,
+                  color: active ? activeColor : KoalaColors.textSec,
+                  letterSpacing: -0.1,
                 ),
               ),
             ],
@@ -335,24 +389,36 @@ class _ModeSegment extends StatelessWidget {
   }
 }
 
-/// Köşedeki yarı saydam icon button (zoom için).
-class _IconButtonChip extends StatelessWidget {
-  final IconData icon;
+/// Glass FAB — büyüt ikonu, opak yerine cam görünüm.
+class _ZoomFab extends StatelessWidget {
   final VoidCallback onTap;
-  const _IconButtonChip({required this.icon, required this.onTap});
+  const _ZoomFab({required this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: KoalaColors.surface.withValues(alpha: 0.92),
-      shape: const CircleBorder(),
-      elevation: 2,
-      child: InkWell(
-        customBorder: const CircleBorder(),
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.all(8),
-          child: Icon(icon, size: 16, color: KoalaColors.text),
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(22),
+      child: BackdropFilter(
+        filter: ui.ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+        child: Material(
+          color: Colors.white.withValues(alpha: 0.5),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(22),
+            side: BorderSide(
+              color: Colors.white.withValues(alpha: 0.6),
+              width: 0.7,
+            ),
+          ),
+          elevation: 0,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(22),
+            onTap: onTap,
+            child: const SizedBox(
+              width: 40,
+              height: 40,
+              child: Icon(LucideIcons.expand, size: 18, color: KoalaColors.text),
+            ),
+          ),
         ),
       ),
     );

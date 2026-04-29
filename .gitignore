@@ -58,3 +58,4 @@ android/app/koala-release.jks
 
 # Archived scripts (one-time migration/fix scripts)
 scripts/archive/
+.vercel

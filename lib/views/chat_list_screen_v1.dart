@@ -387,18 +387,21 @@ class _ChatListScreenV1State extends State<ChatListScreenV1> {
         backgroundColor: KoalaColors.bg,
         surfaceTintColor: KoalaColors.bg,
         elevation: 0,
-        leading: IconButton(
-          onPressed: _goBackHome,
-          icon: const Icon(LucideIcons.arrowLeft),
-        ),
+        automaticallyImplyLeading: false,
+        titleSpacing: 20,
+        toolbarHeight: 64,
         title: GestureDetector(
-          // Title'a 5x tıklama → debug dialog (gizli — user'ı rahatsız etmez)
           onTap: _maybeOpenDebug,
-          child: const Text('Mesajlar', style: KoalaText.h2),
+          child: const Text(
+            'Mesajlar',
+            style: TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.w700,
+              color: KoalaColors.text,
+              letterSpacing: -0.5,
+            ),
+          ),
         ),
-        // Refresh butonu kaldırıldı — WhatsApp gibi anlık olmalı. Pull-to-refresh
-        // gizli yedek olarak duruyor (RefreshIndicator body'de).
-        // "Yeni" butonu kaldırıldı — yeni AI sorusu anasayfadan başlatılıyor.
       ),
       body: _loading
           ? const ShimmerList(itemCount: 6, cardHeight: 72)
@@ -442,7 +445,7 @@ class _ChatListScreenV1State extends State<ChatListScreenV1> {
             KoalaSpacing.lg,
             KoalaSpacing.sm,
             KoalaSpacing.lg,
-            KoalaSpacing.xxxl,
+            110,
           ),
           children: [
             _buildSearchBar(),
@@ -466,7 +469,7 @@ class _ChatListScreenV1State extends State<ChatListScreenV1> {
           KoalaSpacing.lg,
           KoalaSpacing.sm,
           KoalaSpacing.lg,
-          KoalaSpacing.xxxl,
+          110,
         ),
         children: [
           _buildSearchBar(),
@@ -490,7 +493,7 @@ class _ChatListScreenV1State extends State<ChatListScreenV1> {
         KoalaSpacing.lg,
         KoalaSpacing.sm,
         KoalaSpacing.lg,
-        KoalaSpacing.xxxl,
+        110, // bottom nav clearance
       ),
       children: [
         _buildSearchBar(),

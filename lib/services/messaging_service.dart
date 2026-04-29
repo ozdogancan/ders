@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' hide User;
 
 import '../core/config/env.dart';
+import 'auth_token_service.dart';
 
 /// Mesaj tipi
 enum MessageType { text, image, file, system }
@@ -164,7 +165,10 @@ class MessagingService {
         final res = await http
             .post(
               Uri.parse('$apiUrl/api/conversations/ensure'),
-              headers: {'Content-Type': 'application/json'},
+              headers: {
+                ...await AuthTokenService.authHeaders(),
+                'Content-Type': 'application/json',
+              },
               body: jsonEncode({
                 'firebaseUid': uid,
                 'designerId': designerId,
@@ -718,7 +722,10 @@ class MessagingService {
       final res = await http
           .post(
             Uri.parse('$apiUrl/api/messages/inbound'),
-            headers: {'Content-Type': 'application/json'},
+            headers: {
+              ...await AuthTokenService.authHeaders(),
+              'Content-Type': 'application/json',
+            },
             body: jsonEncode({
               'firebaseUid': user.uid,
               'email': user.email,

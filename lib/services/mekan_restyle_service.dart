@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 
 import 'mekan_analyze_service.dart' show StyleHints;
+import 'mock_mode.dart';
 import 'replicate_service.dart' show ReplicateException;
 
 /// Mekan Restyle v2 — 3-variant batch (faithful · editorial · bold).
@@ -31,6 +32,7 @@ class MekanRestyleService {
     required String room,
     required String theme,
     StyleHints? styleHints,
+    String? referenceUrl, // Swipe'tan gelen ilham görseli
   }) async {
     final b64 = base64Encode(imageBytes);
     final dataUrl = 'data:image/jpeg;base64,$b64';
@@ -39,14 +41,16 @@ class MekanRestyleService {
     final enrichedTheme =
         '${theme.toLowerCase()}${styleHints?.toPromptSuffix() ?? ''}';
 
-    if (_forceMock) {
-      // Mock: 3 variant'ı da orijinal foto olarak dön — UI farklı judge_score
-      // değerleri görsün diye küçük varyasyon.
-      await Future.delayed(const Duration(milliseconds: 2500));
+    // _forceMock = compile-time, MockMode.enabled = compile-time veya runtime
+    // (URL ?mock=1 ile etkin). Token harcamadan UI test'i için.
+    if (_forceMock || MockMode.enabled) {
+      await Future.delayed(const Duration(milliseconds: 1800));
+      // Stil + oda eşleşmeli stock görsel — supabase style-previews'den.
+      final mockUrl = MockMode.mockAfterUrl(room: room, theme: theme);
       return RestyleBatchResult(
         variants: [
           RestyleVariant(
-            output: dataUrl,
+            output: mockUrl,
             promptKind: 'faithful',
             judgeScore: 0.92,
             judgeReason: 'mock',
@@ -54,7 +58,7 @@ class MekanRestyleService {
             mock: true,
           ),
           RestyleVariant(
-            output: dataUrl,
+            output: mockUrl,
             promptKind: 'editorial',
             judgeScore: 0.85,
             judgeReason: 'mock',
@@ -62,7 +66,7 @@ class MekanRestyleService {
             mock: true,
           ),
           RestyleVariant(
-            output: dataUrl,
+            output: mockUrl,
             promptKind: 'bold',
             judgeScore: 0.78,
             judgeReason: 'mock',
@@ -71,7 +75,7 @@ class MekanRestyleService {
           ),
         ],
         rejectedCount: 0,
-        latencyMs: 2500,
+        latencyMs: 1800,
         mock: true,
       );
     }
@@ -84,6 +88,8 @@ class MekanRestyleService {
             'image': dataUrl,
             'room': room.toLowerCase(),
             'theme': enrichedTheme,
+            if (referenceUrl != null && referenceUrl.isNotEmpty)
+              'reference_url': referenceUrl,
           }),
         )
         .timeout(const Duration(seconds: 120));

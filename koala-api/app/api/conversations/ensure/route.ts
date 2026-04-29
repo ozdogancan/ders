@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { koalaAdmin } from '@/lib/supabase/koala';
-import { corsHeaders } from '@/lib/security';
+import { corsHeaders, isOriginAllowed, checkRateLimit } from '@/lib/security';
+import { verifyAuthHeader, logAuthOutcome } from '@/lib/auth-verify';
+
+// TODO[2026-Q3]: legacy mode kaldır — verifyAuthHeader.legacy=true → 401 yap.
 
 export const runtime = 'nodejs';
 export const maxDuration = 15;
@@ -32,6 +35,16 @@ export async function OPTIONS(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const cors = corsHeaders(req.headers.get('origin'));
 
+  if (!isOriginAllowed(req)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403, headers: cors });
+  }
+  if (!checkRateLimit(req, 'conversations-ensure', 30)) {
+    return NextResponse.json(
+      { error: 'Rate limit exceeded. Please try again later.' },
+      { status: 429, headers: cors },
+    );
+  }
+
   let payload: {
     firebaseUid?: string;
     designerId?: string;
@@ -60,6 +73,19 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       { error: 'firebaseUid and designerId are required' },
       { status: 400, headers: cors },
+    );
+  }
+
+  // ─── AUTH (dual-mode) ─────────────────────────────────────────
+  const authResult = await verifyAuthHeader(req, firebaseUid);
+  logAuthOutcome('conversations/ensure', authResult, {
+    userId: firebaseUid,
+    ip: req.headers.get('x-forwarded-for'),
+  });
+  if (!authResult.ok) {
+    return NextResponse.json(
+      { error: 'unauthorized', reason: authResult.reason },
+      { status: 401, headers: cors },
     );
   }
 

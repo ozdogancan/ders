@@ -24,10 +24,10 @@ import '../services/evlumba_live_service.dart';
 import 'chat_detail_screen.dart';
 import 'chat_list_screen.dart';
 import 'mekan/mekan_flow_screen.dart';
+import 'mekan/wizard/mekan_wizard_screen.dart';
 import 'product_entry_screen.dart';
 import 'saved/saved_screen_v2.dart';
-import 'style_discovery_live_screen.dart';
-import '../widgets/style_discovery_pull.dart';
+import '../widgets/style_discovery_pull.dart'; // GlobalKey type için tutuldu
 import 'home/widgets/continue_design_card.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -62,10 +62,15 @@ class _HomeScreenState extends State<HomeScreen>
     super.initState();
     Analytics.screenViewed('home');
     WidgetsBinding.instance.addObserver(this);
+    // Eskiden 1400ms staggered fade-in entrance vardı (her kart 100ms gecikmeli
+    // belirir). Kullanıcı "ana sayfa hazır olduğunda direkt gelsin, 0 bekleme"
+    // dediği için controller `value: 1.0` ile başlatılıyor → tüm widget'lar
+    // anında opacity 1 / offset 0 → hiç animasyon yok, instant render.
     _staggerCtrl = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1400),
-    )..forward();
+      value: 1.0,
+    );
     _loadUnreadMsgCount();
     _migrateChatsOnce();
     _requestNotificationPermission();
@@ -368,12 +373,11 @@ class _HomeScreenState extends State<HomeScreen>
     );
     if (f == null) return;
     final bytes = await f.readAsBytes();
-    // First chat interaction triggers style discovery once
     final intercepted = await _showStyleDiscoveryIfNeeded();
     if (intercepted || !mounted) return;
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => MekanFlowScreen(initialBytes: bytes),
+        builder: (_) => MekanWizardScreen(photoBytes: bytes),
       ),
     );
   }
@@ -404,6 +408,8 @@ class _HomeScreenState extends State<HomeScreen>
 
     return Scaffold(
       backgroundColor: KoalaColors.bg,
+      extendBody: true,
+      // bottomNavigationBar MainShell tarafından sağlanıyor — burada yok.
       body: Listener(
         behavior: HitTestBehavior.translucent,
         onPointerDown: (e) {
@@ -453,105 +459,74 @@ class _HomeScreenState extends State<HomeScreen>
               child: SingleChildScrollView(
                 child: Column(
                   children: [
-            // ─── Top bar ───
-            // 2026 dil: greeting kaldırıldı (sol sadelik), sağda 3 ikon triplet'i.
-            // Sıra soldan sağa: Koleksiyon → Mesaj → Profil. Üçü de 36px soft
-            // daire chip — profil avatarı aynı ölçüde kalıyor ki tek kimlik
-            // öne çıkmasın, horizon ritmik hissedilsin.
+            // ─── Top bar — sol: logo+slogan, sağ: 3 ikon ───
             _staggered(
               0,
               Padding(
-                padding: const EdgeInsets.only(top: 12, left: 20, right: 20),
+                padding: const EdgeInsets.fromLTRB(20, 14, 16, 0),
                 child: Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
+                  crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    // Koleksiyon
-                    _Pressable(
-                      onTap: () => context.push('/collections').then(
-                        (_) => _inputKey.currentState?.clearAndReset(),
-                      ),
-                      child: Container(
-                        width: 36,
-                        height: 36,
-                        decoration: const BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: KoalaColors.accentSoft,
-                        ),
-                        child: const Icon(
-                          LucideIcons.bookmark,
-                          size: 18,
-                          color: KoalaColors.accentDeep,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    // Mesajlar
-                    _Pressable(
-                      onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const ChatListScreen(),
-                        ),
-                      ).then((_) {
-                        _inputKey.currentState?.clearAndReset();
-                        _loadUnreadMsgCount();
-                      }),
-                      child: Stack(
-                        clipBehavior: Clip.none,
+                    // SOL — koala by evlumba + slogan
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
                         children: [
-                          Container(
-                            width: 36,
-                            height: 36,
-                            decoration: const BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: KoalaColors.accentSoft,
-                            ),
-                            child: const Icon(
-                              LucideIcons.messageCircle,
-                              size: 18,
-                              color: KoalaColors.accentDeep,
-                            ),
-                          ),
-                          if (_unreadMsgCount > 0)
-                            Positioned(
-                              top: -2,
-                              right: -2,
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 4,
-                                  vertical: 1,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: KoalaColors.error,
-                                  borderRadius: BorderRadius.circular(99),
-                                ),
-                                constraints: const BoxConstraints(
-                                  minWidth: 14,
-                                  minHeight: 14,
-                                ),
-                                child: Text(
-                                  _unreadMsgCount > 9 ? '9+' : '$_unreadMsgCount',
-                                  textAlign: TextAlign.center,
-                                  style: const TextStyle(
-                                    fontSize: 9,
-                                    fontWeight: FontWeight.w700,
-                                    color: Colors.white,
-                                  ),
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.baseline,
+                            textBaseline: TextBaseline.alphabetic,
+                            children: [
+                              const Text(
+                                'koala',
+                                style: TextStyle(
+                                  fontSize: 36,
+                                  fontWeight: FontWeight.w700,
+                                  fontFamily: 'Georgia',
+                                  color: KoalaColors.ink,
+                                  letterSpacing: -1.6,
+                                  height: 1.0,
                                 ),
                               ),
+                              const SizedBox(width: 6),
+                              Text(
+                                'by evlumba',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w700,
+                                  color: KoalaColors.accentDeep,
+                                  letterSpacing: 0.1,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          const Text(
+                            'Evin için ilham ve hızlı tasarım.',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
+                              color: KoalaColors.textTer,
+                              letterSpacing: -0.1,
                             ),
+                          ),
                         ],
                       ),
                     ),
-                    const SizedBox(width: 10),
+                    // SAĞ — sadece profil ikonu (Projeler/Mesajlar bottom nav'a taşındı)
                     _Pressable(
-                      onTap: () => context.push('/profile').then((_) => _inputKey.currentState?.clearAndReset()),
+                      onTap: () => context.push('/profile').then(
+                          (_) => _inputKey.currentState?.clearAndReset()),
                       child: Container(
-                        width: 36,
-                        height: 36,
+                        width: 42,
+                        height: 42,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
                           color: KoalaColors.accentSoft,
+                          border: Border.all(
+                              color:
+                                  KoalaColors.accentDeep.withValues(alpha: 0.18),
+                              width: 0.8),
                           image: currentUser?.photoURL != null
                               ? DecorationImage(
                                   image: CachedNetworkImageProvider(
@@ -564,7 +539,7 @@ class _HomeScreenState extends State<HomeScreen>
                         child: currentUser?.photoURL == null
                             ? const Icon(
                                 LucideIcons.user,
-                                size: 18,
+                                size: 20,
                                 color: KoalaColors.accentDeep,
                               )
                             : null,
@@ -574,54 +549,7 @@ class _HomeScreenState extends State<HomeScreen>
                 ),
               ),
             ),
-
-            // ─── Center brand ───
-            const SizedBox(height: 24),
-            _staggered(
-              1,
-              Column(
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.baseline,
-                    textBaseline: TextBaseline.alphabetic,
-                    children: [
-                      const Text(
-                        'koala',
-                        style: TextStyle(
-                          fontSize: 44,
-                          fontWeight: FontWeight.w700,
-                          fontFamily: 'Georgia',
-                          color: KoalaColors.ink,
-                          letterSpacing: -1.9,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        'by evlumba',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w700,
-                          color: KoalaColors.accentDeep,
-                          letterSpacing: 0.1,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  const Text(
-                    'Evini akıllıca tasarla',
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w500,
-                      color: KoalaColors.textTer,
-                      letterSpacing: -0.15,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 28),
 
             // ─── 2 hero kart — radical redesign 2026-04-27 ───
             // 3 kart (Mekan/Ürün/Uzman) → 2 kart (Mekan/Tarz). "Ürün Bul" yok
@@ -658,21 +586,10 @@ class _HomeScreenState extends State<HomeScreen>
               const ContinueDesignCard(),
             ),
 
-            const SizedBox(height: 12),
-
-            // ─── Kaydedilenlerim kısayol ───
-            _staggered(
-              5,
-              _SavedPreviewRow(
-                onViewAll: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const SavedScreenV2()),
-                ),
-              ),
-            ),
-
-            const SizedBox(height: 12),
-
+            // 2026-04-27: "Kaydedilenlerim" anasayfa preview row kaldırıldı —
+            // kullanıcı koleksiyonlarını sağ üstteki bookmark ikonundan görür.
+            // _SavedPreviewRow widget'ı dosyada duruyor ama artık render
+            // edilmiyor.
             const SizedBox(height: 16),
                   ],
                 ),
@@ -684,30 +601,115 @@ class _HomeScreenState extends State<HomeScreen>
             // tamamen bu handle üzerinden. Minimal pill ("Hayalindeki tarzı
             // keşfet" + chevron-up + sparkle), ilk girişte zıplayan hint
             // (_maybeShowPullHint), yukarı kaydırınca eski sheet → swipe ekranı.
-            _staggered(
-              7,
-              StyleDiscoveryPull(
-                key: _pullKey,
-                showHandleStrip: true,
-                totalCountBuilder: () async {
-                  try {
-                    if (!EvlumbaLiveService.isReady) return 0;
-                    final res = await EvlumbaLiveService.client
-                        .from('designer_projects')
-                        .select()
-                        .eq('is_published', true)
-                        .count();
-                    return res.count;
-                  } catch (_) {
-                    return 0;
-                  }
-                },
-                child: SizedBox(height: btm + 4),
-              ),
-            ),
+            // 2026-04-28: "Tarzını Keşfedelim" kartı kaldırıldı — tarz keşfi
+            // alt navigasyondaki Swipe sekmesi üzerinden erişiliyor.
+            SizedBox(height: btm + 90), // bottom nav clearance
+
           ],
         ),
       ),
+      ),
+    );
+  }
+}
+
+/// Tarzını Keşfedelim CTA kartı — pull-up handle yerine sade tıklanabilir
+/// kart. Sol mor sparkle ikon küresi + başlık + alt yazı + sağda chevron.
+class _TarzKesfetCard extends StatelessWidget {
+  final VoidCallback onTap;
+  const _TarzKesfetCard({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(20),
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(14, 14, 16, 14),
+          decoration: BoxDecoration(
+            color: KoalaColors.surface,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: KoalaColors.border, width: 0.6),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.05),
+                blurRadius: 14,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 56,
+                height: 56,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(16),
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      KoalaColors.accentDeep,
+                      KoalaColors.accent,
+                    ],
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: KoalaColors.accent.withValues(alpha: 0.32),
+                      blurRadius: 14,
+                      offset: const Offset(0, 6),
+                    ),
+                  ],
+                ),
+                child:
+                    const Icon(LucideIcons.sparkles, size: 26, color: Colors.white),
+              ),
+              const SizedBox(width: 14),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'Tarzını Keşfedelim',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        color: KoalaColors.text,
+                        letterSpacing: -0.2,
+                      ),
+                    ),
+                    SizedBox(height: 2),
+                    Text(
+                      'Sana uygun stilleri bulalım',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                        color: KoalaColors.textSec,
+                        letterSpacing: -0.1,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: KoalaColors.accentSoft,
+                ),
+                child: const Icon(
+                  LucideIcons.arrowRight,
+                  size: 18,
+                  color: KoalaColors.accentDeep,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -863,16 +865,17 @@ class _HeroCaptureCard extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Hayalindeki Tasarımı Gerçeğe Dönüştür',
+                            'Hayalindeki Tasarımı\nGerçeğe Dönüştür',
+                            maxLines: 2,
                             style: TextStyle(
-                              fontSize: 16.5,
-                              fontWeight: FontWeight.w700,
+                              fontSize: 17,
+                              fontWeight: FontWeight.w800,
                               color: KoalaColors.text,
-                              letterSpacing: -0.35,
-                              height: 1.15,
+                              letterSpacing: -0.4,
+                              height: 1.2,
                             ),
                           ),
-                          SizedBox(height: 4),
+                          SizedBox(height: 6),
                           Text(
                             'Bir fotoğraf · 30 sn · gerçek tasarım',
                             style: TextStyle(
@@ -1133,24 +1136,23 @@ class _BeforeAfterShowcaseState extends State<_BeforeAfterShowcase>
   }
 
   /// 0..1 master t değerinden slider pozisyonu üret.
-  /// WIPE YÖNÜ: SAĞ → SOL. Empty top layer önce çoğu alanı kaplar (sağda
-  /// görünür), slider sola doğru kayınca empty küçülür → designed reveal
-  /// olur. Sonuç görsel: "boş → Koala dolduruyor" — natural transformation.
-  /// Phase A (0-0.1875)   : slider sağda sabit (boş tüm sahneyi kaplar)
-  /// Phase B (0.1875-0.425) : sağ → sol, easeInOutCubic
-  /// Phase B-end bounce   : sol kenara hafif yaylanma
-  /// Phase C-D-E          : solda sabit (designed tüm sahneyi kaplar)
+  /// WIPE YÖNÜ: SAĞ → SOL. Empty layer önce çoğu alanı kaplar, slider sola
+  /// kayınca designed reveal olur ("boş → Koala dolduruyor").
+  /// Phase A (0-0.10)     : slider sağda sabit (boş tüm sahnede)
+  /// Phase B (0.10-0.34)  : sağ → sol, easeInOutCubic
+  /// Phase B-end bounce   : 0.34-0.36 sol kenarda hafif yaylanma
+  /// Phase C-D-E          : solda sabit (designed tüm sahnede)
   double _sliderPos(double t) {
     const left = 0.04;
     const right = 0.96;
-    if (t < 0.1875) return right;
-    if (t < 0.425) {
-      final localT = (t - 0.1875) / (0.425 - 0.1875);
+    if (t < 0.10) return right;
+    if (t < 0.34) {
+      final localT = (t - 0.10) / (0.34 - 0.10);
       return right -
           Curves.easeInOutCubic.transform(localT) * (right - left);
     }
-    if (t < 0.4438) {
-      final localT = (t - 0.425) / (0.4438 - 0.425);
+    if (t < 0.36) {
+      final localT = (t - 0.34) / (0.36 - 0.34);
       final b = math.sin(localT * math.pi) * 0.03;
       return left + b;
     }
@@ -1266,119 +1268,202 @@ class _BeforeAfterShowcaseState extends State<_BeforeAfterShowcase>
               ),
             ),
 
-            // Phase C: 3 ürün tag'ı + connector line + item dot.
-            // Tag karşı-köşede sabit pozisyonda, image üzerindeki gerçek
-            // mobilyada küçük accent dot, ikisi arasında yumuşak çizgi.
-            // SnapHome'daki "ürün label'ı + pointer line" estetiğine yakın.
+            // Phase C: 3 ürün için SIRALI 3-stage reveal:
+            //   Her ürün için: dot pop → çizgi item'dan tag'a doğru çizilir
+            //   → tag çizginin ucunda pop. 3 ürün birbiri ardına.
+            // Total cycle: 3 ürün × ~960ms = ~2.9s, hold + fade = +~1.5s.
+            //   Lambader: dot 0.36-0.38, line 0.38-0.42, tag 0.42-0.45
+            //   Kanepe:   dot 0.45-0.47, line 0.47-0.51, tag 0.51-0.54
+            //   Sehpa:    dot 0.54-0.56, line 0.56-0.60, tag 0.60-0.63
+            //   Hold all: 0.63-0.70
+            //   Fade all: 0.70-0.72
             ListenableBuilder(
               listenable: _ctrl,
               builder: (ctx, _) {
                 final t = _ctrl.value;
-                final t1 = _phase(t, 0.456, 0.494, 0.638, 0.663);
-                final t2 = _phase(t, 0.494, 0.531, 0.638, 0.663);
-                final t3 = _phase(t, 0.531, 0.569, 0.638, 0.663);
-                if (t1 == 0 && t2 == 0 && t3 == 0) {
+                // Ürün 1 (Lambader)
+                final dot1 = _phase(t, 0.36, 0.38, 0.70, 0.72);
+                final line1Op = _phase(t, 0.38, 0.40, 0.70, 0.72);
+                final line1Prog =
+                    ((t - 0.38) / 0.04).clamp(0.0, 1.0);
+                final t1 = _phase(t, 0.42, 0.45, 0.70, 0.72);
+                // Ürün 2 (Kanepe)
+                final dot2 = _phase(t, 0.45, 0.47, 0.70, 0.72);
+                final line2Op = _phase(t, 0.47, 0.49, 0.70, 0.72);
+                final line2Prog =
+                    ((t - 0.47) / 0.04).clamp(0.0, 1.0);
+                final t2 = _phase(t, 0.51, 0.54, 0.70, 0.72);
+                // Ürün 3 (Sehpa)
+                final dot3 = _phase(t, 0.54, 0.56, 0.70, 0.72);
+                final line3Op = _phase(t, 0.56, 0.58, 0.70, 0.72);
+                final line3Prog =
+                    ((t - 0.56) / 0.04).clamp(0.0, 1.0);
+                final t3 = _phase(t, 0.60, 0.63, 0.70, 0.72);
+                // Toplam dotsT — herhangi biri görünürse Phase C aktif
+                final dotsT = math.max(
+                    math.max(dot1, dot2), dot3);
+                if (dotsT == 0 && t1 == 0 && t2 == 0 && t3 == 0 &&
+                    line1Op == 0 && line2Op == 0 && line3Op == 0) {
                   return const SizedBox.shrink();
                 }
                 return LayoutBuilder(
                   builder: (ctx, c) {
                     final w = c.maxWidth;
                     final h = c.maxHeight;
-                    // Item dot pozisyonları — gerçek mobilyaların ratio'su
-                    final lampItem = Offset(w * 0.86, h * 0.50);
-                    final sofaItem = Offset(w * 0.50, h * 0.62);
-                    final tableItem = Offset(w * 0.42, h * 0.85);
-                    // Tag pozisyonları — item dot'a YAKIN (12-14px gap, kısa
-                    // connector). Tag'lar item'ların dışına ofset edildi:
-                    //   Lambader → dot'un solunda
-                    //   Kanepe → dot'un üstünde
-                    //   Sehpa → dot'un sağ-üstünde
-                    final lampTagPos = Offset(
-                      lampItem.dx - 134,
-                      lampItem.dy - 18,
-                    );
-                    final sofaTagPos = Offset(
-                      sofaItem.dx - 70,
-                      sofaItem.dy - 56,
-                    );
-                    final tableTagPos = Offset(
-                      tableItem.dx + 18,
-                      tableItem.dy - 28,
-                    );
-                    // Tag'ın bağlantı noktası (kart bottom-center)
+                    // ── Source image dims (after.webp 900x660) ──
+                    // Item pozisyonları source coord'unda hardcoded.
+                    // BoxFit.cover'a göre display coord'una çevriliyor —
+                    // mobilde geniş card'da da, dar card'da da tam yerinde.
+                    const imgW = 900.0;
+                    const imgH = 660.0;
+                    const lampSrc = Offset(775, 360);   // beyaz floor lamp gövdesi
+                    // Sofa dot'u sol tarafa kaydırıldı (left-cushion) →
+                    // Lambader popup'ından daha uzak, görsel ferah.
+                    const sofaSrc = Offset(360, 400);   // cream sofa SOL kısmı
+                    const tableSrc = Offset(460, 555);  // marble coffee table
+                    // BoxFit.cover scaling: container'ın daha geniş olduğu
+                    // tarafa göre fill et, diğer tarafı crop et.
+                    final containerRatio = w / h;
+                    const imgRatio = imgW / imgH;
+                    double scale;
+                    double offsetX = 0, offsetY = 0;
+                    if (containerRatio > imgRatio) {
+                      // Container daha geniş — width'e göre fill, top/bottom crop
+                      scale = w / imgW;
+                      offsetY = (imgH * scale - h) / 2;
+                    } else {
+                      // Container daha dar — height'a göre fill, left/right crop
+                      scale = h / imgH;
+                      offsetX = (imgW * scale - w) / 2;
+                    }
+                    Offset srcToDisplay(Offset src) {
+                      return Offset(
+                        src.dx * scale - offsetX,
+                        src.dy * scale - offsetY,
+                      );
+                    }
+                    final lampItem = srcToDisplay(lampSrc);
+                    final sofaItem = srcToDisplay(sofaSrc);
+                    final tableItem = srcToDisplay(tableSrc);
                     const tagW = 130.0;
                     const tagH = 42.0;
+                    // TAG'LAR ITEM'A YAPIŞIK (~8-12px stem). Çakışmamak için
+                    // alternatif yönler:
+                    //   Lambader (lamp sağda)   → tag SOLUNDA, aynı y
+                    //   Kanepe   (sofa merkez)  → tag SOL-ÜSTÜ
+                    //   Sehpa    (sehpa merkez) → tag SAĞINDA, aynı y
+                    final lampTagPos = Offset(
+                      (lampItem.dx - tagW - 8).clamp(8, w - tagW - 8),
+                      (lampItem.dy - tagH / 2).clamp(8, h - tagH - 8),
+                    );
+                    // Kanepe → daha SOL-ÜST (Lambader'dan uzaklaş, ferah dur)
+                    final sofaTagPos = Offset(
+                      (sofaItem.dx - tagW - 14).clamp(8, w - tagW - 8),
+                      (sofaItem.dy - tagH - 28).clamp(8, h - tagH - 8),
+                    );
+                    final tableTagPos = Offset(
+                      (tableItem.dx + 12).clamp(8, w - tagW - 8),
+                      (tableItem.dy - tagH / 2).clamp(8, h - tagH - 8),
+                    );
+                    // Connector anchor — tag'ın İÇİNE 12px girer (overshoot)
+                    // ki çizgi tag'a YAPIŞIK gözüksün, kenarda kalmasın.
+                    const overshoot = 12.0;
                     final lampAnchor = Offset(
-                      lampTagPos.dx + tagW,
+                      lampTagPos.dx + tagW - overshoot,
                       lampTagPos.dy + tagH / 2,
                     );
                     final sofaAnchor = Offset(
-                      sofaTagPos.dx + tagW / 2,
-                      sofaTagPos.dy + tagH,
+                      sofaTagPos.dx + tagW - overshoot,
+                      sofaTagPos.dy + tagH - overshoot,
                     );
                     final tableAnchor = Offset(
-                      tableTagPos.dx,
+                      tableTagPos.dx + overshoot,
                       tableTagPos.dy + tagH / 2,
                     );
                     return Stack(
                       fit: StackFit.expand,
                       children: [
-                        // ── Connector lines (CustomPaint, RepaintBoundary)
-                        RepaintBoundary(
-                          child: CustomPaint(
-                            painter: _ConnectorPainter(
-                              connections: [
-                                if (t1 > 0) (lampAnchor, lampItem, t1),
-                                if (t2 > 0) (sofaAnchor, sofaItem, t2),
-                                if (t3 > 0) (tableAnchor, tableItem, t3),
-                              ],
+                        // ── Connector lines — item dot'tan tag anchor'a
+                        // doğru ÇİZİLEN (progressive). Her ürün için ayrı.
+                        Positioned.fill(
+                          child: RepaintBoundary(
+                            child: CustomPaint(
+                              size: Size.infinite,
+                              painter: _ConnectorPainter(
+                                connections: [
+                                  if (line1Op > 0)
+                                    (
+                                      start: lampItem,
+                                      end: lampAnchor,
+                                      opacity: line1Op,
+                                      progress: line1Prog,
+                                    ),
+                                  if (line2Op > 0)
+                                    (
+                                      start: sofaItem,
+                                      end: sofaAnchor,
+                                      opacity: line2Op,
+                                      progress: line2Prog,
+                                    ),
+                                  if (line3Op > 0)
+                                    (
+                                      start: tableItem,
+                                      end: tableAnchor,
+                                      opacity: line3Op,
+                                      progress: line3Prog,
+                                    ),
+                                ],
+                              ),
                             ),
                           ),
                         ),
-                        // ── Item dots
-                        if (t1 > 0)
+                        // ── Item dots — her biri kendi sub-phase opacity'si
+                        if (dot1 > 0)
                           Positioned(
                             left: lampItem.dx - 5,
                             top: lampItem.dy - 5,
-                            child: _ItemDot(opacity: t1),
+                            child: _ItemDot(opacity: dot1),
                           ),
-                        if (t2 > 0)
+                        if (dot2 > 0)
                           Positioned(
                             left: sofaItem.dx - 5,
                             top: sofaItem.dy - 5,
-                            child: _ItemDot(opacity: t2),
+                            child: _ItemDot(opacity: dot2),
                           ),
-                        if (t3 > 0)
+                        if (dot3 > 0)
                           Positioned(
                             left: tableItem.dx - 5,
                             top: tableItem.dy - 5,
-                            child: _ItemDot(opacity: t3),
+                            child: _ItemDot(opacity: dot3),
                           ),
-                        // ── Tag cards (dot'a yakın pozisyonda)
-                        Positioned(
-                          left: lampTagPos.dx,
-                          top: lampTagPos.dy,
-                          child: _ProductTagSnap(
-                            product: _kProducts[0],
-                            opacity: t1,
+                        // ── Tag cards
+                        if (t1 > 0)
+                          Positioned(
+                            left: lampTagPos.dx,
+                            top: lampTagPos.dy,
+                            child: _ProductTagSnap(
+                              product: _kProducts[0],
+                              opacity: t1,
+                            ),
                           ),
-                        ),
-                        Positioned(
-                          left: sofaTagPos.dx,
-                          top: sofaTagPos.dy,
-                          child: _ProductTagSnap(
-                            product: _kProducts[1],
-                            opacity: t2,
+                        if (t2 > 0)
+                          Positioned(
+                            left: sofaTagPos.dx,
+                            top: sofaTagPos.dy,
+                            child: _ProductTagSnap(
+                              product: _kProducts[1],
+                              opacity: t2,
+                            ),
                           ),
-                        ),
-                        Positioned(
-                          left: tableTagPos.dx,
-                          top: tableTagPos.dy,
-                          child: _ProductTagSnap(
-                            product: _kProducts[2],
-                            opacity: t3,
+                        if (t3 > 0)
+                          Positioned(
+                            left: tableTagPos.dx,
+                            top: tableTagPos.dy,
+                            child: _ProductTagSnap(
+                              product: _kProducts[2],
+                              opacity: t3,
+                            ),
                           ),
-                        ),
                       ],
                     );
                   },
@@ -1391,10 +1476,9 @@ class _BeforeAfterShowcaseState extends State<_BeforeAfterShowcase>
               listenable: _ctrl,
               builder: (ctx, _) {
                 final t = _ctrl.value;
-                // Glow: 0.6625-0.7125, pill: 0.675-0.731, hold to 0.8875,
-                // fade to 0.9125
-                final glowT = _phase(t, 0.6625, 0.7125, 0.8875, 0.9125);
-                final pillT = _phase(t, 0.675, 0.731, 0.8875, 0.9125);
+                // Phase D: 0.72 → 0.94 designer reveal (tag fade-out ile cross)
+                final glowT = _phase(t, 0.72, 0.76, 0.92, 0.94);
+                final pillT = _phase(t, 0.73, 0.77, 0.92, 0.94);
                 if (glowT == 0 && pillT == 0) {
                   return const SizedBox.shrink();
                 }
@@ -1451,55 +1535,74 @@ class _BeforeAfterShowcaseState extends State<_BeforeAfterShowcase>
   }
 }
 
-/// CustomPainter — tag anchor'dan item dot'a kadar yumuşak quadratic eğri
-/// çizer. Stroke beyaz + accent gradient karışımı, opacity tag'in fade'ine
-/// senkron. Path tag'tan başlayıp itemDot'a iner — pointer hissi.
+/// CustomPainter — item dot'tan tag anchor'a doğru ÇİZİLEN connector eğri.
+/// `progress` 0..1 ile çizginin ne kadarının çizildiği kontrol edilir →
+/// "çizgi büyüyerek geliyor" hissi. PathMetrics ile extractPath kullanır.
 class _ConnectorPainter extends CustomPainter {
   _ConnectorPainter({required this.connections});
-  final List<(Offset, Offset, double)> connections;
+  final List<({Offset start, Offset end, double opacity, double progress})>
+      connections;
 
   @override
   void paint(Canvas canvas, Size size) {
     for (final c in connections) {
-      final (start, end, op) = c;
-      if (op <= 0) continue;
-      final paint = Paint()
-        ..color = Colors.white.withValues(alpha: 0.85 * op)
-        ..strokeWidth = 1.5
-        ..style = PaintingStyle.stroke
-        ..strokeCap = StrokeCap.round;
-      // Yumuşak quadratic eğri — control point yarı yolda, başlangıca yakın
+      if (c.opacity <= 0 || c.progress <= 0) continue;
+      // start = item dot, end = tag anchor → çizgi DOT'TAN TAG'A doğru çizilir
       final mid = Offset(
-        (start.dx + end.dx) / 2,
-        (start.dy + end.dy) / 2,
+        (c.start.dx + c.end.dx) / 2,
+        (c.start.dy + c.end.dy) / 2,
       );
-      // Curve control: start tarafına bias, "tag'tan damlıyor" hissi
       final ctrl = Offset(
-        start.dx + (mid.dx - start.dx) * 0.2,
-        start.dy + (mid.dy - start.dy) * 0.85,
+        c.start.dx + (mid.dx - c.start.dx) * 0.4,
+        c.start.dy + (mid.dy - c.start.dy) * 0.75,
       );
-      final path = Path()
-        ..moveTo(start.dx, start.dy)
-        ..quadraticBezierTo(ctrl.dx, ctrl.dy, end.dx, end.dy);
-      // İnce dış kontur (gölge)
+      final fullPath = Path()
+        ..moveTo(c.start.dx, c.start.dy)
+        ..quadraticBezierTo(ctrl.dx, ctrl.dy, c.end.dx, c.end.dy);
+
+      // Progressive reveal — path metrics ile partial extract
+      Path drawPath;
+      if (c.progress >= 1.0) {
+        drawPath = fullPath;
+      } else {
+        final metricsList = fullPath.computeMetrics().toList();
+        if (metricsList.isEmpty) continue;
+        final metric = metricsList.first;
+        drawPath = metric.extractPath(0, metric.length * c.progress);
+      }
+
+      // Dış halo (mobilde okunabilirlik)
       final shadowPaint = Paint()
-        ..color = Colors.black.withValues(alpha: 0.18 * op)
-        ..strokeWidth = 2.5
+        ..color = Colors.black.withValues(alpha: 0.22 * c.opacity)
+        ..strokeWidth = 3.5
         ..style = PaintingStyle.stroke
         ..strokeCap = StrokeCap.round;
-      canvas.drawPath(path, shadowPaint);
-      canvas.drawPath(path, paint);
+      canvas.drawPath(drawPath, shadowPaint);
+      // İç beyaz stroke
+      final paint = Paint()
+        ..color = Colors.white.withValues(alpha: 0.92 * c.opacity)
+        ..strokeWidth = 2.0
+        ..style = PaintingStyle.stroke
+        ..strokeCap = StrokeCap.round;
+      canvas.drawPath(drawPath, paint);
     }
   }
 
   @override
-  bool shouldRepaint(_ConnectorPainter old) =>
-      old.connections.length != connections.length ||
-      List.generate(connections.length, (i) {
-        final a = old.connections[i];
-        final b = connections[i];
-        return a.$3 != b.$3 || a.$1 != b.$1 || a.$2 != b.$2;
-      }).any((e) => e);
+  bool shouldRepaint(_ConnectorPainter old) {
+    if (old.connections.length != connections.length) return true;
+    for (var i = 0; i < connections.length; i++) {
+      final a = old.connections[i];
+      final b = connections[i];
+      if (a.opacity != b.opacity ||
+          a.progress != b.progress ||
+          a.start != b.start ||
+          a.end != b.end) {
+        return true;
+      }
+    }
+    return false;
+  }
 }
 
 /// Image üzerindeki gerçek mobilyaya yerleştirilen küçük accent dot.
@@ -1552,6 +1655,10 @@ class _ProductTagSnap extends StatelessWidget {
           scale: scale,
           alignment: Alignment.center,
           child: Container(
+            // Sabit genişlik — connector anchor matematiği bu sayıya bağlı,
+            // label uzunluğuna göre genişlemeyecek.
+            width: 130,
+            height: 42,
             padding: const EdgeInsets.fromLTRB(5, 5, 11, 5),
             decoration: BoxDecoration(
               color: Colors.white,
@@ -1712,7 +1819,7 @@ class _DesignerMatchPill extends StatelessWidget {
   Widget build(BuildContext context) {
     return RepaintBoundary(
       child: Container(
-        padding: const EdgeInsets.fromLTRB(6, 6, 14, 6),
+        padding: const EdgeInsets.fromLTRB(6, 6, 8, 6),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(99),
@@ -1769,39 +1876,43 @@ class _DesignerMatchPill extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 10),
-            const Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Esra K. — Eşleşen İç Mimar',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    color: KoalaColors.text,
-                    letterSpacing: -0.2,
-                  ),
-                ),
-                SizedBox(height: 1),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(LucideIcons.star,
-                        size: 10, color: Color(0xFFE0A53A)),
-                    SizedBox(width: 3),
-                    Text(
-                      '4.9 · İstanbul · 8 yıl',
-                      style: TextStyle(
-                        fontSize: 10.5,
-                        fontWeight: FontWeight.w500,
-                        color: KoalaColors.textSec,
-                      ),
+            const Expanded(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Esra K. — Eşleşen İç Mimar',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: KoalaColors.text,
+                      letterSpacing: -0.2,
                     ),
-                  ],
-                ),
-              ],
+                  ),
+                  SizedBox(height: 1),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(LucideIcons.star,
+                          size: 10, color: Color(0xFFE0A53A)),
+                      SizedBox(width: 3),
+                      Text(
+                        '4.9 · İstanbul · 8 yıl',
+                        style: TextStyle(
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w500,
+                          color: KoalaColors.textSec,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
-            const SizedBox(width: 10),
+            const SizedBox(width: 8),
             Container(
               width: 22,
               height: 22,

@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { resolveHomeownerId, evlumbaAdmin } from '@/lib/supabase/evlumba-admin';
 import { koalaAdmin } from '@/lib/supabase/koala';
 import { corsHeaders } from '@/lib/security';
+import { verifyAuthHeader, logAuthOutcome } from '@/lib/auth-verify';
+
+// TODO[2026-Q3]: legacy mode kaldır — verifyAuthHeader.legacy=true → 401 yap.
 
 export const runtime = 'nodejs';
 export const maxDuration = 30;
@@ -91,6 +94,19 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       { error: 'firebaseUid is required' },
       { status: 400, headers: cors },
+    );
+  }
+
+  // ─── AUTH (dual-mode) ─────────────────────────────────────────
+  const authResult = await verifyAuthHeader(req, firebaseUid);
+  logAuthOutcome('messages/inbound', authResult, {
+    userId: firebaseUid,
+    ip: req.headers.get('x-forwarded-for'),
+  });
+  if (!authResult.ok) {
+    return NextResponse.json(
+      { error: 'unauthorized', reason: authResult.reason },
+      { status: 401, headers: cors },
     );
   }
 

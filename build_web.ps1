@@ -32,14 +32,15 @@ if ([string]::IsNullOrEmpty($SUPABASE_ANON_KEY) -or $SUPABASE_ANON_KEY -eq "YOUR
 # ── Build ──
 Write-Host "`nBuilding Flutter Web (release)..." -ForegroundColor Green
 
-flutter build web --release `
+flutter build web --release --tree-shake-icons --no-source-maps `
   --dart-define=AI_PROVIDER=gemini `
   --dart-define=KOALA_API_URL=$KOALA_API_URL `
   --dart-define=SUPABASE_URL=$SUPABASE_URL `
   --dart-define=SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY `
   --dart-define=EVLUMBA_SUPABASE_URL=$EVLUMBA_URL `
   --dart-define=EVLUMBA_SUPABASE_ANON_KEY=$EVLUMBA_ANON_KEY `
-  --dart-define=REQUIRE_LOGIN=false
+  --dart-define=REQUIRE_LOGIN=false `
+  --dart-define=RESTYLE_V2=true
 
 if ($LASTEXITCODE -ne 0) {
     Write-Host "ERROR: Flutter build failed" -ForegroundColor Red

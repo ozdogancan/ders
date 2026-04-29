@@ -66,6 +66,8 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
   final _textController = TextEditingController();
   final _scrollController = ScrollController();
   final _picker = ImagePicker();
+  // Klavye açıldığında portföyü otomatik kapatmak için input focus dinleyicisi.
+  final _inputFocusNode = FocusNode();
   List<Map<String, dynamic>> _messages = [];
   bool _loading = true;
   bool _sending = false;
@@ -130,6 +132,14 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
     _uid = MessagingService.currentUserId;
     _activeConvId = widget.conversationId;
     _scrollController.addListener(_onScroll);
+    // Klavye açıldığında "Tüm Tasarımlar" portföyü auto-collapse olsun ki
+    // input bar her zaman görünür kalsın (mobil viewport tight olduğunda
+    // expanded portfolio + keyboard input'u baskılıyordu).
+    _inputFocusNode.addListener(() {
+      if (_inputFocusNode.hasFocus && _portfolioExpanded) {
+        setState(() => _portfolioExpanded = false);
+      }
+    });
     _loadDesignerDetail();
 
     if (_activeConvId != null) {
@@ -184,6 +194,7 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
       } catch (_) {}
     }
     _textController.dispose();
+    _inputFocusNode.dispose();
     _scrollController.dispose();
     super.dispose();
   }
@@ -793,8 +804,7 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
             // ── Zengin Header ──
             _buildHeader(),
 
-            // Spesifik projeden geldiyse — mesaj alanının üstünde sabit bağlam kartı
-            if (_contextProject != null) _buildContextProjectCard(),
+            // Pin'li proje artık header'ın sağ ucundaki mini chip'te yaşıyor.
 
             // Messages
             Expanded(
@@ -1090,6 +1100,7 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
             Expanded(
               child: TextField(
                 controller: _textController,
+                focusNode: _inputFocusNode,
                 textInputAction: TextInputAction.send,
                 onSubmitted: (_) => _sendMessage(),
                 onChanged: (_) => setState(() {}),
@@ -1275,6 +1286,10 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
                     ],
                   ),
                 ),
+                // Sağ uçta: spesifik projeden gelindiyse pinli mini-thumbnail.
+                // Tıklayınca aynı project viewer açılır. Modern, kompakt; eski
+                // koca pin kartı yer kaplıyordu — çıkarıldı.
+                if (_contextProject != null) _buildContextPinChip(),
               ],
             ),
           ),
@@ -1316,7 +1331,8 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
                     letterSpacing: 0.4,
                   ),
                 ),
-                const Spacer(),
+                // Başlık ile mini-avatar şeridi arasında nefes payı.
+                const SizedBox(width: 14),
                 // Kapalıyken ilk 4 proje mini-avatar şerit olarak görünür
                 if (!_portfolioExpanded)
                   SizedBox(
@@ -1356,6 +1372,7 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
                   ),
                 if (!_portfolioExpanded)
                   SizedBox(width: (previewCount * 18.0) + 6),
+                const Spacer(),
                 Icon(
                   _portfolioExpanded
                       ? LucideIcons.chevronUp
@@ -1427,28 +1444,8 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
                                                 color: KoalaColors.textTer),
                                           ),
                                   ),
-                                  if (isContext)
-                                    Positioned(
-                                      top: 6,
-                                      left: 6,
-                                      child: Container(
-                                        padding: const EdgeInsets.symmetric(
-                                            horizontal: 6, vertical: 2),
-                                        decoration: BoxDecoration(
-                                          color: KoalaColors.accent,
-                                          borderRadius: BorderRadius.circular(
-                                              KoalaRadius.pill),
-                                        ),
-                                        child: const Text(
-                                          'Bu Proje',
-                                          style: TextStyle(
-                                            fontSize: 9,
-                                            fontWeight: FontWeight.w700,
-                                            color: Colors.white,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
+                                  // "Bu Proje" badge kullanıcı isteğiyle kaldırıldı.
+                                  if (false && isContext) const SizedBox.shrink(),
                                 ],
                               ),
                               // Kategori / oda tipi etiketi.
@@ -1508,75 +1505,82 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
     return 'odam';
   }
 
-  void _applyPresetChip(String prefillText) {
-    HapticFeedback.selectionClick();
-    _textController.text = prefillText;
-    _textController.selection = TextSelection.fromPosition(
-      TextPosition(offset: prefillText.length),
-    );
-    setState(() {});
-  }
-
-  Widget _buildPresetChip(String label, String prefill) {
-    return GestureDetector(
-      onTap: () => _applyPresetChip(prefill),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        decoration: BoxDecoration(
-          color: KoalaColors.surfaceAlt,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: KoalaColors.border),
-        ),
-        child: Text(
-          label,
-          style: const TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w500,
-            color: KoalaColors.text,
-          ),
-        ),
-      ),
-    );
-  }
-
   Widget _buildEmptyStateWithPresets() {
-    final room = _detectRoomWord();
-    final presets = <List<String>>[
-      ['💰 Bütçe ne olabilir?', 'Projemin bütçesi ne kadar olabilir?'],
-      ['⏱ Ne kadar sürer?', 'Ortalama ne kadar sürede tamamlanır?'],
-      ['🎥 Önce görüşsek?', 'Başlamadan önce video call yapabilir miyiz?'],
-      ['🖼 Benzer bir proje', 'Portfolyondaki $room projesine benzer istiyorum.'],
-    ];
-    return Center(
+    // Minimal boş state: tek bir narin outline mesaj balonu (stroke 1.5px) +
+    // küçük tek sparkle aksanı + iki satır tipografi.
+    //
+    // KLAVYE FIX: Center kullanırsak Scaffold body'yi keyboard yüksekliği
+    // kadar küçültünce içerik yeni daha küçük alanın ortasına gidiyor — yani
+    // görsel olarak yukarı kayıyor. Bunun yerine üstten sabit offsetle
+    // (Align.topCenter + topPadding) anchor'la → klavye açılsa da kapanışsa
+    // da illüstrasyonun konumu DEĞİŞMEZ.
+    return Align(
+      alignment: Alignment.topCenter,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 24),
+        padding: const EdgeInsets.fromLTRB(32, 96, 32, 0),
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text(
-              'Henüz mesaj yok. İlk mesajı sen gönder!',
-              style: KoalaText.bodySec,
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 24),
-            const Text(
-              'Başlamak için bir soru seç:',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: KoalaColors.textSec,
+            SizedBox(
+              width: 96,
+              height: 96,
+              child: Stack(
+                clipBehavior: Clip.none,
+                alignment: Alignment.center,
+                children: [
+                  // Çok hafif halo — sadece ima.
+                  Container(
+                    width: 96,
+                    height: 96,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: RadialGradient(
+                        colors: [
+                          KoalaColors.accent.withValues(alpha: 0.10),
+                          KoalaColors.accent.withValues(alpha: 0.0),
+                        ],
+                      ),
+                    ),
+                  ),
+                  // Outline mesaj balonu — Lucide ikonu, 1.5 stroke, mor
+                  Icon(
+                    LucideIcons.messageCircle,
+                    size: 56,
+                    color: KoalaColors.accent.withValues(alpha: 0.85),
+                  ),
+                  // Tek minik sparkle — sağ üst
+                  Positioned(
+                    top: 4,
+                    right: 6,
+                    child: Icon(
+                      LucideIcons.sparkle,
+                      size: 14,
+                      color: KoalaColors.accent.withValues(alpha: 0.75),
+                    ),
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 8,
-              runSpacing: 10,
-              alignment: WrapAlignment.center,
-              children: [
-                for (final p in presets) _buildPresetChip(p[0], p[1]),
-              ],
+            const SizedBox(height: 18),
+            const Text(
+              'Henüz mesaj yok',
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+                color: KoalaColors.text,
+                letterSpacing: -0.2,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 4),
+            const Text(
+              'İlk mesajı sen gönder',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                color: KoalaColors.textTer,
+              ),
+              textAlign: TextAlign.center,
             ),
           ],
         ),
@@ -1584,7 +1588,95 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
     );
   }
 
-  /// Spesifik projeden gelindiğinde mesaj alanının üstünde pinli gösterilen kart
+  /// Header'ın sağ ucunda yaşayan modern, kompakt pin chip'i.
+  /// 40×40 yuvarlatılmış kare + sağ üstte mor pin rozeti. Tıklayınca proje
+  /// viewer açılır (eski koca kartla aynı davranış, sadece görsel rafineleme).
+  Widget _buildContextPinChip() {
+    final project = _contextProject!;
+    final img = (project['cover_image_url'] ??
+            project['cover_url'] ??
+            project['image_url'] ??
+            '')
+        .toString()
+        .trim();
+    final idx = _designerProjects.indexOf(project);
+
+    return Padding(
+      padding: const EdgeInsets.only(left: 8),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: idx >= 0 ? () => _openProjectViewer(project, idx) : null,
+          borderRadius: BorderRadius.circular(12),
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  color: KoalaColors.surfaceAlt,
+                  border: Border.all(
+                    color: KoalaColors.accent.withValues(alpha: 0.35),
+                    width: 1.5,
+                  ),
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(10.5),
+                  child: img.isNotEmpty
+                      ? Image.network(
+                          img,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => const Icon(
+                            LucideIcons.image,
+                            size: 16,
+                            color: KoalaColors.textTer,
+                          ),
+                        )
+                      : const Icon(
+                          LucideIcons.image,
+                          size: 16,
+                          color: KoalaColors.textTer,
+                        ),
+                ),
+              ),
+              // Sağ-üst pin rozeti: 16×16 mor daire + beyaz pin ikonu.
+              Positioned(
+                top: -4,
+                right: -4,
+                child: Container(
+                  width: 18,
+                  height: 18,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: KoalaColors.accent,
+                    border: Border.all(color: Colors.white, width: 2),
+                    boxShadow: [
+                      BoxShadow(
+                        color: KoalaColors.accent.withValues(alpha: 0.35),
+                        blurRadius: 4,
+                        offset: const Offset(0, 1),
+                      ),
+                    ],
+                  ),
+                  child: const Icon(
+                    LucideIcons.pin,
+                    size: 9,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// (Legacy) Eski büyük "Mesajlaştığınız proje" kartı — header chip'iyle
+  /// değiştirildi, artık çağrılmıyor. Referans için bırakıldı.
+  // ignore: unused_element
   Widget _buildContextProjectCard() {
     final project = _contextProject!;
     final img = (project['cover_image_url'] ??
@@ -2242,3 +2334,4 @@ class _NewMessagesDivider extends StatelessWidget {
     );
   }
 }
+

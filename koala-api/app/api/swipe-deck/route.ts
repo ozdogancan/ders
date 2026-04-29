@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { evlumbaAdmin } from '@/lib/supabase/evlumba-admin';
-import { corsHeaders } from '@/lib/security';
+import { corsHeaders, checkRateLimit, isOriginAllowed } from '@/lib/security';
 
 export const runtime = 'nodejs';
 export const maxDuration = 15;
@@ -38,6 +38,16 @@ export async function OPTIONS(req: NextRequest) {
 export async function GET(req: NextRequest) {
   const cors = corsHeaders(req.headers.get('origin'), 'GET, OPTIONS');
   const t0 = Date.now();
+
+  if (!isOriginAllowed(req)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403, headers: cors });
+  }
+  if (!checkRateLimit(req, 'swipe-deck', 60)) {
+    return NextResponse.json(
+      { error: 'Rate limit exceeded. Please try again later.' },
+      { status: 429, headers: cors },
+    );
+  }
 
   const url = new URL(req.url);
   const roomType = url.searchParams.get('room_type')?.trim() || null;

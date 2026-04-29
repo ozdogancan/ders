@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -11,6 +12,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'app.dart';
 import 'core/router/app_router.dart';
 import 'services/analytics_service.dart';
+import 'services/mock_mode.dart';
 import 'services/cache_service.dart';
 import 'services/connectivity_service.dart';
 import 'services/evlumba_live_service.dart';
@@ -31,7 +33,7 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   debugPrint('[fcm/bg] ${message.messageId}: ${message.notification?.title}');
 }
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   // Background message handler'ı runApp'tan ÖNCE register et — Android'de
   // terminated state'te gelen mesajlar için zorunlu. kIsWeb'de no-op.
@@ -92,6 +94,10 @@ void main() {
     runApp(const _MisconfiguredBuildApp());
     return;
   }
+
+  // Mock mode init (URL ?mock=1 / sharedprefs flag) — restyle çağrısı
+  // başlamadan önce tamamlansın diye await ediyoruz (sharedprefs read fast).
+  await MockMode.init();
 
   runApp(const _BootstrapApp());
 }

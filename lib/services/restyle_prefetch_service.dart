@@ -43,6 +43,7 @@ class RestylePrefetchService {
     required String room,
     required String theme,
     StyleHints? styleHints,
+    String? referenceUrl,
   }) {
     final key = _cacheKey(imageBytes, theme);
 
@@ -53,6 +54,7 @@ class RestylePrefetchService {
         room: room,
         theme: theme,
         styleHints: styleHints,
+        referenceUrl: referenceUrl,
       ).then((b) => _batchToLegacy(b));
     }
 
@@ -85,6 +87,7 @@ class RestylePrefetchService {
     required String room,
     required String theme,
     StyleHints? styleHints,
+    String? referenceUrl,
   }) {
     if (_doneBatch.containsKey(key)) {
       return Future.value(_doneBatch[key]);
@@ -97,6 +100,7 @@ class RestylePrefetchService {
       room: room,
       theme: theme,
       styleHints: styleHints,
+      referenceUrl: referenceUrl,
     ).then((b) {
       _doneBatch[key] = b;
       _inFlightBatch.remove(key);

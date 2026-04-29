@@ -48,9 +48,10 @@ class NotificationsService {
   }) async {
     if (_uid == null || !Env.hasSupabaseConfig) return [];
     try {
+      // perf: full row → 10 cols actually consumed by UI
       final res = await _db
           .from('koala_notifications')
-          .select()
+          .select('id, type, title, body, image_url, action_type, action_data, is_read, created_at, user_id')
           .eq('user_id', _uid!)
           .order('created_at', ascending: false)
           .range(offset, offset + limit - 1);
@@ -67,9 +68,10 @@ class NotificationsService {
   }) async {
     if (_uid == null || !Env.hasSupabaseConfig) return [];
     try {
+      // perf: full row → 10 cols actually consumed by UI
       final res = await _db
           .from('koala_notifications')
-          .select()
+          .select('id, type, title, body, image_url, action_type, action_data, is_read, created_at, user_id')
           .eq('user_id', _uid!)
           .eq('is_read', false)
           .order('created_at', ascending: false)
@@ -85,11 +87,13 @@ class NotificationsService {
   static Future<int> getUnreadCount() async {
     if (_uid == null || !Env.hasSupabaseConfig) return 0;
     try {
+      // perf: cap at 100 — badge UI shows 99+ anyway, no need to count more
       final res = await _db
           .from('koala_notifications')
           .select('id')
           .eq('user_id', _uid!)
-          .eq('is_read', false);
+          .eq('is_read', false)
+          .limit(100);
       return (res as List).length;
     } catch (e) {
       debugPrint('NotificationsService.getUnreadCount error: $e');

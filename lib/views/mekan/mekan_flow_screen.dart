@@ -1,8 +1,16 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
+import 'package:crypto/crypto.dart' show sha1;
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import '../../core/theme/koala_tokens.dart';
+import '../../widgets/koala_bottom_nav.dart';
+import '../main_shell.dart';
+import '../../services/background_gen.dart';
+import '../../services/saved_items_service.dart';
+import '../../services/upload_service.dart';
 import '../../services/analytics_service.dart';
 import '../../services/content_gate_service.dart';
 import '../../services/mekan_analyze_service.dart';
@@ -12,6 +20,7 @@ import '../../services/swipe_deck_service.dart';
 import '../../services/taste_service.dart';
 import '../style_discovery_screen.dart';
 import 'mekan_constants.dart';
+import 'realize_screen.dart';
 import 'swipe_screen.dart' as mekan_swipe;
 import 'stages/analysis_reveal_stage.dart';
 import 'stages/generating_stage.dart';
@@ -19,16 +28,30 @@ import 'stages/moodboard_stage.dart';
 import 'stages/result_stage.dart';
 import 'stages/style_stage.dart';
 import 'widgets/mekan_ui.dart';
-import 'widgets/pro_match_sheet.dart';
 import 'widgets/quality_hint_sheet.dart';
 import 'widgets/style_swipe_sheet.dart';
+import 'wizard/mekan_wizard_screen.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
 /// Mekan akışı state machine — foto HomeScreen'den geliyor.
 /// Açılışta /api/analyze-room ile oda tespiti → style → generating → result.
+///
+/// 2026-04-27: `wizard` parametresi eklendi. MekanWizardScreen kullanıcı
+/// tercihlerini topladıktan sonra buraya iletir — restyle prompt bu
+/// seçimlerle zenginleştirilir (next round'da consume edilecek).
 class MekanFlowScreen extends StatefulWidget {
   final Uint8List initialBytes;
-  const MekanFlowScreen({super.key, required this.initialBytes});
+  final MekanWizardResult? wizard;
+  /// Swipe'tan gelen referans tasarım — Gemini'ye "şu tarzda yap" inspiration.
+  final String? targetDesignUrl;
+  final String? targetDesignerId;
+  const MekanFlowScreen({
+    super.key,
+    required this.initialBytes,
+    this.wizard,
+    this.targetDesignUrl,
+    this.targetDesignerId,
+  });
 
   @override
   State<MekanFlowScreen> createState() => _MekanFlowScreenState();
@@ -166,10 +189,24 @@ class _MekanFlowScreenState extends State<MekanFlowScreen> {
         // shouldContinue == true → user override, normal akışa devam.
       }
 
-      // 4) Analiz başarılı → önce REVEAL ekranı. Taste kararı ve prefetch
-      // kullanıcı foto'yu okurken ARKA PLANDA hesaplanır, CTA'ya basınca
-      // doğru rotaya atılır. Böylece analiz sonucu "wow" anı taste yüküyle
-      // karışmaz ve tek sayfa editorial hisse dönüşür.
+      // 4) Analiz başarılı.
+      // Wizard provided ise: kullanıcı zaten oda/stil/palet/yerleşim
+      // seçimlerini yapmış → reveal/moodboard/style aşamalarını ATLA,
+      // direkt generating'e geç. analyze sonucundan sadece "is_room" gate
+      // kullanıldı; restyle prompt wizard tercihleriyle inşa edilecek.
+      if (widget.wizard != null) {
+        if (!mounted) return;
+        setState(() {
+          _analysis = r;
+        });
+        final synthTheme = _wizardToTheme(widget.wizard!);
+        unawaited(_generate(synthTheme));
+        return;
+      }
+
+      // Wizard yoksa: REVEAL ekranı. Taste kararı ve prefetch kullanıcı
+      // foto'yu okurken ARKA PLANDA hesaplanır, CTA'ya basınca doğru
+      // rotaya atılır.
       setState(() {
         _analysis = r;
         _phase = _Phase.reveal;
@@ -403,6 +440,22 @@ class _MekanFlowScreenState extends State<MekanFlowScreen> {
     }
   }
 
+  /// Wizard sonucunu restyle için ThemeOption'a sar. `value` field'ı doğrudan
+  /// Gemini prompt'una giden style metni — wizard'ın `toPromptHint()` çıktısı
+  /// (style + palette HEX + layout mode) tek satır halinde inject edilir.
+  ThemeOption _wizardToTheme(MekanWizardResult w) {
+    final swatch = w.paletteColors.isNotEmpty
+        ? w.paletteColors.take(3).toList()
+        : const [0xFFEEEEEE, 0xFFCCCCCC, 0xFF999999];
+    return ThemeOption(
+      w.toPromptHint(),
+      w.styleTr,
+      'Wizard ${w.styleTr}',
+      swatch,
+      const {},
+    );
+  }
+
   Future<void> _generate(ThemeOption theme) async {
     final a = _analysis;
     if (a == null) return;
@@ -424,8 +477,11 @@ class _MekanFlowScreenState extends State<MekanFlowScreen> {
     });
     final restyleStartedAt = DateTime.now();
     try {
-      // Oda tipi analyze'dan gelir; boşsa "living room" varsayılanı.
-      final room = a.roomType.isNotEmpty ? a.roomType : 'living room';
+      // Oda tipi: WIZARD ÖNCELİKLİ. Kullanıcı seçtiyse onun seçimini al,
+      // analiz'in tahminini override et — kullanıcı agency'si > AI tahmini.
+      final room = widget.wizard?.roomKey.isNotEmpty == true
+          ? widget.wizard!.roomKey
+          : (a.roomType.isNotEmpty ? a.roomType : 'living room');
 
       // Prefetch hit → arka tarafta bitmişse anında sonuç, çalışıyorsa bekle.
       // Miss → taze çağrı. Her durumda cache'e yazar.
@@ -448,7 +504,45 @@ class _MekanFlowScreenState extends State<MekanFlowScreen> {
                 room: room.replaceAll('_', ' '),
                 theme: theme.value,
                 styleHints: _styleHints,
+                referenceUrl: widget.targetDesignUrl,
               );
+      }
+      // Background gen aktifse (kullanıcı küçülttüyse) sonucu bildir +
+      // koleksiyona kaydet (mounted false olsa da çalışsın).
+      if (BackgroundGen.notifier.value != null) {
+        // ÖNCE complete'i fire et — pending kart hemen %100'e atlasın,
+        // upload/save'i arka planda çalıştır. Aksi halde upload süresi
+        // boyunca kart %95'te tıkanıyor.
+        BackgroundGen.complete(afterUrl: r.output);
+        final user = FirebaseAuth.instance.currentUser;
+        if (user != null && !user.isAnonymous) {
+          final designId = sha1
+              .convert(
+                '${theme.value}|${r.output}|${_bytes.length}'.codeUnits,
+              )
+              .toString()
+              .substring(0, 24);
+          final roomTr = widget.wizard?.roomTr ?? a.roomLabelTr;
+          final bytesCopy = _bytes;
+          unawaited(() async {
+            final beforeUrl = await UploadService.uploadBefore(bytesCopy);
+            await SavedItemsService.saveItem(
+              type: SavedItemType.design,
+              itemId: designId,
+              title: 'Yeni $roomTr',
+              imageUrl: r.output,
+              subtitle: 'İç Mimarlık · ${theme.tr}',
+              extraData: {
+                'room': roomTr,
+                'theme': theme.tr,
+                'after_url': r.output,
+                if (beforeUrl != null) 'before_url': beforeUrl,
+                'category': 'interior_design',
+                'saved_at': DateTime.now().toIso8601String(),
+              },
+            );
+          }());
+        }
       }
       if (!mounted) return;
       final restyleLatencyMs =
@@ -471,12 +565,21 @@ class _MekanFlowScreenState extends State<MekanFlowScreen> {
           rejectedCount: batch?.rejectedCount,
         ),
       );
+      // Kullanıcı küçülttüyse mounted=false — setState atma. Background gen
+      // ZATEN complete edildi yukarıda; sessizce bitir.
+      if (!mounted) return;
       setState(() {
         _afterSrc = r.output;
         _mock = r.mock;
         _phase = _Phase.result;
       });
     } on ReplicateException catch (e) {
+      // Background gen aktifse hata bildir → kart kaybolsun, kullanıcı takılı kalmasın.
+      if (BackgroundGen.notifier.value != null) {
+        BackgroundGen.fail('${e.code} · ${e.detail}');
+        // Kısa süre sonra temizle
+        Future.delayed(const Duration(milliseconds: 1200), BackgroundGen.clear);
+      }
       if (!mounted) return;
       final restyleLatencyMs =
           DateTime.now().difference(restyleStartedAt).inMilliseconds;
@@ -494,6 +597,10 @@ class _MekanFlowScreenState extends State<MekanFlowScreen> {
         _phase = _Phase.error;
       });
     } catch (e) {
+      if (BackgroundGen.notifier.value != null) {
+        BackgroundGen.fail(e.toString());
+        Future.delayed(const Duration(milliseconds: 1200), BackgroundGen.clear);
+      }
       if (!mounted) return;
       final restyleLatencyMs =
           DateTime.now().difference(restyleStartedAt).inMilliseconds;
@@ -655,15 +762,37 @@ class _MekanFlowScreenState extends State<MekanFlowScreen> {
     );
   }
 
+  /// Edit sheet'ten gelen değişiklikleri uygular. Şu an sadece style change
+  /// generate'i tetikliyor; oda/yapı/palette değişikleri için flow refactor
+  /// gerek (wizard final). Görsel state olarak yine de kullanıcıya yansıtılır.
+  void _onApplyEdit(EditDesignChange change) {
+    if (change.styleValue != null) {
+      // Backend prompt için ThemeOption objesi gerek; mevcut kThemes'tan eşleştir.
+      final match = kThemes.where(
+        (t) => t.value.toLowerCase() == change.styleValue!.toLowerCase(),
+      );
+      if (match.isNotEmpty) {
+        // Cache'i temizle ki yeni stil için taze çağrı yapılsın
+        RestylePrefetchService.clear();
+        _theme = match.first;
+        _generate(match.first);
+        return;
+      }
+    }
+    // Style değişmediyse, mevcut config ile yenile (cache invalidate edip).
+    if (_theme != null) {
+      RestylePrefetchService.clear();
+      _generate(_theme!);
+    }
+  }
+
   void _onPro() {
-    // Kullanıcı "Bu tasarımı gerçeğe dönüştür" bastı → pro match sheet.
-    // Yeni v2: image-similarity match (`/api/match-designers`). Restyle
-    // çıktısı görseli + Türkçe oda tipi + theme ile en yakın iç mimarları
-    // bulur ve kullanıcıyı tek tık ile mesaj akışına alır.
+    // Kullanıcı "Bu tasarımı gerçeğe dönüştür" bastı → vurucu Realize ekranı.
+    // Ekran içinde: ürün listesi (api/products/search) + "Profesyonele Sor"
+    // (mevcut ProMatchSheet'i açar) + "Tasarımı Sakla".
     final restyle = _afterSrc;
     final theme = _theme?.value ?? _inferredTheme?.value;
     if (restyle == null || restyle.isEmpty || theme == null) {
-      // Tasarım veya tema yoksa açma.
       return;
     }
     final roomTypeTr = _mapRoomKeyToTr(_analysis?.roomType);
@@ -673,12 +802,17 @@ class _MekanFlowScreenState extends State<MekanFlowScreen> {
         roomType: _analysis?.roomType ?? 'unknown',
       ),
     );
-    ProMatchSheet.show(
-      context,
-      restyleUrl: restyle,
-      roomType: roomTypeTr,
-      theme: theme.toLowerCase(),
-      city: null,
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => RealizeScreen(
+          afterSrc: restyle,
+          room: widget.wizard?.roomTr ?? _analysis?.roomLabelTr ?? 'Mekan',
+          theme: widget.wizard?.styleTr ?? _theme?.tr ?? '',
+          themeValue: theme,
+          roomTypeTr: roomTypeTr,
+          preferredDesignerId: widget.targetDesignerId,
+        ),
+      ),
     );
   }
 
@@ -734,21 +868,28 @@ class _MekanFlowScreenState extends State<MekanFlowScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Tarzını Keşfet / Mesajlar ile aynı AppBar — app genelinde tutarlı.
+    // analyzing/generating/result fazlarında app bar gösterme — tam ekran,
+    // sade bir akış. Result kendi top bar'ını çiziyor, analyzing/generating
+    // ise kasıtlı olarak çıkışsız (kullanıcı işlemi durduramasın).
+    final hideAppBar = _phase == _Phase.analyzing ||
+        _phase == _Phase.generating ||
+        _phase == _Phase.result;
     return Scaffold(
       backgroundColor: KoalaColors.bg,
-      appBar: AppBar(
-        backgroundColor: KoalaColors.bg,
-        surfaceTintColor: KoalaColors.bg,
-        elevation: 0,
-        leading: IconButton(
-          onPressed: () => Navigator.of(context).pop(),
-          icon: const Icon(LucideIcons.arrowLeft),
-        ),
-        title: const Text('Mekan', style: KoalaText.h2),
-      ),
+      appBar: hideAppBar
+          ? null
+          : AppBar(
+              backgroundColor: KoalaColors.bg,
+              surfaceTintColor: KoalaColors.bg,
+              elevation: 0,
+              leading: IconButton(
+                onPressed: () => Navigator.of(context).pop(),
+                icon: const Icon(LucideIcons.arrowLeft),
+              ),
+              title: const Text('Mekan', style: KoalaText.h2),
+            ),
       body: SafeArea(
-        top: false,
+        top: !hideAppBar,
         child: AnimatedSwitcher(
           duration: const Duration(milliseconds: 320),
           switchInCurve: Curves.easeOutCubic,
@@ -799,19 +940,34 @@ class _MekanFlowScreenState extends State<MekanFlowScreen> {
           bytes: _bytes,
           room: _analysis?.roomLabelTr ?? 'Mekan',
           theme: _theme?.tr ?? '',
+          themeValue: _theme?.value,
         );
       case _Phase.result:
+        // Wizard varsa kullanıcının seçtiği oda adı + stil; yoksa analiz.
         return ResultStage(
           key: const ValueKey('result'),
           beforeBytes: _bytes,
           afterSrc: _afterSrc!,
-          room: _analysis?.roomLabelTr ?? 'Mekan',
-          theme: _theme?.tr ?? '',
+          room: widget.wizard?.roomTr ??
+              _analysis?.roomLabelTr ??
+              'Mekan',
+          theme: widget.wizard?.styleTr ?? _theme?.tr ?? '',
+          paletteTr: widget.wizard?.paletteTr,
+          layoutTr: widget.wizard == null
+              ? null
+              : (widget.wizard!.layout == LayoutMode.preserve
+                  ? 'Orijinalini Koru'
+                  : 'Yenilikçi'),
           mock: _mock,
           onRetry: () => _generate(_theme!),
           onNewStyle: () => setState(() => _phase = _Phase.style),
-          onRestart: () => Navigator.of(context).pop(),
+          onRestart: () {
+            // Yeni üretilen tasarımdan çıkınca kullanıcıyı Projelerim'e götür.
+            Navigator.of(context).popUntil((r) => r.isFirst);
+            MainShell.of(context)?.switchTab(KoalaTab.projeler);
+          },
           onPro: _onPro,
+          onApplyEdit: _onApplyEdit,
         );
       case _Phase.error:
         return _errorView();
@@ -822,6 +978,7 @@ class _MekanFlowScreenState extends State<MekanFlowScreen> {
     return _AnalyzingView(
       key: const ValueKey('analyzing'),
       bytes: _bytes,
+      referenceUrl: widget.targetDesignUrl,
     );
   }
 
@@ -1024,7 +1181,8 @@ class _MekanFlowScreenState extends State<MekanFlowScreen> {
 /// hissi verir; 3-5 saniyelik bir beklemeyi sıkmadan geçirir.
 class _AnalyzingView extends StatefulWidget {
   final Uint8List bytes;
-  const _AnalyzingView({super.key, required this.bytes});
+  final String? referenceUrl;
+  const _AnalyzingView({super.key, required this.bytes, this.referenceUrl});
 
   @override
   State<_AnalyzingView> createState() => _AnalyzingViewState();
@@ -1079,54 +1237,138 @@ class _AnalyzingViewState extends State<_AnalyzingView>
           mainAxisAlignment: MainAxisAlignment.center,
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-          ScaleTransition(
-            scale: Tween(begin: 0.985, end: 1.015).animate(
-              CurvedAnimation(parent: _pulse, curve: Curves.easeInOut),
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(KoalaRadius.xl),
-              child: SizedBox(
-                width: 200,
-                height: 200,
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    // Fotoğraf
-                    Image.memory(widget.bytes, fit: BoxFit.cover),
-                    // Mor overlay gradient — tarayıcı hissi
-                    DecoratedBox(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          colors: [
-                            KoalaColors.accentDeep.withValues(alpha: 0.14),
-                            Colors.transparent,
-                            KoalaColors.accentDeep.withValues(alpha: 0.10),
+          // Referans tasarım varsa: 2 görsel + ortada "+", yoksa tek görsel.
+          if (widget.referenceUrl != null && widget.referenceUrl!.isNotEmpty)
+            AnimatedBuilder(
+              animation: _pulse,
+              builder: (_, _) {
+                final t = _pulse.value;
+                return SizedBox(
+                  height: 160,
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          // Sol: kullanıcının fotoğrafı
+                          Container(
+                            width: 140,
+                            height: 160,
+                            decoration: BoxDecoration(
+                              borderRadius:
+                                  BorderRadius.circular(KoalaRadius.xl),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: KoalaColors.accent.withValues(
+                                      alpha: 0.18 + 0.08 * t),
+                                  blurRadius: 24 + 10 * t,
+                                  offset: const Offset(0, 8),
+                                ),
+                              ],
+                            ),
+                            child: ClipRRect(
+                              borderRadius:
+                                  BorderRadius.circular(KoalaRadius.xl),
+                              child: Image.memory(widget.bytes,
+                                  fit: BoxFit.cover),
+                            ),
+                          ),
+                          const SizedBox(width: 56),
+                          // Sağ: swipe'tan gelen referans
+                          Container(
+                            width: 140,
+                            height: 160,
+                            decoration: BoxDecoration(
+                              borderRadius:
+                                  BorderRadius.circular(KoalaRadius.xl),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: KoalaColors.accent.withValues(
+                                      alpha: 0.18 + 0.08 * t),
+                                  blurRadius: 24 + 10 * t,
+                                  offset: const Offset(0, 8),
+                                ),
+                              ],
+                            ),
+                            child: ClipRRect(
+                              borderRadius:
+                                  BorderRadius.circular(KoalaRadius.xl),
+                              child: Image.network(
+                                widget.referenceUrl!,
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, _, _) => Container(
+                                    color: KoalaColors.surfaceAlt),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      // Orta: + işareti
+                      Container(
+                        width: 44,
+                        height: 44,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: [
+                              KoalaColors.accentDeep,
+                              KoalaColors.accent,
+                            ],
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color:
+                                  KoalaColors.accent.withValues(alpha: 0.5),
+                              blurRadius: 16 + 6 * t,
+                              offset: const Offset(0, 4),
+                            ),
                           ],
                         ),
+                        child: const Icon(LucideIcons.plus,
+                            color: Colors.white, size: 22),
                       ),
+                    ],
+                  ),
+                );
+              },
+            )
+          else
+            AnimatedBuilder(
+            animation: _pulse,
+            builder: (_, _) {
+              final t = _pulse.value;
+              return Container(
+                width: 240,
+                height: 240,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(KoalaRadius.xl),
+                  boxShadow: [
+                    BoxShadow(
+                      color: KoalaColors.accent
+                          .withValues(alpha: 0.18 + 0.10 * t),
+                      blurRadius: 30 + 14 * t,
+                      offset: const Offset(0, 10),
                     ),
-                    // Tarama çizgisi
-                    AnimatedBuilder(
-                      animation: _scan,
-                      builder: (_, _) {
-                        final t = _scan.value;
-                        return CustomPaint(
-                          painter: _ScanLinePainter(progress: t),
-                        );
-                      },
-                    ),
-                    // Köşe çerçeveleri — kamera vizör hissi
-                    const _CornerFrame(),
                   ],
                 ),
-              ),
-            ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(KoalaRadius.xl),
+                  child: Image.memory(widget.bytes, fit: BoxFit.cover),
+                ),
+              );
+            },
           ),
           const SizedBox(height: KoalaSpacing.xxl),
-          const Text('Fotoğrafın inceleniyor',
-              style: KoalaText.h2, textAlign: TextAlign.center),
+          Text(
+            widget.referenceUrl != null && widget.referenceUrl!.isNotEmpty
+                ? 'Tasarımın hazırlanıyor'
+                : 'Fotoğrafın inceleniyor',
+            style: KoalaText.h2,
+            textAlign: TextAlign.center,
+          ),
           const SizedBox(height: KoalaSpacing.sm),
           SizedBox(
             height: 20,
@@ -1163,6 +1405,7 @@ class _AnalyzingViewState extends State<_AnalyzingView>
               ),
             ),
           ),
+          // Süreci Küçült kaldırıldı (2026-04-28).
           ],
         ),
       ),

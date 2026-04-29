@@ -34,9 +34,13 @@
 
   <!-- Preconnect -->
   <link rel="preconnect" href="https://xgefjepaqnghaotqybpi.supabase.co">
+  <link rel="preconnect" href="https://vgtgcjnrsladdharzkwn.supabase.co">
+  <link rel="preconnect" href="https://koala-api-olive.vercel.app">
   <link rel="preconnect" href="https://generativelanguage.googleapis.com">
   <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
   <link rel="dns-prefetch" href="https://xgefjepaqnghaotqybpi.supabase.co">
+  <link rel="dns-prefetch" href="https://vgtgcjnrsladdharzkwn.supabase.co">
+  <link rel="dns-prefetch" href="https://koala-api-olive.vercel.app">
 
   <!-- Preload -->
   <link rel="preload" href="flutter_bootstrap.js" as="script">
@@ -55,12 +59,53 @@
   <title>Koala - AI İç Mimari Asistanı | koalatutor.com</title>
   <link rel="manifest" href="manifest.json">
 
-  <!--
-    SW kill-switch kaldırıldı (2026-04-17). Eski 2026-04-16 release için
-    gerekliydi; her yeni tab'da 2x initial load yaparak ~4-8 MB gereksiz
-    trafik yaratıyordu. Vercel Cache-Control + Flutter bootstrap versiyonlaması
-    yeterli.
-  -->
+  <!-- 2026-04-27: Aggressive cache-bust — bu build'in versiyonunu localStorage'da
+       tut, eski versiyondaysa SW + cacheStorage temizle ve sayfayı bir kez
+       yenile. Her deploy'da BUILD_VERSION değiştir; Vercel cache yine de
+       kullanıcıya yeni index.html veriyor (no-cache). -->
+  <script>
+    (function () {
+      var BUILD_VERSION = '1.0.83+87';
+      try {
+        var KEY = 'koala_build_v';
+        var ONCE = 'koala_kill_done';
+        var prev = null;
+        try { prev = localStorage.getItem(KEY); } catch (_) {}
+        if (prev === BUILD_VERSION) return;
+        // Sonsuz reload koruması: aynı session içinde bir kez reload edildiyse
+        // daha tetikleme. Chrome mobile private mode ya da localStorage blok'u
+        // halinde localStorage.setItem sessizce başarısız olur ve script tekrar
+        // tekrar reload tetikleyebilir — sessionStorage flag'i ile bunu kır.
+        var alreadyDone = false;
+        try { alreadyDone = sessionStorage.getItem(ONCE) === '1'; } catch (_) {}
+        if (alreadyDone) {
+          // Persist edilemediyse de en azından aynı turda reload döngüsüne girme.
+          try { localStorage.setItem(KEY, BUILD_VERSION); } catch (_) {}
+          return;
+        }
+        try { sessionStorage.setItem(ONCE, '1'); } catch (_) {}
+        if ('serviceWorker' in navigator) {
+          navigator.serviceWorker.getRegistrations().then(function (regs) {
+            return Promise.all(regs.map(function (r) { return r.unregister(); }));
+          }).then(function () {
+            if ('caches' in window) {
+              return caches.keys().then(function (keys) {
+                return Promise.all(keys.map(function (k) { return caches.delete(k); }));
+              });
+            }
+          }).then(function () {
+            try { localStorage.setItem(KEY, BUILD_VERSION); } catch (_) {}
+            if (prev) location.reload();
+          }).catch(function () {
+            // SW/cache temizliği patlasa bile sayfayı boot et — beyaz ekran tutma.
+            try { localStorage.setItem(KEY, BUILD_VERSION); } catch (_) {}
+          });
+        } else {
+          try { localStorage.setItem(KEY, BUILD_VERSION); } catch (_) {}
+        }
+      } catch (_) {}
+    })();
+  </script>
 
   <!-- Schema.org JSON-LD -->
   <script type="application/ld+json">

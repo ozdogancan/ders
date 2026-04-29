@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../views/home_screen.dart';
+import '../../views/main_shell.dart';
 import '../../views/explore_screen.dart';
 import '../../views/saved/saved_screen_v2.dart';
 import '../../views/chat_list_screen.dart';
@@ -12,6 +13,7 @@ import '../../services/koala_ai_service.dart';
 import '../../views/conversation_detail_screen.dart';
 import '../../views/designers_screen.dart';
 import '../../views/collections_screen.dart';
+import '../../views/projeler_screen.dart';
 import '../../views/notifications_screen.dart';
 import '../../views/onboarding_screen.dart';
 import '../../views/style_discovery_screen.dart';
@@ -47,13 +49,12 @@ final GoRouter appRouter = GoRouter(
     return null;
   },
   routes: [
-    // ─── Hub (Home) veya Onboarding ───
+    // ─── Ana Shell (Home/Chat/Swipe/Projeler 4 sekme) veya Onboarding ───
     GoRoute(
       path: '/',
       builder: (context, state) {
         if (!onboardingComplete) return const OnboardingScreen();
-        final openPull = state.uri.queryParameters['openPull'] == '1';
-        return HomeScreen(openStyleDiscovery: openPull);
+        return const MainShell();
       },
     ),
 
@@ -169,7 +170,17 @@ final GoRouter appRouter = GoRouter(
       },
     ),
     GoRoute(
+      // Projeler — AI tasarım koleksiyonu (yeni). Eski /collections tutuluyor
+      // ama uygulama içi yönlendirme buna gidiyor.
       path: '/collections',
+      builder: (context, state) => const ProjelerScreen(),
+    ),
+    GoRoute(
+      path: '/projeler',
+      builder: (context, state) => const ProjelerScreen(),
+    ),
+    GoRoute(
+      path: '/collections-legacy',
       builder: (context, state) => const CollectionsScreen(),
     ),
     GoRoute(

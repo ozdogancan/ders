@@ -1,10 +1,12 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:http/http.dart' as http;
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/config/env.dart';
 import '../../../core/theme/koala_tokens.dart';
@@ -35,12 +37,17 @@ class ProMatchSheet extends StatefulWidget {
   /// İleride profile/geoloc'tan gelecek; şimdilik null.
   final String? city;
 
+  /// Swipe akışından geldiyse: bu tasarımı yapan tasarımcının ID'si — listenin
+  /// başında ÖNCELİKLİ olarak göster.
+  final String? preferredDesignerId;
+
   const ProMatchSheet({
     super.key,
     required this.restyleUrl,
     required this.roomType,
     required this.theme,
     this.city,
+    this.preferredDesignerId,
   });
 
   static Future<void> show(
@@ -49,6 +56,7 @@ class ProMatchSheet extends StatefulWidget {
     required String roomType,
     required String theme,
     String? city,
+    String? preferredDesignerId,
   }) {
     return showModalBottomSheet<void>(
       context: context,
@@ -60,6 +68,7 @@ class ProMatchSheet extends StatefulWidget {
         roomType: roomType,
         theme: theme,
         city: city,
+        preferredDesignerId: preferredDesignerId,
       ),
     );
   }
@@ -70,6 +79,11 @@ class ProMatchSheet extends StatefulWidget {
 
 class _ProMatchSheetState extends State<ProMatchSheet> {
   late Future<_MatchResponse> _future;
+
+  // Swipe akışı: belirli bir tasarımcıya odaklı, tek kart.
+  bool get _isPreferredFlow =>
+      widget.preferredDesignerId != null &&
+      widget.preferredDesignerId!.isNotEmpty;
 
   @override
   void initState() {
@@ -103,7 +117,33 @@ class _ProMatchSheetState extends State<ProMatchSheet> {
       throw HttpException('${res.statusCode}');
     }
     final body = jsonDecode(res.body) as Map<String, dynamic>;
-    final parsed = _MatchResponse.fromJson(body);
+    var parsed = _MatchResponse.fromJson(body);
+    // Swipe akışı: bu tasarımı yapan tasarımcıyı izole et — TEK kart göster.
+    // Kullanıcı zaten bu tasarımı seçti, başka önerilere gerek yok.
+    final pref = widget.preferredDesignerId;
+    if (pref != null && pref.isNotEmpty && parsed.matches.isNotEmpty) {
+      final idx = parsed.matches.indexWhere(
+        (m) => m.designer.id == pref || m.designer.id == pref.toString(),
+      );
+      if (idx >= 0) {
+        parsed = _MatchResponse(
+          matches: [parsed.matches[idx]],
+          total: 1,
+          latencyMs: parsed.latencyMs,
+        );
+      }
+    } else if (parsed.matches.length > 3) {
+      // BACKEND: match-designers embedding similarity sorting always returns
+      // same designers — investigate. Frontend palyatifi: 3'ten fazla varsa
+      // karıştır, ilk 3 sıraya çeşitlilik gelsin.
+      final shuffled = List<_DesignerMatch>.from(parsed.matches)
+        ..shuffle(math.Random());
+      parsed = _MatchResponse(
+        matches: shuffled,
+        total: parsed.total,
+        latencyMs: parsed.latencyMs,
+      );
+    }
     unawaited(
       Analytics.log('pro_match_loaded', {
         'match_count': parsed.matches.length,
@@ -147,17 +187,22 @@ class _ProMatchSheetState extends State<ProMatchSheet> {
               ),
             ),
             const SizedBox(height: KoalaSpacing.lg),
-            // Header
+            // Header — swipe akışı (preferredDesignerId varsa) tek kart için
+            // sade; widget akışı için "uygun profesyoneller" tonu.
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: KoalaSpacing.xl),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Tasarımına en uygun mimarlar',
-                    style: KoalaText.serif(
+                    _isPreferredFlow
+                        ? 'En uygun profesyonel'
+                        : 'Bu tasarıma uygun profesyoneller',
+                    style: const TextStyle(
                       fontSize: 22,
-                      fontWeight: FontWeight.w600,
+                      fontWeight: FontWeight.w800,
+                      color: KoalaColors.text,
+                      letterSpacing: -0.4,
                     ),
                   ).animate(delay: 80.ms).fadeIn(duration: 280.ms).slideY(
                         begin: 0.06,
@@ -165,12 +210,19 @@ class _ProMatchSheetState extends State<ProMatchSheet> {
                         duration: 320.ms,
                         curve: Curves.easeOutCubic,
                       ),
-                  const SizedBox(height: KoalaSpacing.xs),
-                  Text(
-                    'Görseline benzer projeler yapan iç mimarlar — '
-                    'birine mesaj at, sohbet başlasın.',
-                    style: KoalaText.bodySec,
-                  ).animate(delay: 120.ms).fadeIn(duration: 320.ms),
+                  if (!_isPreferredFlow) ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      'Bu tasarımı senin için gerçeğe dönüştürebilecek\niç mimarları getirdik.',
+                      style: TextStyle(
+                        fontSize: 13.5,
+                        color: KoalaColors.textSec,
+                        height: 1.45,
+                        fontWeight: FontWeight.w500,
+                        letterSpacing: -0.1,
+                      ),
+                    ).animate(delay: 120.ms).fadeIn(duration: 320.ms),
+                  ],
                 ],
               ),
             ),
@@ -207,19 +259,28 @@ class _ProMatchSheetState extends State<ProMatchSheet> {
   }
 
   void _openProfileSheet(_DesignerMatch match) {
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      barrierColor: Colors.black.withValues(alpha: 0.55),
-      builder: (_) => _DesignerProfileSheet(
-        match: match,
-        onMessage: () {
-          Navigator.of(context).pop();
-          _openMessageFlow(match);
-        },
-      ),
-    );
+    // 2026-04-28: Profile popup'ı kaldırıldı — kullanıcı tap'le direkt mesaj
+    // ekranına gitsin. Instagram ikonu kartın üzerinde direkt açılıyor.
+    _openMessageFlow(match);
+  }
+
+  Future<void> _openInstagram(String handle) async {
+    var h = handle.trim();
+    // "@" prefix varsa kaldır, full URL ise direkt aç.
+    if (h.startsWith('http')) {
+      final uri = Uri.tryParse(h);
+      if (uri != null) {
+        try {
+          await launchUrl(uri, mode: LaunchMode.externalApplication);
+        } catch (_) {}
+      }
+      return;
+    }
+    if (h.startsWith('@')) h = h.substring(1);
+    final uri = Uri.parse('https://www.instagram.com/$h/');
+    try {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } catch (_) {}
   }
 
   void _openMessageFlow(_DesignerMatch match) {
@@ -561,11 +622,14 @@ class _MatchCardState extends State<_MatchCard> {
                               size: 12, color: KoalaColors.accentDeep),
                           const SizedBox(width: 4),
                           Text(
-                            '%${(m.similarity * 100).round()} uyumlu',
+                            m.similarity > 0.45
+                                ? '%${(m.similarity * 100).round()} uyumlu'
+                                : 'Önerildi',
                             style: const TextStyle(
                               fontSize: 12,
-                              fontWeight: FontWeight.w600,
+                              fontWeight: FontWeight.w700,
                               color: KoalaColors.accentDeep,
+                              letterSpacing: -0.1,
                             ),
                           ),
                         ],
@@ -617,6 +681,11 @@ class _MatchCardState extends State<_MatchCard> {
                             ],
                           ),
                         ),
+                        if (designer.instagram != null &&
+                            designer.instagram!.trim().isNotEmpty) ...[
+                          const SizedBox(width: 8),
+                          _InstagramBtn(handle: designer.instagram!),
+                        ],
                         if (designer.rating != null) ...[
                           const SizedBox(width: KoalaSpacing.sm),
                           _RatingPill(
@@ -1025,22 +1094,22 @@ class _MessageDraftSheetState extends State<_MessageDraftSheet> {
   String _initialDraft() {
     final phrase = _roomPhrase(widget.roomType);
     return 'Merhaba ${widget.match.designer.name},\n\n'
-        '$phrase yaptığınız tasarımları çok beğendim. AI ile hazırladığım bir '
-        'görselim var — bu tarzda gerçek bir tasarım için sizinle çalışmak '
-        'istiyorum. Müsait olduğunuzda görüşelim.';
+        'Tarzınızı çok beğendim. Koala ile $phrase AI tasarım hazırladım — '
+        'ekteki görseli baz alarak gerçek bir tasarım için sizinle çalışmak '
+        'isterim. Müsait olduğunuzda görüşelim.';
   }
 
   String _roomPhrase(String roomType) {
     final lower = roomType.toLowerCase();
-    if (lower.contains('yatak')) return 'Yatak odam için';
+    if (lower.contains('yatak')) return 'yatak odam için';
     if (lower.contains('oturma') || lower.contains('salon')) {
-      return 'Salonum için';
+      return 'salonum için';
     }
-    if (lower.contains('mutfak')) return 'Mutfağım için';
-    if (lower.contains('banyo')) return 'Banyom için';
-    if (lower.contains('antre')) return 'Antrem için';
-    if (lower.contains('yemek')) return 'Yemek odam için';
-    return 'Mekanım için';
+    if (lower.contains('mutfak')) return 'mutfağım için';
+    if (lower.contains('banyo')) return 'banyom için';
+    if (lower.contains('antre')) return 'antrem için';
+    if (lower.contains('yemek')) return 'yemek odam için';
+    return 'mekanım için';
   }
 
   Future<void> _send() async {
@@ -1570,4 +1639,50 @@ class HttpException implements Exception {
   HttpException(this.message);
   @override
   String toString() => 'HTTP $message';
+}
+
+/// Instagram quick-link — designer kartının içinde küçük yuvarlak buton.
+class _InstagramBtn extends StatelessWidget {
+  final String handle;
+  const _InstagramBtn({required this.handle});
+
+  Future<void> _open(BuildContext context) async {
+    var h = handle.trim();
+    if (h.startsWith('http')) {
+      final uri = Uri.tryParse(h);
+      if (uri != null) {
+        try {
+          await launchUrl(uri, mode: LaunchMode.externalApplication);
+        } catch (_) {}
+      }
+      return;
+    }
+    if (h.startsWith('@')) h = h.substring(1);
+    final uri = Uri.parse('https://www.instagram.com/$h/');
+    try {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } catch (_) {}
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: KoalaColors.accentSoft,
+      shape: const CircleBorder(),
+      child: InkWell(
+        customBorder: const CircleBorder(),
+        onTap: () => _open(context),
+        child: Container(
+          width: 32,
+          height: 32,
+          alignment: Alignment.center,
+          child: const Icon(
+            LucideIcons.instagram,
+            size: 15,
+            color: KoalaColors.accentDeep,
+          ),
+        ),
+      ),
+    );
+  }
 }

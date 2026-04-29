@@ -37,6 +37,9 @@ class ShareService {
         return 'https://www.evlumba.com/urun/$itemId';
       case SavedItemType.palette:
         return 'https://www.evlumba.com/palet/$itemId';
+      case SavedItemType.project:
+        // Kullanıcının kendi projesi — kamuya açık URL yok, /proje/ fallback.
+        return 'https://www.evlumba.com/proje/$itemId';
     }
   }
 

@@ -42,9 +42,10 @@ class AIChatHistoryService {
   }) async {
     if (_uid == null || !Env.hasSupabaseConfig) return [];
     try {
+      // perf: full row → 5 cols actually consumed by ChatPersistence
       final res = await _db
           .from('ai_chat_sessions')
-          .select()
+          .select('id, title, intent, created_at, updated_at')
           .eq('user_id', _uid!)
           .order('updated_at', ascending: false)
           .range(offset, offset + limit - 1);
@@ -100,9 +101,10 @@ class AIChatHistoryService {
       final safeQuery = _escapeIlike(query.trim());
 
       // Session'larda başlık ara
+      // perf: full row → 5 cols actually consumed by ChatSummary
       final titleResults = await _db
           .from('ai_chat_sessions')
-          .select()
+          .select('id, title, intent, created_at, updated_at')
           .eq('user_id', _uid!)
           .ilike('title', '%$safeQuery%')
           .order('updated_at', ascending: false)
@@ -135,9 +137,10 @@ class AIChatHistoryService {
 
       // Eğer mesaj aramasından yeni session'lar bulduysa onları da getir
       if (sessionIds.isNotEmpty) {
+        // perf: full row → 5 cols actually consumed
         final extraSessions = await _db
             .from('ai_chat_sessions')
-            .select()
+            .select('id, title, intent, created_at, updated_at')
             .eq('user_id', _uid!)
             .inFilter('id', sessionIds.toList())
             .order('updated_at', ascending: false);

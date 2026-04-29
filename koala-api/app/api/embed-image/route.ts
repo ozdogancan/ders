@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { corsHeaders } from '@/lib/security';
+import { corsHeaders, checkRateLimit, isOriginAllowed, isBodyTooLarge } from '@/lib/security';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -33,6 +33,20 @@ export async function OPTIONS(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const cors = corsHeaders(req.headers.get('origin'));
   const t0 = Date.now();
+
+  // Replicate is a paid API — guard hard.
+  if (!isOriginAllowed(req)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403, headers: cors });
+  }
+  if (isBodyTooLarge(req, 15)) {
+    return NextResponse.json({ error: 'Payload too large' }, { status: 413, headers: cors });
+  }
+  if (!checkRateLimit(req, 'embed-image', 20)) {
+    return NextResponse.json(
+      { error: 'Rate limit exceeded. Please try again later.' },
+      { status: 429, headers: cors },
+    );
+  }
 
   let body: { image?: string };
   try {

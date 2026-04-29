@@ -7,8 +7,10 @@ class Env {
     'AI_PROVIDER',
     defaultValue: 'openai',
   );
-  static const String openAiApiKey = String.fromEnvironment('OPENAI_API_KEY');
-  static const String geminiApiKey = String.fromEnvironment('GEMINI_API_KEY');
+  // NOTE: openAiApiKey / geminiApiKey were intentionally removed from the
+  // client. AI calls go through the koala-api proxy (KOALA_API_URL) which
+  // holds the real keys server-side. Re-introducing them here would leak
+  // them into the web bundle and Android APK.
   static const String openAiModel = String.fromEnvironment(
     'OPENAI_MODEL',
     defaultValue: 'gpt-4o',
