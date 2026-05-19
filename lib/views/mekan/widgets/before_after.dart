@@ -99,8 +99,11 @@ class _BeforeAfterState extends State<BeforeAfter> {
                           maxWidth: w,
                           minWidth: w,
                           alignment: Alignment.centerLeft,
-                          child:
-                              Image.memory(widget.beforeBytes, fit: BoxFit.cover),
+                          child: Image.memory(
+                            widget.beforeBytes,
+                            fit: BoxFit.cover,
+                            filterQuality: FilterQuality.high,
+                          ),
                         ),
                       ),
                     ),
@@ -206,41 +209,31 @@ class _BeforeAfterState extends State<BeforeAfter> {
 
   Widget _afterImage() {
     final s = widget.afterSrc;
-    // ignore: avoid_print
-    print('[BeforeAfter] afterSrc len=${s.length} prefix="${s.length > 40 ? s.substring(0, 40) : s}"');
+    // NOTE: print() removed (perf: build() hot path, retained in release).
+    // Use debugPrint if logging is reintroduced.
 
     if (s.startsWith('data:image')) {
       // Flutter web'de UriData.fromString().contentAsBytes() base64'ü decode
       // etmeden ham UTF-8 string bytes döndürüyor. Manuel decode şart.
       final commaIdx = s.indexOf(',');
       if (commaIdx < 0) {
-        // ignore: avoid_print
-        print('[BeforeAfter] no comma in data URL — fallback');
         return Container(color: KoalaColors.surfaceAlt);
       }
       try {
         final b = base64Decode(s.substring(commaIdx + 1));
-        // ignore: avoid_print
-        print('[BeforeAfter] decoded ${b.length} bytes header=${b.take(4).map((x) => x.toRadixString(16).padLeft(2, '0')).join(' ')}');
         return Image.memory(
           b,
           fit: BoxFit.cover,
           gaplessPlayback: true,
           errorBuilder: (_, err, __) {
-            // ignore: avoid_print
-            print('[BeforeAfter] Image.memory errorBuilder: $err');
             return Container(color: KoalaColors.surfaceAlt);
           },
         );
       } catch (e) {
-        // ignore: avoid_print
-        print('[BeforeAfter] base64Decode threw: $e');
         return Container(color: KoalaColors.surfaceAlt);
       }
     }
     if (s.isEmpty) {
-      // ignore: avoid_print
-      print('[BeforeAfter] empty afterSrc — placeholder');
       return Container(color: KoalaColors.surfaceAlt);
     }
     return CachedNetworkImage(

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../core/theme/koala_tokens.dart';
+import '../services/quota_service.dart';
 import '../services/saved_items_service.dart';
+import '../views/pro/widgets/pro_badge.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
 /// Reusable kaydet butonu — kalp/bookmark ikonu.
@@ -38,6 +40,7 @@ class _SaveButtonState extends State<SaveButton>
     with SingleTickerProviderStateMixin {
   bool _saved = false;
   bool _loading = true;
+  bool _showProPill = false; // true when free user is at/over the save quota
   late AnimationController _animController;
   late Animation<double> _scaleAnim;
 
@@ -70,6 +73,16 @@ class _SaveButtonState extends State<SaveButton>
       itemId: widget.itemId,
     );
     if (mounted) setState(() { _saved = result; _loading = false; });
+    // Quota check — show subtle PRO pill if free user has hit/exceeded
+    // their save quota AND this item is not yet saved (about to consume one).
+    try {
+      final snap = await QuotaService.fetch();
+      if (!mounted) return;
+      final atQuota = !snap.isPro && snap.saveUsed >= snap.saveLimit;
+      if (atQuota && !result && !_showProPill) {
+        setState(() => _showProPill = true);
+      }
+    } catch (_) {/* silent */}
   }
 
   Future<void> _toggle() async {
@@ -121,10 +134,24 @@ class _SaveButtonState extends State<SaveButton>
                     color: KoalaColors.textTer,
                   ),
                 )
-              : Icon(
-                  _saved ? filledIcon : outlinedIcon,
-                  size: widget.size,
-                  color: _saved ? KoalaColors.error : KoalaColors.textSec,
+              : Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    Icon(
+                      _saved ? filledIcon : outlinedIcon,
+                      size: widget.size,
+                      color:
+                          _saved ? KoalaColors.error : KoalaColors.textSec,
+                    ),
+                    if (_showProPill && !_saved)
+                      Positioned(
+                        top: -6,
+                        right: -10,
+                        child: IgnorePointer(
+                          child: const ProBadge(compact: true, gold: true),
+                        ),
+                      ),
+                  ],
                 ),
         ),
       ),

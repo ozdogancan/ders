@@ -3,10 +3,14 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' hide User;
 import '../core/theme/koala_tokens.dart';
+import '../helpers/paywall_router.dart';
+import '../providers/pro_status_provider.dart';
+import '../services/usage_limit_service.dart';
 import '../core/utils/format_utils.dart';
 import '../services/evlumba_live_service.dart';
 import '../services/global_message_listener.dart';
@@ -18,7 +22,7 @@ import '../widgets/media_upload_helper.dart';
 import 'chat/widgets/quote_card.dart';
 
 /// Tasarımcı ile mesaj detay ekranı — gerçek zamanlı
-class ConversationDetailScreen extends StatefulWidget {
+class ConversationDetailScreen extends ConsumerStatefulWidget {
   const ConversationDetailScreen({
     super.key,
     this.conversationId,
@@ -58,11 +62,11 @@ class ConversationDetailScreen extends StatefulWidget {
   final int? unreadOnEntry;
 
   @override
-  State<ConversationDetailScreen> createState() =>
+  ConsumerState<ConversationDetailScreen> createState() =>
       _ConversationDetailScreenState();
 }
 
-class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
+class _ConversationDetailScreenState extends ConsumerState<ConversationDetailScreen> {
   final _textController = TextEditingController();
   final _scrollController = ScrollController();
   final _picker = ImagePicker();
@@ -494,6 +498,20 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
       }
     }
     final cid = _activeConvId!;
+
+    // Pro paywall gate — free tier allows evlumbaFreeRepliesPerConversation
+    // replies per conversation lifetime.
+    final pro = ref.read(proStatusProvider).value?.isPro ?? false;
+    if (!pro) {
+      if (!await UsageLimitService.canSendEvlumbaReply(cid)) {
+        if (!mounted) return;
+        setState(() => _sending = false);
+        if (!context.mounted) return;
+        await showPaywall(context, trigger: 'evlumba_dm_limit');
+        return;
+      }
+      await UsageLimitService.incrementEvlumbaReply(cid);
+    }
 
     String? errorMsg;
     Map<String, dynamic>? sentMsg;

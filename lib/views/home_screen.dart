@@ -28,7 +28,7 @@ import 'mekan/wizard/mekan_wizard_screen.dart';
 import 'product_entry_screen.dart';
 import 'saved/saved_screen_v2.dart';
 import '../widgets/style_discovery_pull.dart'; // GlobalKey type için tutuldu
-import 'home/widgets/continue_design_card.dart';
+// import 'home/widgets/continue_design_card.dart'; // 2026-04-30 kaldırıldı
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key, this.openStyleDiscovery = false});
@@ -90,6 +90,26 @@ class _HomeScreenState extends State<HomeScreen>
     // GlobalMessageListener her sync tick'inde notify eder —
     // realtime event'e güvenmek yerine explicit refresh.
     GlobalMessageListener.syncTick.addListener(_onGlobalSyncTick);
+  }
+
+  // ── Hero asset pre-cache ──────────────────────────────────────────────
+  // İlk paint'te _HeroCaptureCard'ın altındaki before/after asset'leri
+  // decode edilirken kart boş bir bej blok olarak açılıyor ve text/gradient
+  // "snap" ediyor. precacheImage ile decode'u önceden tetikle — kart
+  // mount olduğunda image hazır, gradient ve CTA layout shift'siz oturuyor.
+  bool _heroPrecached = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_heroPrecached) return;
+    _heroPrecached = true;
+    precacheImage(const AssetImage('assets/showcase/after.webp'), context)
+        .catchError((_) {});
+    precacheImage(const AssetImage('assets/showcase/before.webp'), context)
+        .catchError((_) {});
+    precacheImage(const AssetImage('assets/images/koala_hero.webp'), context)
+        .catchError((_) {});
   }
 
   void _onGlobalSyncTick() {
@@ -578,14 +598,8 @@ class _HomeScreenState extends State<HomeScreen>
 
             const SizedBox(height: 12),
 
-            // ─── Devam Et kartı — son kaydedilen restyle render'ı ───
-            // Retention loop'un görünür ucu. Latest design yoksa kendi kendini
-            // saklar (SizedBox.shrink), placeholder basmaz.
-            _staggered(
-              4,
-              const ContinueDesignCard(),
-            ),
-
+            // 2026-04-30: "Devam Et" kartı kaldırıldı — kullanıcı istemedi,
+            // ContinueDesignCard widget dosyada duruyor ama artık render edilmiyor.
             // 2026-04-27: "Kaydedilenlerim" anasayfa preview row kaldırıldı —
             // kullanıcı koleksiyonlarını sağ üstteki bookmark ikonundan görür.
             // _SavedPreviewRow widget'ı dosyada duruyor ama artık render
@@ -824,79 +838,115 @@ class _HeroCaptureCard extends StatelessWidget {
     return _Pressable(
       onTap: onTap,
       child: Container(
-        // Hero alanı 200px + footer 88px + iç padding = 296. Tag/pill için
-        // kart yüksekliği artırıldı (önceki 232 → 296). Tek karta indiğimiz
-        // için sayfanın görsel ağırlığı bu kartta toplanıyor.
-        height: 296,
-        width: double.infinity,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(22),
-          color: Colors.white,
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.10),
-              blurRadius: 28,
-              offset: const Offset(0, 8),
-            ),
-          ],
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: Column(
-          children: [
-            // ── HERO before/after wipe + ürün tag'ları + designer pill ──
-            Expanded(
-              flex: 200,
-              child: _BeforeAfterShowcase(
+          // Aspect-ratio sabit (yaklaşık 4:3) — GIF/asset yüklenirken layout
+          // kaymasın diye sabit yükseklik korunuyor. Önceki 296px kalibrasyonu.
+          height: 296,
+          width: double.infinity,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(24),
+            color: const Color(0xFFEFEAE3),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.12),
+                blurRadius: 24,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              // ── HERO before/after — kartın tamamını kaplıyor (modern dergi)
+              _BeforeAfterShowcase(
                 urls: showcaseUrls,
                 fallbackAsset: 'assets/images/koala_hero.webp',
               ),
-            ),
-            // ── FOOTER (white, title + sub + pill) ──
-            Expanded(
-              flex: 88,
-              child: Container(
-                color: Colors.white,
-                padding: const EdgeInsets.fromLTRB(16, 12, 12, 12),
+
+              // ── Bottom→top dark gradient overlay (CTA okunaklılığı için)
+              IgnorePointer(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.bottomCenter,
+                      end: Alignment.topCenter,
+                      colors: [
+                        Colors.black.withValues(alpha: 0.62),
+                        Colors.black.withValues(alpha: 0.28),
+                        Colors.transparent,
+                      ],
+                      stops: const [0.0, 0.45, 0.85],
+                    ),
+                  ),
+                ),
+              ),
+
+              // ── CTA (bottom-left) — başlık + alt etiket + chevron
+              Positioned(
+                left: 16,
+                right: 16,
+                bottom: 16,
                 child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
                     const Expanded(
                       child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
+                        mainAxisSize: MainAxisSize.min,
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
+                          Text(
+                            'Bir fotoğraf · 30 sn',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w500,
+                              color: Color(0xCCFFFFFF),
+                              letterSpacing: 0.4,
+                              height: 1.0,
+                            ),
+                          ),
+                          SizedBox(height: 8),
                           Text(
                             'Hayalindeki Tasarımı\nGerçeğe Dönüştür',
                             maxLines: 2,
                             style: TextStyle(
-                              fontSize: 17,
+                              fontSize: 20,
                               fontWeight: FontWeight.w800,
-                              color: KoalaColors.text,
-                              letterSpacing: -0.4,
-                              height: 1.2,
-                            ),
-                          ),
-                          SizedBox(height: 6),
-                          Text(
-                            'Bir fotoğraf · 30 sn · gerçek tasarım',
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w400,
-                              color: KoalaColors.textSec,
-                              letterSpacing: -0.1,
+                              color: Colors.white,
+                              letterSpacing: -0.5,
+                              height: 1.15,
                             ),
                           ),
                         ],
                       ),
                     ),
-                    const SizedBox(width: 8),
-                    _DenePill(),
+                    const SizedBox(width: 12),
+                    // Modern minimal chevron disc — _DenePill yerine ikon
+                    Container(
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.18),
+                            blurRadius: 12,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: const Icon(
+                        LucideIcons.arrowUpRight,
+                        size: 20,
+                        color: KoalaColors.text,
+                      ),
+                    ),
                   ],
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
-      ),
     );
   }
 }

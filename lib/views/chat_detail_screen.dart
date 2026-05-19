@@ -3,9 +3,13 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../helpers/paywall_router.dart';
+import '../providers/pro_status_provider.dart';
+import '../services/usage_limit_service.dart';
 import '../services/koala_ai_service.dart';
 import '../services/koala_image_service.dart';
 import '../services/chat_persistence.dart';
@@ -14,8 +18,10 @@ import '../services/analytics_service.dart';
 import '../services/profile_feedback_service.dart';
 import '../core/theme/koala_tokens.dart';
 import '../services/evlumba_live_service.dart';
+import '../services/quota_service.dart';
 import '../services/saved_items_service.dart';
 import '../widgets/chat/designer_chat_popup.dart';
+import 'pro/widgets/upsell_banner.dart';
 import '../widgets/chat/product_carousel.dart';
 import '../widgets/offline_banner.dart';
 import '../widgets/projects_gallery_popup.dart';
@@ -28,7 +34,7 @@ const _accent = KoalaColors.accentDeep;
 const _accentLight = KoalaColors.accentSoft;
 const _ink = KoalaColors.ink;
 
-class ChatDetailScreen extends StatefulWidget {
+class ChatDetailScreen extends ConsumerStatefulWidget {
   const ChatDetailScreen({
     super.key,
     this.initialText,
@@ -55,10 +61,10 @@ class ChatDetailScreen extends StatefulWidget {
   final bool testAssetPhoto;
 
   @override
-  State<ChatDetailScreen> createState() => _ChatDetailScreenState();
+  ConsumerState<ChatDetailScreen> createState() => _ChatDetailScreenState();
 }
 
-class _ChatDetailScreenState extends State<ChatDetailScreen>
+class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
     with TickerProviderStateMixin {
   final _ctrl = TextEditingController();
   final _scroll = ScrollController();
@@ -97,6 +103,12 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
   Timer? _loadingStage2;
   String? _loadingOverrideText;
 
+  // ── Pro upsell quota banner state ──
+  // Shown above input bar when free user has 1 chat message left this period.
+  // Dismissed per session (in-memory). Auto-hides for Pro users.
+  bool _showQuotaUpsell = false;
+  bool _quotaUpsellDismissed = false;
+
   @override
   void initState() {
     super.initState();
@@ -106,6 +118,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     _scroll.addListener(_onScrollChanged);
     _ctrl.addListener(_onComposerTextChanged);
     _inputFocus.addListener(_onComposerTextChanged);
+    _refreshQuotaUpsell();
 
     // Yeni (boş) bir sohbet ise AI slot-context'i sıfırla; mevcut sohbeti koru.
     if (widget.chatId == null) {
@@ -208,6 +221,24 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     // Composer durumu değişince rebuild (hint switch + has button).
     if (!mounted) return;
     setState(() {});
+  }
+
+  /// Refresh chat quota — show inline upsell when free user has 1 message
+  /// left for the day. Dismissed once per session by user. Skipped silently
+  /// if Pro or quota fetch fails.
+  Future<void> _refreshQuotaUpsell() async {
+    if (_quotaUpsellDismissed) return;
+    try {
+      final s = await QuotaService.fetch();
+      if (!mounted) return;
+      final remaining = (s.chatLimit - s.chatUsed).clamp(0, s.chatLimit);
+      // 2026-04-30: only show when quota is fully exhausted (5/5) — owner UX
+      // hassasiyeti, "1 hak kaldı" hâlâ kullanıcıyı sıkıyordu.
+      final shouldShow = !s.isPro && remaining == 0;
+      if (shouldShow != _showQuotaUpsell) {
+        setState(() => _showQuotaUpsell = shouldShow);
+      }
+    } catch (_) {/* silent */}
   }
 
   // ── Kademeli loading mesajları ──
@@ -429,6 +460,169 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
     }).toList();
   }
 
+  /// İlk kullanıcı mesajından akıllı sohbet başlığı türet.
+  /// Strategy: ilk cümleyi al → trailing noktalama (?, !, .) sil → 40 char
+  /// üstündeyse son kelime sınırından kes → ilk harfi büyüt. Çıktı doğal
+  /// + kısa + okunaklı. Kullanıcı hâlâ kalem ikonuyla istediği gibi
+  /// değiştirebilir.
+  String _smartTitle(String raw) {
+    var s = raw.trim();
+    // İlk cümleyi al (?, !, ., \n hangisinden önce gelirse)
+    final endMatch = RegExp(r'[\?\!\.\n]').firstMatch(s);
+    if (endMatch != null) s = s.substring(0, endMatch.start);
+    s = s.trim();
+    if (s.isEmpty) return 'Yeni Sohbet';
+    const maxLen = 40;
+    if (s.length > maxLen) {
+      // Son kelime sınırından kes — kelime ortasında kalmasın
+      var cut = s.substring(0, maxLen);
+      final lastSpace = cut.lastIndexOf(' ');
+      if (lastSpace > 20) cut = cut.substring(0, lastSpace);
+      s = '$cut…';
+    }
+    // İlk harfi büyüt (Türkçe-aware için characters paketi gerekmez, basit)
+    if (s.isNotEmpty) {
+      s = s[0].toUpperCase() + s.substring(1);
+    }
+    return s;
+  }
+
+  /// Sohbet başlığını edit modal bottom sheet ile değiştir.
+  /// AlertDialog mobile'de klavye açılınca üst yarı kesiliyor, alt sheet
+  /// `viewInsets.bottom` ile native şekilde klavyenin üstünde kalıyor.
+  Future<void> _editTitle() async {
+    final ctrl = TextEditingController(text: _chatTitle);
+    final newTitle = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true, // klavye için kritik
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        return AnimatedPadding(
+          duration: const Duration(milliseconds: 100),
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(ctx).viewInsets.bottom,
+          ),
+          child: Container(
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+            ),
+            padding: EdgeInsets.fromLTRB(
+              20,
+              12,
+              20,
+              MediaQuery.of(ctx).padding.bottom + 16,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Drag handle — bottom-sheet affordance
+                Container(
+                  width: 40,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 14),
+                  decoration: BoxDecoration(
+                    color: KoalaColors.borderSolid,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                const Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    'Sohbet Başlığı',
+                    style: TextStyle(
+                      fontFamily: 'Fraunces',
+                      fontSize: 19,
+                      fontWeight: FontWeight.w600,
+                      color: _ink,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                TextField(
+                  controller: ctrl,
+                  autofocus: true,
+                  maxLength: 60,
+                  maxLines: 1,
+                  textInputAction: TextInputAction.done,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  decoration: InputDecoration(
+                    hintText: 'Sohbet için isim yaz',
+                    counterText: '',
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 14),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(
+                          color: KoalaColors.borderSolid, width: 1),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(color: _accent, width: 2),
+                    ),
+                  ),
+                  onSubmitted: (val) => Navigator.pop(ctx, val.trim()),
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextButton(
+                        onPressed: () => Navigator.pop(ctx),
+                        style: TextButton.styleFrom(
+                          padding:
+                              const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          backgroundColor: KoalaColors.surfaceAlt,
+                          foregroundColor: KoalaColors.text,
+                        ),
+                        child: const Text(
+                          'Vazgeç',
+                          style: TextStyle(
+                              fontWeight: FontWeight.w700, fontSize: 15),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: FilledButton(
+                        onPressed: () =>
+                            Navigator.pop(ctx, ctrl.text.trim()),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: _accent,
+                          padding:
+                              const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: const Text(
+                          'Kaydet',
+                          style: TextStyle(
+                              fontWeight: FontWeight.w700, fontSize: 15),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+    if (newTitle == null || newTitle.isEmpty || newTitle == _chatTitle) return;
+    setState(() => _chatTitle = newTitle.length > 60
+        ? newTitle.substring(0, 60)
+        : newTitle);
+    await _persist();
+  }
+
   Future<void> _persist() async {
     final serialized = _msgs
         .where((m) => m.text != null || m.cards != null)
@@ -533,10 +727,26 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
   Future<void> _sendToAI({String? text, Uint8List? photo, Uint8List? referencePhoto, String? hiddenContext}) async {
     if (text == null && photo == null && referencePhoto == null) return;
     if (_loading) return; // Önceki istek bitmeden yeni istek gönderme
+
+    // Pro paywall gate — free tier capped at dailyKoalaAiLimit messages/day.
+    final pro = ref.read(proStatusProvider).value?.isPro ?? false;
+    if (!pro) {
+      if (!await UsageLimitService.canSendKoalaAi()) {
+        if (!context.mounted) return;
+        await showPaywall(context, trigger: 'koala_ai_daily_limit');
+        return;
+      }
+      await UsageLimitService.incrementKoalaAi();
+    }
     if (_msgs.isEmpty) {
       Analytics.aiChatStarted((photo ?? referencePhoto) != null ? 'photo' : 'text');
-      if (text != null && text.length > 3) {
-        _chatTitle = text.length > 30 ? '${text.substring(0, 30)}...' : text;
+      // Auto-title: kullanıcının ilk mesajından akıllı başlık üret.
+      // Kelime sınırından kes (ortadan kesme), trailing noktalama temizle,
+      // 40 karakter max, ilk harfi büyüt.
+      if (text != null && text.trim().length > 2) {
+        _chatTitle = _smartTitle(text);
+      } else if (photo != null) {
+        _chatTitle = 'Mekan Analizi';
       }
     }
 
@@ -1120,14 +1330,31 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
             ),
             const SizedBox(width: 8),
             Expanded(
-              child: Text(
-                _chatTitle,
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                  color: _ink,
+              child: GestureDetector(
+                onTap: _editTitle,
+                behavior: HitTestBehavior.opaque,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Flexible(
+                      child: Text(
+                        _chatTitle,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                          color: _ink,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Icon(
+                      LucideIcons.pencil,
+                      size: 13,
+                      color: _ink.withValues(alpha: 0.45),
+                    ),
+                  ],
                 ),
-                overflow: TextOverflow.ellipsis,
               ),
             ),
           ],
@@ -1191,6 +1418,15 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
           if (_msgs.isNotEmpty && !_loading) _buildQuickActions(),
           // Photo preview — shown directly above the input bar after picker
           if (_pendingPhoto != null) _buildPhotoPreview(),
+          // Pro upsell banner — when free user has 1 chat left.
+          if (_showQuotaUpsell && !_quotaUpsellDismissed)
+            InlineUpsellBanner(
+              text: 'Bugün 1 sorun kaldı. Pro ile sınırsız sor.',
+              trigger: 'chat_quota_inline',
+              ctaLabel: 'Pro\'ya Geç',
+              onDismiss: () =>
+                  setState(() => _quotaUpsellDismissed = true),
+            ),
           _buildInputBar(btm),
         ],
           ),
@@ -1573,8 +1809,6 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
 
   // ── Empty state with profile-aware suggestion chips ──
   Widget _buildEmptyState() {
-    // Build personalized suggestions based on user profile
-    final starters = _getProfileAwareStarters();
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
@@ -1627,13 +1861,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
                 ),
               ),
             ),
-            const SizedBox(height: 16),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              alignment: WrapAlignment.center,
-              children: starters,
-            ),
+            // 2026-05-02: 4 quick-suggestion pill kaldırıldı (kullanıcı talebi).
+            // Sadece "Odanın fotoğrafını çek, analiz edeyim" CTA kalsın.
+            // Kullanıcı yine de istediği soruyu free-text alanına yazabilir.
           ],
         ),
       ),
@@ -2313,13 +2543,14 @@ class _ChatDetailScreenState extends State<ChatDetailScreen>
       'before_after',
     ];
     if (!saveable.contains(card.type)) return const SizedBox.shrink();
+    // 2026-05-02: Kullanıcı talebi — Koala chat içindeki önerilen kartlarda
+    // "Kaydet" / "Like" butonu OLMASIN. Sadece "Paylaş" kalsın. Kaydetme
+    // istenirse kullanıcı normal akışta (Projelerim, Kaydedilenler) yapar.
     return Padding(
       padding: const EdgeInsets.only(top: 6),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.end,
         children: [
-          _miniAction(LucideIcons.heart, 'Kaydet', KoalaColors.accentDeep, () => _saveCard(card)),
-          const SizedBox(width: 6),
           _miniAction(LucideIcons.copy, 'Paylaş', KoalaColors.greenAlt, () => _shareCard(card)),
         ],
       ),
@@ -2831,12 +3062,8 @@ class _ProjectCardInline extends StatelessWidget {
                       onTap: () => _askDesigner(context),
                     ),
                     const SizedBox(width: 8),
-                    _ProjectActionIconButton(
-                      icon: LucideIcons.bookmark,
-                      tooltip: 'Kaydet',
-                      onTap: () => _saveProject(context),
-                    ),
-                    const SizedBox(width: 8),
+                    // 2026-05-02: Koala chat içinde "Kaydet" butonu kaldırıldı.
+                    // Kullanıcı kaydetmek istiyorsa Projelerim/Kaydedilenler'den.
                     _ProjectActionIconButton(
                       icon: LucideIcons.share2,
                       tooltip: 'Paylaş',

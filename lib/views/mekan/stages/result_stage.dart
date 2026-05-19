@@ -7,6 +7,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gal/gal.dart';
 import 'package:http/http.dart' as http;
 import 'package:image/image.dart' as img;
@@ -14,17 +15,21 @@ import 'package:lucide_icons/lucide_icons.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:universal_html/html.dart' as html;
 import '../../../core/theme/koala_tokens.dart';
+import '../../../helpers/paywall_router.dart';
+import '../../../providers/pro_status_provider.dart';
+import '../../../services/analytics_service.dart';
 import '../../../services/background_gen.dart';
 import '../../../services/feedback_service.dart';
 import '../../../services/saved_items_service.dart';
 import '../../../services/upload_service.dart';
+import '../../pro/widgets/first_restyle_celebration.dart';
 import '../widgets/before_after.dart';
 
 /// Tasarım Sonucu — sade, snaphome benzeri.
 /// Top bar (Tasarım Sonucu / paylaş / X) + before/after compare + 2 aksiyon
 /// (İndir / Başka Tarz) + büyük "Gerçeğe Dönüştür" CTA.
 /// Sonuç oluşur oluşmaz otomatik koleksiyona kaydedilir.
-class ResultStage extends StatefulWidget {
+class ResultStage extends ConsumerStatefulWidget {
   final Uint8List beforeBytes;
   final String afterSrc;
   final String room;
@@ -61,10 +66,10 @@ class ResultStage extends StatefulWidget {
   });
 
   @override
-  State<ResultStage> createState() => _ResultStageState();
+  ConsumerState<ResultStage> createState() => _ResultStageState();
 }
 
-class _ResultStageState extends State<ResultStage> {
+class _ResultStageState extends ConsumerState<ResultStage> {
   late final String _itemId = sha1
       .convert(
         '${widget.theme}|${widget.afterSrc}|${widget.beforeBytes.length}'
@@ -87,40 +92,171 @@ class _ResultStageState extends State<ResultStage> {
   }
 
   Future<void> _autoSave() async {
-    // BackgroundGen complete'i ÖNCE fire et — pending kart %100'e atlasın,
-    // before upload + DB save backend'de devam etsin (UI bloklanmasın).
-    BackgroundGen.complete(afterUrl: widget.afterSrc);
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null || user.isAnonymous) {
-      debugPrint('[ResultStage] auto-save skipped: anon/null user');
-      return;
+    try {
+      // BackgroundGen complete'i ÖNCE fire et — pending kart %100'e atlasın,
+      // before upload + DB save backend'de devam etsin (UI bloklanmasın).
+      BackgroundGen.complete(afterUrl: widget.afterSrc);
+      // 2026-05-01: user reported AI design not appearing in Projelerim. Root
+      // cause: FirebaseAuth.instance.currentUser was null at this exact tick
+      // (web Google session race). Wait up to 5s for auth to materialize via
+      // authStateChanges before bailing.
+      var user = FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        try {
+          user = await FirebaseAuth.instance
+              .authStateChanges()
+              .firstWhere((u) => u != null)
+              .timeout(const Duration(seconds: 5));
+        } catch (_) {
+          // timeout — proceed below to skip-with-log path
+        }
+      }
+      if (user == null) {
+        debugPrint('[ResultStage] auto-save skipped: no user (after 5s wait)');
+        unawaited(Analytics.log('autosave_skipped', {'reason': 'no_user_after_wait'}));
+        return;
+      }
+      if (user.isAnonymous) {
+        debugPrint('[ResultStage] auto-save proceeding for anon user');
+        unawaited(Analytics.log('autosave_anon_proceed', {'uid': user.uid}));
+      }
+      // CRITICAL: save'i önce yap, before upload paralele kaçsın.
+      // Eskiden uploadBefore await ediliyordu (10-30s bottleneck) — kullanıcı
+      // sonucu görüp X'e bastığında save henüz başlamamış oluyordu, Projelerim
+      // boş geliyordu. Artık save anında fire olur, before upload arka planda
+      // tamamlanınca extra_data.before_url update edilir.
+      // 2026-05-01: log url shape for diagnostics (data: vs https: vs empty).
+      final isDataUrl = widget.afterSrc.startsWith('data:');
+      unawaited(Analytics.log('autosave_attempt', {
+        'item_id': _itemId,
+        'has_after_url': widget.afterSrc.isNotEmpty,
+        'is_data_url': isDataUrl,
+        'after_len': widget.afterSrc.length,
+      }));
+      // 1) ANINDA save — beforeUrl olmadan. Tasarım anında Projelerim'de.
+      final ok = await SavedItemsService.saveItem(
+        type: SavedItemType.project,
+        itemId: _itemId,
+        title: 'Yeni ${widget.room}',
+        imageUrl: widget.afterSrc,
+        subtitle: 'İç Mimarlık · ${widget.theme}',
+        extraData: {
+          'kind': 'ai_design',
+          'ai_generated': true,
+          'room': widget.room,
+          'style': widget.theme,
+          'theme': widget.theme,
+          'palette': widget.paletteTr,
+          'layout': widget.layoutTr,
+          'after_url': widget.afterSrc,
+          'category': 'interior_design',
+          'saved_at': DateTime.now().toIso8601String(),
+        },
+      );
+      debugPrint(
+          '[ResultStage] auto-save ok=$ok err=${SavedItemsService.lastError}');
+      unawaited(Analytics.log('autosave_result', {
+        'ok': ok,
+        'item_id': _itemId,
+        if (!ok) 'error': SavedItemsService.lastError ?? 'unknown',
+      }));
+      // 2) Before upload arka planda devam etsin, bittikten sonra extra_data
+      // güncellensin (before/after slider'da before görünsün).
+      // 3) Eğer afterSrc data:URL ise (Vercel Blob fail edince Gemini base64
+      // dönüyordu, FUNCTION_PAYLOAD_TOO_LARGE oluyordu) → arka planda upload
+      // edip image_url'i patch et.
+      if (ok) {
+        unawaited(_uploadBeforeAndPatch(user.uid));
+        if (widget.afterSrc.startsWith('data:')) {
+          unawaited(_uploadAfterAndPatch(user.uid));
+        }
+        // Soft Pro upsell — non-blocking material banner, only shown ONCE
+        // per user lifetime (tracked in SharedPreferences). Skipped for Pro.
+        if (mounted) {
+          unawaited(FirstRestyleCelebration.maybeShow(
+            context: context,
+            ref: ref,
+          ));
+        }
+      }
+    } catch (e, st) {
+      debugPrint('[ResultStage] auto-save threw: $e\n$st');
+      unawaited(Analytics.log('autosave_exception', {
+        'error': e.toString(),
+      }));
     }
-    // Before upload async — başarısız olsa bile after_url ile kayıt geçsin.
-    final beforeUrl = await UploadService.uploadBefore(widget.beforeBytes);
-    // item_type='project' → Projelerim sekmesinde listelenir.
-    // kind='ai_design' → before/after AI tasarımı (manuel proje değil).
-    final ok = await SavedItemsService.saveItem(
-      type: SavedItemType.project,
-      itemId: _itemId,
-      title: 'Yeni ${widget.room}',
-      imageUrl: widget.afterSrc,
-      subtitle: 'İç Mimarlık · ${widget.theme}',
-      extraData: {
-        'kind': 'ai_design',
-        'ai_generated': true,
-        'room': widget.room,
-        'style': widget.theme,
-        'theme': widget.theme,
-        'palette': widget.paletteTr,
-        'layout': widget.layoutTr,
-        'after_url': widget.afterSrc,
-        if (beforeUrl != null) 'before_url': beforeUrl,
-        'category': 'interior_design',
-        'saved_at': DateTime.now().toIso8601String(),
-      },
-    );
-    debugPrint(
-        '[ResultStage] auto-save ok=$ok err=${SavedItemsService.lastError}');
+  }
+
+  /// AI'in ürettiği after görseli (data:URL şeklinde) arka planda upload et
+  /// ve saved_items.image_url'i patch et. Vercel Blob upload'ı /api/restyle/
+  /// batch içinde başarısız olursa Gemini'den dönen base64 data URL'i save'e
+  /// gönderemiyoruz (FUNCTION_PAYLOAD_TOO_LARGE). Önce data URL'siz save,
+  /// sonra burada upload + patch.
+  Future<void> _uploadAfterAndPatch(String uid) async {
+    try {
+      final url = await UploadService.uploadAfterFromDataUrl(widget.afterSrc);
+      if (url == null) return;
+      await SavedItemsService.saveItem(
+        type: SavedItemType.project,
+        itemId: _itemId,
+        title: 'Yeni ${widget.room}',
+        imageUrl: url,
+        subtitle: 'İç Mimarlık · ${widget.theme}',
+        extraData: {
+          'kind': 'ai_design',
+          'ai_generated': true,
+          'room': widget.room,
+          'style': widget.theme,
+          'theme': widget.theme,
+          'palette': widget.paletteTr,
+          'layout': widget.layoutTr,
+          'after_url': url,
+          'category': 'interior_design',
+          'saved_at': DateTime.now().toIso8601String(),
+        },
+      );
+      unawaited(Analytics.log('autosave_after_patched', {
+        'item_id': _itemId,
+      }));
+    } catch (e) {
+      debugPrint('[ResultStage] after patch failed: $e');
+    }
+  }
+
+  /// Before görseli arka planda yükle ve saved_items satırına ekle. Save
+  /// zaten gerçekleşti — bu sadece detay sayfasındaki before/after slider
+  /// için before image url'ini patch ediyor.
+  Future<void> _uploadBeforeAndPatch(String uid) async {
+    try {
+      final beforeUrl = await UploadService.uploadBefore(widget.beforeBytes);
+      if (beforeUrl == null) return;
+      // Yeni saveItem çağrısı: aynı itemId ile upsert → eski satırı günceller.
+      await SavedItemsService.saveItem(
+        type: SavedItemType.project,
+        itemId: _itemId,
+        title: 'Yeni ${widget.room}',
+        imageUrl: widget.afterSrc,
+        subtitle: 'İç Mimarlık · ${widget.theme}',
+        extraData: {
+          'kind': 'ai_design',
+          'ai_generated': true,
+          'room': widget.room,
+          'style': widget.theme,
+          'theme': widget.theme,
+          'palette': widget.paletteTr,
+          'layout': widget.layoutTr,
+          'after_url': widget.afterSrc,
+          'before_url': beforeUrl,
+          'category': 'interior_design',
+          'saved_at': DateTime.now().toIso8601String(),
+        },
+      );
+      unawaited(Analytics.log('autosave_before_patched', {
+        'item_id': _itemId,
+      }));
+    } catch (e) {
+      debugPrint('[ResultStage] before patch failed: $e');
+    }
   }
 
   Future<void> _share() async {
@@ -342,6 +478,27 @@ class _ResultStageState extends State<ResultStage> {
     }
   }
 
+  bool get _isPro {
+    final asyncStatus = ref.watch(proStatusProvider);
+    return asyncStatus.maybeWhen(data: (s) => s.isPro, orElse: () => false);
+  }
+
+  void _onVariantCta() {
+    HapticFeedback.selectionClick();
+    showPaywall(context, trigger: 'variant_quota');
+  }
+
+  void _onHdDownload() {
+    HapticFeedback.selectionClick();
+    if (_isPro) {
+      // Pro user: aynı download flow — ileride backend'de gerçek 4K wired olunca
+      // upgrade edilecek.
+      _download();
+    } else {
+      showPaywall(context, trigger: 'hd_download');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -407,6 +564,14 @@ class _ResultStageState extends State<ResultStage> {
                   beforeBytes: widget.beforeBytes,
                   afterSrc: widget.afterSrc,
                 ),
+                // Variant CTA — sadece free user görür. Pro zaten 3 varyant alıyor.
+                if (!_isPro) ...[
+                  const SizedBox(height: 10),
+                  Align(
+                    alignment: Alignment.center,
+                    child: _VariantProPill(onTap: _onVariantCta),
+                  ),
+                ],
                 AnimatedSize(
                   duration: const Duration(milliseconds: 380),
                   curve: Curves.easeOutCubic,
@@ -453,7 +618,16 @@ class _ResultStageState extends State<ResultStage> {
                         onTap: _download,
                       ),
                     ),
-                    const SizedBox(width: 12),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: _ActionTile(
+                        icon: LucideIcons.maximize2,
+                        label: 'HD İndir',
+                        onTap: _onHdDownload,
+                        proLock: !_isPro,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
                     Expanded(
                       child: _ActionTile(
                         icon: LucideIcons.sliders,
@@ -583,10 +757,12 @@ class _ActionTile extends StatelessWidget {
     required this.icon,
     required this.label,
     required this.onTap,
+    this.proLock = false,
   });
   final IconData icon;
   final String label;
   final VoidCallback onTap;
+  final bool proLock;
 
   @override
   Widget build(BuildContext context) {
@@ -596,27 +772,124 @@ class _ActionTile extends StatelessWidget {
       child: InkWell(
         borderRadius: BorderRadius.circular(14),
         onTap: onTap,
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Container(
+              height: 64,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: KoalaColors.border, width: 0.6),
+              ),
+              alignment: Alignment.center,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(icon, size: 18, color: KoalaColors.text),
+                  const SizedBox(height: 4),
+                  Text(
+                    label,
+                    style: const TextStyle(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w600,
+                      color: KoalaColors.text,
+                      letterSpacing: -0.1,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (proLock)
+              Positioned(
+                top: 4,
+                right: 4,
+                child: Container(
+                  height: 16,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFFE0B96B), Color(0xFFB8862F)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(99),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFFB8862F).withValues(alpha: 0.30),
+                        blurRadius: 5,
+                        offset: const Offset(0, 1),
+                      ),
+                    ],
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(LucideIcons.crown, size: 8.5, color: Colors.white),
+                      SizedBox(width: 2.5),
+                      Text(
+                        'PRO',
+                        style: TextStyle(
+                          fontSize: 8.5,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.white,
+                          letterSpacing: 0.5,
+                          height: 1.0,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Subtle pill: "✨ 2 farklı versiyonu daha gör" — accentSoft bg, accentDeep
+/// text, gold mini crown. Free user görür, Pro user'da hiç gösterilmez.
+class _VariantProPill extends StatelessWidget {
+  const _VariantProPill({required this.onTap});
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(99),
+        onTap: onTap,
         child: Container(
-          height: 64,
+          padding:
+              const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: KoalaColors.border, width: 0.6),
+            color: KoalaColors.accentSoft,
+            borderRadius: BorderRadius.circular(99),
+            border: Border.all(
+              color: KoalaColors.accentDeep.withValues(alpha: 0.18),
+              width: 0.6,
+            ),
           ),
-          alignment: Alignment.center,
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
+          child: const Row(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(icon, size: 18, color: KoalaColors.text),
-              const SizedBox(height: 4),
+              Icon(LucideIcons.crown,
+                  size: 12, color: Color(0xFFB8862F)),
+              SizedBox(width: 6),
               Text(
-                label,
-                style: const TextStyle(
-                  fontSize: 11.5,
-                  fontWeight: FontWeight.w600,
-                  color: KoalaColors.text,
+                '2 farklı versiyonu daha gör',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: KoalaColors.accentDeep,
                   letterSpacing: -0.1,
                 ),
               ),
+              SizedBox(width: 4),
+              Icon(LucideIcons.arrowRight,
+                  size: 12, color: KoalaColors.accentDeep),
             ],
           ),
         ),

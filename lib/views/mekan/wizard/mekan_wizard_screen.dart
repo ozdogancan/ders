@@ -23,6 +23,8 @@ import 'package:flutter/services.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
 import '../../../core/theme/koala_tokens.dart';
+import '../../../helpers/paywall_router.dart';
+import '../../../services/quota_service.dart';
 import '../mekan_constants.dart';
 import '../mekan_flow_screen.dart';
 
@@ -253,12 +255,18 @@ class _MekanWizardScreenState extends State<MekanWizardScreen> {
   }
 
   void _finish() {
+    // Pro stiller için customPromptFlavor'ı prompt'a inject et — backend'de
+    // henüz preview/recipe yok, AI customPrompt ile premium varyantı üretir.
+    String? effectiveCustomPrompt = _customPrompt;
+    if (_theme != null && _theme!.isPro && _theme!.customPromptFlavor != null) {
+      effectiveCustomPrompt = _theme!.customPromptFlavor;
+    }
     final result = MekanWizardResult(
       roomKey: _roomKey!,
       roomTr: _roomTr!,
       styleValue: _theme?.value ?? 'Custom',
       styleTr: _theme?.tr ?? 'Özel',
-      styleCustomPrompt: _customPrompt,
+      styleCustomPrompt: effectiveCustomPrompt,
       paletteKey: _palette!.key,
       paletteTr: _palette!.tr,
       paletteColors: _palette!.colors,
@@ -316,10 +324,23 @@ class _MekanWizardScreenState extends State<MekanWizardScreen> {
                     roomKey: _roomKey ?? kRoomKeyLiving,
                     selectedTheme: _theme,
                     customPrompt: _customPrompt,
-                    onSelectTheme: (t) => setState(() {
-                      _theme = t;
-                      _customPrompt = null;
-                    }),
+                    onSelectTheme: (t) async {
+                      // Pro stiller: önce paywall gate. Pro user direkt seçer
+                      // ve customPromptFlavor _finish()'te prompt'a inject edilir.
+                      if (t.isPro) {
+                        final snap = await QuotaService.fetch();
+                        if (!snap.isPro) {
+                          if (!mounted) return;
+                          await showPaywall(context, trigger: 'premium_styles');
+                          return;
+                        }
+                      }
+                      if (!mounted) return;
+                      setState(() {
+                        _theme = t;
+                        _customPrompt = null;
+                      });
+                    },
                     onSelectCustom: (prompt) => setState(() {
                       _theme = null;
                       _customPrompt = prompt;
@@ -739,7 +760,7 @@ class _StyleStep extends StatelessWidget {
   final String roomKey;
   final ThemeOption? selectedTheme;
   final String? customPrompt;
-  final void Function(ThemeOption) onSelectTheme;
+  final Future<void> Function(ThemeOption) onSelectTheme;
   final void Function(String) onSelectCustom;
 
   @override
@@ -959,6 +980,7 @@ class _StyleTile extends StatelessWidget {
       label: theme.tr,
       sublabel: theme.tag,
       labelDark: true,
+      proBadge: theme.isPro,
       child: _StyleSwatchOrImage(theme: theme, roomKey: roomKey),
     );
   }
@@ -1010,6 +1032,7 @@ class _StyleTileShell extends StatelessWidget {
     required this.label,
     required this.sublabel,
     required this.labelDark,
+    this.proBadge = false,
   });
   final bool selected;
   final VoidCallback onTap;
@@ -1017,6 +1040,7 @@ class _StyleTileShell extends StatelessWidget {
   final String label;
   final String sublabel;
   final bool labelDark; // true = white-on-image; false = white tile (custom)
+  final bool proBadge;
 
   @override
   Widget build(BuildContext context) {
@@ -1116,6 +1140,51 @@ class _StyleTileShell extends StatelessWidget {
                   ],
                 ),
               ),
+              // PRO badge — top-right (sadece proBadge=true ve seçili değilse)
+              if (proBadge && !selected)
+                Positioned(
+                  top: 8,
+                  right: 8,
+                  child: Container(
+                    height: 18,
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 6, vertical: 1),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFFE0B96B), Color(0xFFB8862F)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      borderRadius: BorderRadius.circular(99),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFFB8862F)
+                              .withValues(alpha: 0.30),
+                          blurRadius: 6,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(LucideIcons.crown,
+                            size: 10, color: Colors.white),
+                        SizedBox(width: 3),
+                        Text(
+                          'PRO',
+                          style: TextStyle(
+                            fontSize: 9,
+                            fontWeight: FontWeight.w800,
+                            color: Colors.white,
+                            letterSpacing: 0.6,
+                            height: 1.0,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
               // Selected check chip — top-right
               if (selected)
                 Positioned(
@@ -1163,22 +1232,18 @@ class _CustomStylePageState extends State<_CustomStylePage> {
   void initState() {
     super.initState();
     _ctrl = TextEditingController(text: widget.initial ?? '');
-    // Sayfa açılır açılmaz keyboard'u aç — kullanıcı direkt yazabilsin.
-    // Web/mobil tarayıcılarda autofocus tek başına klavye açmıyor; birden çok
-    // frame boyunca focus + TextInput.show çağırarak garantiye alıyoruz.
+    // Web/mobil tarayıcılarda klavye PROGRAMATIK açılamaz — user gesture gerek.
+    // Önceki SystemChannels hack'leri mobil Safari/Chrome'da çalışmıyordu.
+    // Yerine: gesture detector tüm container'ı kapsayan tap target yaptık,
+    // first paint'ten sonra single requestFocus → desktop'ta açılır,
+    // mobilde kullanıcı tek tap ile direkt focus + klavye alır.
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _focusNode.requestFocus();
-      SystemChannels.textInput.invokeMethod('TextInput.show');
-    });
-    Future.delayed(const Duration(milliseconds: 120), () {
       if (!mounted) return;
       _focusNode.requestFocus();
-      SystemChannels.textInput.invokeMethod('TextInput.show');
     });
-    Future.delayed(const Duration(milliseconds: 350), () {
-      if (!mounted) return;
-      _focusNode.requestFocus();
-      SystemChannels.textInput.invokeMethod('TextInput.show');
+    // Focus durumu değişince border rengini güncelle (visual feedback).
+    _focusNode.addListener(() {
+      if (mounted) setState(() {});
     });
   }
 
@@ -1252,48 +1317,68 @@ class _CustomStylePageState extends State<_CustomStylePage> {
                 style: KoalaText.bodySec,
               ),
               const SizedBox(height: 16),
-              // Büyük text alanı — Expanded ile kalan alanı doldurur
+              // Büyük text alanı — Expanded ile kalan alanı doldurur.
+              // GestureDetector ile tüm container tap target — küçük cursor'a
+              // tam isabet etmek mobilde zor, container'ın her yerine basınca
+              // klavye açılır.
               Expanded(
-                child: Container(
-                  padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-                  decoration: BoxDecoration(
-                    color: KoalaColors.surface,
-                    borderRadius:
-                        BorderRadius.circular(KoalaRadius.lg),
-                  ),
-                  child: TextField(
-                    controller: _ctrl,
-                    focusNode: _focusNode,
-                    autofocus: true,
-                    maxLines: null,
-                    expands: true,
-                    maxLength: 300,
-                    textAlignVertical: TextAlignVertical.top,
-                    style: const TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w500,
-                      color: KoalaColors.text,
-                      height: 1.45,
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () {
+                    if (!_focusNode.hasFocus) {
+                      _focusNode.requestFocus();
+                    }
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+                    decoration: BoxDecoration(
+                      color: KoalaColors.surface,
+                      borderRadius:
+                          BorderRadius.circular(KoalaRadius.lg),
+                      border: Border.all(
+                        color: _focusNode.hasFocus
+                            ? KoalaColors.accent
+                            : KoalaColors.borderSolid,
+                        width: _focusNode.hasFocus ? 1.5 : 1,
+                      ),
                     ),
-                    decoration: const InputDecoration(
-                      hintText: 'Örn: sıcak ışıklı, ahşap dokular, '
-                          'mavi-bej palet, akşam vibe…',
-                      hintStyle: TextStyle(
+                    child: TextField(
+                      controller: _ctrl,
+                      focusNode: _focusNode,
+                      autofocus: true,
+                      maxLines: null,
+                      expands: true,
+                      maxLength: 300,
+                      textAlignVertical: TextAlignVertical.top,
+                      keyboardType: TextInputType.multiline,
+                      textInputAction: TextInputAction.newline,
+                      enableInteractiveSelection: true,
+                      style: const TextStyle(
                         fontSize: 15,
-                        color: KoalaColors.textTer,
+                        fontWeight: FontWeight.w500,
+                        color: KoalaColors.text,
                         height: 1.45,
                       ),
-                      border: InputBorder.none,
-                      enabledBorder: InputBorder.none,
-                      focusedBorder: InputBorder.none,
-                      disabledBorder: InputBorder.none,
-                      errorBorder: InputBorder.none,
-                      focusedErrorBorder: InputBorder.none,
-                      counterText: '',
-                      isCollapsed: true,
-                      contentPadding: EdgeInsets.zero,
+                      decoration: const InputDecoration(
+                        hintText: 'Örn: sıcak ışıklı, ahşap dokular, '
+                            'mavi-bej palet, akşam vibe…',
+                        hintStyle: TextStyle(
+                          fontSize: 15,
+                          color: KoalaColors.textTer,
+                          height: 1.45,
+                        ),
+                        border: InputBorder.none,
+                        enabledBorder: InputBorder.none,
+                        focusedBorder: InputBorder.none,
+                        disabledBorder: InputBorder.none,
+                        errorBorder: InputBorder.none,
+                        focusedErrorBorder: InputBorder.none,
+                        counterText: '',
+                        isCollapsed: true,
+                        contentPadding: EdgeInsets.zero,
+                      ),
+                      onChanged: (_) => setState(() {}),
                     ),
-                    onChanged: (_) => setState(() {}),
                   ),
                 ),
               ),

@@ -17,6 +17,11 @@ import 'services/cache_service.dart';
 import 'services/connectivity_service.dart';
 import 'services/evlumba_live_service.dart';
 import 'services/push_token_service.dart';
+import 'services/saved_items_service.dart';
+import 'services/billing_service.dart';
+import 'services/quota_service.dart';
+import 'helpers/paywall_router.dart';
+import 'core/router/app_router.dart' as koala_router;
 import 'core/config/env.dart';
 import 'widgets/experience_ui.dart';
 import 'firebase_options.dart';
@@ -98,6 +103,15 @@ Future<void> main() async {
   // Mock mode init (URL ?mock=1 / sharedprefs flag) — restyle çağrısı
   // başlamadan önce tamamlansın diye await ediyoruz (sharedprefs read fast).
   await MockMode.init();
+
+  // Disk caches → RAM warm: paralel oku, ilk frame'de hazır olsun.
+  // Hard refresh sonrası Projelerim ve Swipe deck anında çiziliyor.
+  await Future.wait([
+    SavedItemsService.warmFromDiskCache(),
+    EvlumbaLiveService.warmDeckFromDisk(),
+    // Pro/Premium billing — Android only; web/iOS no-op (see BillingService).
+    BillingService.initialize(),
+  ]);
 
   runApp(const _BootstrapApp());
 }
@@ -278,6 +292,15 @@ class _BootstrapAppState extends State<_BootstrapApp> {
             enabled: _supabaseReady,
           );
           Analytics.appOpened();
+          // Wire global 402 → paywall handler. Services call this when API
+          // returns 402 quota_exceeded; we route via the GoRouter navigator key.
+          QuotaService.onQuotaExceeded = (trigger) {
+            final ctx =
+                koala_router.appRouter.routerDelegate.navigatorKey.currentContext;
+            if (ctx == null) return;
+            QuotaService.invalidate();
+            showPaywall(ctx, trigger: trigger);
+          };
         }
         return const ProviderScope(child: KoalaApp());
       },

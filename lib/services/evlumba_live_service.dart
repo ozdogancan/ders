@@ -1,7 +1,9 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'cache_service.dart';
@@ -10,6 +12,25 @@ import 'cache_service.dart';
 /// Koala'nın Supabase'inden AYRI — read-only bağlantı.
 class EvlumbaLiveService {
   EvlumbaLiveService._();
+
+  /// Boot-time RAM warm: önceki oturumdan saklanan style-discovery deck'i.
+  /// StyleDiscoveryLiveScreen initState'te bu listeyi sync olarak okuyup
+  /// ilk frame'de kart gösterebilir. Navigate-out / navigate-in sırasında
+  /// da kullanılır — screen unmount olsa bile RAM'de kalır.
+  static List<Map<String, dynamic>>? prefetchedDeck;
+  static const String _prefsDeckCacheKey = 'style_discovery_deck_cache_v1';
+
+  /// main.dart boot sırasında, paralel `Future.wait` içinden çağrılır.
+  /// Disk'ten deck cache'ini RAM'e alır. ~5-15ms, JSON decode dahil.
+  static Future<void> warmDeckFromDisk() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_prefsDeckCacheKey);
+      if (raw == null || raw.isEmpty) return;
+      final list = (jsonDecode(raw) as List).cast<Map<String, dynamic>>();
+      if (list.isNotEmpty) prefetchedDeck = list;
+    } catch (_) {}
+  }
 
   static SupabaseClient? _client;
   static String? _pendingUrl;

@@ -3,11 +3,15 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
 import '../../core/theme/koala_tokens.dart';
+import '../../helpers/paywall_router.dart';
+import '../../providers/pro_status_provider.dart';
 import '../../services/analytics_service.dart';
 import '../../services/swipe_deck_service.dart';
+import '../../services/usage_limit_service.dart';
 
 /// "Zevkimi keşfet" — analyze-room confidence düşükse veya kullanıcı
 /// açıkça istediğinde açılan kısa swipe akışı. 6-8 kart, drag-to-swipe,
@@ -19,7 +23,7 @@ import '../../services/swipe_deck_service.dart';
 ///
 /// Dönüş: kullanıcı reveal'da "Tasarlayalım"a basarsa parent route
 /// `Navigator.pop` ile [SwipeResult] alır. "Atla" veya geri → null.
-class SwipeScreen extends StatefulWidget {
+class SwipeScreen extends ConsumerStatefulWidget {
   /// Backend'in tahmin ettiği oda tipi (Türkçe; "Yatak Odası" vs). Deck
   /// filtresi için service'e iletilir; null ise random.
   final String? roomTypeHint;
@@ -40,7 +44,7 @@ class SwipeScreen extends StatefulWidget {
   });
 
   @override
-  State<SwipeScreen> createState() => _SwipeScreenState();
+  ConsumerState<SwipeScreen> createState() => _SwipeScreenState();
 }
 
 /// Caller'ın kendi prefetch context'iyle çağrı yapabilmesi için kapı.
@@ -48,7 +52,7 @@ typedef RestylePrefetchTrigger = void Function();
 
 enum _Phase { loading, swiping, revealing }
 
-class _SwipeScreenState extends State<SwipeScreen> {
+class _SwipeScreenState extends ConsumerState<SwipeScreen> {
   static const int _deckSize = 8;
   static const int _minSwipesToFinish = 6;
   static const double _swipeThreshold = 100;
@@ -136,8 +140,20 @@ class _SwipeScreenState extends State<SwipeScreen> {
     }
   }
 
-  void _commit({required bool liked}) {
+  Future<void> _commit({required bool liked}) async {
     if (_index >= _deck.length) return;
+
+    // Pro paywall gate — free tier capped at dailySwipeLimit swipes/day.
+    final pro = ref.read(proStatusProvider).value?.isPro ?? false;
+    if (!pro) {
+      if (!await UsageLimitService.canSwipe()) {
+        if (!context.mounted) return;
+        await showPaywall(context, trigger: 'swipe_daily_limit');
+        return;
+      }
+      await UsageLimitService.incrementSwipe();
+    }
+
     final card = _deck[_index];
     if (liked) _liked.add(card);
     _swipeOutcomes.add(liked);

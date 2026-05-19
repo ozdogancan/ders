@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/theme/koala_tokens.dart';
 import '../helpers/auth_guard.dart';
+import '../providers/pro_status_provider.dart';
 import '../services/evlumba_live_service.dart';
 import '../services/saved_items_service.dart';
 import '../widgets/chat/designer_chat_popup.dart';
@@ -11,7 +13,7 @@ import '../widgets/save_button.dart';
 import '../widgets/share_sheet.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
-class DesignerProfileScreen extends StatefulWidget {
+class DesignerProfileScreen extends ConsumerStatefulWidget {
   final String designerId;
   final String? designerName;
 
@@ -22,10 +24,11 @@ class DesignerProfileScreen extends StatefulWidget {
   });
 
   @override
-  State<DesignerProfileScreen> createState() => _DesignerProfileScreenState();
+  ConsumerState<DesignerProfileScreen> createState() =>
+      _DesignerProfileScreenState();
 }
 
-class _DesignerProfileScreenState extends State<DesignerProfileScreen> {
+class _DesignerProfileScreenState extends ConsumerState<DesignerProfileScreen> {
   Map<String, dynamic>? _designer;
   List<Map<String, dynamic>> _projects = [];
   bool _loading = true;
@@ -194,27 +197,91 @@ class _DesignerProfileScreenState extends State<DesignerProfileScreen> {
                         const SizedBox(height: KoalaSpacing.xxl),
 
                         // ── MESAJ AT BUTTON ──
-                        SizedBox(
-                          width: double.infinity,
-                          height: 48,
-                          child: ElevatedButton.icon(
-                            onPressed: _openChat,
-                            icon: const Icon(LucideIcons.messageCircle,
-                                size: 20),
-                            label: const Text('Mesaj At',
-                                style: TextStyle(
-                                    fontSize: 15, fontWeight: FontWeight.w600)),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: KoalaColors.accent,
-                              foregroundColor: Colors.white,
-                              shape: RoundedRectangleBorder(
-                                borderRadius:
-                                    BorderRadius.circular(KoalaRadius.md),
+                        // Free user'a subtle gold mini PRO badge — designer DM
+                        // quota dolduğunda backend 402 → global handler
+                        // (QuotaService.onQuotaExceeded) paywall'ı açar
+                        // (trigger: 'designer_dm_quota'). Badge = soft heads-up.
+                        Builder(builder: (_) {
+                          final isPro = ref
+                              .watch(proStatusProvider)
+                              .maybeWhen(
+                                  data: (s) => s.isPro,
+                                  orElse: () => false);
+                          return Stack(
+                            clipBehavior: Clip.none,
+                            children: [
+                              SizedBox(
+                                width: double.infinity,
+                                height: 48,
+                                child: ElevatedButton.icon(
+                                  onPressed: _openChat,
+                                  icon: const Icon(LucideIcons.messageCircle,
+                                      size: 20),
+                                  label: const Text('Mesaj At',
+                                      style: TextStyle(
+                                          fontSize: 15,
+                                          fontWeight: FontWeight.w600)),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: KoalaColors.accent,
+                                    foregroundColor: Colors.white,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(
+                                          KoalaRadius.md),
+                                    ),
+                                    elevation: 0,
+                                  ),
+                                ),
                               ),
-                              elevation: 0,
-                            ),
-                          ),
-                        ),
+                              if (!isPro)
+                                Positioned(
+                                  top: -6,
+                                  right: -6,
+                                  child: Container(
+                                    height: 18,
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 6, vertical: 1),
+                                    decoration: BoxDecoration(
+                                      gradient: const LinearGradient(
+                                        colors: [
+                                          Color(0xFFE0B96B),
+                                          Color(0xFFB8862F)
+                                        ],
+                                        begin: Alignment.topLeft,
+                                        end: Alignment.bottomRight,
+                                      ),
+                                      borderRadius: BorderRadius.circular(99),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: const Color(0xFFB8862F)
+                                              .withValues(alpha: 0.30),
+                                          blurRadius: 6,
+                                          offset: const Offset(0, 2),
+                                        ),
+                                      ],
+                                    ),
+                                    child: const Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(LucideIcons.crown,
+                                            size: 9, color: Colors.white),
+                                        SizedBox(width: 3),
+                                        Text(
+                                          'PRO',
+                                          style: TextStyle(
+                                            fontSize: 9,
+                                            fontWeight: FontWeight.w800,
+                                            color: Colors.white,
+                                            letterSpacing: 0.6,
+                                            height: 1.0,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          );
+                        }),
                         const SizedBox(height: KoalaSpacing.md),
                         // ── Like / Save / Share row ──
                         Row(

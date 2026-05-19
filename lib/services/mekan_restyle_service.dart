@@ -2,8 +2,12 @@ import 'dart:convert';
 import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 
+import 'package:firebase_auth/firebase_auth.dart';
+
+import 'auth_token_service.dart';
 import 'mekan_analyze_service.dart' show StyleHints;
 import 'mock_mode.dart';
+import 'quota_service.dart';
 import 'replicate_service.dart' show ReplicateException;
 
 /// Mekan Restyle v2 — 3-variant batch (faithful · editorial · bold).
@@ -80,14 +84,19 @@ class MekanRestyleService {
       );
     }
 
+    final uid = FirebaseAuth.instance.currentUser?.uid;
     final resp = await http
         .post(
           Uri.parse('$_apiBase/api/restyle/batch'),
-          headers: {'Content-Type': 'application/json'},
+          headers: {
+            ...await AuthTokenService.authHeaders(),
+            'Content-Type': 'application/json',
+          },
           body: jsonEncode({
             'image': dataUrl,
             'room': room.toLowerCase(),
             'theme': enrichedTheme,
+            if (uid != null) 'userId': uid,
             if (referenceUrl != null && referenceUrl.isNotEmpty)
               'reference_url': referenceUrl,
           }),
@@ -101,6 +110,13 @@ class MekanRestyleService {
       throw ReplicateException('bad_response', 'HTTP ${resp.statusCode}');
     }
 
+    if (resp.statusCode == 402 && j['feature'] == 'restyle') {
+      QuotaService.onQuotaExceeded?.call('restyle_quota');
+      throw ReplicateException(
+        'quota_exceeded',
+        'Aylık AI yeniden tasarım hakkın doldu. Pro\'ya geçerek sınırsız üretebilirsin.',
+      );
+    }
     if (resp.statusCode >= 400) {
       throw ReplicateException(
         (j['error'] ?? 'http_${resp.statusCode}').toString(),

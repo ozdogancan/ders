@@ -4,7 +4,11 @@ import 'dart:typed_data';
 import 'package:crypto/crypto.dart' show sha1;
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../helpers/paywall_router.dart';
+import '../../providers/pro_status_provider.dart';
+import '../pro/widgets/restyle_counter_pill.dart';
 import '../../core/theme/koala_tokens.dart';
 import '../../widgets/koala_bottom_nav.dart';
 import '../main_shell.dart';
@@ -27,6 +31,7 @@ import 'stages/generating_stage.dart';
 import 'stages/moodboard_stage.dart';
 import 'stages/result_stage.dart';
 import 'stages/style_stage.dart';
+import 'widgets/exit_edit_dialog.dart';
 import 'widgets/mekan_ui.dart';
 import 'widgets/quality_hint_sheet.dart';
 import 'widgets/style_swipe_sheet.dart';
@@ -39,7 +44,7 @@ import 'package:lucide_icons/lucide_icons.dart';
 /// 2026-04-27: `wizard` parametresi eklendi. MekanWizardScreen kullanıcı
 /// tercihlerini topladıktan sonra buraya iletir — restyle prompt bu
 /// seçimlerle zenginleştirilir (next round'da consume edilecek).
-class MekanFlowScreen extends StatefulWidget {
+class MekanFlowScreen extends ConsumerStatefulWidget {
   final Uint8List initialBytes;
   final MekanWizardResult? wizard;
   /// Swipe'tan gelen referans tasarım — Gemini'ye "şu tarzda yap" inspiration.
@@ -54,7 +59,7 @@ class MekanFlowScreen extends StatefulWidget {
   });
 
   @override
-  State<MekanFlowScreen> createState() => _MekanFlowScreenState();
+  ConsumerState<MekanFlowScreen> createState() => _MekanFlowScreenState();
 }
 
 enum _Phase { analyzing, notMekan, reveal, moodboard, style, generating, result, error }
@@ -62,7 +67,7 @@ enum _Phase { analyzing, notMekan, reveal, moodboard, style, generating, result,
 /// "Bu bir mekan değil" reddi için sebep — mesaj tonlaması için.
 enum _RejectReason { selfie, food, pet, vehicle, document, screen, clothing, outdoor, other }
 
-class _MekanFlowScreenState extends State<MekanFlowScreen> {
+class _MekanFlowScreenState extends ConsumerState<MekanFlowScreen> {
   _Phase _phase = _Phase.analyzing;
   late Uint8List _bytes;
   AnalyzeResult? _analysis;
@@ -459,6 +464,14 @@ class _MekanFlowScreenState extends State<MekanFlowScreen> {
   Future<void> _generate(ThemeOption theme) async {
     final a = _analysis;
     if (a == null) return;
+
+    // Pro paywall gate — restyle is Pro-only on free tier.
+    final pro = ref.read(proStatusProvider).value?.isPro ?? false;
+    if (!pro) {
+      if (!context.mounted) return;
+      await showPaywall(context, trigger: 'restyle_pre_generate');
+      return;
+    }
 
     // ───── /api/analyze-room (stil sinyalleri) ─────
     // Restyle hand-off'undan HEMEN önce. Kullanıcı stil seçti, görsel restyle
@@ -874,7 +887,16 @@ class _MekanFlowScreenState extends State<MekanFlowScreen> {
     final hideAppBar = _phase == _Phase.analyzing ||
         _phase == _Phase.generating ||
         _phase == _Phase.result;
-    return Scaffold(
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) async {
+        if (didPop) return;
+        final confirmed = await showExitEditDialog(context);
+        if (confirmed && context.mounted) {
+          Navigator.of(context).pop();
+        }
+      },
+      child: Scaffold(
       backgroundColor: KoalaColors.bg,
       appBar: hideAppBar
           ? null
@@ -883,10 +905,21 @@ class _MekanFlowScreenState extends State<MekanFlowScreen> {
               surfaceTintColor: KoalaColors.bg,
               elevation: 0,
               leading: IconButton(
-                onPressed: () => Navigator.of(context).pop(),
+                onPressed: () async {
+                  final confirmed = await showExitEditDialog(context);
+                  if (confirmed && context.mounted) {
+                    Navigator.of(context).pop();
+                  }
+                },
                 icon: const Icon(LucideIcons.arrowLeft),
               ),
               title: const Text('Mekan', style: KoalaText.h2),
+              actions: const [
+                Padding(
+                  padding: EdgeInsets.only(right: 14, top: 14, bottom: 14),
+                  child: RestyleCounterPill(),
+                ),
+              ],
             ),
       body: SafeArea(
         top: !hideAppBar,
@@ -896,6 +929,7 @@ class _MekanFlowScreenState extends State<MekanFlowScreen> {
           switchOutCurve: Curves.easeInCubic,
           child: _buildPhase(),
         ),
+      ),
       ),
     );
   }

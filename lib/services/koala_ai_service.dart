@@ -1,6 +1,10 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:firebase_auth/firebase_auth.dart';
+import 'auth_token_service.dart';
+import 'quota_service.dart';
+
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
@@ -523,8 +527,11 @@ class KoalaAIService {
       'contents': contents,
       'generationConfig': {'temperature': 0.7, 'maxOutputTokens': 300},
     };
-    final response = await _client.post(_proxyUri, headers: {'Content-Type': 'application/json'}, body: jsonEncode(payload))
+    final response = await _client.post(_proxyUri, headers: await _chatHeaders(), body: jsonEncode(payload))
         .timeout(const Duration(seconds: 30));
+    if (_handle402(response)) {
+      throw Exception('Günlük AI sohbet hakkın doldu. Pro\'ya geçerek sınırsız sohbet et.');
+    }
     if (response.statusCode >= 300) throw Exception('Gemini failed: ${response.statusCode}');
     return _extractText(response.body);
   }
@@ -537,6 +544,31 @@ class KoalaAIService {
 
   /// Proxy URL for Koala API backend
   Uri get _proxyUri => Uri.parse('${Env.koalaApiUrl}/api/chat');
+
+  /// Headers for chat proxy — includes Firebase Bearer token + X-User-Id so
+  /// the server can enforce per-user daily quota.
+  Future<Map<String, String>> _chatHeaders() async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    return {
+      ...await AuthTokenService.authHeaders(),
+      if (uid != null) 'X-User-Id': uid,
+      'Content-Type': 'application/json',
+    };
+  }
+
+  /// Returns true if response is a 402 quota_exceeded chat — also fires the
+  /// global paywall trigger. Caller should throw / abort after.
+  bool _handle402(http.Response response) {
+    if (response.statusCode != 402) return false;
+    try {
+      final j = jsonDecode(response.body) as Map<String, dynamic>;
+      if (j['feature'] == 'chat') {
+        QuotaService.onQuotaExceeded?.call('chat_quota');
+        return true;
+      }
+    } catch (_) {}
+    return false;
+  }
 
   Future<KoalaResponse> _callGemini({
     required String prompt,
@@ -594,8 +626,11 @@ class KoalaAIService {
     };
 
     debugPrint('KoalaAI: Sending request via proxy (${contents.length} messages, jsonMode=$jsonMode)...');
-    final response = await _client.post(_proxyUri, headers: {'Content-Type': 'application/json'}, body: jsonEncode(payload))
+    final response = await _client.post(_proxyUri, headers: await _chatHeaders(), body: jsonEncode(payload))
         .timeout(const Duration(seconds: 30));
+    if (_handle402(response)) {
+      throw Exception('Günlük AI sohbet hakkın doldu. Pro\'ya geçerek sınırsız sohbet et.');
+    }
 
     if (response.statusCode >= 300) {
       debugPrint('KoalaAI ERROR ${response.statusCode}: ${_truncForLog(response.body, 300)}');
@@ -711,10 +746,13 @@ class KoalaAIService {
     http.Response? response;
     for (int attempt = 1; attempt <= 2; attempt++) {
       response = await _client
-          .post(_proxyUri, headers: {'Content-Type': 'application/json'}, body: jsonBody)
+          .post(_proxyUri, headers: await _chatHeaders(), body: jsonBody)
           .timeout(const Duration(seconds: 25));
 
       debugPrint('KoalaAI: Image attempt $attempt → ${response.statusCode}');
+      if (_handle402(response)) {
+        throw Exception('Günlük AI sohbet hakkın doldu. Pro\'ya geçerek sınırsız sohbet et.');
+      }
       if (response.statusCode < 300) break;
       if (response.statusCode == 503 || response.statusCode == 429) {
         if (attempt < 2) await Future.delayed(const Duration(seconds: 2));

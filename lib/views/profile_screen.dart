@@ -1,42 +1,77 @@
+import 'dart:convert';
+import 'dart:io' show Platform;
+
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:image_picker/image_picker.dart';
-import 'package:supabase_flutter/supabase_flutter.dart' hide AuthState, User;
+import 'package:http/http.dart' as http;
+import 'package:lucide_icons/lucide_icons.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:universal_html/html.dart' as html;
+import 'package:url_launcher/url_launcher.dart';
 
 import '../core/theme/koala_tokens.dart';
-import '../widgets/media_upload_helper.dart';
+import '../helpers/paywall_router.dart';
+import '../providers/pro_status_provider.dart';
 import '../services/analytics_service.dart';
-import '../services/collections_service.dart';
+import '../services/auth_token_service.dart';
+import '../services/billing_service.dart';
+import '../services/evlumba_live_service.dart';
 import '../services/saved_items_service.dart';
 import 'admin/admin_shell.dart';
 import 'auth_common.dart';
 import 'auth_entry_screen.dart';
-import 'collections_screen.dart';
-import 'notifications_screen.dart';
-import 'saved/saved_screen_v2.dart';
-import 'package:lucide_icons/lucide_icons.dart';
 
-/// Profil ekranı — refine tasarım. #FAFAFB üniform background,
-/// avatar ring'inde ve butonlarda mor accent. Header card, stats row (3 tile),
-/// sectioned settings (Hesap / Uygulama / Hakkında).
-class ProfileScreen extends StatefulWidget {
+/// Profile / Settings — simple, modern, well-organized.
+/// SnapHome-inspired structure:
+///   header card → koral Pro banner → Hesap / Genel / Hakkında / Hesap Yönetimi.
+class ProfileScreen extends ConsumerStatefulWidget {
   const ProfileScreen({super.key});
   @override
-  State<ProfileScreen> createState() => _ProfileScreenState();
+  ConsumerState<ProfileScreen> createState() => _ProfileScreenState();
 }
 
-class _ProfileScreenState extends State<ProfileScreen> {
-  // Background — direktif: tek tip #FAFAFB.
-  static const Color _bg = Color(0xFFFAFAFB);
-
+class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   final _user = FirebaseAuth.instance.currentUser;
   String? _photoUrl;
   String _displayName = '';
   String _email = '';
   int _adminTapCount = 0;
-  Map<String, int> _savedCounts = {'design': 0, 'designer': 0, 'product': 0};
-  int _collectionCount = 0;
+
+  bool _wiping = false;
+  bool _deleting = false;
+  bool _restoring = false;
+
+  // pubspec.yaml: version: 1.0.98+102
+  // package_info_plus is not in pubspec; hardcoded.
+  // TODO: switch to package_info_plus when added.
+  static const String _appVersion = '1.0.98';
+  static const String _supportEmail = 'info@evlumba.com';
+  static const String _feedbackEmail = 'info@evlumba.com';
+  static const String _privacyUrl = 'https://www.koalatutor.com/privacy';
+  static const String _termsUrl = 'https://www.koalatutor.com/terms';
+  static const String _kvkkUrl = 'https://www.koalatutor.com/kvkk';
+  static const String _shareUrl = 'https://www.evlumba.com';
+  static const String _wipeDataEndpoint =
+      'https://koala-api-olive.vercel.app/api/account/wipe-data';
+  // TODO: confirm Play Store package name + iOS App Store id.
+  static const String _androidPackage = 'com.evlumba.koala';
+  static const String _playStoreUrl =
+      'https://play.google.com/store/apps/details?id=$_androidPackage';
+  static const String _appStoreUrl =
+      'https://apps.apple.com/app/id0000000000'; // TODO: real iOS app id
+
+  // ─── Palette (per spec) ────────────────────────────────────────
+  static const Color _screenBg = Color(0xFFF8F9FB);
+  static const Color _proRed1 = Color(0xFFFF5A5F);
+  static const Color _proRed2 = Color(0xFFFF8A5C);
+  static const Color _avatarGrad1 = Color(0xFF6C63FF);
+  static const Color _avatarGrad2 = Color(0xFF9B5CFF);
+  static const Color _sectionLabel = Color(0xFF6B7280);
+  static const Color _dangerRed = Color(0xFFE5484D);
 
   @override
   void initState() {
@@ -45,144 +80,38 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _displayName = _user?.displayName ?? '';
     _email = _user?.email ?? '';
     _photoUrl = _user?.photoURL;
-    _loadStats();
-  }
-
-  Future<void> _loadStats() async {
-    final results = await Future.wait([
-      SavedItemsService.getCounts(),
-      CollectionsService.getAll(),
-    ]);
-    if (mounted) {
-      setState(() {
-        _savedCounts = results[0] as Map<String, int>;
-        _collectionCount = (results[1] as List).length;
-      });
-    }
-  }
-
-  Future<void> _pickProfilePhoto() async {
-    try {
-      final picker = ImagePicker();
-      final image = await picker.pickImage(
-          source: ImageSource.gallery,
-          maxWidth: 512,
-          maxHeight: 512,
-          imageQuality: 80);
-      if (image == null) return;
-      final bytes = await image.readAsBytes();
-      // MIME magic-byte'tan — uzantı ve contentType senkron olmazsa avatar
-      // broken image görünüyor (özellikle HEIC/WEBP galeri seçimlerinde).
-      final mime = MediaUploadHelper.detectMime(bytes);
-      final ext = MediaUploadHelper.extensionFor(mime);
-      final fileName =
-          'profile_${_user!.uid}_${DateTime.now().millisecondsSinceEpoch}.$ext';
-      final supabase = Supabase.instance.client;
-      await supabase.storage.from('avatars').uploadBinary(fileName, bytes,
-          fileOptions: FileOptions(contentType: mime, upsert: true));
-      final publicUrl =
-          supabase.storage.from('avatars').getPublicUrl(fileName);
-      await _user.updatePhotoURL(publicUrl);
-      if (mounted) {
-        setState(() => _photoUrl = publicUrl);
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            behavior: SnackBarBehavior.floating,
-            backgroundColor: KoalaColors.greenBright,
-            shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(14)),
-            content: const Text('Profil fotoğrafı güncellendi',
-                style: TextStyle(
-                    color: Colors.white, fontWeight: FontWeight.w600))));
-      }
-    } catch (e) {
-      debugPrint('Photo error: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            behavior: SnackBarBehavior.floating,
-            backgroundColor: KoalaColors.errorBright,
-            shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(14)),
-            content: const Text('Fotoğraf yüklenemedi, tekrar dene',
-                style: TextStyle(
-                    color: Colors.white, fontWeight: FontWeight.w600))));
-      }
-    }
-  }
-
-  void _editName() {
-    final ctrl = TextEditingController(text: _displayName);
-    showDialog(
-        context: context,
-        builder: (ctx) => AlertDialog(
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(20)),
-                title: const Text('İsmini Değiştir',
-                    style:
-                        TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
-                content: TextField(
-                    controller: ctrl,
-                    autofocus: true,
-                    style: const TextStyle(
-                        fontSize: 16, fontWeight: FontWeight.w600),
-                    decoration: InputDecoration(
-                        hintText: 'Adın',
-                        border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12)),
-                        focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: const BorderSide(
-                                color: KoalaColors.accent, width: 2)))),
-                actions: [
-                  TextButton(
-                      onPressed: () => Navigator.pop(ctx),
-                      child: const Text('Vazgeç')),
-                  FilledButton(
-                      onPressed: () async {
-                        final name = ctrl.text.trim();
-                        if (name.isEmpty || name.length > 50) return;
-                        Navigator.pop(ctx);
-                        try {
-                          await _user?.updateDisplayName(name);
-                          if (mounted) setState(() => _displayName = name);
-                        } catch (e) {
-                          debugPrint('Name update error: $e');
-                          if (mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                    content: Text('İsim güncellenemedi'),
-                                    behavior: SnackBarBehavior.floating));
-                          }
-                        }
-                      },
-                      style: FilledButton.styleFrom(
-                          backgroundColor: KoalaColors.accent),
-                      child: const Text('Kaydet')),
-                ]));
   }
 
   bool get _isAnonymous => _user?.isAnonymous ?? true;
 
+  // ─── Actions ──────────────────────────────────────────────────
   Future<void> _logout() async {
     final confirm = await showDialog<bool>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(20)),
-                title: const Text('Çıkış Yap',
-                    style: TextStyle(
-                        fontWeight: FontWeight.w800, fontSize: 17)),
-                content: const Text(
-                    'Hesabından çıkış yapmak istediğine emin misin?'),
-                actions: [
-                  TextButton(
-                      onPressed: () => Navigator.pop(ctx, false),
-                      child: const Text('Vazgeç')),
-                  FilledButton(
-                      onPressed: () => Navigator.pop(ctx, true),
-                      style: FilledButton.styleFrom(
-                          backgroundColor: KoalaColors.errorBright),
-                      child: const Text('Çıkış Yap')),
-                ]));
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(KoalaRadius.lg)),
+        title: const Text('Çıkış Yap', style: KoalaText.h3),
+        content: const Text(
+            'Hesabından çıkış yapmak istediğine emin misin?',
+            style: TextStyle(
+                fontFamily: 'Manrope',
+                fontSize: 14,
+                color: KoalaColors.textMed)),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Vazgeç')),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: FilledButton.styleFrom(
+                backgroundColor: KoalaColors.errorBright),
+            child: const Text('Çıkış Yap'),
+          ),
+        ],
+      ),
+    );
     if (confirm != true) return;
 
     try {
@@ -190,8 +119,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     } catch (_) {}
 
     if (!mounted) return;
-
-    // GoRouter bypass — doğrudan Navigator ile tüm stack'ı temizleyip auth ekranını göster
     Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
       MaterialPageRoute(
           builder: (_) => const AuthEntryScreen(mode: AuthFlowMode.login)),
@@ -206,17 +133,304 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  void _comingSoon(String label) {
+  Future<bool> _callWipeDataApi() async {
+    final uid = _user?.uid;
+    if (uid == null) return false;
+    try {
+      final headers = {
+        ...await AuthTokenService.authHeaders(),
+        'Content-Type': 'application/json',
+      };
+      final res = await http.post(
+        Uri.parse(_wipeDataEndpoint),
+        headers: headers,
+        body: jsonEncode({'userId': uid}),
+      );
+      if (res.statusCode >= 200 && res.statusCode < 300) {
+        debugPrint('wipe-data ok: ${res.body}');
+        return true;
+      }
+      debugPrint('wipe-data failed ${res.statusCode}: ${res.body}');
+      return false;
+    } catch (e) {
+      debugPrint('wipe-data error: $e');
+      return false;
+    }
+  }
+
+  void _clearLocalCaches() {
+    SavedItemsService.prefetchedProjects = null;
+    EvlumbaLiveService.prefetchedDeck = null;
+  }
+
+  Future<void> _wipeData() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(KoalaRadius.lg)),
+        title: const Text('Verilerini Sil', style: KoalaText.h3),
+        content: const Text(
+          'Tüm tasarımların, kayıtların, koleksiyonların ve AI sohbet geçmişin '
+          'kalıcı olarak silinecek. Hesabın açık kalır. Devam edilsin mi?',
+          style: TextStyle(
+              fontFamily: 'Manrope',
+              fontSize: 14,
+              height: 1.45,
+              color: KoalaColors.textMed),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Vazgeç')),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: FilledButton.styleFrom(backgroundColor: _dangerRed),
+            child: const Text('Verilerimi Sil'),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+
+    setState(() => _wiping = true);
+    final ok = await _callWipeDataApi();
+    if (!mounted) return;
+    setState(() => _wiping = false);
+
+    if (ok) {
+      _clearLocalCaches();
+      _toast('Verilerin silindi', success: true);
+    } else {
+      _toast('Veriler silinemedi, tekrar dene', success: false);
+    }
+  }
+
+  Future<void> _deleteAccount() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(KoalaRadius.lg)),
+        title: const Text('Hesabımı Sil',
+            style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                color: _dangerRed)),
+        content: const Text(
+          'Hesabın ve TÜM verilerin kalıcı olarak silinecek. '
+          'Bu işlem GERİ ALINAMAZ. Devam etmek istediğinden emin misin?',
+          style: TextStyle(
+              fontFamily: 'Manrope',
+              fontSize: 14,
+              height: 1.45,
+              color: KoalaColors.textMed),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Vazgeç')),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: FilledButton.styleFrom(backgroundColor: _dangerRed),
+            child: const Text('Hesabımı Sil'),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+
+    setState(() => _deleting = true);
+
+    final wiped = await _callWipeDataApi();
+    if (!wiped) {
+      if (mounted) {
+        setState(() => _deleting = false);
+        _toast('Veriler silinemedi, hesap silme iptal edildi',
+            success: false);
+      }
+      return;
+    }
+
+    try {
+      await FirebaseAuth.instance.currentUser?.delete();
+      _clearLocalCaches();
+      if (!mounted) return;
+      Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
+        MaterialPageRoute(
+            builder: (_) => const AuthEntryScreen(mode: AuthFlowMode.login)),
+        (route) => false,
+      );
+    } on FirebaseAuthException catch (e) {
+      debugPrint('account delete error: ${e.code} ${e.message}');
+      if (!mounted) return;
+      setState(() => _deleting = false);
+      if (e.code == 'requires-recent-login') {
+        _toast('Lütfen önce çıkış yap, tekrar giriş yap ve sonra tekrar dene',
+            success: false);
+        await Future.delayed(const Duration(milliseconds: 800));
+        if (mounted) await _logout();
+      } else {
+        _toast('Hesap silinemedi: ${e.message ?? e.code}', success: false);
+      }
+    } catch (e) {
+      debugPrint('account delete error: $e');
+      if (!mounted) return;
+      setState(() => _deleting = false);
+      _toast('Hesap silinemedi, tekrar dene', success: false);
+    }
+  }
+
+  Future<void> _restorePurchases() async {
+    if (_restoring) return;
+    setState(() => _restoring = true);
+    try {
+      final ok = await BillingService.restorePurchases();
+      if (!mounted) return;
+      _toast(
+        ok ? 'Satın alımlar geri yüklendi' : 'Geri yüklenecek satın alım yok',
+        success: ok,
+      );
+    } catch (e) {
+      debugPrint('restorePurchases error: $e');
+      if (mounted) _toast('Geri yükleme başarısız, tekrar dene', success: false);
+    } finally {
+      if (mounted) setState(() => _restoring = false);
+    }
+  }
+
+  Future<void> _shareApp() async {
+    try {
+      if (kIsWeb) {
+        await Clipboard.setData(const ClipboardData(text: _shareUrl));
+        if (mounted) _toast('Bağlantı kopyalandı', success: true);
+        return;
+      }
+      await Share.share('Koala ile evini AI ile tasarla → $_shareUrl');
+    } catch (e) {
+      debugPrint('share error: $e');
+      if (mounted) _toast('Paylaşılamadı, tekrar dene');
+    }
+  }
+
+  void _rateApp() {
+    // Best-effort: route to Play Store on Android, App Store on iOS, web → Play.
+    String url = _playStoreUrl;
+    try {
+      if (!kIsWeb && Platform.isIOS) url = _appStoreUrl;
+    } catch (_) {}
+    _openExternal(url);
+  }
+
+  Future<void> _openFeedback() async {
+    final mailto = Uri.parse(
+        'mailto:$_feedbackEmail?subject=${Uri.encodeComponent('Koala Geri Bildirim')}');
+    try {
+      if (kIsWeb) {
+        html.window.open(mailto.toString(), '_self');
+        return;
+      }
+      final ok = await launchUrl(mailto);
+      if (ok) return;
+    } catch (e) {
+      debugPrint('feedback mailto error: $e');
+    }
+    await Clipboard.setData(const ClipboardData(text: _feedbackEmail));
+    if (mounted) _toast('E-posta kopyalandı: $_feedbackEmail', success: true);
+  }
+
+  void _openFaq() {
+    const faqs = <_FaqItem>[
+      _FaqItem(
+        q: 'AI tasarım nasıl çalışıyor?',
+        a:
+            'Mekan fotoğrafını yükle, Koala görseli analiz eder ve seçtiğin tarza göre yeni bir tasarım üretir.',
+      ),
+      _FaqItem(
+        q: 'Tasarımlarım kaydediliyor mu?',
+        a:
+            'Evet. Ürettiğin tüm tasarımlar otomatik kaydedilir; Kaydedilenlerim ve Koleksiyonlarım üzerinden erişebilirsin.',
+      ),
+      _FaqItem(
+        q: 'Profesyonele nasıl ulaşabilirim?',
+        a:
+            'Tasarımcı profilinde "Mesaj" butonuyla doğrudan iletişime geçebilir, projen için teklif alabilirsin.',
+      ),
+      _FaqItem(
+        q: 'Hesabımı nasıl silerim?',
+        a:
+            'Profil sayfasının en altındaki "Hesap Yönetimi" bölümünden hesabını ve verilerini silebilirsin.',
+      ),
+    ];
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(KoalaRadius.lg)),
+        title: const Text('Sıkça Sorulanlar', style: KoalaText.h3),
+        content: SizedBox(
+          width: 360,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (var i = 0; i < faqs.length; i++) ...[
+                  if (i > 0) const SizedBox(height: 14),
+                  Text(faqs[i].q,
+                      style: const TextStyle(
+                        fontFamily: 'Manrope',
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: KoalaColors.text,
+                      )),
+                  const SizedBox(height: 4),
+                  Text(faqs[i].a,
+                      style: const TextStyle(
+                        fontFamily: 'Manrope',
+                        fontSize: 13,
+                        height: 1.45,
+                        color: KoalaColors.textMed,
+                      )),
+                ],
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Kapat')),
+        ],
+      ),
+    );
+  }
+
+  // ─── UI helpers ─────────────────────────────────────────────────
+  void _toast(String message, {bool? success}) {
+    final color = success == null
+        ? KoalaColors.text
+        : (success ? KoalaColors.greenBright : KoalaColors.errorBright);
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(SnackBar(
         behavior: SnackBarBehavior.floating,
-        duration: const Duration(seconds: 2),
-        content: Text('$label · Yakında'),
+        backgroundColor: color,
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        duration: const Duration(seconds: 3),
+        content: Text(
+          message,
+          style: const TextStyle(
+              color: Colors.white, fontWeight: FontWeight.w600),
+        ),
       ));
   }
 
-  void _goBackHome() {
+  void _goBack() {
     if (Navigator.of(context).canPop()) {
       Navigator.of(context).pop();
       return;
@@ -224,444 +438,463 @@ class _ProfileScreenState extends State<ProfileScreen> {
     context.go('/');
   }
 
-  // Mesaj sayısı placeholder — şu an SavedItemsService'te tutulmuyor.
-  int get _designsCount =>
-      (_savedCounts['design'] ?? 0) + (_savedCounts['project'] ?? 0);
-  int get _savedTotal => _savedCounts.values.fold(0, (a, b) => a + b);
+  void _onAdminTap() {
+    _adminTapCount++;
+    if (_adminTapCount >= 5) {
+      _adminTapCount = 0;
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const AdminShell()),
+      );
+    }
+  }
 
+  Future<void> _openExternal(String url) async {
+    try {
+      if (kIsWeb) {
+        html.window.open(url, '_blank');
+        return;
+      }
+      final uri = Uri.parse(url);
+      final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!ok && mounted) _toast('Bağlantı açılamadı');
+    } catch (e) {
+      debugPrint('Open URL error: $e');
+      if (mounted) _toast('Bağlantı açılamadı');
+    }
+  }
+
+  Future<void> _contactSupport() async {
+    final mailto = Uri.parse(
+        'mailto:$_supportEmail?subject=${Uri.encodeComponent('Koala Destek')}');
+    try {
+      if (kIsWeb) {
+        html.window.open(mailto.toString(), '_self');
+        return;
+      }
+      final ok = await launchUrl(mailto);
+      if (ok) return;
+    } catch (e) {
+      debugPrint('mailto error: $e');
+    }
+    await Clipboard.setData(const ClipboardData(text: _supportEmail));
+    if (mounted) _toast('E-posta kopyalandı: $_supportEmail', success: true);
+  }
+
+  void _tapAvatarEdit() {
+    // TODO: open image picker → upload to Supabase storage →
+    //   FirebaseAuth.currentUser.updatePhotoURL(newUrl).
+    _toast('Profil fotoğrafı düzenleme · Yakında');
+  }
+
+  void _openLanguagePicker() {
+    // TODO: implement language picker (no LanguageService in app yet).
+    _toast('Dil seçimi · Yakında');
+  }
+
+  // ─── Build ──────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
-    final totalDesigns = _designsCount;
-    final totalSaved = _savedTotal;
+    final asyncStatus = ref.watch(proStatusProvider);
+    final proStatus = asyncStatus.value;
+    final isPro = proStatus?.isPro ?? false;
 
     return Scaffold(
-      backgroundColor: _bg,
+      backgroundColor: _screenBg,
+      appBar: AppBar(
+        backgroundColor: _screenBg,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        foregroundColor: KoalaColors.text,
+        leading: IconButton(
+          icon: const Icon(LucideIcons.chevronLeft, size: 24),
+          onPressed: _goBack,
+        ),
+        centerTitle: true,
+        title: GestureDetector(
+          onTap: _onAdminTap,
+          behavior: HitTestBehavior.opaque,
+          child: const Text(
+            'Profil',
+            style: TextStyle(
+              fontFamily: 'Manrope',
+              fontSize: 17,
+              fontWeight: FontWeight.w700,
+              color: KoalaColors.text,
+              letterSpacing: -0.2,
+            ),
+          ),
+        ),
+      ),
       body: SafeArea(
-        child: CustomScrollView(
-          slivers: [
-            // ── Top app bar ─────────────────────────────────
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(12, 8, 16, 0),
-                child: Row(
-                  children: [
-                    GestureDetector(
-                      onTap: _goBackHome,
-                      child: Container(
-                        width: 38,
-                        height: 38,
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(12),
-                          color: Colors.white,
-                          border: Border.all(
-                              color: KoalaColors.border, width: 0.6),
-                        ),
-                        child: const Icon(
-                          LucideIcons.arrowLeft,
-                          size: 18,
-                          color: KoalaColors.textMed,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    GestureDetector(
-                      onTap: () {
-                        _adminTapCount++;
-                        if (_adminTapCount >= 5) {
-                          _adminTapCount = 0;
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => const AdminShell(),
-                            ),
-                          );
-                        }
-                      },
-                      child: const Text(
-                        'Profil',
-                        style: TextStyle(
-                          fontFamily: 'Manrope',
-                          fontSize: 20,
-                          fontWeight: FontWeight.w800,
-                          color: KoalaColors.text,
-                          letterSpacing: -0.4,
-                        ),
-                      ),
-                    ),
-                  ],
+        top: false,
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 40),
+          children: [
+            _buildHeaderCard(),
+            const SizedBox(height: 20),
+            _buildProBanner(isPro, proStatus?.proUntil),
+            const SizedBox(height: 24),
+
+            // ─── Hesap
+            const _SectionHeader('HESAP'),
+            _SettingsCard(rows: [
+              if (!_isAnonymous && _email.isNotEmpty)
+                _SettingsTile(
+                  icon: LucideIcons.mail,
+                  label: 'E-posta',
+                  trailing: _email,
                 ),
-              ),
-            ),
-
-            // ── Header card (avatar 80 + name + email) ─────
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 20, 16, 0),
-                child: Container(
-                  padding: const EdgeInsets.fromLTRB(20, 22, 20, 22),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(
-                        color: KoalaColors.border.withValues(alpha: 0.6),
-                        width: 0.6),
-                  ),
-                  child: Column(
-                    children: [
-                      // Avatar 80px — ring sadece accentDeep ile (mor sınır).
-                      GestureDetector(
-                        onTap: _pickProfilePhoto,
-                        child: Stack(
-                          children: [
-                            Container(
-                              width: 80,
-                              height: 80,
-                              padding: const EdgeInsets.all(2.5),
-                              decoration: const BoxDecoration(
-                                shape: BoxShape.circle,
-                                gradient: LinearGradient(
-                                  colors: [
-                                    KoalaColors.accentDeep,
-                                    KoalaColors.accent,
-                                  ],
-                                ),
-                              ),
-                              child: Container(
-                                decoration: const BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  color: Colors.white,
-                                ),
-                                padding: const EdgeInsets.all(2),
-                                child: ClipOval(
-                                  child: _photoUrl != null
-                                      ? Image.network(
-                                          _photoUrl!,
-                                          fit: BoxFit.cover,
-                                          errorBuilder: (_, _, _) => Container(
-                                            color: KoalaColors.surfaceAlt,
-                                            child: const Icon(LucideIcons.user,
-                                                color: KoalaColors.textTer,
-                                                size: 36),
-                                          ),
-                                        )
-                                      : Container(
-                                          color: KoalaColors.surfaceAlt,
-                                          child: const Icon(LucideIcons.user,
-                                              color: KoalaColors.textTer,
-                                              size: 36),
-                                        ),
-                                ),
-                              ),
-                            ),
-                            Positioned(
-                              bottom: 0,
-                              right: 0,
-                              child: Container(
-                                width: 26,
-                                height: 26,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  color: KoalaColors.accentDeep,
-                                  border: Border.all(
-                                      color: Colors.white, width: 2.5),
-                                ),
-                                child: const Icon(
-                                  LucideIcons.camera,
-                                  size: 12,
-                                  color: Colors.white,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 14),
-                      // İsim — 22px Manrope w700
-                      Text(
-                        _isAnonymous
-                            ? 'Misafir Kullanıcı'
-                            : (_displayName.isNotEmpty
-                                ? _displayName
-                                : 'Koala Kullanıcı'),
-                        style: const TextStyle(
-                          fontFamily: 'Manrope',
-                          fontSize: 22,
-                          fontWeight: FontWeight.w700,
-                          color: KoalaColors.text,
-                          letterSpacing: -0.3,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      // E-posta — 14px secondary
-                      Text(
-                        _isAnonymous
-                            ? 'Giriş yap ve tüm özellikleri kullan'
-                            : _email,
-                        style: TextStyle(
-                          fontFamily: 'Manrope',
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
-                          color: _isAnonymous
-                              ? KoalaColors.accentDeep
-                              : KoalaColors.textSec,
-                        ),
-                      ),
-                      if (_isAnonymous) ...[
-                        const SizedBox(height: 14),
-                        SizedBox(
-                          height: 42,
-                          width: double.infinity,
-                          child: FilledButton.icon(
-                            onPressed: _goToLogin,
-                            style: FilledButton.styleFrom(
-                              backgroundColor: KoalaColors.accentDeep,
-                              foregroundColor: Colors.white,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                            ),
-                            icon: const Icon(LucideIcons.logIn, size: 16),
-                            label: const Text(
-                              'Giriş Yap',
-                              style: TextStyle(
-                                fontFamily: 'Manrope',
-                                fontSize: 14,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ] else ...[
-                        const SizedBox(height: 14),
-                        OutlinedButton.icon(
-                          onPressed: _editName,
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: KoalaColors.text,
-                            side: const BorderSide(
-                                color: KoalaColors.border, width: 0.8),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 16, vertical: 8),
-                          ),
-                          icon: const Icon(LucideIcons.pencil, size: 14),
-                          label: const Text(
-                            'İsmi Düzenle',
-                            style: TextStyle(
-                              fontFamily: 'Manrope',
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
+              if (!_isAnonymous)
+                _SettingsTile(
+                  icon: LucideIcons.logOut,
+                  label: 'Çıkış yap',
+                  onTap: _logout,
                 ),
-              ),
-            ),
-
-            // ── Stats row — Tasarımlarım / Kaydedilenler / Mesajlar ──
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: _StatTile(
-                        icon: LucideIcons.image,
-                        label: 'Tasarımlarım',
-                        value: '$totalDesigns',
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: _StatTile(
-                        icon: LucideIcons.bookmark,
-                        label: 'Kaydedilenler',
-                        value: '$totalSaved',
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: _StatTile(
-                        icon: LucideIcons.messageCircle,
-                        label: 'Mesajlar',
-                        value: '$_collectionCount',
-                      ),
-                    ),
-                  ],
+              if (_isAnonymous)
+                _SettingsTile(
+                  icon: LucideIcons.logIn,
+                  label: 'Giriş yap',
+                  onTap: _goToLogin,
                 ),
+              _SettingsTile(
+                icon: LucideIcons.lifeBuoy,
+                label: 'Bize ulaşın',
+                onTap: _contactSupport,
               ),
-            ),
-
-            // ── Section: Hesap ─────────────────────────────
-            SliverToBoxAdapter(
-              child: _SectionHeader('Hesap'),
-            ),
-            SliverToBoxAdapter(
-              child: _SectionCard(
-                children: [
-                  _SettingRow(
-                    icon: LucideIcons.bookmark,
-                    label: 'Kaydedilenlerim',
-                    onTap: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                          builder: (_) => const SavedScreenV2()),
-                    ),
-                  ),
-                  const _Divider(),
-                  _SettingRow(
-                    icon: LucideIcons.folderHeart,
-                    label: 'Koleksiyonlarım',
-                    onTap: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                          builder: (_) => const CollectionsScreen()),
-                    ),
-                  ),
-                  if (!_isAnonymous) ...[
-                    const _Divider(),
-                    _SettingRow(
-                      icon: LucideIcons.mail,
-                      label: 'E-posta',
-                      trailing: _email,
-                    ),
-                    const _Divider(),
-                    _SettingRow(
-                      icon: LucideIcons.logOut,
-                      label: 'Çıkış Yap',
-                      iconColor: KoalaColors.errorBright,
-                      onTap: _logout,
-                    ),
-                  ],
-                ],
+              _SettingsTile(
+                icon: LucideIcons.helpCircle,
+                label: 'SSS',
+                onTap: _openFaq,
               ),
-            ),
+            ]),
+            const SizedBox(height: 24),
 
-            // ── Section: Uygulama ─────────────────────────
-            SliverToBoxAdapter(
-              child: _SectionHeader('Uygulama'),
-            ),
-            SliverToBoxAdapter(
-              child: _SectionCard(
-                children: [
-                  _SettingRow(
-                    icon: LucideIcons.bell,
-                    label: 'Bildirimler',
-                    onTap: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => const NotificationsScreen(),
-                      ),
-                    ),
-                  ),
-                  const _Divider(),
-                  _SettingRow(
-                    icon: LucideIcons.languages,
-                    label: 'Dil',
-                    trailing: 'Türkçe',
-                    onTap: () => _comingSoon('Dil seçimi'),
-                  ),
-                ],
+            // ─── Genel
+            const _SectionHeader('GENEL'),
+            _SettingsCard(rows: [
+              _SettingsTile(
+                icon: LucideIcons.languages,
+                label: 'Dil',
+                trailing: 'Türkçe',
+                onTap: _openLanguagePicker,
               ),
-            ),
-
-            // ── Section: Hakkında ─────────────────────────
-            SliverToBoxAdapter(
-              child: _SectionHeader('Hakkında'),
-            ),
-            SliverToBoxAdapter(
-              child: _SectionCard(
-                children: [
-                  _SettingRow(
-                    icon: LucideIcons.info,
-                    label: 'Versiyon',
-                    trailing: 'v1.0.0',
-                  ),
-                  const _Divider(),
-                  _SettingRow(
-                    icon: LucideIcons.shield,
-                    label: 'Gizlilik',
-                    onTap: () => _comingSoon('Gizlilik politikası'),
-                  ),
-                  const _Divider(),
-                  _SettingRow(
-                    icon: LucideIcons.fileText,
-                    label: 'KVKK',
-                    onTap: () => _comingSoon('KVKK aydınlatma'),
-                  ),
-                ],
+              _SettingsTile(
+                icon: LucideIcons.shoppingCart,
+                label: 'Satın Alımları Geri Yükle',
+                onTap: _restoring ? null : _restorePurchases,
+                trailingWidget: _restoring
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: KoalaColors.accentDeep,
+                        ),
+                      )
+                    : null,
               ),
-            ),
+            ]),
+            const SizedBox(height: 24),
 
-            const SliverToBoxAdapter(
-              child: SizedBox(height: 36),
-            ),
+            // ─── Hakkında
+            const _SectionHeader('HAKKINDA'),
+            _SettingsCard(rows: [
+              _SettingsTile(
+                icon: LucideIcons.thumbsUp,
+                label: 'Bizi Değerlendirin',
+                onTap: _rateApp,
+              ),
+              _SettingsTile(
+                icon: LucideIcons.messageCircle,
+                label: 'Geri Bildirim',
+                onTap: _openFeedback,
+              ),
+              _SettingsTile(
+                icon: LucideIcons.share2,
+                label: 'Uygulamamızı Paylaş',
+                onTap: _shareApp,
+              ),
+              _SettingsTile(
+                icon: LucideIcons.shield,
+                label: 'Gizlilik Politikası',
+                onTap: () => _openExternal(_privacyUrl),
+              ),
+              _SettingsTile(
+                icon: LucideIcons.fileText,
+                label: 'Kullanım Şartları',
+                onTap: () => _openExternal(_termsUrl),
+              ),
+              _SettingsTile(
+                icon: LucideIcons.gavel,
+                label: 'KVKK Aydınlatma Metni',
+                onTap: () => _openExternal(_kvkkUrl),
+              ),
+              _SettingsTile(
+                icon: LucideIcons.info,
+                label: 'Versiyon',
+                trailing: _appVersion,
+              ),
+            ]),
+
+            if (!_isAnonymous) ...[
+              const SizedBox(height: 24),
+              const _SectionHeader('HESAP YÖNETIMI'),
+              _SettingsCard(rows: [
+                _SettingsTile(
+                  icon: LucideIcons.trash2,
+                  label: 'Verilerimi sil',
+                  danger: true,
+                  onTap: (_wiping || _deleting) ? null : _wipeData,
+                  trailingWidget: _wiping
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2, color: _dangerRed),
+                        )
+                      : null,
+                ),
+                _SettingsTile(
+                  icon: LucideIcons.userX,
+                  label: 'Hesabımı sil',
+                  danger: true,
+                  onTap: (_wiping || _deleting) ? null : _deleteAccount,
+                  trailingWidget: _deleting
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2, color: _dangerRed),
+                        )
+                      : null,
+                ),
+              ]),
+            ],
           ],
         ),
       ),
     );
   }
-}
 
-/// Stats tile — küçük 3'lü grid kartı (ikon + sayı + label).
-class _StatTile extends StatelessWidget {
-  const _StatTile({
-    required this.icon,
-    required this.label,
-    required this.value,
-  });
-  final IconData icon;
-  final String label;
-  final String value;
+  // ─── Header card (avatar + name + email) ───────────────────────
+  Widget _buildHeaderCard() {
+    final initial = _displayName.isNotEmpty
+        ? _displayName.characters.first.toUpperCase()
+        : (_email.isNotEmpty ? _email.characters.first.toUpperCase() : 'K');
+    final shownName = _displayName.isNotEmpty
+        ? _displayName
+        : (_isAnonymous ? 'Misafir' : 'Koala kullanıcısı');
 
-  @override
-  Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 10),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-            color: KoalaColors.border.withValues(alpha: 0.6), width: 0.6),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x0A000000),
+            blurRadius: 12,
+            offset: Offset(0, 4),
+          ),
+        ],
       ),
-      child: Column(
+      child: Row(
         children: [
-          Container(
-            width: 32,
-            height: 32,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(10),
-              color: KoalaColors.accentSoft,
+          // Avatar + edit pencil overlay
+          SizedBox(
+            width: 72,
+            height: 72,
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Container(
+                  width: 72,
+                  height: 72,
+                  decoration: const BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [_avatarGrad1, _avatarGrad2],
+                    ),
+                  ),
+                  child: ClipOval(
+                    child: _photoUrl != null && _photoUrl!.isNotEmpty
+                        ? Image.network(
+                            _photoUrl!,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) =>
+                                _initialAvatar(initial),
+                          )
+                        : _initialAvatar(initial),
+                  ),
+                ),
+                Positioned(
+                  right: -2,
+                  bottom: -2,
+                  child: Material(
+                    color: Colors.white,
+                    shape: const CircleBorder(),
+                    elevation: 2,
+                    child: InkWell(
+                      customBorder: const CircleBorder(),
+                      onTap: _tapAvatarEdit,
+                      child: Container(
+                        width: 26,
+                        height: 26,
+                        alignment: Alignment.center,
+                        decoration: const BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Colors.white,
+                        ),
+                        child: const Icon(LucideIcons.pencil,
+                            size: 13, color: KoalaColors.text),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
-            child: Icon(icon, size: 16, color: KoalaColors.accentDeep),
           ),
-          const SizedBox(height: 8),
-          Text(
-            value,
-            style: const TextStyle(
-              fontFamily: 'Manrope',
-              fontSize: 18,
-              fontWeight: FontWeight.w800,
-              color: KoalaColors.text,
-              letterSpacing: -0.3,
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  shownName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontFamily: 'Manrope',
+                    fontSize: 17,
+                    fontWeight: FontWeight.w700,
+                    color: KoalaColors.text,
+                    letterSpacing: -0.2,
+                  ),
+                ),
+                if (_email.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    _email,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontFamily: 'Manrope',
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                      color: _sectionLabel,
+                    ),
+                  ),
+                ],
+              ],
             ),
           ),
-          const SizedBox(height: 2),
-          Text(
-            label,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              fontFamily: 'Manrope',
-              fontSize: 11,
-              fontWeight: FontWeight.w500,
-              color: KoalaColors.textSec,
+        ],
+      ),
+    );
+  }
+
+  Widget _initialAvatar(String letter) => Center(
+        child: Text(
+          letter,
+          style: const TextStyle(
+            fontFamily: 'Manrope',
+            fontSize: 28,
+            fontWeight: FontWeight.w800,
+            color: Colors.white,
+            letterSpacing: -0.5,
+          ),
+        ),
+      );
+
+  // ─── Koala Pro banner (koral gradient) ─────────────────────────
+  Widget _buildProBanner(bool isPro, DateTime? proUntil) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(20),
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [_proRed1, _proRed2],
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: _proRed1.withValues(alpha: 0.28),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text(
+                      'Koala Pro',
+                      style: TextStyle(
+                        fontFamily: 'Manrope',
+                        fontSize: 20,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.white,
+                        letterSpacing: -0.3,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.22),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: const Text(
+                        'VIP',
+                        style: TextStyle(
+                          fontFamily: 'Manrope',
+                          fontSize: 10,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.white,
+                          letterSpacing: 0.6,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  isPro
+                      ? 'Tüm Pro özellikler aktif. Teşekkürler!'
+                      : 'Tüm Pro özelliklerin kilidini aç',
+                  style: TextStyle(
+                    fontFamily: 'Manrope',
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                    height: 1.35,
+                    color: Colors.white.withValues(alpha: 0.92),
+                    letterSpacing: -0.1,
+                  ),
+                ),
+                const SizedBox(height: 14),
+                if (isPro)
+                  _ProActivePill(until: proUntil)
+                else
+                  _UpgradePill(
+                    onTap: () => showPaywall(context,
+                        trigger: 'profile_upgrade_button'),
+                  ),
+              ],
             ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
           ),
         ],
       ),
@@ -669,40 +902,68 @@ class _StatTile extends StatelessWidget {
   }
 }
 
+// ═══════════════════════════════════════════════════════════
+// Building blocks
+// ═══════════════════════════════════════════════════════════
+
+class _FaqItem {
+  final String q;
+  final String a;
+  const _FaqItem({required this.q, required this.a});
+}
+
 class _SectionHeader extends StatelessWidget {
-  const _SectionHeader(this.title);
-  final String title;
+  const _SectionHeader(this.label);
+  final String label;
+
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 24, 20, 8),
+      padding: const EdgeInsets.fromLTRB(6, 0, 6, 10),
       child: Text(
-        title,
-        style: TextStyle(
+        label,
+        style: const TextStyle(
           fontFamily: 'Manrope',
           fontSize: 12,
-          fontWeight: FontWeight.w700,
-          color: KoalaColors.textTer,
-          letterSpacing: 1.2,
+          fontWeight: FontWeight.w600,
+          color: Color(0xFF6B7280),
+          letterSpacing: 0.8,
         ),
       ),
     );
   }
 }
 
-class _SectionCard extends StatelessWidget {
-  const _SectionCard({required this.children});
-  final List<Widget> children;
+class _SettingsCard extends StatelessWidget {
+  const _SettingsCard({required this.rows});
+  final List<Widget> rows;
+
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
+    final visible = rows.where((w) => w is! SizedBox).toList();
+    final children = <Widget>[];
+    for (var i = 0; i < visible.length; i++) {
+      children.add(visible[i]);
+      if (i != visible.length - 1) {
+        children.add(const Padding(
+          padding: EdgeInsets.only(left: 60, right: 16),
+          child: Divider(height: 1, color: Color(0xFFF1F3F5)),
+        ));
+      }
+    }
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(16),
       child: Container(
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-              color: KoalaColors.border.withValues(alpha: 0.6), width: 0.6),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x08000000),
+              blurRadius: 10,
+              offset: Offset(0, 3),
+            ),
+          ],
         ),
         child: Column(children: children),
       ),
@@ -710,65 +971,93 @@ class _SectionCard extends StatelessWidget {
   }
 }
 
-class _SettingRow extends StatelessWidget {
-  const _SettingRow({
+class _SettingsTile extends StatelessWidget {
+  const _SettingsTile({
     required this.icon,
     required this.label,
     this.trailing,
+    this.trailingWidget,
     this.onTap,
-    this.iconColor,
+    this.danger = false,
   });
   final IconData icon;
   final String label;
   final String? trailing;
+  final Widget? trailingWidget;
   final VoidCallback? onTap;
-  final Color? iconColor;
+  final bool danger;
 
   @override
   Widget build(BuildContext context) {
-    final clr = iconColor ?? KoalaColors.text;
+    final hasChevron = onTap != null;
+    const dangerRed = Color(0xFFE5484D);
+    final labelColor = danger ? dangerRed : KoalaColors.text;
+    final iconColor = danger ? dangerRed : KoalaColors.text;
+    final iconBg = danger
+        ? const Color(0xFFFDECEC)
+        : const Color(0xFFF3F4F6);
+
     return Material(
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(8),
         child: Padding(
-          padding:
-              const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           child: Row(
             children: [
-              Icon(icon, size: 18, color: clr),
+              Container(
+                width: 32,
+                height: 32,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: iconBg,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(icon, size: 18, color: iconColor),
+              ),
               const SizedBox(width: 14),
               Expanded(
                 child: Text(
                   label,
                   style: TextStyle(
                     fontFamily: 'Manrope',
-                    fontSize: 14.5,
+                    fontSize: 15,
                     fontWeight: FontWeight.w600,
-                    color: clr,
+                    color: labelColor,
                     letterSpacing: -0.1,
                   ),
                 ),
               ),
-              if (trailing != null && trailing!.isNotEmpty)
+              if (trailingWidget != null)
                 Padding(
-                  padding: const EdgeInsets.only(right: 6),
-                  child: Text(
-                    trailing!,
-                    style: const TextStyle(
-                      fontFamily: 'Manrope',
-                      fontSize: 13,
-                      fontWeight: FontWeight.w500,
-                      color: KoalaColors.textSec,
+                  padding: EdgeInsets.only(right: hasChevron ? 6 : 0),
+                  child: trailingWidget!,
+                )
+              else if (trailing != null && trailing!.isNotEmpty)
+                Padding(
+                  padding: EdgeInsets.only(right: hasChevron ? 6 : 0),
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 200),
+                    child: Text(
+                      trailing!,
+                      textAlign: TextAlign.right,
+                      style: const TextStyle(
+                        fontFamily: 'Manrope',
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                        color: Color(0xFF8E8E93),
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
-              if (onTap != null)
-                const Icon(LucideIcons.chevronRight,
-                    size: 18, color: KoalaColors.textTer),
+              if (hasChevron)
+                Icon(LucideIcons.chevronRight,
+                    size: 18,
+                    color: danger
+                        ? dangerRed.withValues(alpha: 0.55)
+                        : const Color(0xFFAEAEB2)),
             ],
           ),
         ),
@@ -777,15 +1066,72 @@ class _SettingRow extends StatelessWidget {
   }
 }
 
-class _Divider extends StatelessWidget {
-  const _Divider();
+class _UpgradePill extends StatelessWidget {
+  const _UpgradePill({required this.onTap});
+  final VoidCallback onTap;
+
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 14),
-      child: Container(
-        height: 0.5,
-        color: KoalaColors.border.withValues(alpha: 0.5),
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(999),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(999),
+        child: const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+          child: Text(
+            "PRO'ya yükselt",
+            style: TextStyle(
+              fontFamily: 'Manrope',
+              fontSize: 13,
+              fontWeight: FontWeight.w800,
+              color: Color(0xFFFF5A5F),
+              letterSpacing: -0.1,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ProActivePill extends StatelessWidget {
+  const _ProActivePill({this.until});
+  final DateTime? until;
+
+  String _fmt(DateTime d) {
+    const months = [
+      'Oca', 'Şub', 'Mar', 'Nis', 'May', 'Haz',
+      'Tem', 'Ağu', 'Eyl', 'Eki', 'Kas', 'Ara'
+    ];
+    return '${d.day} ${months[d.month - 1]} ${d.year}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1FB87A),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(LucideIcons.check, size: 14, color: Colors.white),
+          const SizedBox(width: 6),
+          Text(
+            until != null ? 'Pro Üye · ${_fmt(until!)}' : 'Pro Üye',
+            style: const TextStyle(
+              fontFamily: 'Manrope',
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+              color: Colors.white,
+              letterSpacing: -0.1,
+            ),
+          ),
+        ],
       ),
     );
   }

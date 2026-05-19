@@ -44,11 +44,49 @@ class UploadService {
     }
   }
 
+  /// AI'in ürettiği after görseli yükle. data: URL veya raw bytes alır.
+  /// Vercel Blob upload başarısız olduğunda Gemini batch'inden gelen base64
+  /// data URL'i normal https URL'e çevirmek için kullanılır.
+  static Future<String?> uploadAfterFromDataUrl(String dataUrl) async {
+    try {
+      if (!dataUrl.startsWith('data:')) return dataUrl; // zaten URL
+      final match = RegExp(r'^data:([^;]+);base64,(.+)$').firstMatch(dataUrl);
+      if (match == null) return null;
+      final b64 = match.group(2)!;
+      final uid = FirebaseAuth.instance.currentUser?.uid ?? 'anon';
+      final res = await http
+          .post(
+            Uri.parse('${Env.koalaApiUrl}/api/upload-image'),
+            headers: {
+              ...await AuthTokenService.authHeaders(),
+              'Content-Type': 'application/json',
+            },
+            body: jsonEncode({
+              'bytes_b64': b64,
+              'kind': 'after',
+              'userId': uid,
+            }),
+          )
+          .timeout(const Duration(seconds: 45));
+      if (res.statusCode != 200) {
+        debugPrint('[UploadService] uploadAfter HTTP ${res.statusCode}');
+        return null;
+      }
+      final j = jsonDecode(res.body) as Map<String, dynamic>;
+      return j['url']?.toString();
+    } catch (e) {
+      debugPrint('[UploadService] uploadAfter error: $e');
+      return null;
+    }
+  }
+
   static Uint8List _optimize(Uint8List input) {
     try {
       final decoded = img.decodeImage(input);
       if (decoded == null) return input;
-      const maxEdge = 1024;
+      // Before image kalite artırımı: 1024/q72 → 1600/q85.
+      // Projelerim detail before/after slider'ında pixelated görünüyordu.
+      const maxEdge = 1600;
       final w = decoded.width;
       final h = decoded.height;
       img.Image scaled = decoded;
@@ -59,7 +97,7 @@ class UploadService {
           scaled = img.copyResize(decoded, height: maxEdge);
         }
       }
-      return Uint8List.fromList(img.encodeJpg(scaled, quality: 72));
+      return Uint8List.fromList(img.encodeJpg(scaled, quality: 85));
     } catch (_) {
       return input;
     }

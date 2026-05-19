@@ -350,30 +350,10 @@ class _AuthEntryScreenState extends State<AuthEntryScreen>
                         ),
                         const SizedBox(height: 20),
 
-                        // Misafir girişi (sadece izin verildiğinde)
-                        if (widget.showGuestOption)
-                          FadeSlideIn(
-                            animation: buttonsAnim,
-                            child: Padding(
-                              padding: const EdgeInsets.only(top: 8),
-                              child: TextButton(
-                                onPressed: _handleGuestLogin,
-                                style: TextButton.styleFrom(
-                                  foregroundColor: KoalaColors.textMuted,
-                                  padding: const EdgeInsets.symmetric(vertical: 14),
-                                ),
-                                child: const Text(
-                                  'Misafir olarak göz at',
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w500,
-                                    decoration: TextDecoration.underline,
-                                    decorationColor: KoalaColors.textMuted,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
+                        // 2026-05-02: Misafir girişi kaldırıldı — kullanıcının
+                        // hesap açması zorunlu (data persistence + Pro upgrade
+                        // path için). showGuestOption parametresi koddan başka
+                        // yerlerde true geçse bile artık UI çıkmıyor.
                         const SizedBox(height: 12),
 
                         // Legal text

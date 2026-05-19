@@ -2,7 +2,9 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'main_shell.dart';
 import 'style_discovery_live_screen.dart';
+import '../widgets/koala_bottom_nav.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' hide User;
@@ -520,13 +522,18 @@ class _ChatListScreenV1State extends State<ChatListScreenV1> {
     return GestureDetector(
       onTap: () {
         HapticFeedback.lightImpact();
-        // `/style` route yok — live deck'i doğrudan push et (home
-        // pull-to-reveal'ın kullandığı aynı ekran).
-        Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => const StyleDiscoveryLiveScreen(),
-          ),
-        );
+        // Bottom nav'ın altında kalmamak için push YERİNE shell sekmesini
+        // değiştir — kullanıcı swipe (Tarz Keşfi) sekmesine gider, nav görünür.
+        final shell = MainShell.of(context);
+        if (shell != null) {
+          shell.switchTab(KoalaTab.swipe);
+        } else {
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => const StyleDiscoveryLiveScreen(),
+            ),
+          );
+        }
       },
       behavior: HitTestBehavior.opaque,
       child: Container(
@@ -1014,7 +1021,8 @@ class _ChatListScreenV1State extends State<ChatListScreenV1> {
                   icon: LucideIcons.history,
                   label: hasHistory ? 'Geçmiş · ${_aiChats.length}' : 'Geçmiş',
                   primary: false,
-                  onTap: hasHistory ? _openAiHistorySheet : null,
+                  // 2026-05-02: her zaman aç (boş geçmişte de yeni sohbet butonu var).
+                  onTap: _openAiHistorySheet,
                 ),
               ),
             ],
@@ -1873,6 +1881,14 @@ class _ChatListScreenV1State extends State<ChatListScreenV1> {
           );
         },
         onDelete: _deleteAiChat,
+        onNewChat: () {
+          Navigator.pop(context);
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+                builder: (_) => const ChatDetailScreen(chatId: null)),
+          );
+        },
       ),
     );
   }
@@ -2419,11 +2435,13 @@ class _AiHistorySheet extends StatefulWidget {
   final List<ChatSummary> initialChats;
   final void Function(String chatId) onSelect;
   final Future<bool> Function(String chatId) onDelete;
+  final VoidCallback onNewChat;
 
   const _AiHistorySheet({
     required this.initialChats,
     required this.onSelect,
     required this.onDelete,
+    required this.onNewChat,
   });
 
   @override
@@ -2579,6 +2597,62 @@ class _AiHistorySheetState extends State<_AiHistorySheet> {
                     style: KoalaText.bodySec
                         .copyWith(fontWeight: FontWeight.w600)),
               ],
+            ),
+          ),
+          // Yeni Sohbet butonu — her zaman görünür (boş geçmiş + dolu geçmiş).
+          // Empty state için kullanıcının tek girişi buydu (önceki versiyonda
+          // sheet hiç açılmıyordu). Dolu geçmişte de listeye yeni sohbet eklemek
+          // için pratik kısayol.
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+                KoalaSpacing.lg, 0, KoalaSpacing.lg, KoalaSpacing.md),
+            child: GestureDetector(
+              onTap: widget.onNewChat,
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                    vertical: 12, horizontal: 14),
+                decoration: BoxDecoration(
+                  color: KoalaColors.accentSoft,
+                  borderRadius: BorderRadius.circular(KoalaRadius.md),
+                  border: Border.all(
+                      color: KoalaColors.accent.withValues(alpha: 0.18),
+                      width: 1),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 32,
+                      height: 32,
+                      decoration: const BoxDecoration(
+                        color: KoalaColors.accentDeep,
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(LucideIcons.plus,
+                          size: 16, color: Colors.white),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Yeni Sohbet',
+                              style: KoalaText.label.copyWith(
+                                  fontWeight: FontWeight.w700,
+                                  color: KoalaColors.accentDeep)),
+                          const SizedBox(height: 2),
+                          Text(
+                            'Koala AI\'a yeni bir soru sor',
+                            style: KoalaText.labelSmall,
+                          ),
+                        ],
+                      ),
+                    ),
+                    Icon(LucideIcons.chevronRight,
+                        size: 18,
+                        color: KoalaColors.accentDeep.withValues(alpha: 0.6)),
+                  ],
+                ),
+              ),
             ),
           ),
           // Küçük yardım metni — silme ipucu

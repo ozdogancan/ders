@@ -16,6 +16,7 @@ import 'mekan/wizard/mekan_wizard_screen.dart';
 
 import '../core/theme/koala_tokens.dart';
 import '../services/background_gen.dart';
+import '../services/saved_items_service.dart';
 import '../widgets/koala_bottom_nav.dart';
 import 'chat_list_screen.dart';
 import 'main_shell.dart';
@@ -34,6 +35,7 @@ class ProjelerScreen extends StatefulWidget {
 
 class _ProjelerScreenState extends State<ProjelerScreen> {
   bool _loading = true;
+  bool _firstLoadCompleted = false;
   String? _err;
   List<_ProjectItem> _items = const [];
 
@@ -43,50 +45,67 @@ class _ProjelerScreenState extends State<ProjelerScreen> {
   bool _wasPending = false;
   bool _wasCompleted = false;
 
-  /// Aktif filtre — null = Hepsi (default).
-  String? _filter;
-
-  static const List<({String key, String label, IconData icon})> _filters = [
-    (key: '', label: 'Hepsi', icon: LucideIcons.sparkles),
-    (key: 'oturma', label: 'Oturma Odası', icon: LucideIcons.sofa),
-    (key: 'yatak', label: 'Yatak Odası', icon: LucideIcons.bed),
-    (key: 'mutfak', label: 'Mutfak', icon: LucideIcons.chefHat),
-    (key: 'banyo', label: 'Banyo', icon: LucideIcons.bath),
-    (key: 'yemek', label: 'Yemek Odası', icon: LucideIcons.utensilsCrossed),
-    (key: 'çalışma', label: 'Çalışma', icon: LucideIcons.laptop),
-    (key: 'antre', label: 'Antre', icon: LucideIcons.doorOpen),
-  ];
+  /// 0 = Tasarımlar (AI before/after), 1 = Ürünler (geliştirme aşamasında).
+  /// realize_screen'deki "Profesyonele Sor / Ürünler" segment tab pattern'i.
+  int _activeTab = 0;
 
   @override
   void initState() {
     super.initState();
+    // Warm cache hit: önceki oturumdan disk cache RAM'e alınmışsa
+    // skeleton göstermeden direkt grid'e geç. Network fetch _load()
+    // arka planda devam eder, taze data ile üzerine yazar.
+    final warm = SavedItemsService.prefetchedProjects;
+    if (warm != null && warm.isNotEmpty) {
+      _items = warm
+          .map(_ProjectItem.parse)
+          .toList(growable: false);
+      _firstLoadCompleted = true;
+      _loading = false;
+    }
     _load();
     BackgroundGen.notifier.addListener(_onBgGenChange);
     _wasPending = BackgroundGen.notifier.value != null;
     MainShell.activeTab.addListener(_onTabActivate);
+    // Yeni save/remove anında cache static'ini güncelliyor + tick bump.
+    // Listener ile aynı anda mounted olan Projelerim ekranını rebuild et.
+    SavedItemsService.projectsTick.addListener(_onProjectsTick);
+    // Missed-event catch: result_stage'den X ile çıkıp Projelerim'e tıklayan
+    // kullanıcının BackgroundGen.complete event'ini kaçırmamak için.
+    final bg = BackgroundGen.notifier.value;
+    if (bg != null && bg.completed) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _multiReload();
+      });
+    }
+  }
+
+  void _onProjectsTick() {
+    if (!mounted) return;
+    final warm = SavedItemsService.prefetchedProjects;
+    if (warm == null) return;
+    final newItems = warm
+        .map(_ProjectItem.parse)
+        .toList(growable: false);
+    setState(() {
+      _items = newItems;
+      _firstLoadCompleted = true;
+      _loading = false;
+    });
   }
 
   void _onTabActivate() {
     if (MainShell.activeTab.value != KoalaTab.projeler) return;
-    if (_filter != null && mounted) setState(() => _filter = null);
+    if (_activeTab != 0 && mounted) setState(() => _activeTab = 0);
   }
 
-  void _setFilter(String key) {
+  void _setTab(int idx) {
+    if (idx == _activeTab) return;
     HapticFeedback.selectionClick();
-    final next = key.isEmpty ? null : key;
-    if (next == _filter) return;
-    setState(() => _filter = next);
+    setState(() => _activeTab = idx);
   }
 
-  List<_ProjectItem> get _visibleItems {
-    if (_filter == null) return _items;
-    final f = _filter!;
-    return _items
-        .where((p) =>
-            (p.extra['room'] ?? '').toString().toLowerCase().contains(f) ||
-            p.title.toLowerCase().contains(f))
-        .toList();
-  }
+  List<_ProjectItem> get _visibleItems => _items;
 
   /// Sadece anlamlı geçişlerde (pending appear/disappear, completed flip)
   /// setState çağrılır — her progress tick'te grid rebuild olmaz, kartlar
@@ -138,14 +157,14 @@ class _ProjelerScreenState extends State<ProjelerScreen> {
             .eq('item_type', 'project')
             .order('created_at', ascending: false)
             .limit(60);
-        final list = (res as List)
-            .cast<Map<String, dynamic>>()
+        final rawRows = (res as List).cast<Map<String, dynamic>>();
+        final list = rawRows
             .map(_ProjectItem.parse)
-            .where((p) => p.imageUrl.isNotEmpty)
             .toList();
         // Yeni item geldi mi?
         final newIds = list.map((e) => e.itemId).toSet();
         if (newIds.difference(beforeIds).isNotEmpty || i == maxTries - 1) {
+          unawaited(SavedItemsService.persistProjectsCache(rawRows));
           if (!mounted) return;
           setState(() => _items = list);
           return;
@@ -218,6 +237,7 @@ class _ProjelerScreenState extends State<ProjelerScreen> {
         setState(() {
           _items = const [];
           _loading = false;
+          _firstLoadCompleted = true;
         });
         return;
       }
@@ -230,22 +250,29 @@ class _ProjelerScreenState extends State<ProjelerScreen> {
           .eq('item_type', 'project')
           .order('created_at', ascending: false)
           .limit(60);
-      final list = (res as List)
-          .cast<Map<String, dynamic>>()
+      final rawRows = (res as List).cast<Map<String, dynamic>>();
+      // 2026-05-01: don't filter rows with empty imageUrl — multiple users had
+      // saved AI designs that were INVISIBLE because the image_url save raced
+      // before the blob URL was ready. Show the row (with placeholder) instead
+      // of silently dropping the project.
+      final list = rawRows
           .map(_ProjectItem.parse)
-          .where((p) => p.imageUrl.isNotEmpty)
           .toList();
+      // Disk cache'i güncelle — bir sonraki refresh için warm path.
+      unawaited(SavedItemsService.persistProjectsCache(rawRows));
       if (!mounted) return;
       setState(() {
         _items = list;
         _loading = false;
         _err = null;
+        _firstLoadCompleted = true;
       });
     } catch (e) {
       if (!mounted) return;
       setState(() {
         _loading = false;
         _err = e.toString();
+        _firstLoadCompleted = true;
       });
     }
   }
@@ -272,6 +299,7 @@ class _ProjelerScreenState extends State<ProjelerScreen> {
   void dispose() {
     MainShell.activeTab.removeListener(_onTabActivate);
     BackgroundGen.notifier.removeListener(_onBgGenChange);
+    SavedItemsService.projectsTick.removeListener(_onProjectsTick);
     // Sekme değişirse nav'ı geri aç (güvenlik). State context disposed olduğu
     // için MainShell'e doğrudan setState atılmaz; null-safe çağrı yeterli.
     if (_selectMode) {
@@ -320,21 +348,27 @@ class _ProjelerScreenState extends State<ProjelerScreen> {
     if (uid == null) return;
     final ids = _selected.toList();
     // Optimistic UI: anında listeden çıkar, kullanıcı bekletme.
+    final toDelete =
+        _items.where((p) => ids.contains(p.id)).toList(growable: false);
     setState(() {
       _items =
           _items.where((p) => !ids.contains(p.id)).toList(growable: false);
     });
     _exitSelect();
-    // Server'a fire-and-forget — başarısız olursa sessiz reload.
+    // Server'a proxy üzerinden — anon RLS bypass için service_role gerekiyor.
+    // Önceden Supabase anon client ile delete deniyordu, RLS sessizce
+    // bloke ediyordu → silinen projeler refresh sonrası geri geliyordu.
     () async {
-      try {
-        await Supabase.instance.client
-            .from('saved_items')
-            .delete()
-            .inFilter('id', ids);
-      } catch (_) {
-        if (mounted) _load();
+      bool anyFailed = false;
+      for (final item in toDelete) {
+        if (item.itemId.isEmpty) continue;
+        final ok = await SavedItemsService.removeItem(
+          type: SavedItemType.project,
+          itemId: item.itemId,
+        );
+        if (!ok) anyFailed = true;
       }
+      if (anyFailed && mounted) _load();
     }();
   }
 
@@ -412,32 +446,158 @@ class _ProjelerScreenState extends State<ProjelerScreen> {
       ),
       body: Column(
         children: [
-          if (!_selectMode) _filterBar(),
-          Expanded(child: _body()),
+          if (!_selectMode) _segmentTabs(),
+          Expanded(
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 240),
+              switchInCurve: Curves.easeOutCubic,
+              switchOutCurve: Curves.easeInCubic,
+              transitionBuilder: (child, animation) {
+                final slide = Tween<Offset>(
+                  begin: const Offset(0.04, 0),
+                  end: Offset.zero,
+                ).animate(animation);
+                return FadeTransition(
+                  opacity: animation,
+                  child: SlideTransition(position: slide, child: child),
+                );
+              },
+              layoutBuilder: (currentChild, previousChildren) {
+                return Stack(
+                  alignment: Alignment.topCenter,
+                  children: <Widget>[
+                    ...previousChildren,
+                    if (currentChild != null) currentChild,
+                  ],
+                );
+              },
+              child: KeyedSubtree(
+                key: ValueKey<int>(_activeTab),
+                child: _activeTab == 0 ? _body() : _productsPlaceholder(),
+              ),
+            ),
+          ),
           if (_selectMode) _selectBar(),
         ],
       ),
     );
   }
 
-  Widget _filterBar() {
-    return SizedBox(
-      height: 64,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
-        itemCount: _filters.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 8),
-        itemBuilder: (_, i) {
-          final f = _filters[i];
-          final active = (_filter ?? '') == f.key;
-          return _FilterPill(
-            label: f.label,
-            icon: f.icon,
-            active: active,
-            onTap: () => _setFilter(f.key),
-          );
-        },
+  /// realize_screen'deki "Profesyonele Sor / Ürünler" pill segment tab
+  /// pattern'i. Surface alt arkaplanlı pill container, aktif tab beyaz pill
+  /// + accentDeep label, inaktif tab transparent + textSec label.
+  Widget _segmentTabs() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
+      child: Container(
+        padding: const EdgeInsets.all(4),
+        decoration: BoxDecoration(
+          color: KoalaColors.surfaceAlt,
+          borderRadius: BorderRadius.circular(KoalaRadius.pill),
+        ),
+        child: Row(
+          children: [
+            _segTabButton(
+              idx: 0,
+              icon: LucideIcons.layoutGrid,
+              label: 'Tasarımlar',
+            ),
+            _segTabButton(
+              idx: 1,
+              icon: LucideIcons.shoppingBag,
+              label: 'Ürünler',
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _segTabButton({
+    required int idx,
+    required IconData icon,
+    required String label,
+  }) {
+    final active = _activeTab == idx;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => _setTab(idx),
+        behavior: HitTestBehavior.opaque,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOut,
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          decoration: BoxDecoration(
+            color: active ? KoalaColors.surface : Colors.transparent,
+            borderRadius: BorderRadius.circular(KoalaRadius.pill),
+            boxShadow: active ? KoalaShadows.card : null,
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                icon,
+                size: 14,
+                color:
+                    active ? KoalaColors.accentDeep : KoalaColors.textSec,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 13.5,
+                  fontWeight: active ? FontWeight.w700 : FontWeight.w600,
+                  letterSpacing: -0.1,
+                  color:
+                      active ? KoalaColors.accentDeep : KoalaColors.textSec,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Ürünler tab'ı geliştirme aşamasında — placeholder.
+  Widget _productsPlaceholder() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: KoalaColors.surfaceAlt,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                LucideIcons.shoppingBag,
+                size: 36,
+                color: KoalaColors.textSec,
+              ),
+            ),
+            const SizedBox(height: 20),
+            const Text(
+              'Ürünler yakında',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+                color: KoalaColors.text,
+                letterSpacing: -0.3,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Tasarımlarınızdaki mobilya ve dekor ürünlerini\nburadan kolayca bulabileceksiniz.',
+              textAlign: TextAlign.center,
+              style: KoalaText.bodySec.copyWith(height: 1.45),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -555,14 +715,8 @@ class _ProjelerScreenState extends State<ProjelerScreen> {
   }
 
   Widget _body() {
-    if (_loading) {
-      return const Center(
-        child: SizedBox(
-          width: 26,
-          height: 26,
-          child: CircularProgressIndicator(strokeWidth: 2.4),
-        ),
-      );
+    if (!_firstLoadCompleted && _items.isEmpty) {
+      return _skeletonGrid();
     }
     if (_err != null) {
       return Center(
@@ -579,7 +733,10 @@ class _ProjelerScreenState extends State<ProjelerScreen> {
     final pending = BackgroundGen.notifier.value;
     final hasPending = pending != null && !pending.completed;
     final visible = _visibleItems;
-    if (visible.isEmpty && !hasPending) return _empty();
+    if (visible.isEmpty && !hasPending) {
+      if (!_firstLoadCompleted) return _skeletonGrid();
+      return _empty();
+    }
     final totalCount = visible.length + (hasPending ? 1 : 0);
     return RefreshIndicator(
       onRefresh: _load,
@@ -621,6 +778,32 @@ class _ProjelerScreenState extends State<ProjelerScreen> {
             },
           );
         },
+      ),
+    );
+  }
+
+  Widget _skeletonGrid() {
+    return GridView.builder(
+      padding: const EdgeInsets.fromLTRB(20, 4, 20, 100),
+      physics: const NeverScrollableScrollPhysics(),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        mainAxisSpacing: 14,
+        crossAxisSpacing: 14,
+        childAspectRatio: 0.86,
+      ),
+      itemCount: 6,
+      itemBuilder: (_, __) => TweenAnimationBuilder<double>(
+        tween: Tween(begin: 0.5, end: 1.0),
+        duration: const Duration(milliseconds: 900),
+        curve: Curves.easeInOut,
+        builder: (_, v, __) => Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(KoalaRadius.lg),
+            color: KoalaColors.surfaceAlt.withValues(alpha: v),
+            border: Border.all(color: KoalaColors.border, width: 0.6),
+          ),
+        ),
       ),
     );
   }

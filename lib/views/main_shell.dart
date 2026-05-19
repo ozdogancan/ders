@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
 import '../core/theme/koala_tokens.dart';
+import '../helpers/paywall_router.dart';
+import '../providers/pro_status_provider.dart';
 import '../services/background_gen.dart';
 import '../widgets/koala_bottom_nav.dart';
 import 'chat_list_screen.dart';
@@ -9,16 +12,20 @@ import 'home_screen.dart';
 import 'projeler_screen.dart';
 import 'style_discovery_live_screen.dart';
 
+/// Cold-start guard — entry paywall should appear at most once per app launch,
+/// regardless of MainShell rebuilds, tab switches or remounts.
+bool _entryPaywallShownThisLaunch = false;
+
 /// Ana 4-tab kabuk — Ana Sayfa | Mesajlar | Swipe | Projeler.
 /// Nav SABİT kalır, tab değişince sadece içerik IndexedStack ile değişir
 /// (animasyon yok, sıçrama yok). Detay ekranları bu shell'in ÜSTÜNE
 /// Navigator.push ile gelir; o sırada nav doğal olarak gizlenir.
-class MainShell extends StatefulWidget {
+class MainShell extends ConsumerStatefulWidget {
   final int initialIndex;
   const MainShell({super.key, this.initialIndex = 0});
 
   @override
-  State<MainShell> createState() => MainShellState();
+  ConsumerState<MainShell> createState() => MainShellState();
 
   /// Singleton instance — pushed route'lar (mekan flow, project detail vs)
   /// için context ağacı üzerinden bulunamaz. initState/dispose'da set edilir.
@@ -34,7 +41,7 @@ class MainShell extends StatefulWidget {
       ValueNotifier<KoalaTab>(KoalaTab.home);
 }
 
-class MainShellState extends State<MainShell> {
+class MainShellState extends ConsumerState<MainShell> {
   late int _index = widget.initialIndex;
   int _unread = 0;
   bool _navVisible = true;
@@ -44,6 +51,23 @@ class MainShellState extends State<MainShell> {
     super.initState();
     MainShell._instance = this;
     BackgroundGen.completion.addListener(_onBgComplete);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _maybeShowEntryPaywall());
+  }
+
+  Future<void> _maybeShowEntryPaywall() async {
+    if (_entryPaywallShownThisLaunch) return;
+    try {
+      final status = await ref
+          .read(proStatusProvider.future)
+          .timeout(const Duration(seconds: 3), onTimeout: () => ProStatus.free);
+      if (!mounted) return;
+      if (status.isPro) return;
+      if (_entryPaywallShownThisLaunch) return;
+      _entryPaywallShownThisLaunch = true;
+      await showPaywall(context, trigger: 'app_launch');
+    } catch (_) {
+      // Silent — never block app launch on status fetch failure.
+    }
   }
 
   @override

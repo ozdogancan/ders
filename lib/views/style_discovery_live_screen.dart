@@ -13,14 +13,18 @@ import 'dart:math' as math;
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 
 import '../core/theme/koala_tokens.dart';
+import '../helpers/paywall_router.dart';
+import '../providers/pro_status_provider.dart';
 import '../widgets/koala_bottom_nav.dart';
 import 'main_shell.dart';
 import 'mekan/mekan_flow_screen.dart';
@@ -33,15 +37,16 @@ import '../services/saved_items_service.dart';
 import '../services/analytics_service.dart';
 import '../services/taste_profile_service.dart';
 
-class StyleDiscoveryLiveScreen extends StatefulWidget {
+class StyleDiscoveryLiveScreen extends ConsumerStatefulWidget {
   const StyleDiscoveryLiveScreen({super.key});
 
   @override
-  State<StyleDiscoveryLiveScreen> createState() =>
+  ConsumerState<StyleDiscoveryLiveScreen> createState() =>
       _StyleDiscoveryLiveScreenState();
 }
 
-class _StyleDiscoveryLiveScreenState extends State<StyleDiscoveryLiveScreen>
+class _StyleDiscoveryLiveScreenState
+    extends ConsumerState<StyleDiscoveryLiveScreen>
     with TickerProviderStateMixin {
   static const int _batchSize = 10;
   static const int _prefetchThreshold = 3; // kalan kart sayısı < bu → fetch
@@ -49,6 +54,11 @@ class _StyleDiscoveryLiveScreenState extends State<StyleDiscoveryLiveScreen>
   // Kategori filtresi — opsiyonel. null / boş = Hepsi.
   // Persist key: SharedPreferences üzerinden session'lar arası korunur.
   static const String _prefsCategoryKey = 'style_discovery_category';
+  // Warm-disk cache: önceki oturumun ilk batch'i — anlık deck için.
+  // Refresh sonrası boş kart yerine cache'den hızlıca çiziliyor, fresh fetch
+  // arka planda gelince swap ediliyor.
+  static const String _prefsDeckCacheKey = 'style_discovery_deck_cache_v1';
+  static const int _deckCacheMax = 12;
   // Sıra burada UI'da kullanılan sıra — bottom sheet chip sırası.
   // Key = DB'deki project_type değeri (Türkçe, ilike ile eşleştirilir).
   // Sadece canlı verilerde gerçekten proje olan kategoriler listelenir.
@@ -83,6 +93,14 @@ class _StyleDiscoveryLiveScreenState extends State<StyleDiscoveryLiveScreen>
   double _dragDy = 0;
   bool _animatingExit = false;
 
+  // Pro upsell card cadence: free user her 6 swipe'tan sonra (yani 7., 13.,
+  // 19. slotta) Pro upgrade kartı görür. Pro user'da hiç gösterilmez.
+  int _swipeCount = 0;
+  static const int _proSlotEvery = 6;
+  bool get _isProSlot => _isFreeUser && _swipeCount > 0 &&
+      _swipeCount % _proSlotEvery == 0;
+  bool _isFreeUser = true;
+
   late final AnimationController _exitCtrl;
   double _exitStartDx = 0;
   double _exitTargetDx = 0;
@@ -97,6 +115,19 @@ class _StyleDiscoveryLiveScreenState extends State<StyleDiscoveryLiveScreen>
     )..addStatusListener((status) {
         if (status == AnimationStatus.completed) _onExitComplete();
       });
+    // RAM warm cache: boot-time'da disk'ten yüklenen deck'i veya önceki
+    // ekran ziyaretinden kalan listeyi anında göster — ilk frame'de kart.
+    final ramWarm = EvlumbaLiveService.prefetchedDeck;
+    if (ramWarm != null && ramWarm.isNotEmpty) {
+      for (final p in ramWarm) {
+        final id = p['id']?.toString() ?? '';
+        if (id.isEmpty || _seenIds.contains(id)) continue;
+        if (_coverOf(p).isEmpty) continue;
+        _seenIds.add(id);
+        _deck.add(p);
+      }
+      if (_deck.isNotEmpty) _loading = false;
+    }
     _loadSavedCategory().then((_) => _bootstrap());
     Analytics.screenViewed('style_discovery_live');
     // Tab her aktive olduğunda "Hepsi"ye reset et.
@@ -158,11 +189,14 @@ class _StyleDiscoveryLiveScreenState extends State<StyleDiscoveryLiveScreen>
   }
 
   Future<void> _bootstrap() async {
+    // 1) Disk cache'den anında deck'i göster — refresh sonrası boş kart yok.
+    await _warmFromDiskCache();
+    // 2) Backend ready'ye paralelden bekle, fresh fetch ile cache'i yenile.
     final ready = await EvlumbaLiveService.waitForReady(
         timeout: const Duration(seconds: 6));
     if (!ready) {
       debugPrint('StyleDiscoveryLive: EvlumbaLiveService NOT ready');
-      if (mounted) setState(() => _loading = false);
+      if (mounted && _deck.isEmpty) setState(() => _loading = false);
       return;
     }
     try {
@@ -177,10 +211,58 @@ class _StyleDiscoveryLiveScreenState extends State<StyleDiscoveryLiveScreen>
       if (!mounted) return;
       setState(() => _loading = false);
       _prefetchCurrentDesigner();
+      _persistDeckCache();
     } catch (e) {
       debugPrint('StyleDiscoveryLive: bootstrap failed → $e');
       if (mounted) setState(() => _loading = false);
     }
+  }
+
+  /// Önceki oturumun ilk birkaç kartını disk cache'inden anında deck'e ekler.
+  /// Backend fetch'i tamamlanmadan kullanıcı kart görür → algılanan latency
+  /// 0'a yakın.
+  Future<void> _warmFromDiskCache() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_prefsDeckCacheKey);
+      if (raw == null || raw.isEmpty) return;
+      final list = (jsonDecode(raw) as List).cast<Map<String, dynamic>>();
+      if (list.isEmpty) return;
+      // Cache, _selectedCategory'den bağımsız yazılıyor. Aktif bir filtre
+      // varken cache'i olduğu gibi göstermek "chip çalışmıyor" hissi verir.
+      // Cache item'larını mevcut filtreye göre client-side süzeriz.
+      final cat = _selectedCategory?.trim().toLowerCase();
+      final filtered = <Map<String, dynamic>>[];
+      for (final p in list) {
+        final id = p['id']?.toString() ?? '';
+        if (id.isEmpty || _seenIds.contains(id)) continue;
+        if (_coverOf(p).isEmpty) continue;
+        if (cat != null && cat.isNotEmpty) {
+          final pt = (p['project_type'] ?? '').toString().trim().toLowerCase();
+          if (pt != cat) continue;
+        }
+        _seenIds.add(id);
+        filtered.add(p);
+      }
+      if (filtered.isEmpty || !mounted) return;
+      setState(() {
+        _deck.addAll(filtered);
+        _loading = false;
+      });
+      _precacheNext();
+    } catch (_) {}
+  }
+
+  Future<void> _persistDeckCache() async {
+    try {
+      // İlk N kartı kaydet — küçük, hızlı.
+      final snap = _deck.take(_deckCacheMax).toList();
+      if (snap.isEmpty) return;
+      // RAM warm cache'i de güncelle — re-mount sırasında kullanılır.
+      EvlumbaLiveService.prefetchedDeck = snap;
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_prefsDeckCacheKey, jsonEncode(snap));
+    } catch (_) {}
   }
 
   Future<int> _fetchCount() async {
@@ -312,6 +394,21 @@ class _StyleDiscoveryLiveScreenState extends State<StyleDiscoveryLiveScreen>
   }
 
   Future<void> _swipe({required bool liked}) async {
+    // ── Pro upsell slot? ──
+    // Free user her 6 swipe'tan sonra normal kart yerine Pro upgrade kartı
+    // görüyor. Burada özel davranış: like → paywall, skip → next.
+    if (_isProSlot) {
+      HapticFeedback.selectionClick();
+      if (liked) {
+        unawaited(Analytics.log('upsell_swipe_card_clicked', const {}));
+        await showPaywall(context, trigger: 'swipe_premium_styles');
+      } else {
+        unawaited(Analytics.log('upsell_swipe_card_skipped', const {}));
+      }
+      // Slot'u tüket — _swipeCount'u bump et, render normal karta dönsün.
+      if (mounted) setState(() => _swipeCount++);
+      return;
+    }
     final card = _currentCard;
     if (card == null) return;
     // Undo için snapshot al — exit animasyonu bitince _index++ oluyor.
@@ -320,6 +417,8 @@ class _StyleDiscoveryLiveScreenState extends State<StyleDiscoveryLiveScreen>
       'liked': liked,
       'id': card['id']?.toString() ?? '',
     });
+    // Her gerçek swipe sayılır — Pro slot cadence'ı için.
+    _swipeCount++;
     HapticFeedback.selectionClick();
     final w = MediaQuery.of(context).size.width;
     _exitStartDx = _dragDx;
@@ -453,14 +552,12 @@ class _StyleDiscoveryLiveScreenState extends State<StyleDiscoveryLiveScreen>
         ((d?['full_name'] ?? d?['business_name'] ?? '') as String).trim();
     final designerAvatar = ((d?['avatar_url'] ?? '') as String).trim();
 
-    // Çift-tap koruması: 600ms pencere yeterli — route transition animasyonu
-    // tamamlanana kadar buton dondurulur. Pop edince _askingInFlight zaten
-    // otomatik sıfırlanır (timer).
-    setState(() => _askingInFlight = true);
-    Future.delayed(const Duration(milliseconds: 600), () {
-      if (mounted) setState(() => _askingInFlight = false);
-    });
-
+    // Çift-tap koruması: 600ms pencere — ÖNCE navigation tetiklenir,
+    // SONRA flag set edilir. Aksi halde setState rebuild'i action bar'ı
+    // yeniden çizip context.push'u bir frame geciktiriyordu (chat "yavaş
+    // açılıyor" hissinin kaynağı). Flag'i bir sonraki microtask'ta set
+    // ediyoruz — guard çift-tap'i hâlâ yakalar (synchronous tap loop
+    // değilse).
     context.push('/chat/dm/new', extra: {
       'designerId': designerId,
       if (designerName.isNotEmpty) 'designerName': designerName,
@@ -481,6 +578,14 @@ class _StyleDiscoveryLiveScreenState extends State<StyleDiscoveryLiveScreen>
         // kullanıyor) ama projectTitle yeterli — conversation.context_title
         // doğru kayıt edilecek.
       },
+    });
+
+    // Navigation tetiklendikten SONRA in-flight guard'ı kur. setState yerine
+    // raw assignment + delayed reset — action bar rebuild'i route transition
+    // ile yarışmasın. Tek mounted check yeterli.
+    _askingInFlight = true;
+    Future.delayed(const Duration(milliseconds: 600), () {
+      if (mounted) _askingInFlight = false;
     });
   }
 
@@ -522,6 +627,9 @@ class _StyleDiscoveryLiveScreenState extends State<StyleDiscoveryLiveScreen>
 
   @override
   Widget build(BuildContext context) {
+    final asyncPro = ref.watch(proStatusProvider);
+    _isFreeUser = !asyncPro.maybeWhen(
+        data: (s) => s.isPro, orElse: () => false);
     return Scaffold(
       backgroundColor: KoalaColors.bg,
       extendBody: true,
@@ -808,9 +916,18 @@ class _StyleDiscoveryLiveScreenState extends State<StyleDiscoveryLiveScreen>
                         child: GestureDetector(
                           onPanUpdate: _onPanUpdate,
                           onPanEnd: _onPanEnd,
-                          onTap: () => _onCardTap(current),
+                          onTap: _isProSlot
+                              ? () {
+                                  HapticFeedback.selectionClick();
+                                  showPaywall(context,
+                                      trigger: 'swipe_premium_styles');
+                                }
+                              : () => _onCardTap(current),
                           child: Stack(
                             children: [
+                              if (_isProSlot)
+                                const _ProUpsellCard()
+                              else
                               _Card(
                                 project: current,
                                 coverOf: _coverOf,
@@ -890,6 +1007,7 @@ class _StyleDiscoveryLiveScreenState extends State<StyleDiscoveryLiveScreen>
     final disabled = _currentCard == null || _animatingExit;
     // Modern, uygulama aksentine bağlı, 3'lü denge: Pas — Beğen (primary) — Sor
     final askDisabled = disabled ||
+        _isProSlot ||
         ((_currentCard?['designer_id'] ?? '').toString().isEmpty) ||
         _askingInFlight;
     final undoDisabled = _history.isEmpty || _animatingExit;
@@ -1470,6 +1588,153 @@ class _CategoryChip extends StatelessWidget {
 }
 
 // _TapHintOverlay kaldırıldı — direktif gereği hiçbir tutorial gösterilmiyor.
+
+/// Pro upsell kartı — swipe deck'inde her 6 swipe'tan sonra free user'a
+/// gösterilir. Skip → pas, Like → paywall. Aynı boyut/radius normal kartla.
+class _ProUpsellCard extends StatelessWidget {
+  const _ProUpsellCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(24),
+        gradient: const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            Color(0xFF1A1325),
+            KoalaColors.text,
+          ],
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.18),
+            blurRadius: 28,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          // Subtle gold radial highlight
+          DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: RadialGradient(
+                center: const Alignment(0, -0.4),
+                radius: 0.85,
+                colors: [
+                  const Color(0xFFB8862F).withValues(alpha: 0.20),
+                  Colors.transparent,
+                ],
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(28, 36, 28, 32),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Mini PRO badge
+                Container(
+                  height: 22,
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 9, vertical: 2),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFFE0B96B), Color(0xFFB8862F)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(99),
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(LucideIcons.crown,
+                          size: 12, color: Colors.white),
+                      SizedBox(width: 5),
+                      Text(
+                        'PRO',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.white,
+                          letterSpacing: 0.8,
+                          height: 1.0,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const Spacer(),
+                const Text(
+                  'Premium stilleri keşfet',
+                  style: TextStyle(
+                    fontSize: 26,
+                    fontWeight: FontWeight.w800,
+                    color: Colors.white,
+                    letterSpacing: -0.5,
+                    height: 1.15,
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Text(
+                  'Bohem-Lüks, Vintage Atelier, Japandi-Pro,\nBrutal-Modern ve 9 özel stil daha.',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    color: Colors.white.withValues(alpha: 0.85),
+                    height: 1.45,
+                    letterSpacing: -0.1,
+                  ),
+                ),
+                const Spacer(),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 18, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(99),
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(LucideIcons.crown,
+                          size: 14, color: Color(0xFFB8862F)),
+                      SizedBox(width: 8),
+                      Text(
+                        "Pro'ya Geç",
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w800,
+                          color: KoalaColors.text,
+                          letterSpacing: 0.1,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  'Beğen → Pro\'ya geç · Geç → atla',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w500,
+                    color: Colors.white.withValues(alpha: 0.55),
+                    letterSpacing: 0.1,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
 
 class _SwipePhotoSheet extends StatelessWidget {
   const _SwipePhotoSheet();

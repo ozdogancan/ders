@@ -45,6 +45,16 @@
   <!-- Preload -->
   <link rel="preload" href="flutter_bootstrap.js" as="script">
 
+  <!-- Plus Jakarta Sans preload — google_fonts paketi runtime'da font
+       indirdiği için ilk paint'te Roboto fallback gösterilip sonra
+       custom font geldiğinde text re-layout oluyordu ("snap"). Headline
+       weight'leri (500, 700, 800) preload + preconnect ile font ilk
+       Flutter frame'inden önce hazır geliyor → layout shift yok. -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;700;800&display=swap">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;700;800&display=swap">
+
   <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -65,7 +75,7 @@
        kullanıcıya yeni index.html veriyor (no-cache). -->
   <script>
     (function () {
-      var BUILD_VERSION = '1.0.83+87';
+      var BUILD_VERSION = '1.0.98+102';
       try {
         var KEY = 'koala_build_v';
         var ONCE = 'koala_kill_done';

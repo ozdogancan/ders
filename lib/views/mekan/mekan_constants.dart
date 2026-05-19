@@ -37,13 +37,23 @@ class ThemeOption {
   /// (kart gradient fallback'e kalır — _StyleImage buna hazır).
   final Map<String, String> images;
 
+  /// Pro-only stil mi? Ücretsiz kullanıcılar tıklayınca paywall açılır.
+  /// AI tarafına customPrompt olarak ekstra "premium" flavor ekleniyor.
+  final bool isPro;
+
+  /// AI prompt'una eklenecek ek detay — Pro stiller için backend'de henüz
+  /// karşılığı olmadığından customPrompt mantığı ile inject edilir.
+  final String? customPromptFlavor;
+
   const ThemeOption(
     this.value,
     this.tr,
     this.tag,
     this.swatch,
-    this.images,
-  );
+    this.images, {
+    this.isPro = false,
+    this.customPromptFlavor,
+  });
 
   /// Kart için görsel seç. Oda bazlı eşleşme yoksa salonu, o da yoksa
   /// boş string döner → _StyleImage gradient'a düşer.
@@ -150,5 +160,57 @@ const kThemes = <ThemeOption>[
       kRoomKeyDining: '$_sb/industrial-dining_room.png',
       kRoomKeyOffice: '$_sb/industrial-office.png',
     },
+  ),
+  // ─── Pro-only stiller (2026-04-30) ───
+  // Backend'de henüz preview görselleri yok → swatch fallback'e düşer.
+  // Pro user seçtiğinde customPromptFlavor restyle prompt'una inject edilir
+  // (mekan_flow_screen → faithfulPrompt customPrompt parametresi).
+  ThemeOption(
+    'BohemLuxe',
+    'Bohem-Lüks',
+    'Pro · Mahmel + pirinç + bitki',
+    [0xFF6B3F2E, 0xFFC9985A, 0xFFE6CFA8],
+    const {},
+    isPro: true,
+    customPromptFlavor:
+        'A bohemian-luxury aesthetic: rich velvet upholstery in deep emerald or burgundy, '
+        'aged brass fixtures, layered persian rugs, abundant greenery, eclectic curated '
+        'art, warm ambient lighting, lush textile mix.',
+  ),
+  ThemeOption(
+    'VintageAtelier',
+    'Vintage Atelier',
+    'Pro · Eski deri, ahşap, sepia',
+    [0xFF3E2A1F, 0xFF8B6B49, 0xFFD9BE92],
+    const {},
+    isPro: true,
+    customPromptFlavor:
+        'A vintage atelier aesthetic: aged chestnut wood floors, distressed leather chesterfield, '
+        'antique drafting table, brass desk lamps with green glass shades, bookcases with '
+        'leather-bound volumes, sepia and amber palette, soft golden lighting.',
+  ),
+  ThemeOption(
+    'JapandiPro',
+    'Japandi-Pro',
+    'Pro · Wabi-sabi mastery',
+    [0xFFE3DACB, 0xFF7A6A55, 0xFF1F1A14],
+    const {},
+    isPro: true,
+    customPromptFlavor:
+        'A premium Japandi aesthetic: handcrafted oak furniture with raw edges, raw plaster walls, '
+        'shoji screens with diffused light, ikebana arrangements, handmade ceramics, washi paper '
+        'pendant lamps, deep contemplative shadows, mastery of negative space.',
+  ),
+  ThemeOption(
+    'BrutalModern',
+    'Brutal-Modern',
+    'Pro · Beton + monolit form',
+    [0xFFB8B2A8, 0xFF555049, 0xFF1A1816],
+    const {},
+    isPro: true,
+    customPromptFlavor:
+        'A brutalist-modern aesthetic: polished raw concrete walls and floors, monolithic '
+        'sculptural furniture, blackened steel accents, oversized geometric forms, hidden '
+        'cove lighting, restrained palette of greys and warm charcoal, museum-like calm.',
   ),
 ];
