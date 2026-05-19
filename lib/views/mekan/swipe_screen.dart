@@ -7,11 +7,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
 import '../../core/theme/koala_tokens.dart';
-import '../../helpers/paywall_router.dart';
-import '../../providers/pro_status_provider.dart';
 import '../../services/analytics_service.dart';
 import '../../services/swipe_deck_service.dart';
-import '../../services/usage_limit_service.dart';
 
 /// "Zevkimi keşfet" — analyze-room confidence düşükse veya kullanıcı
 /// açıkça istediğinde açılan kısa swipe akışı. 6-8 kart, drag-to-swipe,
@@ -142,17 +139,6 @@ class _SwipeScreenState extends ConsumerState<SwipeScreen> {
 
   Future<void> _commit({required bool liked}) async {
     if (_index >= _deck.length) return;
-
-    // Pro paywall gate — free tier capped at dailySwipeLimit swipes/day.
-    final pro = ref.read(proStatusProvider).value?.isPro ?? false;
-    if (!pro) {
-      if (!await UsageLimitService.canSwipe()) {
-        if (!context.mounted) return;
-        await showPaywall(context, trigger: 'swipe_daily_limit');
-        return;
-      }
-      await UsageLimitService.incrementSwipe();
-    }
 
     final card = _deck[_index];
     if (liked) _liked.add(card);

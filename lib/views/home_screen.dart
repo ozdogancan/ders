@@ -838,115 +838,79 @@ class _HeroCaptureCard extends StatelessWidget {
     return _Pressable(
       onTap: onTap,
       child: Container(
-          // Aspect-ratio sabit (yaklaşık 4:3) — GIF/asset yüklenirken layout
-          // kaymasın diye sabit yükseklik korunuyor. Önceki 296px kalibrasyonu.
-          height: 296,
-          width: double.infinity,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(24),
-            color: const Color(0xFFEFEAE3),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.12),
-                blurRadius: 24,
-                offset: const Offset(0, 8),
-              ),
-            ],
-          ),
-          clipBehavior: Clip.antiAlias,
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              // ── HERO before/after — kartın tamamını kaplıyor (modern dergi)
-              _BeforeAfterShowcase(
+        // Hero alanı 200px + footer 88px + iç padding = 296. Tag/pill için
+        // kart yüksekliği artırıldı (önceki 232 → 296). Tek karta indiğimiz
+        // için sayfanın görsel ağırlığı bu kartta toplanıyor.
+        height: 296,
+        width: double.infinity,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(22),
+          color: Colors.white,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.10),
+              blurRadius: 28,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          children: [
+            // ── HERO before/after wipe + ürün tag'ları + designer pill ──
+            Expanded(
+              flex: 200,
+              child: _BeforeAfterShowcase(
                 urls: showcaseUrls,
                 fallbackAsset: 'assets/images/koala_hero.webp',
               ),
-
-              // ── Bottom→top dark gradient overlay (CTA okunaklılığı için)
-              IgnorePointer(
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.bottomCenter,
-                      end: Alignment.topCenter,
-                      colors: [
-                        Colors.black.withValues(alpha: 0.62),
-                        Colors.black.withValues(alpha: 0.28),
-                        Colors.transparent,
-                      ],
-                      stops: const [0.0, 0.45, 0.85],
-                    ),
-                  ),
-                ),
-              ),
-
-              // ── CTA (bottom-left) — başlık + alt etiket + chevron
-              Positioned(
-                left: 16,
-                right: 16,
-                bottom: 16,
+            ),
+            // ── FOOTER (white, title + sub + pill) ──
+            Expanded(
+              flex: 88,
+              child: Container(
+                color: Colors.white,
+                padding: const EdgeInsets.fromLTRB(16, 12, 12, 12),
                 child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
                     const Expanded(
                       child: Column(
-                        mainAxisSize: MainAxisSize.min,
+                        mainAxisAlignment: MainAxisAlignment.center,
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            'Bir fotoğraf · 30 sn',
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w500,
-                              color: Color(0xCCFFFFFF),
-                              letterSpacing: 0.4,
-                              height: 1.0,
-                            ),
-                          ),
-                          SizedBox(height: 8),
                           Text(
                             'Hayalindeki Tasarımı\nGerçeğe Dönüştür',
                             maxLines: 2,
                             style: TextStyle(
-                              fontSize: 20,
+                              fontSize: 17,
                               fontWeight: FontWeight.w800,
-                              color: Colors.white,
-                              letterSpacing: -0.5,
-                              height: 1.15,
+                              color: KoalaColors.text,
+                              letterSpacing: -0.4,
+                              height: 1.2,
+                            ),
+                          ),
+                          SizedBox(height: 6),
+                          Text(
+                            'Bir fotoğraf · 30 sn · gerçek tasarım',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w400,
+                              color: KoalaColors.textSec,
+                              letterSpacing: -0.1,
                             ),
                           ),
                         ],
                       ),
                     ),
-                    const SizedBox(width: 12),
-                    // Modern minimal chevron disc — _DenePill yerine ikon
-                    Container(
-                      width: 44,
-                      height: 44,
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.18),
-                            blurRadius: 12,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
-                      ),
-                      child: const Icon(
-                        LucideIcons.arrowUpRight,
-                        size: 20,
-                        color: KoalaColors.text,
-                      ),
-                    ),
+                    const SizedBox(width: 8),
+                    _DenePill(),
                   ],
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
+      ),
     );
   }
 }

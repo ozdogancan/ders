@@ -66,8 +66,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
   // ─── Palette (per spec) ────────────────────────────────────────
   static const Color _screenBg = Color(0xFFF8F9FB);
-  static const Color _proRed1 = Color(0xFFFF5A5F);
-  static const Color _proRed2 = Color(0xFFFF8A5C);
+  static const Color _proPurple1 = Color(0xFF6C63FF);
+  static const Color _proPurple2 = Color(0xFF9B5CFF);
   static const Color _avatarGrad1 = Color(0xFF6C63FF);
   static const Color _avatarGrad2 = Color(0xFF9B5CFF);
   static const Color _sectionLabel = Color(0xFF6B7280);
@@ -810,93 +810,156 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         ),
       );
 
-  // ─── Koala Pro banner (koral gradient) ─────────────────────────
+  // ─── Koala Pro banner (purple gradient + furniture image) ─────
   Widget _buildProBanner(bool isPro, DateTime? proUntil) {
     return Container(
-      padding: const EdgeInsets.all(20),
+      height: 140,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(20),
         gradient: const LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [_proRed1, _proRed2],
+          colors: [_proPurple1, _proPurple2],
         ),
         boxShadow: [
           BoxShadow(
-            color: _proRed1.withValues(alpha: 0.28),
+            color: _proPurple1.withValues(alpha: 0.32),
             blurRadius: 18,
             offset: const Offset(0, 8),
           ),
         ],
       ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Text(
-                      'Koala Pro',
-                      style: TextStyle(
-                        fontFamily: 'Manrope',
-                        fontSize: 20,
-                        fontWeight: FontWeight.w800,
-                        color: Colors.white,
-                        letterSpacing: -0.3,
-                      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(20),
+        child: Stack(
+          children: [
+            // Right-side furniture image with fade-into-purple on its left edge
+            Positioned.fill(
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: FractionallySizedBox(
+                  widthFactor: 0.4,
+                  heightFactor: 1,
+                  child: ShaderMask(
+                    blendMode: BlendMode.dstIn,
+                    shaderCallback: (rect) => const LinearGradient(
+                      begin: Alignment.centerLeft,
+                      end: Alignment.centerRight,
+                      colors: [
+                        Colors.transparent,
+                        Colors.black,
+                      ],
+                      stops: [0.0, 0.55],
+                    ).createShader(rect),
+                    child: Image.asset(
+                      'assets/pro/hero_1.png',
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => const SizedBox.shrink(),
                     ),
-                    const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.22),
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                      child: const Text(
-                        'VIP',
-                        style: TextStyle(
-                          fontFamily: 'Manrope',
-                          fontSize: 10,
-                          fontWeight: FontWeight.w800,
-                          color: Colors.white,
-                          letterSpacing: 0.6,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  isPro
-                      ? 'Tüm Pro özellikler aktif. Teşekkürler!'
-                      : 'Tüm Pro özelliklerin kilidini aç',
-                  style: TextStyle(
-                    fontFamily: 'Manrope',
-                    fontSize: 13,
-                    fontWeight: FontWeight.w500,
-                    height: 1.35,
-                    color: Colors.white.withValues(alpha: 0.92),
-                    letterSpacing: -0.1,
                   ),
                 ),
-                const SizedBox(height: 14),
-                if (isPro)
-                  _ProActivePill(until: proUntil)
-                else
-                  _UpgradePill(
-                    onTap: () => showPaywall(context,
-                        trigger: 'profile_upgrade_button'),
-                  ),
-              ],
+              ),
             ),
-          ),
-        ],
+            // Extra purple gradient overlay on the left edge of the image
+            // to guarantee a clean blend even if the asset has light pixels.
+            Positioned.fill(
+              child: IgnorePointer(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.centerLeft,
+                      end: Alignment.centerRight,
+                      colors: [
+                        _proPurple1.withValues(alpha: 0.0),
+                        _proPurple1.withValues(alpha: 0.0),
+                        _proPurple1.withValues(alpha: 0.55),
+                        _proPurple1.withValues(alpha: 0.0),
+                      ],
+                      stops: const [0.0, 0.55, 0.66, 0.85],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            // Content (left 60%)
+            Padding(
+              padding: const EdgeInsets.all(20),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Expanded(
+                    flex: 6,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Text(
+                              'Koala Pro',
+                              style: TextStyle(
+                                fontFamily: 'Manrope',
+                                fontSize: 20,
+                                fontWeight: FontWeight.w800,
+                                color: Colors.white,
+                                letterSpacing: -0.3,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFFFC857),
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                              child: const Text(
+                                'VIP',
+                                style: TextStyle(
+                                  fontFamily: 'Manrope',
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w800,
+                                  color: Color(0xFF3B2A00),
+                                  letterSpacing: 0.6,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          isPro
+                              ? 'Tüm Pro özellikler aktif. Teşekkürler!'
+                              : 'Tüm Pro özelliklerin kilidini aç',
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontFamily: 'Manrope',
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                            height: 1.3,
+                            color: Colors.white.withValues(alpha: 0.92),
+                            letterSpacing: -0.1,
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        if (isPro)
+                          _ProActivePill(until: proUntil)
+                        else
+                          _UpgradePill(
+                            onTap: () => showPaywall(context,
+                                trigger: 'profile_upgrade_button'),
+                          ),
+                      ],
+                    ),
+                  ),
+                  const Spacer(flex: 4),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1086,7 +1149,7 @@ class _UpgradePill extends StatelessWidget {
               fontFamily: 'Manrope',
               fontSize: 13,
               fontWeight: FontWeight.w800,
-              color: Color(0xFFFF5A5F),
+              color: Color(0xFF6C63FF),
               letterSpacing: -0.1,
             ),
           ),
@@ -1113,7 +1176,11 @@ class _ProActivePill extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: const Color(0xFF1FB87A),
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF16A34A), Color(0xFF22C55E)],
+        ),
         borderRadius: BorderRadius.circular(999),
       ),
       child: Row(

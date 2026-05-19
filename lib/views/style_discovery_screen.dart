@@ -12,9 +12,6 @@ import 'package:supabase_flutter/supabase_flutter.dart' hide User;
 
 import '../core/config/env.dart';
 import '../core/theme/koala_tokens.dart';
-import '../helpers/paywall_router.dart';
-import '../providers/pro_status_provider.dart';
-import '../services/usage_limit_service.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
 class StyleDiscoveryScreen extends ConsumerStatefulWidget {
@@ -189,17 +186,6 @@ class _StyleDiscoveryScreenState extends ConsumerState<StyleDiscoveryScreen>
   Future<void> _handleSwipe(bool liked, {double velocity = 0}) async {
     final card = _currentCard;
     if (_leaving || card == null || _isSwipeAnimating) return;
-
-    // Pro paywall gate — free tier capped at dailySwipeLimit swipes/day.
-    final pro = ref.read(proStatusProvider).value?.isPro ?? false;
-    if (!pro) {
-      if (!await UsageLimitService.canSwipe()) {
-        if (!context.mounted) return;
-        await showPaywall(context, trigger: 'swipe_daily_limit');
-        return;
-      }
-      await UsageLimitService.incrementSwipe();
-    }
 
     HapticFeedback.mediumImpact();
     final width = MediaQuery.of(context).size.width;
