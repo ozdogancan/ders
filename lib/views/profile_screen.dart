@@ -893,39 +893,15 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Text(
-                              'Koala Pro',
-                              style: TextStyle(
-                                fontFamily: 'Manrope',
-                                fontSize: 20,
-                                fontWeight: FontWeight.w800,
-                                color: Colors.white,
-                                letterSpacing: -0.3,
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 8, vertical: 3),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFFFC857),
-                                borderRadius: BorderRadius.circular(999),
-                              ),
-                              child: const Text(
-                                'VIP',
-                                style: TextStyle(
-                                  fontFamily: 'Manrope',
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w800,
-                                  color: Color(0xFF3B2A00),
-                                  letterSpacing: 0.6,
-                                ),
-                              ),
-                            ),
-                          ],
+                        const Text(
+                          'Koala Pro',
+                          style: TextStyle(
+                            fontFamily: 'Manrope',
+                            fontSize: 20,
+                            fontWeight: FontWeight.w800,
+                            color: Colors.white,
+                            letterSpacing: -0.3,
+                          ),
                         ),
                         const SizedBox(height: 6),
                         Text(

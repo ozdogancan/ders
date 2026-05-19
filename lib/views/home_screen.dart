@@ -11,8 +11,11 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../core/theme/koala_tokens.dart';
+import '../helpers/paywall_router.dart';
+import '../providers/pro_status_provider.dart';
 import '../services/chat_persistence.dart';
 import '../services/analytics_service.dart';
 import '../services/koala_ai_service.dart';
@@ -30,16 +33,16 @@ import 'saved/saved_screen_v2.dart';
 import '../widgets/style_discovery_pull.dart'; // GlobalKey type için tutuldu
 // import 'home/widgets/continue_design_card.dart'; // 2026-04-30 kaldırıldı
 
-class HomeScreen extends StatefulWidget {
+class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key, this.openStyleDiscovery = false});
   /// `/?openPull=1` deep-link ile true gelir — postFrame'de pull otomatik açılır.
   final bool openStyleDiscovery;
   @override
-  State<HomeScreen> createState() => _HomeScreenState();
+  ConsumerState<HomeScreen> createState() => _HomeScreenState();
 }
 
 
-class _HomeScreenState extends State<HomeScreen>
+class _HomeScreenState extends ConsumerState<HomeScreen>
     with TickerProviderStateMixin, WidgetsBindingObserver {
   final ImagePicker _picker = ImagePicker();
   final GlobalKey<_TypewriterInputState> _inputKey = GlobalKey();
@@ -340,7 +343,15 @@ class _HomeScreenState extends State<HomeScreen>
     });
   }
 
-  void _showPicker() {
+  Future<void> _showPicker() async {
+    // Pro paywall gate — restyle is Pro-only. Block at the BUTTON onTap so
+    // free users never enter the picker / MekanFlow / waiting screen.
+    final pro = ref.read(proStatusProvider).value?.isPro ?? false;
+    if (!pro) {
+      await showPaywall(context, trigger: 'home_hero_button');
+      return;
+    }
+    if (!mounted) return;
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,

@@ -6,8 +6,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import '../../helpers/paywall_router.dart';
-import '../../providers/pro_status_provider.dart';
 import '../pro/widgets/restyle_counter_pill.dart';
 import '../../core/theme/koala_tokens.dart';
 import '../../widgets/koala_bottom_nav.dart';
@@ -465,13 +463,10 @@ class _MekanFlowScreenState extends ConsumerState<MekanFlowScreen> {
     final a = _analysis;
     if (a == null) return;
 
-    // Pro paywall gate — restyle is Pro-only on free tier.
-    final pro = ref.read(proStatusProvider).value?.isPro ?? false;
-    if (!pro) {
-      if (!context.mounted) return;
-      await showPaywall(context, trigger: 'restyle_pre_generate');
-      return;
-    }
+    // Pro paywall gate moved UP to entry button onTap (home_screen `_showPicker`
+    // and style_discovery_live_screen `_onCardTap`). Free users never reach
+    // this point — gating here would be redundant and user-hostile (post-flow
+    // paywall after wait screen).
 
     // ───── /api/analyze-room (stil sinyalleri) ─────
     // Restyle hand-off'undan HEMEN önce. Kullanıcı stil seçti, görsel restyle

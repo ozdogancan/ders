@@ -144,6 +144,14 @@ class _StyleDiscoveryLiveScreenState
     HapticFeedback.selectionClick();
     final url = _coverOf(project);
     if (url.isEmpty) return;
+    // Pro paywall gate — restyle is Pro-only. Block at the BUTTON onTap so
+    // free users never enter the picker / MekanFlow / waiting screen.
+    final pro = ref.read(proStatusProvider).value?.isPro ?? false;
+    if (!pro) {
+      await showPaywall(context, trigger: 'realize_to_my_room');
+      return;
+    }
+    if (!mounted) return;
     final source = await showModalBottomSheet<ImageSource>(
       context: context,
       backgroundColor: Colors.transparent,
