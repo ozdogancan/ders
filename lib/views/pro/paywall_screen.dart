@@ -228,27 +228,22 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                _buildTopBar(),
-                const SizedBox(height: 8),
                 _buildHero(),
-                const SizedBox(height: 12),
+                const SizedBox(height: 14),
                 _buildTitle(),
                 const SizedBox(height: 10),
                 _buildBulletsGrid(),
                 const SizedBox(height: 10),
                 if (!_trialUsed) ...[
                   _buildTrialToggle(),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 8),
                 ],
                 _buildPlanCards(),
-                // Spacer absorbs extra height on tall screens so the footer
-                // is always reachable above the home indicator.
                 const Spacer(),
-                const SizedBox(height: 10),
+                const SizedBox(height: 8),
                 _buildCta(),
                 const SizedBox(height: 8),
                 _buildFooter(),
-                const SizedBox(height: 4),
               ],
             ),
           ),
@@ -296,7 +291,7 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
   // ─── Hero (auto-rotating 3-slide value-prop carousel) ───
   Widget _buildHero() {
     return SizedBox(
-      height: 220,
+      height: 170,
       child: DecoratedBox(
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(22),
@@ -322,6 +317,45 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
                 },
                 itemBuilder: (_, i) => _CarouselSlide(
                   assetPath: _kSlideAssets[i],
+                ),
+              ),
+              // Top-left close + top-right Geri Yükle pill, overlay-style.
+              Positioned(
+                top: 10,
+                left: 10,
+                child: _CircleIconButton(
+                  icon: Icons.close,
+                  onTap: () => Navigator.of(context).pop(),
+                ),
+              ),
+              Positioned(
+                top: 10,
+                right: 10,
+                child: GestureDetector(
+                  onTap: _onRestore,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 7),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.92),
+                      borderRadius: BorderRadius.circular(20),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.10),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: const Text(
+                      'Geri Yükle',
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w700,
+                        color: KoalaColors.text,
+                      ),
+                    ),
+                  ),
                 ),
               ),
               // Page dots — center-bottom.
