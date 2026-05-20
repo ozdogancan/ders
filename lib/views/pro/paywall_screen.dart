@@ -16,6 +16,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:purchases_flutter/purchases_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -44,11 +45,6 @@ const _kSlideAssets = <String>[
   'assets/pro/hero_1.png',
   'assets/pro/hero_2.png',
   'assets/pro/hero_3.png',
-];
-const _kSlideTaglines = <String>[
-  'Mekanını AI ile sınırsız dönüştür',
-  'Profesyonel tasarımları kendi mekanına uygula',
-  'Evlumba uzmanlarından öncelikli yanıt',
 ];
 
 class PaywallScreen extends ConsumerStatefulWidget {
@@ -250,10 +246,14 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
                   const SizedBox(height: 10),
                 ],
                 _buildPlanCards(),
+                // Spacer absorbs extra height on tall screens so the footer
+                // is always reachable above the home indicator.
+                const Spacer(),
                 const SizedBox(height: 10),
                 _buildCta(),
-                const SizedBox(height: 6),
+                const SizedBox(height: 8),
                 _buildFooter(),
+                const SizedBox(height: 4),
               ],
             ),
           ),
@@ -327,7 +327,6 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
                 },
                 itemBuilder: (_, i) => _CarouselSlide(
                   assetPath: _kSlideAssets[i],
-                  tagline: _kSlideTaglines[i],
                 ),
               ),
               // Page dots — center-bottom.
@@ -411,34 +410,26 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
     );
   }
 
-  // ─── 2x2 bullets ────────────────────────────────────────
+  // ─── 3 value-prop cards — horizontal scroll ─────────────
   Widget _buildBulletsGrid() {
-    const bullets = [
-      'Sınırsız Koala AI tasarım sohbeti',
-      'Mekanını AI ile sınırsız dönüştür',
-      'Profesyonel tasarımları uygula',
-      'Uzmanlardan öncelikli yanıt',
+    const items = [
+      (Icons.auto_awesome, 'AI Tasarım Sohbeti', 'Sınırsız fikir, anlık iterasyon'),
+      (Icons.auto_fix_high, 'Mekan Dönüşümü', 'Fotoğrafından sınırsız stil'),
+      (Icons.verified, 'Uzman Desteği', 'Profesyonellerden öncelikli yanıt'),
     ];
-    return Column(
-      children: [
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(child: _Bullet(text: bullets[0])),
-            const SizedBox(width: 12),
-            Expanded(child: _Bullet(text: bullets[1])),
-          ],
-        ),
-        const SizedBox(height: 8),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(child: _Bullet(text: bullets[2])),
-            const SizedBox(width: 12),
-            Expanded(child: _Bullet(text: bullets[3])),
-          ],
-        ),
-      ],
+    return SizedBox(
+      height: 96,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        physics: const BouncingScrollPhysics(),
+        padding: EdgeInsets.zero,
+        itemCount: items.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 10),
+        itemBuilder: (_, i) {
+          final (icon, title, sub) = items[i];
+          return _ValueCard(icon: icon, title: title, sub: sub);
+        },
+      ),
     );
   }
 
@@ -469,8 +460,9 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
             child: Switch(
               value: _trialEnabled,
               onChanged: (v) => setState(() {
-                _trialEnabled = v;
-                if (v) _selected = _PlanKind.yearly;
+                // Trial ON → weekly (7-day trial), OFF → yearly.
+                _trialEnabled = v && !_trialUsed;
+                _selected = _trialEnabled ? _PlanKind.weekly : _PlanKind.yearly;
               }),
               activeThumbColor: Colors.white,
               activeTrackColor: _kPurple,
@@ -483,25 +475,33 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
 
   // ─── Plan cards ─────────────────────────────────────────
   Widget _buildPlanCards() {
-    final showTrialOnYearly = _trialEnabled && !_trialUsed;
+    final canTrial = !_trialUsed && _trialEnabled;
     return Column(
       children: [
         _PlanCard(
           selected: _selected == _PlanKind.weekly,
-          onTap: () => setState(() => _selected = _PlanKind.weekly),
-          topLabel: 'Haftalık',
-          subLabel: 'haftalık yenilenir',
+          onTap: () => setState(() {
+            _selected = _PlanKind.weekly;
+            // Selecting weekly re-enables trial (if eligible).
+            _trialEnabled = !_trialUsed;
+          }),
+          topLabel: canTrial ? '7 Gün Tam Erişim' : 'Haftalık',
+          subLabel: canTrial
+              ? 'sonra $_weeklyPrice/hafta'
+              : 'haftalık yenilenir',
           priceMain: _weeklyPrice,
           priceUnit: '/ hafta',
         ),
-        const SizedBox(height: 14),
+        const SizedBox(height: 12),
         _PlanCard(
           selected: _selected == _PlanKind.yearly,
-          onTap: () => setState(() => _selected = _PlanKind.yearly),
+          onTap: () => setState(() {
+            _selected = _PlanKind.yearly;
+            // Selecting yearly auto-disables trial.
+            _trialEnabled = false;
+          }),
           topLabel: 'Yıllık',
-          subLabel: showTrialOnYearly
-              ? '7 gün ücretsiz, sonra $_yearlyPrice/yıl'
-              : '$_yearlyPrice / yıl',
+          subLabel: '$_yearlyPrice / yıl',
           priceMain: _yearlyPerWeek,
           priceUnit: '/ haftada',
           badge: '%76 TASARRUF',
@@ -510,53 +510,67 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
     );
   }
 
-  // ─── CTA ────────────────────────────────────────────────
+  // ─── CTA — purple gradient + looping shimmer sweep ──────
   Widget _buildCta() {
-    return SizedBox(
+    final button = SizedBox(
       width: double.infinity,
       height: 52,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
-          gradient: const LinearGradient(
-            colors: [_kPurple, _kPurpleDeep],
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: _kPurple.withValues(alpha: 0.32),
-              blurRadius: 16,
-              offset: const Offset(0, 6),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [_kPurple, _kPurpleDeep],
             ),
-          ],
-        ),
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            borderRadius: BorderRadius.circular(16),
-            onTap: _purchasing ? null : _onPurchase,
-            child: Center(
-              child: _purchasing
-                  ? const SizedBox(
-                      width: 22,
-                      height: 22,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2.5,
-                        color: Colors.white,
+            boxShadow: [
+              BoxShadow(
+                color: _kPurple.withValues(alpha: 0.32),
+                blurRadius: 16,
+                offset: const Offset(0, 6),
+              ),
+            ],
+          ),
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: _purchasing ? null : _onPurchase,
+              child: Center(
+                child: _purchasing
+                    ? const SizedBox(
+                        width: 22,
+                        height: 22,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2.5,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Text(
+                        'Devam et',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                          letterSpacing: 0.2,
+                        ),
                       ),
-                    )
-                  : const Text(
-                      'Devam et',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.white,
-                        letterSpacing: 0.2,
-                      ),
-                    ),
+              ),
             ),
           ),
         ),
       ),
+    );
+    if (_purchasing) return button;
+    // Looping shimmer sweep — every ~2.4s, white glaze passes across.
+    return Animate(
+      onPlay: (c) => c.repeat(),
+      effects: [
+        ShimmerEffect(
+          duration: const Duration(milliseconds: 2400),
+          delay: const Duration(milliseconds: 600),
+          color: Colors.white.withValues(alpha: 0.55),
+        ),
+      ],
+      child: button,
     );
   }
 
@@ -641,31 +655,69 @@ class _CircleIconButton extends StatelessWidget {
   }
 }
 
-class _Bullet extends StatelessWidget {
-  final String text;
-  const _Bullet({required this.text});
+class _ValueCard extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String sub;
+  const _ValueCard({required this.icon, required this.title, required this.sub});
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        const Icon(Icons.workspace_premium, color: _kPurple, size: 16),
-        const SizedBox(width: 6),
-        Expanded(
-          child: Text(
-            text,
+    return Container(
+      width: 168,
+      padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _kBorder),
+        boxShadow: [
+          BoxShadow(
+            color: _kPurple.withValues(alpha: 0.06),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 30,
+            height: 30,
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(colors: [_kPurple, _kPurpleDeep]),
+              borderRadius: BorderRadius.circular(9),
+            ),
+            child: Icon(icon, color: Colors.white, size: 17),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              fontSize: 13.5,
+              fontWeight: FontWeight.w800,
+              color: KoalaColors.text,
+              letterSpacing: -0.2,
+              height: 1.1,
+            ),
+          ),
+          const SizedBox(height: 3),
+          Text(
+            sub,
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(
-              fontSize: 12.5,
+              fontSize: 11.5,
               fontWeight: FontWeight.w500,
-              color: KoalaColors.text,
-              height: 1.25,
+              color: KoalaColors.textMed,
+              height: 1.2,
             ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
@@ -838,52 +890,15 @@ class _FooterDot extends StatelessWidget {
 // ═══════════════════════════════════════════════════════════
 class _CarouselSlide extends StatelessWidget {
   final String assetPath;
-  final String tagline;
-  const _CarouselSlide({required this.assetPath, required this.tagline});
+  const _CarouselSlide({required this.assetPath});
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        Image.asset(
-          assetPath,
-          fit: BoxFit.cover,
-          width: double.infinity,
-          height: double.infinity,
-        ),
-        // Dark gradient overlay bottom→top for text legibility.
-        DecoratedBox(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.bottomCenter,
-              end: Alignment.topCenter,
-              colors: [
-                Colors.black.withValues(alpha: 0.55),
-                Colors.transparent,
-              ],
-            ),
-          ),
-        ),
-        // Tagline bottom-left.
-        Positioned(
-          left: 16,
-          right: 16,
-          bottom: 22,
-          child: Text(
-            tagline,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w800,
-              color: Colors.white,
-              height: 1.2,
-              letterSpacing: -0.2,
-            ),
-          ),
-        ),
-      ],
+    return Image.asset(
+      assetPath,
+      fit: BoxFit.cover,
+      width: double.infinity,
+      height: double.infinity,
     );
   }
 }
