@@ -200,8 +200,10 @@
       animation: kp-rot 0.9s linear infinite;
     }
     @keyframes kp-rot { to { transform: rotate(360deg); } }
-    /* Flutter canvas gelir gelmez loader'ı gizle */
-    body:has(flt-glass-pane) #koala-preloader { opacity: 0; pointer-events: none; }
+    /* Flutter canvas gelir gelmez loader'ı gizle.
+       Modern tarayıcılar için :has() — eski tarayıcılar için JS fallback (aşağıda). */
+    body:has(flt-glass-pane) #koala-preloader,
+    #koala-preloader.hidden { opacity: 0; pointer-events: none; }
   </style>
 </head>
 <body>
@@ -209,6 +211,37 @@
     <div class="kp-logo"></div>
     <div class="kp-spinner"></div>
   </div>
+  <script>
+    // JS fallback — modern :has() selector çalışmayan tarayıcılar için.
+    // flt-glass-pane DOM'a ekleniyor mu poll et; eklenince preloader'ı gizle.
+    // Ayrıca 20sn hard cap — Flutter'ın bir nedenle mount olamadığı durumda
+    // kullanıcı sonsuz spinner görmesin (en azından beyaz ekrana düş).
+    (function() {
+      var preloader = document.getElementById('koala-preloader');
+      if (!preloader) return;
+      var hidden = false;
+      function hide() {
+        if (hidden) return;
+        hidden = true;
+        preloader.classList.add('hidden');
+        setTimeout(function() {
+          if (preloader.parentNode) preloader.parentNode.removeChild(preloader);
+        }, 300);
+      }
+      // Poll for flt-glass-pane (Flutter mounted) every 100ms.
+      var pollId = setInterval(function() {
+        if (document.querySelector('flt-glass-pane')) {
+          clearInterval(pollId);
+          hide();
+        }
+      }, 100);
+      // Hard 20s cap so we never trap user on the preloader screen.
+      setTimeout(function() {
+        clearInterval(pollId);
+        hide();
+      }, 20000);
+    })();
+  </script>
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>
