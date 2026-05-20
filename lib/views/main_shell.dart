@@ -58,10 +58,18 @@ class MainShellState extends ConsumerState<MainShell> {
   }
 
   Future<void> _resolveGate() async {
+    // Hard fail-safe: gate ne olursa olsun 5sn içinde açılır. Boş ekran takılı
+    // kalmasın diye. Pro fetch / paywall render hata verirse bile home gelir.
+    Future.delayed(const Duration(seconds: 5), () {
+      if (!mounted) return;
+      if (_gate != _GateState.passed) {
+        setState(() => _gate = _GateState.passed);
+      }
+    });
     try {
       final status = await ref
           .read(proStatusProvider.future)
-          .timeout(const Duration(seconds: 3), onTimeout: () => ProStatus.free);
+          .timeout(const Duration(seconds: 2), onTimeout: () => ProStatus.free);
       if (!mounted) return;
       if (status.isPro || _entryPaywallShownThisLaunch) {
         setState(() => _gate = _GateState.passed);
@@ -71,9 +79,13 @@ class MainShellState extends ConsumerState<MainShell> {
       setState(() => _gate = _GateState.gated);
       WidgetsBinding.instance.addPostFrameCallback((_) async {
         if (!mounted) return;
-        await showPaywall(context, trigger: 'app_launch');
+        try {
+          await showPaywall(context, trigger: 'app_launch');
+        } catch (_) {/* paywall render hatası — yine de home'a düş */}
         if (!mounted) return;
-        setState(() => _gate = _GateState.passed);
+        if (_gate != _GateState.passed) {
+          setState(() => _gate = _GateState.passed);
+        }
       });
     } catch (_) {
       if (!mounted) return;
