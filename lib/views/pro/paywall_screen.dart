@@ -56,7 +56,7 @@ class PaywallScreen extends ConsumerStatefulWidget {
 }
 
 class _PaywallScreenState extends ConsumerState<PaywallScreen> {
-  _PlanKind _selected = _PlanKind.yearly;
+  _PlanKind _selected = _PlanKind.weekly;
   bool _trialEnabled = true;
   bool _trialUsed = false;
   bool _purchasing = false;

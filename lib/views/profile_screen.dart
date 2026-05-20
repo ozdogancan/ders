@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io' show Platform;
 
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -501,36 +502,47 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
     return Scaffold(
       backgroundColor: _screenBg,
-      appBar: AppBar(
-        backgroundColor: _screenBg,
-        elevation: 0,
-        scrolledUnderElevation: 0,
-        foregroundColor: KoalaColors.text,
-        leading: IconButton(
-          icon: const Icon(LucideIcons.chevronLeft, size: 24),
-          onPressed: _goBack,
-        ),
-        centerTitle: true,
-        title: GestureDetector(
-          onTap: _onAdminTap,
-          behavior: HitTestBehavior.opaque,
-          child: const Text(
-            'Profil',
-            style: TextStyle(
-              fontFamily: 'Manrope',
-              fontSize: 17,
-              fontWeight: FontWeight.w700,
-              color: KoalaColors.text,
-              letterSpacing: -0.2,
-            ),
-          ),
-        ),
-      ),
       body: SafeArea(
-        top: false,
+        bottom: false,
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 40),
           children: [
+            // Editorial header — Fraunces serif, large, left-aligned (matches Mesajlar)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(0, 0, 0, 12),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  GestureDetector(
+                    onTap: _goBack,
+                    behavior: HitTestBehavior.opaque,
+                    child: const Padding(
+                      padding: EdgeInsets.fromLTRB(0, 6, 10, 6),
+                      child: Icon(LucideIcons.arrowLeft,
+                          size: 22, color: KoalaColors.text),
+                    ),
+                  ),
+                  GestureDetector(
+                    onTap: _onAdminTap,
+                    behavior: HitTestBehavior.opaque,
+                    child: Text(
+                      'Profil',
+                      style: GoogleFonts.fraunces(
+                        fontSize: 34,
+                        fontWeight: FontWeight.w300,
+                        color: KoalaColors.text,
+                        letterSpacing: -1.0,
+                        height: 1.05,
+                        fontFeatures: const [
+                          FontFeature('ss01'),
+                          FontFeature('ss02'),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
             _buildHeaderCard(),
             const SizedBox(height: 20),
             _buildProBanner(isPro, proStatus?.proUntil),

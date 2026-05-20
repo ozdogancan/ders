@@ -47,6 +47,10 @@ class StyleDiscoveryLiveScreen extends ConsumerStatefulWidget {
       _StyleDiscoveryLiveScreenState();
 }
 
+// Cold-start başına bir kez gösterilecek realize tutorial flag'i.
+// In-memory — app process restart edilince doğal olarak false'a döner.
+bool _realizeHintShownInSession = false;
+
 class _StyleDiscoveryLiveScreenState
     extends ConsumerState<StyleDiscoveryLiveScreen>
     with TickerProviderStateMixin {
@@ -158,7 +162,8 @@ class _StyleDiscoveryLiveScreenState
   }
 
   /// İlk-tap teaching: tasarımı kendi mekanına uygulayabileceğini öğret.
-  /// `seen_realize_hint` flag'i set edildikten sonra bir daha gösterilmez.
+  /// Cold-start başına bir kez — _realizeHintShownInSession in-memory flag'i
+  /// app process'i yeniden başlayınca sıfırlanır.
   Future<void> _showRealizeHint(BuildContext context) async {
     await showGeneralDialog<void>(
       context: context,
@@ -189,34 +194,15 @@ class _StyleDiscoveryLiveScreenState
                           bottom: Radius.circular(28),
                         ),
                         child: Padding(
-                          padding: const EdgeInsets.all(24),
+                          padding: const EdgeInsets.all(20),
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
-                              Center(
-                                child: Container(
-                                  width: 56,
-                                  height: 56,
-                                  decoration: const BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    gradient: LinearGradient(
-                                      begin: Alignment.topLeft,
-                                      end: Alignment.bottomRight,
-                                      colors: [
-                                        Color(0xFF6C63FF),
-                                        Color(0xFF9B5CFF),
-                                      ],
-                                    ),
-                                  ),
-                                  child: const Icon(
-                                    Icons.auto_awesome,
-                                    color: Colors.white,
-                                    size: 28,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(height: 16),
+                              // 3-step process visual — purple gradient frame,
+                              // sequential pulse animates current step.
+                              const _RealizeStepsIllustration(),
+                              const SizedBox(height: 18),
                               const Text(
                                 'Bunu kendi mekanında dene',
                                 textAlign: TextAlign.center,
@@ -230,7 +216,7 @@ class _StyleDiscoveryLiveScreenState
                               ),
                               const SizedBox(height: 8),
                               const Text(
-                                'Beğendiğin her tasarımı, AI ile kendi odanın fotoğrafına uygulayabilirsin.',
+                                'Beğendiğin tasarımı seç, AI senin mekanının fotoğrafına uygular — saniyeler içinde.',
                                 textAlign: TextAlign.center,
                                 style: TextStyle(
                                   fontSize: 14,
@@ -281,16 +267,12 @@ class _StyleDiscoveryLiveScreenState
     HapticFeedback.selectionClick();
     final url = _coverOf(project);
     if (url.isEmpty) return;
-    // İlk-tap teaching hint — sadece bir kere.
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      if (!(prefs.getBool('seen_realize_hint') ?? false)) {
-        await prefs.setBool('seen_realize_hint', true);
-        if (!mounted) return;
-        await _showRealizeHint(context);
-        if (!mounted) return;
-      }
-    } catch (_) {/* hint best-effort */}
+    // İlk-tap teaching hint — cold-start başına bir kez (in-memory flag).
+    if (!_realizeHintShownInSession) {
+      _realizeHintShownInSession = true;
+      await _showRealizeHint(context);
+      if (!mounted) return;
+    }
     // Pro paywall gate — restyle is Pro-only. Block at the BUTTON onTap so
     // free users never enter the picker / MekanFlow / waiting screen.
     final pro = ref.read(proStatusProvider).value?.isPro ?? false;
@@ -1910,6 +1892,134 @@ class _ProUpsellCard extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// 3-adım process illüstrasyonu — realize tutorial popup'ının üst görseli.
+/// Pulsing animasyon ile şu anki adımı vurgular: Seç → Dönüştür → Hazır.
+class _RealizeStepsIllustration extends StatefulWidget {
+  const _RealizeStepsIllustration();
+  @override
+  State<_RealizeStepsIllustration> createState() =>
+      _RealizeStepsIllustrationState();
+}
+
+class _RealizeStepsIllustrationState extends State<_RealizeStepsIllustration>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+  int _step = 0;
+  Timer? _stepTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    )..repeat(reverse: true);
+    _stepTimer = Timer.periodic(const Duration(milliseconds: 1100), (_) {
+      if (!mounted) return;
+      setState(() => _step = (_step + 1) % 3);
+    });
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    _stepTimer?.cancel();
+    super.dispose();
+  }
+
+  Widget _stepIcon(int idx, IconData icon, String label) {
+    final active = idx == _step;
+    return Expanded(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          AnimatedScale(
+            duration: const Duration(milliseconds: 280),
+            curve: Curves.easeOutCubic,
+            scale: active ? 1.0 : 0.84,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 280),
+              width: 54,
+              height: 54,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: active
+                    ? const LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [Color(0xFF6C63FF), Color(0xFF9B5CFF)],
+                      )
+                    : null,
+                color: active ? null : const Color(0xFFEDEBFF),
+                boxShadow: active
+                    ? [
+                        BoxShadow(
+                          color: const Color(0xFF6C63FF).withValues(alpha: 0.32),
+                          blurRadius: 14,
+                          offset: const Offset(0, 4),
+                        ),
+                      ]
+                    : null,
+              ),
+              child: Icon(icon,
+                  size: 26,
+                  color: active ? Colors.white : const Color(0xFF6C63FF)),
+            ),
+          ),
+          const SizedBox(height: 8),
+          AnimatedDefaultTextStyle(
+            duration: const Duration(milliseconds: 280),
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: active ? FontWeight.w800 : FontWeight.w600,
+              color: active ? KoalaColors.text : KoalaColors.textSec,
+              height: 1.1,
+            ),
+            child: Text(label, textAlign: TextAlign.center),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 18, 16, 16),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFFF7F5FF), Color(0xFFFBF8FF)],
+        ),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFE0DAFF)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _stepIcon(0, Icons.touch_app, 'Tasarımı seç'),
+          const _StepArrow(),
+          _stepIcon(1, Icons.auto_awesome, 'AI dönüştürür'),
+          const _StepArrow(),
+          _stepIcon(2, Icons.check_circle, 'Mekanında hazır'),
+        ],
+      ),
+    );
+  }
+}
+
+class _StepArrow extends StatelessWidget {
+  const _StepArrow();
+  @override
+  Widget build(BuildContext context) {
+    return const Padding(
+      padding: EdgeInsets.only(top: 18),
+      child: Icon(Icons.arrow_forward, size: 14, color: Color(0xFFB6AEEC)),
     );
   }
 }
