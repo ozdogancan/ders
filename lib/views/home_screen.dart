@@ -881,7 +881,7 @@ class _HeroCaptureCard extends StatelessWidget {
               flex: 88,
               child: Container(
                 color: Colors.white,
-                padding: const EdgeInsets.fromLTRB(16, 12, 12, 12),
+                padding: const EdgeInsets.fromLTRB(16, 14, 14, 14),
                 child: Row(
                   children: [
                     const Expanded(
@@ -890,31 +890,35 @@ class _HeroCaptureCard extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Hayalindeki Tasarımı\nGerçeğe Dönüştür',
-                            maxLines: 2,
+                            'Mekanını Dönüştür',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                             style: TextStyle(
-                              fontSize: 17,
+                              fontSize: 18,
                               fontWeight: FontWeight.w800,
-                              color: KoalaColors.text,
+                              color: Color(0xFF0F172A),
                               letterSpacing: -0.4,
-                              height: 1.2,
+                              height: 1.15,
                             ),
                           ),
-                          SizedBox(height: 6),
+                          SizedBox(height: 4),
                           Text(
-                            'Bir fotoğraf · 30 sn · gerçek tasarım',
+                            'Bir fotoğraf yükle, AI sana özel tasarım yapsın',
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
                             style: TextStyle(
-                              fontSize: 12,
+                              fontSize: 13,
                               fontWeight: FontWeight.w400,
-                              color: KoalaColors.textSec,
+                              color: Color(0xFF64748B),
                               letterSpacing: -0.1,
+                              height: 1.25,
                             ),
                           ),
                         ],
                       ),
                     ),
-                    const SizedBox(width: 8),
-                    _DenePill(),
+                    const SizedBox(width: 10),
+                    const _DenePill(label: 'Başla'),
                   ],
                 ),
               ),
@@ -968,7 +972,7 @@ class _HeroDiscoveryCard extends StatelessWidget {
               flex: 88,
               child: Container(
                 color: Colors.white,
-                padding: const EdgeInsets.fromLTRB(16, 12, 12, 12),
+                padding: const EdgeInsets.fromLTRB(16, 14, 14, 14),
                 child: Row(
                   children: [
                     const Expanded(
@@ -977,30 +981,35 @@ class _HeroDiscoveryCard extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Hayalindeki Tarzı Bul',
+                            'Tarzını Keşfet',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                             style: TextStyle(
-                              fontSize: 17,
-                              fontWeight: FontWeight.w700,
-                              color: KoalaColors.text,
-                              letterSpacing: -0.3,
+                              fontSize: 18,
+                              fontWeight: FontWeight.w800,
+                              color: Color(0xFF0F172A),
+                              letterSpacing: -0.4,
                               height: 1.15,
                             ),
                           ),
                           SizedBox(height: 4),
                           Text(
-                            '8 oda · zevkini 30 saniyede çöz',
+                            'Yüzlerce tasarım arasından beğendiğini keşfet',
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
                             style: TextStyle(
-                              fontSize: 12,
+                              fontSize: 13,
                               fontWeight: FontWeight.w400,
-                              color: KoalaColors.textSec,
+                              color: Color(0xFF64748B),
                               letterSpacing: -0.1,
+                              height: 1.25,
                             ),
                           ),
                         ],
                       ),
                     ),
-                    const SizedBox(width: 8),
-                    _DenePill(),
+                    const SizedBox(width: 10),
+                    const _DenePill(label: 'Keşfet'),
                   ],
                 ),
               ),
@@ -2205,6 +2214,9 @@ class _SwipeDeckShowcaseState extends State<_SwipeDeckShowcase>
 
 /// SnapHome'daki "Deneyin →" pill — koyu fill + beyaz label + chevron.
 class _DenePill extends StatelessWidget {
+  const _DenePill({this.label = 'Başla'});
+  final String label;
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -2213,20 +2225,20 @@ class _DenePill extends StatelessWidget {
         color: KoalaColors.text,
         borderRadius: BorderRadius.circular(99),
       ),
-      child: const Row(
+      child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           Text(
-            'Deneyin',
-            style: TextStyle(
+            label,
+            style: const TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.w600,
               color: Colors.white,
               letterSpacing: -0.1,
             ),
           ),
-          SizedBox(width: 4),
-          Icon(LucideIcons.arrowRight, size: 14, color: Colors.white),
+          const SizedBox(width: 4),
+          const Icon(LucideIcons.arrowRight, size: 14, color: Colors.white),
         ],
       ),
     );

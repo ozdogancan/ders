@@ -41,32 +41,43 @@ class MainShell extends ConsumerStatefulWidget {
       ValueNotifier<KoalaTab>(KoalaTab.home);
 }
 
+enum _GateState { loading, gated, passed }
+
 class MainShellState extends ConsumerState<MainShell> {
   late int _index = widget.initialIndex;
   int _unread = 0;
   bool _navVisible = true;
+  _GateState _gate = _GateState.loading;
 
   @override
   void initState() {
     super.initState();
     MainShell._instance = this;
     BackgroundGen.completion.addListener(_onBgComplete);
-    WidgetsBinding.instance.addPostFrameCallback((_) => _maybeShowEntryPaywall());
+    _resolveGate();
   }
 
-  Future<void> _maybeShowEntryPaywall() async {
-    if (_entryPaywallShownThisLaunch) return;
+  Future<void> _resolveGate() async {
     try {
       final status = await ref
           .read(proStatusProvider.future)
           .timeout(const Duration(seconds: 3), onTimeout: () => ProStatus.free);
       if (!mounted) return;
-      if (status.isPro) return;
-      if (_entryPaywallShownThisLaunch) return;
+      if (status.isPro || _entryPaywallShownThisLaunch) {
+        setState(() => _gate = _GateState.passed);
+        return;
+      }
       _entryPaywallShownThisLaunch = true;
-      await showPaywall(context, trigger: 'app_launch');
+      setState(() => _gate = _GateState.gated);
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        if (!mounted) return;
+        await showPaywall(context, trigger: 'app_launch');
+        if (!mounted) return;
+        setState(() => _gate = _GateState.passed);
+      });
     } catch (_) {
-      // Silent — never block app launch on status fetch failure.
+      if (!mounted) return;
+      setState(() => _gate = _GateState.passed);
     }
   }
 
@@ -203,6 +214,16 @@ class MainShellState extends ConsumerState<MainShell> {
 
   @override
   Widget build(BuildContext context) {
+    if (_gate != _GateState.passed) {
+      return Scaffold(
+        backgroundColor: KoalaColors.bg,
+        body: const SizedBox.expand(),
+      );
+    }
+    return _buildHome(context);
+  }
+
+  Widget _buildHome(BuildContext context) {
     return Scaffold(
       backgroundColor: KoalaColors.bg,
       extendBody: true,

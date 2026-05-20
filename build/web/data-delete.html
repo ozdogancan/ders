@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Koala - Veri Silme Talebi | evlumba.com</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Inter', -apple-system, sans-serif;
+            background: #FAFBFD;
+            color: #334155;
+            line-height: 1.7;
+            -webkit-font-smoothing: antialiased;
+        }
+        .header {
+            background: white;
+            border-bottom: 1px solid #E2E8F0;
+            padding: 20px 0;
+        }
+        .container {
+            max-width: 720px;
+            margin: 0 auto;
+            padding: 0 24px;
+        }
+        .logo-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .logo-icon {
+            width: 36px;
+            height: 36px;
+            background: linear-gradient(135deg, #6366F1, #8B5CF6);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 18px;
+            font-weight: 800;
+        }
+        .logo-text {
+            font-size: 20px;
+            font-weight: 800;
+            color: #1E293B;
+        }
+        .hero {
+            padding: 48px 0 32px;
+            text-align: center;
+        }
+        .hero h1 {
+            font-size: 32px;
+            font-weight: 800;
+            color: #1E293B;
+            margin-bottom: 8px;
+        }
+        .hero .subtitle {
+            color: #64748B;
+            font-size: 15px;
+        }
+        .hero .date {
+            display: inline-block;
+            margin-top: 16px;
+            padding: 6px 14px;
+            background: #F1F5F9;
+            border-radius: 99px;
+            font-size: 13px;
+            color: #64748B;
+            font-weight: 500;
+        }
+        .content {
+            padding-bottom: 80px;
+        }
+        .section {
+            background: white;
+            border: 1px solid #E2E8F0;
+            border-radius: 16px;
+            padding: 28px;
+            margin-bottom: 16px;
+        }
+        .section h2 {
+            font-size: 18px;
+            font-weight: 700;
+            color: #1E293B;
+            margin-bottom: 14px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .section h2 .icon {
+            width: 32px;
+            height: 32px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            flex-shrink: 0;
+        }
+        .section p, .section li {
+            font-size: 14px;
+            color: #475569;
+            margin-bottom: 10px;
+        }
+        .section ul, .section ol {
+            padding-left: 20px;
+        }
+        .section li {
+            margin-bottom: 6px;
+        }
+        .highlight {
+            background: #F1F5F9;
+            border-radius: 10px;
+            padding: 14px 16px;
+            margin-top: 12px;
+            font-size: 13px;
+            color: #64748B;
+        }
+        .footer {
+            text-align: center;
+            padding: 32px 0;
+            border-top: 1px solid #E2E8F0;
+            color: #94A3B8;
+            font-size: 13px;
+        }
+        .footer a {
+            color: #6366F1;
+            text-decoration: none;
+        }
+        .section a {
+            color: #6366F1;
+            text-decoration: none;
+        }
+        @media (max-width: 600px) {
+            .hero h1 { font-size: 24px; }
+            .section { padding: 20px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="container">
+            <div class="logo-row">
+                <div class="logo-icon">K</div>
+                <div class="logo-text">Koala</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="hero">
+            <h1>Veri Silme Talebi</h1>
+            <p class="subtitle">Hesabınızı kapatmadan belirli verilerinizi silme talimatları</p>
+            <span class="date">Son güncelleme: 20 Mayıs 2026</span>
+        </div>
+
+        <div class="content">
+            <div class="section">
+                <h2><span class="icon" style="background:#6366F120;color:#6366F1">📋</span> Genel Bakış</h2>
+                <p>Koala kullanıcıları, hesaplarını kapatmadan yalnızca belirli veri kategorilerini silme hakkına sahiptir. Bu sayfa, hangi verilerin seçici olarak silinebileceğini ve bu talebi nasıl iletebileceğinizi açıklar.</p>
+                <p>Tüm hesabınızı ve verilerinizi birlikte silmek istiyorsanız <a href="/account-delete">Hesap Silme Talebi</a> sayfasını kullanmanızı öneririz.</p>
+            </div>
+
+            <div class="section">
+                <h2><span class="icon" style="background:#0EA5E920;color:#0EA5E9">🗂️</span> Silinebilir Veri Kategorileri</h2>
+                <p>Aşağıdaki veri kategorilerini hesabınızı koruyarak silebilirsiniz:</p>
+                <ul>
+                    <li><strong>Sohbet geçmişi:</strong> AI asistan ile yaptığınız tüm yazışmalar ve mesajlaşma akışları.</li>
+                    <li><strong>Kaydedilmiş tasarımlar:</strong> Uygulama içinde oluşturduğunuz veya favorilere eklediğiniz tasarım çıktıları.</li>
+                    <li><strong>Fotoğraflar ve görseller:</strong> Mekan analizi veya stil keşfi için yüklediğiniz tüm görseller.</li>
+                    <li><strong>Analitik veriler:</strong> Uygulama kullanım istatistikleri, oturum bilgileri ve davranışsal kayıtlar.</li>
+                </ul>
+                <div class="highlight">
+                    Profil bilgileriniz (ad, e-posta, abonelik durumu) bu işlem sonrasında korunur; hesabınız aktif kalmaya devam eder.
+                </div>
+            </div>
+
+            <div class="section">
+                <h2><span class="icon" style="background:#22C55E20;color:#22C55E">📱</span> Yöntem 1 — Uygulama İçinden</h2>
+                <p>Verilerinizi seçici olarak silmek için aşağıdaki adımları izleyin:</p>
+                <ol>
+                    <li>Koala uygulamasını açın ve hesabınızla giriş yapın.</li>
+                    <li>Alt menüden <strong>Profil</strong> sekmesine dokunun.</li>
+                    <li><strong>Hesap Yönetimi</strong> bölümünü açın.</li>
+                    <li><strong>Verilerimi sil</strong> seçeneğine dokunun ve silmek istediğiniz veri kategorisini işaretleyin.</li>
+                    <li>Onay ekranındaki talimatları takip ederek işlemi tamamlayın.</li>
+                </ol>
+            </div>
+
+            <div class="section">
+                <h2><span class="icon" style="background:#8B5CF620;color:#8B5CF6">✉️</span> Yöntem 2 — E-posta ile</h2>
+                <p>Talebinizi yazılı olarak iletmek isterseniz, hesabınızla ilişkili e-posta adresinden aşağıdaki adrese ulaşabilirsiniz:</p>
+                <ul>
+                    <li><strong>E-posta:</strong> <a href="mailto:info@evlumba.com?subject=Veri%20Silme%20Talebi">info@evlumba.com</a></li>
+                    <li><strong>Konu:</strong> Veri Silme Talebi</li>
+                    <li><strong>İçerik:</strong> Hesabınıza kayıtlı e-posta adresi ve silmek istediğiniz veri kategorisi (ör. sohbet geçmişi, fotoğraflar)</li>
+                </ul>
+                <p>Talebinizin doğrulanabilmesi için e-postanın hesabınıza kayıtlı adresten gönderilmesi gerekmektedir. Talepler en geç 30 gün içinde sonuçlandırılır.</p>
+            </div>
+
+            <div class="section">
+                <h2><span class="icon" style="background:#EF444420;color:#EF4444">⚠️</span> Geri Alınamaz İşlem</h2>
+                <p>Veri silme işlemi <strong>geri alınamaz</strong>. Silinen sohbet geçmişi, tasarımlar, görseller ve analitik kayıtlar kurtarılamaz veya yeniden oluşturulamaz.</p>
+                <p>İşlemi onaylamadan önce, kaybetmek istemediğiniz içerikleri dışa aktarmanızı veya yedeklemenizi öneririz.</p>
+                <div class="highlight">
+                    Yasal yükümlülükler gereği saklanması zorunlu olan kayıtlar (ör. ödeme ve fatura bilgileri) bu süreç dışında tutulur ve ilgili mevzuatta belirtilen süre boyunca saklanmaya devam eder.
+                </div>
+            </div>
+
+            <div class="section">
+                <h2><span class="icon" style="background:#0EA5E920;color:#0EA5E9">📬</span> İletişim</h2>
+                <p>Veri silme süreciyle ilgili sorularınız veya talebinizin durumu için bizimle iletişime geçebilirsiniz:</p>
+                <ul>
+                    <li><strong>E-posta:</strong> <a href="mailto:info@evlumba.com">info@evlumba.com</a></li>
+                    <li><strong>Web:</strong> <a href="https://evlumba.com">evlumba.com</a></li>
+                    <li><strong>Geliştirici:</strong> Evlumba Software</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="footer">
+            <p>&copy; 2026 Koala. Tum haklari saklidir.</p>
+            <p style="margin-top:8px"><a href="https://evlumba.com">evlumba.com</a></p>
+        </div>
+    </div>
+</body>
+</html>

@@ -26,8 +26,12 @@ enum _PlanKind { weekly, yearly }
 const _kKoral = Color(0xFFFF5A5F);
 const _kKoralSoft = Color(0xFFFFF1F2);
 const _kBorder = Color(0xFFE5E7EB);
-const _kGradTop = Color(0xFF6C63FF);
-const _kGradBot = Color(0xFF9B5CFF);
+
+// Supabase Storage hero assets (swappable without rebuild).
+const _heroBeforeUrl =
+    'https://xgefjepaqnghaotqybpi.supabase.co/storage/v1/object/public/pro-assets/paywall-hero-before.webp';
+const _heroAfterUrl =
+    'https://xgefjepaqnghaotqybpi.supabase.co/storage/v1/object/public/pro-assets/paywall-hero-after.webp';
 
 class PaywallScreen extends StatefulWidget {
   final String trigger;
@@ -192,69 +196,52 @@ class _PaywallScreenState extends State<PaywallScreen> {
   }
 
   // ─── Hero ────────────────────────────────────────────────
+  // Before/after split-screen interior card. Demonstrates the AI design
+  // value-prop instantly. Images served from Supabase Storage with bundled
+  // asset fallback (assets/showcase/before|after.webp) for instant load and
+  // offline resilience.
   Widget _buildHero(BuildContext context) {
     final topPad = MediaQuery.of(context).padding.top;
-    final h = MediaQuery.of(context).size.height * 0.40;
-    // TODO: replace with Gemini-generated cozy interior hero
-    // (asset path: assets/images/koala_pro_hero.jpg — not present yet,
-    // using gradient fallback for now).
-    return SizedBox(
-      height: h,
-      child: Stack(
+    return Padding(
+      padding: EdgeInsets.only(top: topPad + 12, left: 16, right: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Container(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [_kGradTop, _kGradBot],
+          // Top row: close X + Geri Yükle pill.
+          Row(
+            children: [
+              _CircleIconButton(
+                icon: Icons.close,
+                onTap: () => Navigator.of(context).pop(),
               ),
-            ),
-            alignment: Alignment.center,
-            child: Padding(
-              padding: const EdgeInsets.only(bottom: 24),
-              child: Image.asset(
-                'assets/images/koala_logo.webp',
-                width: 120,
-                height: 120,
-                errorBuilder: (_, _, _) => const Icon(
-                  Icons.workspace_premium,
-                  color: Colors.white,
-                  size: 88,
-                ),
-              ),
-            ),
-          ),
-          Positioned(
-            top: topPad + 12,
-            left: 16,
-            child: _CircleIconButton(
-              icon: Icons.close,
-              onTap: () => Navigator.of(context).pop(),
-            ),
-          ),
-          Positioned(
-            top: topPad + 14,
-            right: 16,
-            child: GestureDetector(
-              onTap: _onRestore,
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.92),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: const Text(
-                  'Geri Yükle',
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: KoalaColors.text,
+              const Spacer(),
+              GestureDetector(
+                onTap: _onRestore,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 14, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: KoalaColors.surfaceAlt,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: _kBorder),
+                  ),
+                  child: const Text(
+                    'Geri Yükle',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: KoalaColors.text,
+                    ),
                   ),
                 ),
               ),
-            ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          // Before/after card.
+          _BeforeAfterHeroCard(
+            beforeUrl: _heroBeforeUrl,
+            afterUrl: _heroAfterUrl,
           ),
         ],
       ),
@@ -272,14 +259,46 @@ class _PaywallScreenState extends State<PaywallScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            const Text(
+              'Pro Erişimi',
+              style: TextStyle(
+                fontSize: 28,
+                fontWeight: FontWeight.w800,
+                color: KoalaColors.text,
+                letterSpacing: -0.5,
+                height: 1.1,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: _kKoral,
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: const Text(
+                'PRO',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                  color: Colors.white,
+                  letterSpacing: 0.6,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
         const Text(
-          'Pro Erişimi',
+          'AI tasarım, sınırsız ilham',
           style: TextStyle(
-            fontSize: 28,
-            fontWeight: FontWeight.w800,
-            color: KoalaColors.text,
-            letterSpacing: -0.5,
-            height: 1.1,
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+            color: KoalaColors.textMed,
           ),
         ),
         const SizedBox(height: 16),
@@ -467,10 +486,11 @@ class _CircleIconButton extends StatelessWidget {
         width: 36,
         height: 36,
         decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.28),
+          color: KoalaColors.surfaceAlt,
           shape: BoxShape.circle,
+          border: Border.all(color: _kBorder),
         ),
-        child: Icon(icon, color: Colors.white, size: 20),
+        child: Icon(icon, color: KoalaColors.text, size: 20),
       ),
     );
   }
@@ -624,4 +644,184 @@ class _FooterDot extends StatelessWidget {
         child: Text('·',
             style: TextStyle(fontSize: 12, color: KoalaColors.textTer)),
       );
+}
+
+// ═══════════════════════════════════════════════════════════
+// Before/After hero card — split-screen interior showcase.
+// ═══════════════════════════════════════════════════════════
+class _BeforeAfterHeroCard extends StatelessWidget {
+  final String beforeUrl;
+  final String afterUrl;
+  const _BeforeAfterHeroCard({
+    required this.beforeUrl,
+    required this.afterUrl,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return AspectRatio(
+      aspectRatio: 16 / 11,
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(24),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.12),
+              blurRadius: 24,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(24),
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              // Split image: Row of two equal halves.
+              Row(
+                children: [
+                  Expanded(
+                    child: RepaintBoundary(
+                      child: _HeroHalfImage(
+                        url: beforeUrl,
+                        assetPath: 'assets/showcase/before.webp',
+                        alignment: Alignment.centerLeft,
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    child: RepaintBoundary(
+                      child: _HeroHalfImage(
+                        url: afterUrl,
+                        assetPath: 'assets/showcase/after.webp',
+                        alignment: Alignment.centerRight,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              // Before pill (top-left).
+              const Positioned(
+                top: 12,
+                left: 12,
+                child: _LabelPill(
+                  text: 'Önce',
+                  bg: Colors.black87,
+                  fg: Colors.white,
+                ),
+              ),
+              // After pill (top-right).
+              const Positioned(
+                top: 12,
+                right: 12,
+                child: _LabelPill(
+                  text: 'Sonra',
+                  bg: Colors.white,
+                  fg: Colors.black87,
+                ),
+              ),
+              // Center swipe handle.
+              const Align(
+                alignment: Alignment.center,
+                child: _CenterHandle(),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _HeroHalfImage extends StatelessWidget {
+  final String url;
+  final String assetPath;
+  final Alignment alignment;
+  const _HeroHalfImage({
+    required this.url,
+    required this.assetPath,
+    required this.alignment,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final fallback = Image.asset(
+      assetPath,
+      fit: BoxFit.cover,
+      alignment: alignment,
+      // Stretch to 2x so each half shows half of a full-width image.
+      width: double.infinity,
+      height: double.infinity,
+    );
+    return Image.network(
+      url,
+      fit: BoxFit.cover,
+      alignment: alignment,
+      cacheWidth: 800,
+      width: double.infinity,
+      height: double.infinity,
+      errorBuilder: (_, _, _) => fallback,
+      loadingBuilder: (ctx, child, progress) {
+        if (progress == null) return child;
+        return fallback;
+      },
+    );
+  }
+}
+
+class _LabelPill extends StatelessWidget {
+  final String text;
+  final Color bg;
+  final Color fg;
+  const _LabelPill({required this.text, required this.bg, required this.fg});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(
+          fontSize: 11.5,
+          fontWeight: FontWeight.w700,
+          color: fg,
+          letterSpacing: 0.3,
+        ),
+      ),
+    );
+  }
+}
+
+class _CenterHandle extends StatelessWidget {
+  const _CenterHandle();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 40,
+      height: 40,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        shape: BoxShape.circle,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.18),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: const Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.chevron_left, size: 16, color: Colors.black87),
+          Icon(Icons.chevron_right, size: 16, color: Colors.black87),
+        ],
+      ),
+    );
+  }
 }
