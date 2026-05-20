@@ -296,7 +296,7 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
   // ─── Hero (auto-rotating 3-slide value-prop carousel) ───
   Widget _buildHero() {
     return SizedBox(
-      height: 180,
+      height: 220,
       child: DecoratedBox(
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(22),
@@ -354,49 +354,28 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
     );
   }
 
-  // ─── Title + subtitle ───────────────────────────────────
+  // ─── Title + subtitle — centered SnapHome-style ─────────
   Widget _buildTitle() {
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            const Text(
-              'Pro Erişimi',
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.w800,
-                color: KoalaColors.text,
-                letterSpacing: -0.5,
-                height: 1.1,
-              ),
-            ),
-            const SizedBox(width: 8),
-            Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                    colors: [_kPurple, _kPurpleDeep]),
-                borderRadius: BorderRadius.circular(999),
-              ),
-              child: const Text(
-                'PRO',
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w800,
-                  color: Colors.white,
-                  letterSpacing: 0.6,
-                ),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 2),
-        const Text(
-          'AI tasarım, sınırsız ilham',
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: const [
+        Text(
+          'Pro Erişimi',
+          textAlign: TextAlign.center,
           style: TextStyle(
-            fontSize: 13,
+            fontSize: 26,
+            fontWeight: FontWeight.w800,
+            color: KoalaColors.text,
+            letterSpacing: -0.5,
+            height: 1.1,
+          ),
+        ),
+        SizedBox(height: 4),
+        Text(
+          'AI tasarım, sınırsız ilham',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontSize: 13.5,
             fontWeight: FontWeight.w500,
             color: KoalaColors.textMed,
           ),
@@ -405,26 +384,41 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
     );
   }
 
-  // ─── 3 value-prop cards — horizontal scroll ─────────────
+  // ─── 3 stacked value bullets — SnapHome-style ───────────
   Widget _buildBulletsGrid() {
-    const items = [
-      (Icons.auto_awesome, 'AI Tasarım Sohbeti', 'Sınırsız fikir, anlık iterasyon'),
-      (Icons.auto_fix_high, 'Mekan Dönüşümü', 'Fotoğrafından sınırsız stil'),
-      (Icons.verified, 'Uzman Desteği', 'Profesyonellerden öncelikli yanıt'),
+    const bullets = [
+      'Sınırsız AI tasarım sohbeti',
+      'Fotoğrafından sınırsız mekan dönüşümü',
+      'Uzmanlardan öncelikli, hızlı yanıt',
     ];
-    return SizedBox(
-      height: 96,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        physics: const BouncingScrollPhysics(),
-        padding: EdgeInsets.zero,
-        itemCount: items.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 10),
-        itemBuilder: (_, i) {
-          final (icon, title, sub) = items[i];
-          return _ValueCard(icon: icon, title: title, sub: sub);
-        },
-      ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (final b in bullets)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                const Icon(Icons.workspace_premium,
+                    color: _kPurple, size: 20),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    b,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: KoalaColors.text,
+                      height: 1.25,
+                      letterSpacing: -0.1,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+      ],
     );
   }
 
@@ -650,72 +644,6 @@ class _CircleIconButton extends StatelessWidget {
   }
 }
 
-class _ValueCard extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final String sub;
-  const _ValueCard({required this.icon, required this.title, required this.sub});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 168,
-      padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: _kBorder),
-        boxShadow: [
-          BoxShadow(
-            color: _kPurple.withValues(alpha: 0.06),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 30,
-            height: 30,
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(colors: [_kPurple, _kPurpleDeep]),
-              borderRadius: BorderRadius.circular(9),
-            ),
-            child: Icon(icon, color: Colors.white, size: 17),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            title,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              fontSize: 13.5,
-              fontWeight: FontWeight.w800,
-              color: KoalaColors.text,
-              letterSpacing: -0.2,
-              height: 1.1,
-            ),
-          ),
-          const SizedBox(height: 3),
-          Text(
-            sub,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              fontSize: 11.5,
-              fontWeight: FontWeight.w500,
-              color: KoalaColors.textMed,
-              height: 1.2,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
 
 class _PlanCard extends StatelessWidget {
   final bool selected;
