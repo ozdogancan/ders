@@ -292,6 +292,17 @@ class _BootstrapAppState extends State<_BootstrapApp> {
             enabled: _supabaseReady,
           );
           Analytics.appOpened();
+          // TODO(analytics-batch): Analytics now batches INSERTs (30s / 50
+          // events). No WidgetsBindingObserver exists in _BootstrapApp, so
+          // the lifecycle flush is wired into the existing observer in
+          // lib/views/home_screen.dart's didChangeAppLifecycleState — when
+          // touching that file next, add:
+          //   if (state == AppLifecycleState.paused ||
+          //       state == AppLifecycleState.detached) {
+          //     Analytics.flushNow();
+          //   }
+          // Acceptable loss window otherwise: up to 50 events / 30s on
+          // process death before first flush.
           // Wire global 402 → paywall handler. Services call this when API
           // returns 402 quota_exceeded; we route via the GoRouter navigator key.
           QuotaService.onQuotaExceeded = (trigger) {

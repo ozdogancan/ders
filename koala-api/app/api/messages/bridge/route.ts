@@ -6,6 +6,7 @@ import {
 } from '@/lib/supabase/evlumba-admin';
 import { koalaService } from '@/lib/supabase/koala';
 import { corsHeaders } from '@/lib/security';
+import { checkAndIncrementQuota } from '@/lib/quota';
 
 export const runtime = 'nodejs';
 export const maxDuration = 30;
@@ -77,6 +78,36 @@ export async function POST(req: NextRequest) {
       { error: 'firebaseUid, designerId, and (body or attachmentUrl) are required' },
       { status: 400, headers: cors },
     );
+  }
+
+  // ─── Quota gate (free tier: 1 reply per koala_conversation) ───────────
+  // Pro users bypass (handled inside checkAndIncrementQuota).
+  // Only gate when koalaConversationId is provided — older clients without
+  // it pass through (cannot enforce per-conversation without an id).
+  if (koalaConversationId) {
+    try {
+      const q = await checkAndIncrementQuota({
+        userId: firebaseUid,
+        feature: 'designer_dm',
+        conversationId: koalaConversationId,
+      });
+      if (!q.allowed) {
+        return NextResponse.json(
+          {
+            error: 'quota_exceeded',
+            feature: 'designer_dm',
+            code: 'DESIGNER_DM_QUOTA',
+            conversationId: koalaConversationId,
+            used: q.used,
+            limit: q.limit,
+          },
+          { status: 402, headers: cors },
+        );
+      }
+    } catch (e) {
+      // Fail-open: bridge must not break on a quota bug.
+      console.warn('[bridge] quota check failed', e);
+    }
   }
 
   try {

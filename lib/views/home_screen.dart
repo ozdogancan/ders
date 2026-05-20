@@ -301,6 +301,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       setState(() {});
       // App foreground'a gelince anında inbound sync
       _kickInboundSync();
+    } else if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.detached) {
+      // Flush queued analytics events before the OS may suspend us.
+      Analytics.flushNow();
     }
   }
 

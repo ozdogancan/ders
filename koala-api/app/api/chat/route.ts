@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { corsHeaders, checkRateLimit, isOriginAllowed, isBodyTooLarge } from '@/lib/security';
+import { verifyAuthHeader } from '@/lib/auth-verify';
+import { checkAndIncrementQuota } from '@/lib/quota';
 
 export const maxDuration = 300;
 
@@ -48,6 +50,31 @@ export async function POST(req: NextRequest) {
       { error: 'Server configuration error' },
       { status: 500, headers }
     );
+  }
+
+  // Quota gate — daily 5 user messages on free tier. Skip if no auth (legacy
+  // clients) so old shipped Android builds keep working until next forced upgrade.
+  try {
+    const auth = await verifyAuthHeader(req);
+    const headerUid = req.headers.get('x-user-id');
+    const userId = auth.uid ?? headerUid;
+    if (userId && !auth.legacy) {
+      const q = await checkAndIncrementQuota({ userId, feature: 'chat' });
+      if (!q.allowed) {
+        return NextResponse.json(
+          {
+            error: 'quota_exceeded',
+            feature: 'chat',
+            code: 'CHAT_QUOTA',
+            used: q.used,
+            limit: q.limit,
+          },
+          { status: 402, headers },
+        );
+      }
+    }
+  } catch (e) {
+    console.warn('[chat] quota check failed', e);
   }
 
   try {

@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 1.0.82+86
+version: 1.0.98+102
 
 environment:
   sdk: ^3.10.8
@@ -131,11 +131,17 @@ flutter:
   uses-material-design: true
   assets:
     - assets/images/
+    - assets/onboarding/
     # Curated before/after pair — Gemini ile aynı odanın boş ve tasarlı
     # versiyonları üretildi (assets/showcase/before.webp + after.webp).
     # Toplam ~86KB, ana sayfa Card 1'in hero before/after wipe gösteriminde
     # kullanılıyor. Network değil bundle → 0 jank, instant render.
     - assets/showcase/
+    # Run B — paywall hero carousel. 4 Gemini-generated editorial PNGs
+    # (~1.5-1.9MB each). Bundled (not network) so first paywall open is
+    # instant and offline-safe. Total ~6.7MB — acceptable cost for the
+    # most important conversion screen.
+    - assets/pro/
     # google_fonts paketi runtime'da fonts.googleapis.com'dan font çekmek
     # yerine bundle'daki TTF'leri kullanır (assets/google_fonts/ altında doğru
     # isimli dosya varsa). Bu klasör + main.dart'taki `allowRuntimeFetching=false`

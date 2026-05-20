@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { put } from '@vercel/blob';
 import { corsHeaders, checkRateLimit, isOriginAllowed, isBodyTooLarge } from '@/lib/security';
+import { verifyAuthHeader } from '@/lib/auth-verify';
+import { checkAndIncrementQuota } from '@/lib/quota';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -80,7 +82,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  let body: { image?: string; room?: string; theme?: string; customPrompt?: string };
+  let body: { image?: string; room?: string; theme?: string; customPrompt?: string; userId?: string };
   try {
     body = await req.json();
   } catch {
@@ -89,6 +91,26 @@ export async function POST(req: NextRequest) {
 
   let { image } = body;
   const { room, theme, customPrompt } = body;
+
+  // Quota gate — skip if no userId (legacy clients) so we don't break old apps.
+  // Strict-mode rollout will reject anonymous calls in a future release.
+  const auth = await verifyAuthHeader(req);
+  const userId = auth.uid ?? body.userId;
+  if (userId && !auth.legacy) {
+    const q = await checkAndIncrementQuota({ userId, feature: 'restyle' });
+    if (!q.allowed) {
+      return NextResponse.json(
+        {
+          error: 'quota_exceeded',
+          feature: 'restyle',
+          code: 'RESTYLE_QUOTA',
+          used: q.used,
+          limit: q.limit,
+        },
+        { status: 402, headers },
+      );
+    }
+  }
 
   if (!image || !room || !theme) {
     return NextResponse.json(
@@ -176,13 +198,13 @@ export async function POST(req: NextRequest) {
     const buffer = Buffer.from(outData, 'base64');
     const bytes = buffer.byteLength;
 
-    // Upload to Vercel Blob. Fall back to base64-only on failure so the
-    // request still succeeds (mobile client can render either way).
+    // Try 1: Vercel Blob. Try 2: Supabase Storage fallback (server-side).
+    // Try 3: base64 data URL (last resort — saveItem strips this).
     let blobUrl: string | null = null;
     const tUpload = Date.now();
+    const filename = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}.png`;
     try {
-      const filename = `restyle/${Date.now()}-${Math.random().toString(36).slice(2, 10)}.png`;
-      const blob = await put(filename, buffer, {
+      const blob = await put(`restyle/${filename}`, buffer, {
         access: 'public',
         contentType: 'image/png',
       });
@@ -196,6 +218,40 @@ export async function POST(req: NextRequest) {
         ms_upload: Date.now() - tUpload,
         detail: uploadErr instanceof Error ? uploadErr.message : 'Unknown error',
       });
+    }
+    // Supabase Storage fallback — Vercel Blob başarısız olursa.
+    if (!blobUrl) {
+      try {
+        const { createClient } = await import('@supabase/supabase-js');
+        const SUPABASE_URL = process.env.SUPABASE_URL || '';
+        const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+        if (SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY) {
+          const sb = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+            auth: { autoRefreshToken: false, persistSession: false },
+          });
+          try {
+            await sb.storage.createBucket('design-uploads', { public: true });
+          } catch (_) {
+            /* exists */
+          }
+          const { error: upErr } = await sb.storage
+            .from('design-uploads')
+            .upload(`restyle-after/${filename}`, buffer, {
+              contentType: 'image/png',
+              upsert: false,
+              cacheControl: '2592000',
+            });
+          if (!upErr) {
+            const { data } = sb.storage
+              .from('design-uploads')
+              .getPublicUrl(`restyle-after/${filename}`);
+            blobUrl = data.publicUrl;
+            console.log('[restyle] supabase_uploaded', { url: blobUrl });
+          }
+        }
+      } catch (_) {
+        /* fallback also failed */
+      }
     }
 
     console.log('[restyle] ok', {

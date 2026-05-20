@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' hide User;
@@ -958,6 +958,11 @@ class MessagingService {
   // olabiliyor. Tek channel paylaşılır, her event tüm listener'lara fan-out.
   static final Set<void Function(Map<String, dynamic>)> _convListeners = {};
 
+  // App-lifecycle pause/resume state for the conversations channel only.
+  // subscribeToMessages (chat) is intentionally NOT lifecycle-managed.
+  static _ConvLifecycleHook? _convHook;
+  static bool _convPaused = false;
+
   /// Conversations listesini canli dinle (son mesaj degisiklikleri).
   /// Aynı listener fonksiyonunu ikinci kez eklemek no-op. Aynı reference
   /// dispose'da [unsubscribeFromConversations(listener: ...)] ile verilmeli.
@@ -968,7 +973,27 @@ class MessagingService {
 
     _convListeners.add(onUpdate);
 
+    // App lifecycle observer'i ilk subscribe'da bagla (idempotent).
+    if (_convHook == null) {
+      _convHook = _ConvLifecycleHook();
+      try {
+        WidgetsBinding.instance.addObserver(_convHook!);
+      } catch (_) {
+        // WidgetsBinding henuz init olmamissa sessizce gec — realtime gene
+        // kurulur, sadece pause/resume devre disi kalir.
+      }
+    }
+
     // Channel zaten kurulu mu? Kuruluysa sadece listener'ı ekle.
+    if (_channels.containsKey('_conversations')) return;
+
+    _attachConvChannel();
+  }
+
+  /// Conversations realtime channel'ini kurar. Hem ilk subscribe hem de
+  /// foreground'a donus sirasinda kullanilir.
+  static void _attachConvChannel() {
+    if (_uid == null) return;
     if (_channels.containsKey('_conversations')) return;
 
     final channel = _db.channel('conversations:$_uid');
@@ -998,6 +1023,43 @@ class MessagingService {
 
     _channels['_conversations'] = channel;
     debugPrint('MessagingService: subscribed to conversations');
+  }
+
+  /// App background'a girdiginde conversations channel'ini kapat.
+  /// Chat (subscribeToMessages) channel'ina dokunmaz.
+  static Future<void> _pauseConvChannel() async {
+    if (_convPaused) return;
+    final channel = _channels.remove('_conversations');
+    if (channel == null) return;
+    _convPaused = true;
+    try {
+      await _db.removeChannel(channel);
+      debugPrint('MessagingService: conv channel paused (app background)');
+    } catch (e) {
+      debugPrint('MessagingService: pause conv channel error: $e');
+    }
+  }
+
+  /// App foreground'a dondugunde conversations channel'ini yeniden kur.
+  /// Pause penceresinde kacirilan realtime update'ler icin one-shot fan-out
+  /// tetiklenir; listener'lar (HomeScreen/ChatListScreen) listesini tazeler.
+  static Future<void> _resumeConvChannel() async {
+    if (!_convPaused) return;
+    _convPaused = false;
+    if (_convListeners.isEmpty) return;
+    _attachConvChannel();
+    // One-shot catch-up: pause penceresinde realtime update kacirilmis
+    // olabilir. Listener'lara bos payload ile bir refresh sinyali gonder —
+    // mevcut fan-out kontratinda record map'i defensive olarak okunuyor,
+    // ancak guvenli olmak adina bos map gondermek yerine senkron refresh
+    // tetiklemeyi listener'a birakmiyoruz. Listener'lar her cagrida kendi
+    // cache'lerini refetch eden tasarima sahip degil; bu yuzden bos payload
+    // ile cagri yapmak yerine sadece reconnect ile yetinilir.
+    // TODO(canoz): HomeScreen / ChatListScreen icin acik bir refresh
+    // sinyali (ornegin onResumeCatchUp callback'i) eklemek istersek burada
+    // ayri bir fan-out yapilabilir. Simdilik realtime reconnect yeterli;
+    // worst case bir realtime tick'i icin liste stale kalir.
+    debugPrint('MessagingService: conv channel resumed (app foreground)');
   }
 
   /// Mesaj subscription'i kapat
@@ -1092,4 +1154,20 @@ class MessagingService {
 
   /// Alias — badge icin toplam okunmamis
   static Future<int> getTotalUnreadCount() => getUnreadCount();
+}
+
+/// Conversations realtime channel'i icin app-lifecycle hook'u.
+/// SADECE conversations channel'ini etkiler — chat (messages) channel'i
+/// dokunulmaz.
+class _ConvLifecycleHook with WidgetsBindingObserver {
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.detached ||
+        state == AppLifecycleState.hidden) {
+      MessagingService._pauseConvChannel();
+    } else if (state == AppLifecycleState.resumed) {
+      MessagingService._resumeConvChannel();
+    }
+  }
 }

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' hide User;
@@ -15,6 +17,18 @@ class Analytics {
   bool _enabled = false;
 
   String? get _uid => FirebaseAuth.instance.currentUser?.uid;
+
+  // ─── Batching state ─────────────────────────────────────────
+  // analytics_events used to INSERT once per log() call (~1131/day).
+  // Now we enqueue in-memory and flush in batches: every 30s OR when
+  // the queue hits 50 rows, whichever comes first. App-pause/detach
+  // can call [flushNow] to drain before the process is suspended.
+  static final List<Map<String, dynamic>> _queue = [];
+  static Timer? _flushTimer;
+  static const Duration _flushInterval = Duration(seconds: 30);
+  static const int _maxBatchSize = 50;
+  // Hard cap on queue size to avoid memory blowup if Supabase is down.
+  static const int _maxQueueSize = 500;
 
   /// Call once at app start
   void init({
@@ -43,19 +57,56 @@ class Analytics {
 
   Future<void> _log(String eventName, Map<String, dynamic>? data) async {
     if (!_enabled) return;
-    try {
-      await Supabase.instance.client.from('analytics_events').insert({
-        'user_id': _uid,
-        'event_name': eventName,
-        'event_data': data ?? {},
-        'session_id': _sessionId,
-        'platform': _platform,
-        'app_version': _appVersion,
-      });
-    } catch (e) {
-      debugPrint('Analytics error: $e');
+    // Capture the timestamp at log time so analytics order is preserved
+    // even if the flush is delayed by the 30s window.
+    _queue.add({
+      'user_id': _uid,
+      'event_name': eventName,
+      'event_data': data ?? {},
+      'session_id': _sessionId,
+      'platform': _platform,
+      'app_version': _appVersion,
+      'created_at': DateTime.now().toUtc().toIso8601String(),
+    });
+    if (_queue.length >= _maxBatchSize) {
+      // Fire-and-forget; callers expect _log to be cheap.
+      // ignore: unawaited_futures
+      _flush();
+    } else {
+      _scheduleFlush();
     }
   }
+
+  static void _scheduleFlush() {
+    _flushTimer ??= Timer(_flushInterval, () {
+      _flushTimer = null;
+      // ignore: unawaited_futures
+      _flush();
+    });
+  }
+
+  static Future<void> _flush() async {
+    if (_queue.isEmpty) return;
+    final batch = List<Map<String, dynamic>>.from(_queue);
+    _queue.clear();
+    _flushTimer?.cancel();
+    _flushTimer = null;
+    try {
+      await Supabase.instance.client.from('analytics_events').insert(batch);
+    } catch (e) {
+      // Re-queue on failure — but cap to avoid unbounded memory growth
+      // if Supabase is unreachable for an extended period.
+      if (_queue.length + batch.length <= _maxQueueSize) {
+        _queue.insertAll(0, batch);
+      }
+      debugPrint('analytics flush failed: $e');
+    }
+  }
+
+  /// Force the in-memory queue to flush immediately. Callers should wire
+  /// this into their existing [WidgetsBindingObserver.didChangeAppLifecycleState]
+  /// for `paused` / `detached` states so telemetry isn't lost on suspend.
+  static Future<void> flushNow() => _flush();
 
   // ═══════════════════════════════════════════
   // CONVENIENCE METHODS

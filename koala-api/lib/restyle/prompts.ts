@@ -132,12 +132,58 @@ function spaceDirective(room: string): string {
 }
 
 export function faithfulPrompt(room: string, theme: string): string {
-  // En sadık yorum — sade, az dramatik, mekanı olabildiğince tanı.
+  // En sadık yorum — mimariyi koru, ama hedef oda tipine göre eşyaları yenile.
+  // 2026-05-02: user reported salon→yatak odası dönüşümünde eski salon eşyaları
+  // kalıyor; AI'in yatak odası eşyalarını sığacak şekilde EKLEMESİ gerekiyor.
+  // Önceki versiyon "DO NOT add fixtures" diyordu — fazla restrictive. Şimdi
+  // ARCHITECTURE preserve + FURNITURE transform with spatial reasoning.
   const r = room.replace('_', ' ');
+  const fixtures = ROOM_FIXTURES[r.toLowerCase().replace(' ', '_')] ||
+                   ROOM_FIXTURES[r.toLowerCase()] ||
+                   [];
+  const fixtureGuide = fixtures.length > 0
+    ? `\n\n=== TARGET ROOM = ${r.toUpperCase()} ===\n` +
+      `The output MUST function as a ${r}. Replace existing furniture with ` +
+      `${r}-appropriate items, sized & positioned to fit the visible space:\n` +
+      fixtures.map(f => `  • ${f}`).join('\n') + '\n' +
+      `IMPORTANT: only include fixtures that physically FIT in the visible area. ` +
+      `If the input shows a small corner, use compact furniture. If the input ` +
+      `shows a full room, you may include all listed fixtures. Use spatial ` +
+      `reasoning — never cram a king-size bed into a 2m corner.`
+    : '';
   return (
-    `Convert this room into a tasteful ${theme}-style ${r}, while keeping the same ` +
-    `architectural space (walls, windows, ceiling, perspective). Photorealistic, natural ` +
-    `daylight, high detail, editorial interior photography.${spaceDirective(room)} ${NEG}`
+    `Task: photo-realistic EDIT of the attached photograph. The output is the ` +
+    `SAME PHYSICAL ROOM as the input, but redecorated and refurnished as a ` +
+    `${theme}-style ${r}.\n\n` +
+    `=== ARCHITECTURE — PRESERVE EXACTLY (non-negotiable) ===\n` +
+    `1. Walls: positions, sizes, angles, surface planes — UNCHANGED.\n` +
+    `2. Windows: positions, sizes, shapes, count — UNCHANGED.\n` +
+    `3. Doors: positions, count — UNCHANGED.\n` +
+    `4. Ceiling: height, slope — UNCHANGED.\n` +
+    `5. Floor: outline, room footprint — UNCHANGED.\n` +
+    `6. Camera: viewpoint, framing, perspective angle, focal length, crop ` +
+    `   boundaries — match the input EXACTLY. Do NOT zoom out. Do NOT reveal ` +
+    `   areas not visible in the input.\n\n` +
+    `=== FURNITURE & FIXTURES — TRANSFORM TO MATCH TARGET ROOM ===\n` +
+    `The user wants the room to FUNCTION as a ${r}. You MAY (and should) ` +
+    `replace existing furniture with appropriate ${r} furniture:\n` +
+    `• Existing salon sofas / kitchen counters / desks / etc. that don't fit a ` +
+    `  ${r} — REMOVE them.\n` +
+    `• Add ${r}-appropriate fixtures (see TARGET ROOM section below) — but ONLY ` +
+    `  fixtures that realistically fit the visible space.\n` +
+    `• Respect spatial reality: small corner → compact furniture; full room → ` +
+    `  full furniture set.\n\n` +
+    `=== STYLE ===\n` +
+    `Apply ${theme} aesthetic through: color palette, materials, textures, ` +
+    `furniture style/silhouette, lighting warmth, decor objects.${fixtureGuide}\n\n` +
+    `=== STRICTLY FORBIDDEN ===\n` +
+    `• Inventing new walls, windows, doors, or expanding the visible area\n` +
+    `• Changing the camera angle or zooming out to show more of the room\n` +
+    `• Generating a generic stock ${r} unrelated to the input photo\n` +
+    `• Cramming oversized furniture into spaces that can't realistically hold it\n\n` +
+    `Output: photorealistic interior photograph, natural lighting, editorial ` +
+    `quality, 8k. The viewer should think "this is the SAME room from the input, ` +
+    `cleverly converted into a ${r}". ${NEG}`
   );
 }
 
@@ -209,8 +255,14 @@ export function buildVariants(
       },
     ];
   }
+  // 2026-05-01: faithful temp 0.6 → 0.25 — at 0.6 Gemini was inventing entirely
+  // new bathrooms when the input was a small corner. Low temp + "EDIT THE
+  // ATTACHED PHOTO" prefix forces an edit, not a generation.
   return [
-    { kind: 'faithful', temperature: 0.6, prompt: faithfulPrompt(room, theme) },
-    { kind: 'editorial', temperature: 0.95, prompt: editorialPrompt(room, theme) },
+    // 2026-05-01-v2: faithful temperature 0.25 → 0.1 — tiny corner shots were
+    // still being expanded to full rooms. With strong photo-edit prompt + temp
+    // 0.1 Gemini sticks much closer to the input.
+    { kind: 'faithful', temperature: 0.1, prompt: faithfulPrompt(room, theme) },
+    { kind: 'editorial', temperature: 0.85, prompt: editorialPrompt(room, theme) },
   ];
 }

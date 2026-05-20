@@ -1,8 +1,52 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { put } from '@vercel/blob';
+import { createClient } from '@supabase/supabase-js';
 import { corsHeaders, checkRateLimit, isOriginAllowed, isBodyTooLarge } from '@/lib/security';
 import { buildVariants, type PromptKind } from '@/lib/restyle/prompts';
 import { phashHamming, geminiJudge } from '@/lib/restyle/quality_gate';
+import { verifyAuthHeader } from '@/lib/auth-verify';
+import { checkAndIncrementQuota, isProUser } from '@/lib/quota';
+
+// Supabase Storage fallback — Vercel Blob fail ederse devreye girer.
+// Önceden base64 data URL dönüyordu (3MB+), Flutter saveItem'a koyamıyordu
+// (FUNCTION_PAYLOAD_TOO_LARGE). Şimdi server-side direkt Supabase Storage'a
+// yükle, gerçek https URL dön — kullanıcı her seferinde proper URL alır.
+const SUPABASE_URL = process.env.SUPABASE_URL || '';
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+const STORAGE_BUCKET = 'design-uploads';
+
+async function uploadToSupabaseStorage(
+  buffer: Buffer,
+  filename: string,
+): Promise<string | null> {
+  try {
+    if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) return null;
+    const sb = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
+    try {
+      await sb.storage.createBucket(STORAGE_BUCKET, { public: true });
+    } catch (_) {
+      /* exists */
+    }
+    const { error } = await sb.storage
+      .from(STORAGE_BUCKET)
+      .upload(filename, buffer, {
+        contentType: 'image/png',
+        upsert: false,
+        cacheControl: '2592000',
+      });
+    if (error) {
+      console.warn('[restyle/batch] supabase_upload_error', error.message);
+      return null;
+    }
+    const { data } = sb.storage.from(STORAGE_BUCKET).getPublicUrl(filename);
+    return data.publicUrl;
+  } catch (err) {
+    console.warn('[restyle/batch] supabase_upload_throw', err);
+    return null;
+  }
+}
 
 export const runtime = 'nodejs';
 // 3 paralel render + judge: p95 ~ 80s; 120s pay bırakıyoruz Fluid Compute'ta.
@@ -143,6 +187,31 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // Quota + Pro detect. Free → 1 variant only + watermark signal.
+  // Legacy (no auth header) bypasses gate during rollout window.
+  const auth = await verifyAuthHeader(req);
+  const userId = auth.uid ?? body.userId;
+  let userIsPro = false;
+  if (userId && !auth.legacy) {
+    const q = await checkAndIncrementQuota({ userId, feature: 'restyle' });
+    if (!q.allowed) {
+      return NextResponse.json(
+        {
+          error: 'quota_exceeded',
+          feature: 'restyle',
+          code: 'RESTYLE_QUOTA',
+          used: q.used,
+          limit: q.limit,
+        },
+        { status: 402, headers },
+      );
+    }
+    userIsPro = q.isPro;
+  } else if (userId) {
+    // Legacy path — try to detect pro for variant cap, but don't gate.
+    try { userIsPro = await isProUser(userId); } catch { /* ignore */ }
+  }
+
   // base64/dataURL normalize.
   let mimeType = 'image/jpeg';
   let b64Data = image;
@@ -246,32 +315,44 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Survivor'ları Blob'a yükle — paralel, biri patlasa diğerleri etkilenmesin.
+  // Survivor'ları upload — paralel, biri patlasa diğerleri etkilenmesin.
+  // İlk olarak Vercel Blob, fail ederse Supabase Storage fallback (server-side
+  // upload — base64 data URL round-trip etmiyor, kullanıcı her zaman gerçek
+  // https URL alıyor).
   const variants: VariantResult[] = await Promise.all(
     survivors.map(async (g) => {
-      let blobUrl: string | null = null;
+      const fileBase = `${Date.now()}-${g.render.kind}-${Math.random()
+        .toString(36)
+        .slice(2, 10)}.png`;
+      let resolvedUrl: string | null = null;
+      // Try 1: Vercel Blob
       try {
-        const filename = `restyle/${Date.now()}-${g.render.kind}-${Math.random()
-          .toString(36)
-          .slice(2, 10)}.png`;
-        const blob = await put(filename, g.render.buffer, {
+        const blob = await put(`restyle/${fileBase}`, g.render.buffer, {
           access: 'public',
           contentType: 'image/png',
         });
-        blobUrl = blob.url;
+        resolvedUrl = blob.url;
       } catch (uploadErr) {
         console.warn('[restyle/batch] blob_upload_failed', {
           kind: g.render.kind,
           detail: uploadErr instanceof Error ? uploadErr.message : 'Unknown',
         });
       }
-      // Blob upload başarısızsa client'ın boş "Sonra" panel görmemesi için
-      // base64 data URL fallback dön. Single /api/restyle ile aynı pattern.
-      const outputDataUrl = blobUrl
+      // Try 2: Supabase Storage fallback (server-side, no client round-trip)
+      if (!resolvedUrl) {
+        resolvedUrl = await uploadToSupabaseStorage(
+          g.render.buffer,
+          `restyle-after/${fileBase}`,
+        );
+      }
+      // Try 3 (last resort): base64 data URL — eski davranış. Yeni saveItem
+      // bunu strip ediyor (FUNCTION_PAYLOAD_TOO_LARGE engeli) ama Flutter
+      // tarafında hâlâ ResultStage'e direkt göstermek için lazım.
+      const outputDataUrl = resolvedUrl
         ? undefined
         : `data:image/png;base64,${g.render.outDataB64}`;
       return {
-        url: blobUrl,
+        url: resolvedUrl,
         ...(outputDataUrl ? { output: outputDataUrl } : {}),
         bytes: g.render.buffer.byteLength,
         model: RENDER_MODEL,
@@ -290,10 +371,20 @@ export async function POST(req: NextRequest) {
     survivors: survivors.length,
     rejected_count,
     latency_ms,
+    pro: userIsPro,
   });
 
+  // Free tier cap: 1 variant + watermark signal. Pro gets all survivors.
+  const cappedVariants = userIsPro ? variants : variants.slice(0, 1);
+
   return NextResponse.json(
-    { variants, rejected_count, latency_ms },
+    {
+      variants: cappedVariants,
+      rejected_count,
+      latency_ms,
+      isPro: userIsPro,
+      watermark: !userIsPro,
+    },
     { headers }
   );
 }

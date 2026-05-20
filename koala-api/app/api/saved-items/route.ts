@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { corsHeaders, isOriginAllowed, checkRateLimit } from '@/lib/security';
 import { verifyAuthHeader, logAuthOutcome } from '@/lib/auth-verify';
+import { countSavedItems, featureLimit, isProUser } from '@/lib/quota';
 
 // TODO[2026-Q3]: legacy mode kaldır — verifyAuthHeader.legacy=true → 401 yap.
 
@@ -84,9 +85,11 @@ export async function POST(req: NextRequest) {
       { status: 401, headers },
     );
   }
-  // Production check constraint sadece project|designer|product kabul ediyor;
+  // Production check constraint product|project|designer|style kabul ediyor;
   // Flutter `design` ve `palette` gönderiyor → uyumlu isimlere çeviriyoruz.
-  if (itemType === 'design') itemType = 'project';
+  // ÖNEMLİ: `design` (style_discovery_live swipe-likes) → `style`. Daha önce
+  // `project`'e mapleniyordu ve Projelerim'e sızıyordu (kullanıcı bug raporu).
+  if (itemType === 'design') itemType = 'style';
   if (itemType === 'palette') itemType = 'product';
 
   const sb = admin();
@@ -105,6 +108,30 @@ export async function POST(req: NextRequest) {
     }
 
     if (op === 'save') {
+      // Free quota: max 3 saved_items rows total. Pro bypasses.
+      try {
+        const pro = await isProUser(userId);
+        if (!pro) {
+          const count = await countSavedItems(userId);
+          const limit = featureLimit('save');
+          if (count >= limit) {
+            return NextResponse.json(
+              {
+                error: 'quota_exceeded',
+                feature: 'save',
+                code: 'SAVE_QUOTA',
+                used: count,
+                limit,
+              },
+              { status: 402, headers },
+            );
+          }
+        }
+      } catch (e) {
+        // On quota lookup failure, allow the save (fail-open) so storage glitch
+        // doesn't break user. Log for telemetry.
+        console.warn('[saved-items] quota check failed', e);
+      }
       const row: Record<string, unknown> = {
         user_id: userId,
         item_type: itemType,
