@@ -171,8 +171,13 @@ class MainShellState extends ConsumerState<MainShell> {
   void switchTab(KoalaTab tab) {
     final next = _tabToIndex(tab);
     if (next == _index) return;
+    // Visual change first — paint the new tab synchronously.
     setState(() => _index = next);
-    MainShell.activeTab.value = tab;
+    // Notify global listeners on the next microtask so any expensive
+    // "I just became active" listener work doesn't block the frame.
+    Future<void>.delayed(Duration.zero, () {
+      MainShell.activeTab.value = tab;
+    });
   }
 
   void setUnread(int count) {

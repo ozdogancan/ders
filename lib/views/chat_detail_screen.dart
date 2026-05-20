@@ -21,6 +21,7 @@ import '../services/evlumba_live_service.dart';
 import '../services/quota_service.dart';
 import '../services/saved_items_service.dart';
 import '../widgets/chat/designer_chat_popup.dart';
+import '../widgets/koala_avatar.dart';
 import 'pro/widgets/upsell_banner.dart';
 import '../widgets/chat/product_carousel.dart';
 import '../widgets/offline_banner.dart';
@@ -1307,27 +1308,7 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
         actions: const [],
         title: Row(
           children: [
-            Image.asset(
-              'assets/images/koalas.webp',
-              width: 28,
-              height: 28,
-              filterQuality: FilterQuality.high,
-              errorBuilder: (_, _, _) => Container(
-                width: 28,
-                height: 28,
-                decoration: const BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: LinearGradient(
-                    colors: [_accent, KoalaColors.accentMuted],
-                  ),
-                ),
-                child: const Icon(
-                  LucideIcons.sparkles,
-                  color: Colors.white,
-                  size: 14,
-                ),
-              ),
-            ),
+            const KoalaAvatar(size: 28),
             const SizedBox(width: 8),
             Expanded(
               child: GestureDetector(
@@ -1844,17 +1825,7 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
                   color: Colors.white,
                 ),
                 padding: const EdgeInsets.all(3),
-                child: ClipOval(
-                  child: Image.asset(
-                    'assets/images/koalas.webp',
-                    width: 72,
-                    height: 72,
-                    fit: BoxFit.cover,
-                    filterQuality: FilterQuality.high,
-                    errorBuilder: (_, _, _) =>
-                        const Icon(LucideIcons.sparkles, size: 48, color: _accent),
-                  ),
-                ),
+                child: const KoalaAvatar(size: 72),
               ),
             ),
             const SizedBox(height: 20),
@@ -2286,24 +2257,7 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
     );
   }
 
-  Widget _koalaAvatar() => ClipRRect(
-    borderRadius: BorderRadius.circular(10),
-    child: Image.asset(
-      'assets/images/koalas.webp',
-      width: 32,
-      height: 32,
-      filterQuality: FilterQuality.high,
-      errorBuilder: (_, _, _) => Container(
-        width: 32,
-        height: 32,
-        decoration: const BoxDecoration(
-          shape: BoxShape.circle,
-          gradient: LinearGradient(colors: [_accent, KoalaColors.accentMuted]),
-        ),
-        child: const Icon(LucideIcons.sparkles, size: 14, color: Colors.white),
-      ),
-    ),
-  );
+  Widget _koalaAvatar() => const KoalaAvatar(size: 32);
 
   Widget _buildPhotoPreview() => Container(
     margin: const EdgeInsets.fromLTRB(12, 0, 12, 4),

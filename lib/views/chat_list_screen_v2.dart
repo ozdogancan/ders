@@ -1,5 +1,9 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../widgets/koala_avatar.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -92,10 +96,21 @@ class _ChatListScreenV2State extends State<ChatListScreenV2> {
   int _titleTapCount = 0;
   DateTime? _firstTapAt;
 
+  // Cached conversation snapshot for INSTANT first paint on revisit.
+  static const _kConvCacheKey = 'koala_conversations_cache_v1';
+  static const _kConvCacheTtl = Duration(hours: 24);
+
   @override
   void initState() {
     super.initState();
+    // 1) Hydrate from disk snapshot synchronously-ish so the user sees
+    //    something on every revisit (no shimmer if cache is warm).
+    _hydrateFromCache();
+    // 2) Kick off real load.
     _load();
+    // 3) Defer subscribe + inbound sync to AFTER first paint, and even
+    //    then push the sync onto a micro-task so the initial frame paints
+    //    before any network work begins.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       try {
@@ -104,11 +119,52 @@ class _ChatListScreenV2State extends State<ChatListScreenV2> {
         debugPrint('ChatListScreenV2: subscribe error $e');
       }
       // İlk açılışta tek sync — sonrası GlobalMessageListener yönetiyor.
-      _syncInboundThenReload();
+      // Defer to next micro-task so first frame paints first.
+      Future<void>.delayed(Duration.zero, _syncInboundThenReload);
     });
     // Inbound polling ve Evlumba realtime artık GlobalMessageListener'da
     // merkezi. Sadece tick'e abone olup sessiz reload yapıyoruz.
     GlobalMessageListener.syncTick.addListener(_onGlobalSyncTick);
+  }
+
+  Future<void> _hydrateFromCache() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_kConvCacheKey);
+      if (raw == null || raw.isEmpty) return;
+      final obj = jsonDecode(raw);
+      if (obj is! Map) return;
+      final ts = obj['ts'];
+      if (ts is! int) return;
+      final age = DateTime.now().millisecondsSinceEpoch - ts;
+      if (age > _kConvCacheTtl.inMilliseconds) return;
+      final data = obj['data'];
+      if (data is! List) return;
+      final list = data
+          .whereType<Map>()
+          .map((e) => Map<String, dynamic>.from(e))
+          .toList();
+      if (!mounted || list.isEmpty) return;
+      // Only seed if real load hasn't already populated state.
+      if (_conversations.isNotEmpty) return;
+      setState(() {
+        _conversations = _sortConversations(list);
+        // Loading stays true; real data may add more. But user sees something.
+      });
+      // Try to populate designer avatars from cached IDs in background.
+      _loadDesignerAvatars();
+    } catch (_) {}
+  }
+
+  Future<void> _saveConvCache(List<Map<String, dynamic>> convs) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final payload = jsonEncode({
+        'ts': DateTime.now().millisecondsSinceEpoch,
+        'data': convs,
+      });
+      await prefs.setString(_kConvCacheKey, payload);
+    } catch (_) {}
   }
 
   void _onGlobalSyncTick() {
@@ -128,46 +184,81 @@ class _ChatListScreenV2State extends State<ChatListScreenV2> {
   Future<void> _load({bool silent = false}) async {
     if (!silent) {
       setState(() {
-        _loading = true;
+        // Only show shimmer if we have NOTHING to show yet.
+        _loading = _conversations.isEmpty && _aiChats.isEmpty;
         _hasError = false;
       });
     }
-    try {
-      final convFuture = MessagingService.getConversations();
-      final aiFuture = ChatPersistence.loadConversations();
-      final results = await Future.wait([convFuture, aiFuture]);
-      if (!mounted) return;
-      final rawConvs = List<Map<String, dynamic>>.from(results[0] as List);
-      final convs = _sortConversations(rawConvs);
-      final ais = results[1] as List<ChatSummary>;
-      setState(() {
-        _conversations = convs;
-        _aiChats = ais;
-        _loading = false;
-      });
-      _loadDesignerAvatars();
 
-      if (convs.isEmpty && ais.isNotEmpty) {
-        Future<void>.delayed(const Duration(milliseconds: 1500), () async {
-          if (!mounted) return;
-          try {
-            final retry = await MessagingService.getConversations();
-            if (mounted && retry.isNotEmpty) {
-              final retryList = List<Map<String, dynamic>>.from(retry);
-              setState(() => _conversations = _sortConversations(retryList));
-              _loadDesignerAvatars();
-            }
-          } catch (_) {}
-        });
-      }
-    } catch (e) {
-      if (mounted && !silent) {
+    var convDone = false;
+    var aiDone = false;
+    var anyError = false;
+    List<Map<String, dynamic>>? loadedConvs;
+    List<ChatSummary>? loadedAis;
+
+    void maybeFinishLoading() {
+      if (!mounted) return;
+      if (convDone && aiDone) {
         setState(() {
           _loading = false;
-          _hasError = true;
+          if (anyError &&
+              _conversations.isEmpty &&
+              _aiChats.isEmpty) {
+            _hasError = true;
+          }
         });
+        // Retry once if designer convs came back empty but we have AI chats —
+        // matches v1 behavior for slow Supabase warmup.
+        if ((loadedConvs?.isEmpty ?? true) && (loadedAis?.isNotEmpty ?? false)) {
+          Future<void>.delayed(const Duration(milliseconds: 1500), () async {
+            if (!mounted) return;
+            try {
+              final retry = await MessagingService.getConversations();
+              if (mounted && retry.isNotEmpty) {
+                final retryList = List<Map<String, dynamic>>.from(retry);
+                final sorted = _sortConversations(retryList);
+                setState(() => _conversations = sorted);
+                _saveConvCache(sorted);
+                _loadDesignerAvatars();
+              }
+            } catch (_) {}
+          });
+        }
       }
     }
+
+    // ─── AI chats — LOCAL, fast. Render immediately when ready. ───
+    ChatPersistence.loadConversations().then((ais) {
+      if (!mounted) return;
+      loadedAis = ais;
+      setState(() {
+        _aiChats = ais;
+      });
+    }).catchError((_) {
+      anyError = true;
+    }).whenComplete(() {
+      aiDone = true;
+      maybeFinishLoading();
+    });
+
+    // ─── Designer conversations — NETWORK. Render independently. ───
+    MessagingService.getConversations().then((rawConvs) {
+      if (!mounted) return;
+      final convs = _sortConversations(
+        List<Map<String, dynamic>>.from(rawConvs),
+      );
+      loadedConvs = convs;
+      setState(() {
+        _conversations = convs;
+      });
+      _saveConvCache(convs);
+      _loadDesignerAvatars();
+    }).catchError((_) {
+      anyError = true;
+    }).whenComplete(() {
+      convDone = true;
+      maybeFinishLoading();
+    });
   }
 
   List<Map<String, dynamic>> _sortConversations(List<Map<String, dynamic>> list) {
@@ -532,17 +623,7 @@ class _ChatListScreenV2State extends State<ChatListScreenV2> {
                             ),
                           ],
                         ),
-                        child: ClipOval(
-                          child: Image.asset(
-                            'assets/images/koalas.webp',
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => const Icon(
-                              LucideIcons.sparkles,
-                              color: _V2.goldSoft,
-                              size: 22,
-                            ),
-                          ),
-                        ),
+                        child: const KoalaAvatar(size: 56),
                       ),
                       // Animated sparkle badge — bottom-right, pulses
                       Positioned(
@@ -1133,17 +1214,7 @@ class _ChatListScreenV2State extends State<ChatListScreenV2> {
         ),
         child: Row(
           children: [
-            Container(
-              width: 44, height: 44,
-              decoration: const BoxDecoration(color: _V2.ink, shape: BoxShape.circle),
-              child: ClipOval(
-                child: Image.asset(
-                  'assets/images/koalas.webp',
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => const Icon(LucideIcons.sparkles, color: _V2.goldSoft, size: 20),
-                ),
-              ),
-            ),
+            const KoalaAvatar(size: 44),
             const SizedBox(width: 14),
             Expanded(
               child: Column(

@@ -125,6 +125,47 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             ),
           ),
 
+          // ── Brand wordmark (discreet, top-center) ────────────────────────
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: SafeArea(
+              bottom: false,
+              child: Padding(
+                padding: const EdgeInsets.only(top: 14),
+                child: Center(
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Image.asset(
+                        'assets/images/koala_logo.webp',
+                        width: 22,
+                        height: 22,
+                        errorBuilder: (_, _, _) => const SizedBox(
+                          width: 22,
+                          height: 22,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        'Koala',
+                        style: GoogleFonts.manrope(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w800,
+                          color: KoalaColors.text,
+                          letterSpacing: -0.5,
+                          height: 1.0,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+
           // ── Top bar (back + skip) ────────────────────────────────────────
           Positioned(
             top: 0,
@@ -286,10 +327,6 @@ class _BottomSheet extends StatelessWidget {
     return Container(
       decoration: const BoxDecoration(
         color: KoalaColors.bg,
-        borderRadius: BorderRadius.only(
-          topLeft: Radius.circular(28),
-          topRight: Radius.circular(28),
-        ),
       ),
       child: SafeArea(
         top: false,
@@ -299,43 +336,42 @@ class _BottomSheet extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Headline (Fraunces serif)
-              AnimatedSwitcher(
-                duration: const Duration(milliseconds: 280),
-                transitionBuilder: (c, a) => FadeTransition(
-                  opacity: a,
-                  child: SlideTransition(
-                    position: Tween<Offset>(
-                      begin: const Offset(0, 0.05),
-                      end: Offset.zero,
-                    ).animate(a),
-                    child: c,
-                  ),
-                ),
-                child: Text(
-                  page.title,
-                  key: ValueKey('t$idx'),
-                  style: GoogleFonts.fraunces(
-                    fontSize: 28,
-                    fontWeight: FontWeight.w600,
-                    color: KoalaColors.text,
-                    height: 1.18,
-                    letterSpacing: -0.6,
+              // Headline (Fraunces serif) — fixed height to avoid jumps when
+              // line-count differs between pages; fade-only transition so it
+              // matches the subtitle (which also uses fade-only).
+              SizedBox(
+                height: 72,
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 280),
+                  child: Text(
+                    page.title,
+                    key: ValueKey('t$idx'),
+                    style: GoogleFonts.fraunces(
+                      fontSize: 28,
+                      fontWeight: FontWeight.w600,
+                      color: KoalaColors.text,
+                      height: 1.18,
+                      letterSpacing: -0.6,
+                    ),
                   ),
                 ),
               ),
               const SizedBox(height: 12),
-              // Subtitle (Manrope)
-              AnimatedSwitcher(
-                duration: const Duration(milliseconds: 280),
-                child: Text(
-                  page.subtitle,
-                  key: ValueKey('s$idx'),
-                  style: GoogleFonts.manrope(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w500,
-                    color: KoalaColors.textMed,
-                    height: 1.5,
+              // Subtitle (Manrope) — fixed min-height to keep layout stable
+              // across pages with different line counts.
+              SizedBox(
+                height: 72,
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 280),
+                  child: Text(
+                    page.subtitle,
+                    key: ValueKey('s$idx'),
+                    style: GoogleFonts.manrope(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w500,
+                      color: KoalaColors.textMed,
+                      height: 1.5,
+                    ),
                   ),
                 ),
               ),

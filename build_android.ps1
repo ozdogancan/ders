@@ -19,6 +19,15 @@ $SUPABASE_ANON_KEY    = "sb_publishable_ogP9BmI1n7xxUCTz3xDijA_xeIDyl7k"
 $EVLUMBA_URL          = "https://vgtgcjnrsladdharzkwn.supabase.co"
 $EVLUMBA_ANON_KEY     = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZndGdjam5yc2xhZGRoYXJ6a3duIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM0MjU1NzEsImV4cCI6MjA4OTAwMTU3MX0.7P5QagZdPntMliL1m5Zte7DSDR0CYkgwoHR7js4wqPg"
 
+# RevenueCat public Android SDK key (goog_...). Required for in-app purchases.
+# Get it from: https://app.revenuecat.com -> Project Settings -> API keys -> Public Android key
+$REVENUECAT_ANDROID_KEY = $env:REVENUECAT_ANDROID_KEY
+if ([string]::IsNullOrEmpty($REVENUECAT_ANDROID_KEY)) {
+    Write-Host "WARN: REVENUECAT_ANDROID_KEY env var not set - purchases will be disabled in this build." -ForegroundColor Yellow
+    Write-Host "      Set with: `$env:REVENUECAT_ANDROID_KEY = 'goog_xxxx...' before running this script." -ForegroundColor Yellow
+    $REVENUECAT_ANDROID_KEY = "YOUR_REVENUECAT_PUBLIC_KEY"
+}
+
 # -- Pre-flight checks --
 Write-Host "Pre-flight checks..." -ForegroundColor Cyan
 
@@ -58,6 +67,7 @@ flutter build appbundle --release `
   --dart-define=SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY `
   --dart-define=EVLUMBA_SUPABASE_URL=$EVLUMBA_URL `
   --dart-define=EVLUMBA_SUPABASE_ANON_KEY=$EVLUMBA_ANON_KEY `
+  --dart-define=REVENUECAT_ANDROID_KEY=$REVENUECAT_ANDROID_KEY `
   --dart-define=REQUIRE_LOGIN=false
 
 if ($LASTEXITCODE -ne 0) {
