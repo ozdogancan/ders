@@ -295,9 +295,9 @@ class _BottomSheet extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Headline (Fraunces serif) — fixed height to avoid jumps when
-              // line-count differs between pages; fade-only transition so it
-              // matches the subtitle (which also uses fade-only).
+              // Headline — Manrope w800 (uygulama canon dili, Tarzını Keşfet /
+              // Projelerim ile aynı; Fraunces serif variable-axis sayfa
+              // değişimlerinde metrik kayması yapıyordu, sabit Manrope ile çözüldü).
               SizedBox(
                 height: 72,
                 child: AnimatedSwitcher(
@@ -305,12 +305,12 @@ class _BottomSheet extends StatelessWidget {
                   child: Text(
                     page.title,
                     key: ValueKey('t$idx'),
-                    style: GoogleFonts.fraunces(
-                      fontSize: 28,
-                      fontWeight: FontWeight.w600,
+                    style: GoogleFonts.manrope(
+                      fontSize: 26,
+                      fontWeight: FontWeight.w800,
                       color: KoalaColors.text,
                       height: 1.18,
-                      letterSpacing: -0.6,
+                      letterSpacing: -0.5,
                     ),
                   ),
                 ),
