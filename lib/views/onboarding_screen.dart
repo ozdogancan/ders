@@ -125,47 +125,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             ),
           ),
 
-          // ── Brand wordmark (discreet, top-center) ────────────────────────
-          Positioned(
-            top: 0,
-            left: 0,
-            right: 0,
-            child: SafeArea(
-              bottom: false,
-              child: Padding(
-                padding: const EdgeInsets.only(top: 14),
-                child: Center(
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      Image.asset(
-                        'assets/images/koala_logo.webp',
-                        width: 22,
-                        height: 22,
-                        errorBuilder: (_, _, _) => const SizedBox(
-                          width: 22,
-                          height: 22,
-                        ),
-                      ),
-                      const SizedBox(width: 6),
-                      Text(
-                        'Koala',
-                        style: GoogleFonts.manrope(
-                          fontSize: 17,
-                          fontWeight: FontWeight.w800,
-                          color: KoalaColors.text,
-                          letterSpacing: -0.5,
-                          height: 1.0,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-
           // ── Top bar (back + skip) ────────────────────────────────────────
           Positioned(
             top: 0,
