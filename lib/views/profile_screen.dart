@@ -65,7 +65,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       'https://apps.apple.com/app/id0000000000'; // TODO: real iOS app id
 
   // ─── Palette (per spec) ────────────────────────────────────────
-  static const Color _screenBg = Color(0xFFF8F9FB);
+  static const Color _screenBg = KoalaColors.bg;
   static const Color _proPurple1 = Color(0xFF6C63FF);
   static const Color _proPurple2 = Color(0xFF9B5CFF);
   static const Color _avatarGrad1 = Color(0xFF6C63FF);

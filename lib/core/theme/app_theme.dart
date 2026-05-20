@@ -19,7 +19,9 @@ class AppTheme {
       useMaterial3: true,
       textTheme: GoogleFonts.plusJakartaSansTextTheme(),
       colorScheme: colorScheme,
-      scaffoldBackgroundColor: KoalaColors.surface,
+      // Single source of truth for app-wide screen background.
+      // Chat screens override explicitly (see chat_detail_screen.dart:1298).
+      scaffoldBackgroundColor: KoalaColors.bg,
       appBarTheme: const AppBarTheme(
         centerTitle: false,
         elevation: 0,

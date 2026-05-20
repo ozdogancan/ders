@@ -219,14 +219,9 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: KoalaColors.bg,
       body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Colors.white, Color(0xFFFAFAFE)],
-          ),
-        ),
+        decoration: const BoxDecoration(color: KoalaColors.bg),
         child: SafeArea(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
