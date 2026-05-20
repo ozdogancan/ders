@@ -552,33 +552,77 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                     _Pressable(
                       onTap: () => context.push('/profile').then(
                           (_) => _inputKey.currentState?.clearAndReset()),
-                      child: Container(
-                        width: 42,
-                        height: 42,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: KoalaColors.accentSoft,
-                          border: Border.all(
-                              color:
-                                  KoalaColors.accentDeep.withValues(alpha: 0.18),
-                              width: 0.8),
-                          image: currentUser?.photoURL != null
-                              ? DecorationImage(
-                                  image: CachedNetworkImageProvider(
-                                    currentUser!.photoURL!,
+                      child: Builder(builder: (context) {
+                        final isPro =
+                            ref.watch(proStatusProvider).value?.isPro ?? false;
+                        return Stack(
+                          clipBehavior: Clip.none,
+                          children: [
+                            Container(
+                              width: 42,
+                              height: 42,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: KoalaColors.accentSoft,
+                                border: Border.all(
+                                    color: KoalaColors.accentDeep
+                                        .withValues(alpha: 0.18),
+                                    width: 0.8),
+                                image: currentUser?.photoURL != null
+                                    ? DecorationImage(
+                                        image: CachedNetworkImageProvider(
+                                          currentUser!.photoURL!,
+                                        ),
+                                        fit: BoxFit.cover,
+                                      )
+                                    : null,
+                              ),
+                              child: currentUser?.photoURL == null
+                                  ? const Icon(
+                                      LucideIcons.user,
+                                      size: 20,
+                                      color: KoalaColors.accentDeep,
+                                    )
+                                  : null,
+                            ),
+                            if (isPro)
+                              Positioned(
+                                right: -2,
+                                bottom: -2,
+                                child: Container(
+                                  width: 18,
+                                  height: 18,
+                                  decoration: BoxDecoration(
+                                    gradient: const LinearGradient(
+                                      colors: [
+                                        KoalaColors.brand,
+                                        KoalaColors.brandLight,
+                                      ],
+                                      begin: Alignment.topLeft,
+                                      end: Alignment.bottomRight,
+                                    ),
+                                    borderRadius: BorderRadius.circular(6),
+                                    border: Border.all(
+                                        color: Colors.white, width: 2),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black
+                                            .withValues(alpha: 0.15),
+                                        blurRadius: 4,
+                                        offset: const Offset(0, 1),
+                                      ),
+                                    ],
                                   ),
-                                  fit: BoxFit.cover,
-                                )
-                              : null,
-                        ),
-                        child: currentUser?.photoURL == null
-                            ? const Icon(
-                                LucideIcons.user,
-                                size: 20,
-                                color: KoalaColors.accentDeep,
-                              )
-                            : null,
-                      ),
+                                  child: const Icon(
+                                    Icons.workspace_premium,
+                                    size: 11,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ),
+                          ],
+                        );
+                      }),
                     ),
                   ],
                 ),

@@ -9,6 +9,7 @@
 
 import 'dart:async';
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
@@ -36,6 +37,7 @@ import '../services/messaging_service.dart';
 import '../services/saved_items_service.dart';
 import '../services/analytics_service.dart';
 import '../services/taste_profile_service.dart';
+import '../services/usage_limit_service.dart';
 
 class StyleDiscoveryLiveScreen extends ConsumerStatefulWidget {
   const StyleDiscoveryLiveScreen({super.key});
@@ -100,6 +102,10 @@ class _StyleDiscoveryLiveScreenState
   bool get _isProSlot => _isFreeUser && _swipeCount > 0 &&
       _swipeCount % _proSlotEvery == 0;
   bool _isFreeUser = true;
+  // Günlük swipe kotası UsageLimitService üzerinden takip ediliyor (10/gün).
+  // Free + quota tükendiğinde deck'in NEXT kartı _ProQuotaCard ile değiştirilir
+  // ve swipe gesture'ları absorbe edilir. Pro'da hep false.
+  bool _quotaExhausted = false;
 
   late final AnimationController _exitCtrl;
   double _exitStartDx = 0;
@@ -129,6 +135,7 @@ class _StyleDiscoveryLiveScreenState
       if (_deck.isNotEmpty) _loading = false;
     }
     _loadSavedCategory().then((_) => _bootstrap());
+    unawaited(_refreshQuota());
     Analytics.screenViewed('style_discovery_live');
     // Tab her aktive olduğunda "Hepsi"ye reset et.
     MainShell.activeTab.addListener(_onTabActivate);
@@ -139,11 +146,151 @@ class _StyleDiscoveryLiveScreenState
     // Tutorial gif kaldırıldı — kullanıcı kart tap'ini kendi keşfedecek.
   }
 
+  Future<void> _refreshQuota() async {
+    try {
+      final can = await UsageLimitService.canSwipe();
+      if (!mounted) return;
+      final next = !can;
+      if (next != _quotaExhausted) {
+        setState(() => _quotaExhausted = next);
+      }
+    } catch (_) {/* sessiz — UI hint */}
+  }
+
+  /// İlk-tap teaching: tasarımı kendi mekanına uygulayabileceğini öğret.
+  /// `seen_realize_hint` flag'i set edildikten sonra bir daha gösterilmez.
+  Future<void> _showRealizeHint(BuildContext context) async {
+    await showGeneralDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: 'realize-hint',
+      barrierColor: Colors.black.withValues(alpha: 0.32),
+      transitionDuration: const Duration(milliseconds: 220),
+      pageBuilder: (ctx, _, __) => const SizedBox.shrink(),
+      transitionBuilder: (ctx, anim, _, __) {
+        final t = Curves.easeOutCubic.transform(anim.value);
+        return BackdropFilter(
+          filter: ui.ImageFilter.blur(sigmaX: 6, sigmaY: 6),
+          child: Opacity(
+            opacity: anim.value,
+            child: Align(
+              alignment: Alignment.bottomCenter,
+              child: Transform.translate(
+                offset: Offset(0, (1 - t) * 24),
+                child: SafeArea(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 360),
+                      child: Material(
+                        color: Colors.white,
+                        borderRadius: const BorderRadius.vertical(
+                          top: Radius.circular(28),
+                          bottom: Radius.circular(28),
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.all(24),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Center(
+                                child: Container(
+                                  width: 56,
+                                  height: 56,
+                                  decoration: const BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    gradient: LinearGradient(
+                                      begin: Alignment.topLeft,
+                                      end: Alignment.bottomRight,
+                                      colors: [
+                                        Color(0xFF6C63FF),
+                                        Color(0xFF9B5CFF),
+                                      ],
+                                    ),
+                                  ),
+                                  child: const Icon(
+                                    Icons.auto_awesome,
+                                    color: Colors.white,
+                                    size: 28,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 16),
+                              const Text(
+                                'Bunu kendi mekanında dene',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w800,
+                                  color: KoalaColors.text,
+                                  letterSpacing: -0.2,
+                                  height: 1.25,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              const Text(
+                                'Beğendiğin her tasarımı, AI ile kendi odanın fotoğrafına uygulayabilirsin.',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w500,
+                                  color: KoalaColors.textSec,
+                                  height: 1.45,
+                                ),
+                              ),
+                              const SizedBox(height: 20),
+                              Material(
+                                color: const Color(0xFF6C63FF),
+                                borderRadius: BorderRadius.circular(999),
+                                child: InkWell(
+                                  borderRadius: BorderRadius.circular(999),
+                                  onTap: () => Navigator.of(ctx).pop(),
+                                  child: const Padding(
+                                    padding: EdgeInsets.symmetric(
+                                        vertical: 14, horizontal: 20),
+                                    child: Text(
+                                      'Anladım',
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.w800,
+                                        color: Colors.white,
+                                        letterSpacing: 0.1,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   Future<void> _onCardTap(Map<String, dynamic> project) async {
-    // Tap hint overlay tamamen kaldırıldı — direktif gereği.
     HapticFeedback.selectionClick();
     final url = _coverOf(project);
     if (url.isEmpty) return;
+    // İlk-tap teaching hint — sadece bir kere.
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (!(prefs.getBool('seen_realize_hint') ?? false)) {
+        await prefs.setBool('seen_realize_hint', true);
+        if (!mounted) return;
+        await _showRealizeHint(context);
+        if (!mounted) return;
+      }
+    } catch (_) {/* hint best-effort */}
     // Pro paywall gate — restyle is Pro-only. Block at the BUTTON onTap so
     // free users never enter the picker / MekanFlow / waiting screen.
     final pro = ref.read(proStatusProvider).value?.isPro ?? false;
@@ -427,6 +574,9 @@ class _StyleDiscoveryLiveScreenState
     });
     // Her gerçek swipe sayılır — Pro slot cadence'ı için.
     _swipeCount++;
+    // Günlük kota sayacı — sessizce arttır, paywall popup AÇMA. Deck-level
+    // quota kartı (gating) görsel sınır olarak iş görüyor.
+    unawaited(UsageLimitService.incrementSwipe().then((_) => _refreshQuota()));
     HapticFeedback.selectionClick();
     final w = MediaQuery.of(context).size.width;
     _exitStartDx = _dragDx;
@@ -871,6 +1021,24 @@ class _StyleDiscoveryLiveScreenState
   }
 
   Widget _deckStack() {
+    // Günlük kota tükendiyse (free user) — deck'in mevcut kartı yerine
+    // _ProQuotaCard göster. Swipe/drag gesture'larını absorbe et.
+    if (_isFreeUser && _quotaExhausted) {
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
+        child: GestureDetector(
+          // Pan/drag absorbe — kart swipe edilemez.
+          onPanUpdate: (_) {},
+          onPanEnd: (_) {},
+          onPanStart: (_) {},
+          onTap: () {
+            HapticFeedback.selectionClick();
+            showPaywall(context, trigger: 'swipe_quota_end');
+          },
+          child: const _ProQuotaCard(),
+        ),
+      );
+    }
     final current = _currentCard;
     final next = _nextCard;
     if (current == null) {
@@ -1012,7 +1180,9 @@ class _StyleDiscoveryLiveScreenState
   }
 
   Widget _buttons() {
-    final disabled = _currentCard == null || _animatingExit;
+    final disabled = _currentCard == null ||
+        _animatingExit ||
+        (_isFreeUser && _quotaExhausted);
     // Modern, uygulama aksentine bağlı, 3'lü denge: Pas — Beğen (primary) — Sor
     final askDisabled = disabled ||
         _isProSlot ||
@@ -1733,6 +1903,113 @@ class _ProUpsellCard extends StatelessWidget {
                     fontWeight: FontWeight.w500,
                     color: Colors.white.withValues(alpha: 0.55),
                     letterSpacing: 0.1,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Günlük swipe kotası bittiğinde swipe deck'i bu kartla "kilitler". Tap →
+/// paywall. Pan/drag absorbe parent'ta yapılıyor; bu sadece görsel.
+class _ProQuotaCard extends StatelessWidget {
+  const _ProQuotaCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(24),
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Color(0xFF6C63FF),
+            Color(0xFF9B5CFF),
+          ],
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF6C63FF).withValues(alpha: 0.30),
+            blurRadius: 32,
+            offset: const Offset(0, 14),
+          ),
+        ],
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          // Üst-merkez radial highlight — yumuşak parlama.
+          DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: RadialGradient(
+                center: const Alignment(0, -0.7),
+                radius: 0.9,
+                colors: [
+                  Colors.white.withValues(alpha: 0.22),
+                  Colors.transparent,
+                ],
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(28, 36, 28, 32),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                const Icon(
+                  Icons.workspace_premium,
+                  size: 36,
+                  color: Colors.white,
+                ),
+                const SizedBox(height: 18),
+                const Text(
+                  'Günlük Limit Doldu',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                    color: Colors.white,
+                    letterSpacing: -0.3,
+                    height: 1.2,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'Pro ile sınırsız keşif, sınırsız ilham seni bekliyor.',
+                  textAlign: TextAlign.center,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w500,
+                    color: Colors.white.withValues(alpha: 0.85),
+                    height: 1.45,
+                    letterSpacing: -0.1,
+                  ),
+                ),
+                const SizedBox(height: 22),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 20, vertical: 14),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: const Text(
+                    "Pro'ya Geç",
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w800,
+                      color: Color(0xFF6C63FF),
+                      letterSpacing: 0.1,
+                    ),
                   ),
                 ),
               ],

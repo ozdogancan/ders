@@ -18,6 +18,7 @@ class ProStatus {
     this.plan,
     this.platform,
     this.gracePeriod = false,
+    this.trialUsed = false,
   });
 
   final bool isPro;
@@ -25,8 +26,9 @@ class ProStatus {
   final String? plan;        // weekly | monthly | yearly
   final String? platform;    // android | ios | web
   final bool gracePeriod;
+  final bool trialUsed;
 
-  static const ProStatus free = ProStatus(isPro: false);
+  static const ProStatus free = ProStatus(isPro: false, trialUsed: false);
 
   factory ProStatus.fromJson(Map<String, dynamic> json) {
     DateTime? parse(dynamic v) {
@@ -39,6 +41,7 @@ class ProStatus {
       plan: json['plan'] as String?,
       platform: json['platform'] as String?,
       gracePeriod: json['gracePeriod'] == true,
+      trialUsed: json['trial_used'] == true || json['trialUsed'] == true,
     );
   }
 }
