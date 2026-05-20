@@ -15,8 +15,6 @@ import 'package:lucide_icons/lucide_icons.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:universal_html/html.dart' as html;
 import '../../../core/theme/koala_tokens.dart';
-import '../../../helpers/paywall_router.dart';
-import '../../../providers/pro_status_provider.dart';
 import '../../../services/analytics_service.dart';
 import '../../../services/background_gen.dart';
 import '../../../services/feedback_service.dart';
@@ -478,27 +476,6 @@ class _ResultStageState extends ConsumerState<ResultStage> {
     }
   }
 
-  bool get _isPro {
-    final asyncStatus = ref.watch(proStatusProvider);
-    return asyncStatus.maybeWhen(data: (s) => s.isPro, orElse: () => false);
-  }
-
-  void _onVariantCta() {
-    HapticFeedback.selectionClick();
-    showPaywall(context, trigger: 'variant_quota');
-  }
-
-  void _onHdDownload() {
-    HapticFeedback.selectionClick();
-    if (_isPro) {
-      // Pro user: aynı download flow — ileride backend'de gerçek 4K wired olunca
-      // upgrade edilecek.
-      _download();
-    } else {
-      showPaywall(context, trigger: 'hd_download');
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -564,14 +541,6 @@ class _ResultStageState extends ConsumerState<ResultStage> {
                   beforeBytes: widget.beforeBytes,
                   afterSrc: widget.afterSrc,
                 ),
-                // Variant CTA — sadece free user görür. Pro zaten 3 varyant alıyor.
-                if (!_isPro) ...[
-                  const SizedBox(height: 10),
-                  Align(
-                    alignment: Alignment.center,
-                    child: _VariantProPill(onTap: _onVariantCta),
-                  ),
-                ],
                 AnimatedSize(
                   duration: const Duration(milliseconds: 380),
                   curve: Curves.easeOutCubic,
@@ -618,16 +587,7 @@ class _ResultStageState extends ConsumerState<ResultStage> {
                         onTap: _download,
                       ),
                     ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: _ActionTile(
-                        icon: LucideIcons.maximize2,
-                        label: 'HD İndir',
-                        onTap: _onHdDownload,
-                        proLock: !_isPro,
-                      ),
-                    ),
-                    const SizedBox(width: 10),
+                    const SizedBox(width: 12),
                     Expanded(
                       child: _ActionTile(
                         icon: LucideIcons.sliders,
@@ -842,56 +802,6 @@ class _ActionTile extends StatelessWidget {
                 ),
               ),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-/// Subtle pill: "✨ 2 farklı versiyonu daha gör" — accentSoft bg, accentDeep
-/// text, gold mini crown. Free user görür, Pro user'da hiç gösterilmez.
-class _VariantProPill extends StatelessWidget {
-  const _VariantProPill({required this.onTap});
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(99),
-        onTap: onTap,
-        child: Container(
-          padding:
-              const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-          decoration: BoxDecoration(
-            color: KoalaColors.accentSoft,
-            borderRadius: BorderRadius.circular(99),
-            border: Border.all(
-              color: KoalaColors.accentDeep.withValues(alpha: 0.18),
-              width: 0.6,
-            ),
-          ),
-          child: const Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(LucideIcons.crown,
-                  size: 12, color: Color(0xFFB8862F)),
-              SizedBox(width: 6),
-              Text(
-                '2 farklı versiyonu daha gör',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  color: KoalaColors.accentDeep,
-                  letterSpacing: -0.1,
-                ),
-              ),
-              SizedBox(width: 4),
-              Icon(LucideIcons.arrowRight,
-                  size: 12, color: KoalaColors.accentDeep),
-            ],
-          ),
         ),
       ),
     );

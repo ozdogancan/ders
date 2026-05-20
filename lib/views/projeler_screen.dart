@@ -33,7 +33,8 @@ class ProjelerScreen extends StatefulWidget {
   State<ProjelerScreen> createState() => _ProjelerScreenState();
 }
 
-class _ProjelerScreenState extends State<ProjelerScreen> {
+class _ProjelerScreenState extends State<ProjelerScreen>
+    with SingleTickerProviderStateMixin {
   bool _loading = true;
   bool _firstLoadCompleted = false;
   String? _err;
@@ -46,12 +47,15 @@ class _ProjelerScreenState extends State<ProjelerScreen> {
   bool _wasCompleted = false;
 
   /// 0 = Tasarımlar (AI before/after), 1 = Ürünler (geliştirme aşamasında).
-  /// realize_screen'deki "Profesyonele Sor / Ürünler" segment tab pattern'i.
-  int _activeTab = 0;
+  /// realize_screen'deki "Profesyonele Sor / Ürünler" segment tab pattern'i —
+  /// TabController + TabBar + TabBarView ile native smooth swipe-tracking
+  /// indicator animasyonu.
+  late final TabController _tabs = TabController(length: 2, vsync: this);
 
   @override
   void initState() {
     super.initState();
+    _tabs.addListener(_onTabChanged);
     // Warm cache hit: önceki oturumdan disk cache RAM'e alınmışsa
     // skeleton göstermeden direkt grid'e geç. Network fetch _load()
     // arka planda devam eder, taze data ile üzerine yazar.
@@ -80,6 +84,10 @@ class _ProjelerScreenState extends State<ProjelerScreen> {
     }
   }
 
+  void _onTabChanged() {
+    if (mounted) setState(() {});
+  }
+
   void _onProjectsTick() {
     if (!mounted) return;
     final warm = SavedItemsService.prefetchedProjects;
@@ -96,13 +104,7 @@ class _ProjelerScreenState extends State<ProjelerScreen> {
 
   void _onTabActivate() {
     if (MainShell.activeTab.value != KoalaTab.projeler) return;
-    if (_activeTab != 0 && mounted) setState(() => _activeTab = 0);
-  }
-
-  void _setTab(int idx) {
-    if (idx == _activeTab) return;
-    HapticFeedback.selectionClick();
-    setState(() => _activeTab = idx);
+    if (_tabs.index != 0 && mounted) _tabs.animateTo(0);
   }
 
   List<_ProjectItem> get _visibleItems => _items;
@@ -300,6 +302,8 @@ class _ProjelerScreenState extends State<ProjelerScreen> {
     MainShell.activeTab.removeListener(_onTabActivate);
     BackgroundGen.notifier.removeListener(_onBgGenChange);
     SavedItemsService.projectsTick.removeListener(_onProjectsTick);
+    _tabs.removeListener(_onTabChanged);
+    _tabs.dispose();
     // Sekme değişirse nav'ı geri aç (güvenlik). State context disposed olduğu
     // için MainShell'e doğrudan setState atılmaz; null-safe çağrı yeterli.
     if (_selectMode) {
@@ -446,35 +450,17 @@ class _ProjelerScreenState extends State<ProjelerScreen> {
       ),
       body: Column(
         children: [
-          if (!_selectMode) _segmentTabs(),
+          if (!_selectMode) RepaintBoundary(child: _segmentTabs()),
           Expanded(
-            child: AnimatedSwitcher(
-              duration: const Duration(milliseconds: 240),
-              switchInCurve: Curves.easeOutCubic,
-              switchOutCurve: Curves.easeInCubic,
-              transitionBuilder: (child, animation) {
-                final slide = Tween<Offset>(
-                  begin: const Offset(0.04, 0),
-                  end: Offset.zero,
-                ).animate(animation);
-                return FadeTransition(
-                  opacity: animation,
-                  child: SlideTransition(position: slide, child: child),
-                );
-              },
-              layoutBuilder: (currentChild, previousChildren) {
-                return Stack(
-                  alignment: Alignment.topCenter,
-                  children: <Widget>[
-                    ...previousChildren,
-                    if (currentChild != null) currentChild,
-                  ],
-                );
-              },
-              child: KeyedSubtree(
-                key: ValueKey<int>(_activeTab),
-                child: _activeTab == 0 ? _body() : _productsPlaceholder(),
-              ),
+            child: TabBarView(
+              controller: _tabs,
+              physics: _selectMode
+                  ? const NeverScrollableScrollPhysics()
+                  : null,
+              children: [
+                _body(),
+                _productsPlaceholder(),
+              ],
             ),
           ),
           if (_selectMode) _selectBar(),
@@ -483,9 +469,10 @@ class _ProjelerScreenState extends State<ProjelerScreen> {
     );
   }
 
-  /// realize_screen'deki "Profesyonele Sor / Ürünler" pill segment tab
-  /// pattern'i. Surface alt arkaplanlı pill container, aktif tab beyaz pill
-  /// + accentDeep label, inaktif tab transparent + textSec label.
+  /// realize_screen.dart'taki "Profesyonele Sor / Ürünler" segment tab
+  /// pattern'inin birebir kopyası — TabBar + sliding indicator. Pill arkaplan,
+  /// aktif tab beyaz pill + accentDeep label, inaktif transparent + textSec.
+  /// Indicator TabController progress'i ile smooth slide eder.
   Widget _segmentTabs() {
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
@@ -495,66 +482,51 @@ class _ProjelerScreenState extends State<ProjelerScreen> {
           color: KoalaColors.surfaceAlt,
           borderRadius: BorderRadius.circular(KoalaRadius.pill),
         ),
-        child: Row(
-          children: [
-            _segTabButton(
-              idx: 0,
-              icon: LucideIcons.layoutGrid,
-              label: 'Tasarımlar',
+        child: TabBar(
+          controller: _tabs,
+          onTap: (_) => HapticFeedback.selectionClick(),
+          indicator: BoxDecoration(
+            color: KoalaColors.surface,
+            borderRadius: BorderRadius.circular(KoalaRadius.pill),
+            boxShadow: KoalaShadows.card,
+          ),
+          indicatorSize: TabBarIndicatorSize.tab,
+          dividerColor: Colors.transparent,
+          labelColor: KoalaColors.accentDeep,
+          unselectedLabelColor: KoalaColors.textSec,
+          labelStyle: const TextStyle(
+            fontSize: 13.5,
+            fontWeight: FontWeight.w700,
+            letterSpacing: -0.1,
+          ),
+          unselectedLabelStyle: const TextStyle(
+            fontSize: 13.5,
+            fontWeight: FontWeight.w600,
+          ),
+          tabs: const [
+            Tab(
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(LucideIcons.layoutGrid, size: 14),
+                  SizedBox(width: 6),
+                  Text('Tasarımlar'),
+                ],
+              ),
             ),
-            _segTabButton(
-              idx: 1,
-              icon: LucideIcons.shoppingBag,
-              label: 'Ürünler',
+            Tab(
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(LucideIcons.shoppingBag, size: 14),
+                  SizedBox(width: 6),
+                  Text('Ürünler'),
+                ],
+              ),
             ),
           ],
-        ),
-      ),
-    );
-  }
-
-  Widget _segTabButton({
-    required int idx,
-    required IconData icon,
-    required String label,
-  }) {
-    final active = _activeTab == idx;
-    return Expanded(
-      child: GestureDetector(
-        onTap: () => _setTab(idx),
-        behavior: HitTestBehavior.opaque,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
-          curve: Curves.easeOut,
-          padding: const EdgeInsets.symmetric(vertical: 10),
-          decoration: BoxDecoration(
-            color: active ? KoalaColors.surface : Colors.transparent,
-            borderRadius: BorderRadius.circular(KoalaRadius.pill),
-            boxShadow: active ? KoalaShadows.card : null,
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                icon,
-                size: 14,
-                color:
-                    active ? KoalaColors.accentDeep : KoalaColors.textSec,
-              ),
-              const SizedBox(width: 6),
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 13.5,
-                  fontWeight: active ? FontWeight.w700 : FontWeight.w600,
-                  letterSpacing: -0.1,
-                  color:
-                      active ? KoalaColors.accentDeep : KoalaColors.textSec,
-                ),
-              ),
-            ],
-          ),
         ),
       ),
     );

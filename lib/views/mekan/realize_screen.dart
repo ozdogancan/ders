@@ -11,8 +11,6 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/config/env.dart';
 import '../../core/theme/koala_tokens.dart';
-import '../../helpers/paywall_router.dart';
-import '../../providers/pro_status_provider.dart';
 import '../../services/saved_items_service.dart';
 import 'widgets/pro_match_sheet.dart';
 
@@ -563,9 +561,6 @@ class _RealizeScreenState extends ConsumerState<RealizeScreen>
 
   Widget _bottomBar() {
     final onProTab = _tabs.index == 0; // Profesyonele Sor varsayılan
-    final asyncStatus = ref.watch(proStatusProvider);
-    final isPro =
-        asyncStatus.maybeWhen(data: (s) => s.isPro, orElse: () => false);
     return SafeArea(
       top: false,
       child: Container(
@@ -578,41 +573,6 @@ class _RealizeScreenState extends ConsumerState<RealizeScreen>
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            if (onProTab && !isPro)
-              GestureDetector(
-                onTap: () =>
-                    showPaywall(context, trigger: 'realize_pro_discount'),
-                child: Container(
-                  margin: const EdgeInsets.only(bottom: 8),
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFEF6E0),
-                    borderRadius: BorderRadius.circular(99),
-                    border: Border.all(
-                      color: const Color(0xFFE0B96B),
-                      width: 0.6,
-                    ),
-                  ),
-                  child: const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(LucideIcons.crown,
-                          size: 12, color: Color(0xFFB8862F)),
-                      SizedBox(width: 6),
-                      Text(
-                        'Pro üyelere bu hizmette %10 indirim',
-                        style: TextStyle(
-                          fontSize: 11.5,
-                          fontWeight: FontWeight.w700,
-                          color: Color(0xFF8A6515),
-                          letterSpacing: -0.1,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
             SizedBox(
               height: 54,
               width: double.infinity,
