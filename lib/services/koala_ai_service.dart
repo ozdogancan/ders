@@ -264,6 +264,11 @@ class KoalaAIService {
   String? _tasteHint;
   DateTime? _tasteHintAt;
 
+  /// Cached "personal context" block — top styles + dominant room + samples.
+  /// Built once per session (lazily) and refreshed alongside _tasteHint.
+  /// Concatenated into system_instruction so the AI feels "beni tanıyor".
+  String? _cachedPersonalContext;
+
   /// Warm the taste hint cache if stale (>60s). Safe to await each ask.
   Future<void> _refreshTasteHintIfStale() async {
     final now = DateTime.now();
@@ -274,11 +279,65 @@ class KoalaAIService {
     try {
       final profile = await TasteProfileService.computeProfile();
       _tasteHint = profile.toPromptHint();
+      _cachedPersonalContext = _personalContextFromProfile(profile);
       _tasteHintAt = now;
     } catch (_) {
       _tasteHint = null;
+      _cachedPersonalContext = null;
       _tasteHintAt = now;
     }
+  }
+
+  /// Public: invalidate cached taste/personal-context so the next ask rebuilds.
+  /// Callers (e.g. swipe_screen, style_discovery_live_screen) should call this
+  /// after recording a new like/pass so the AI's "kullanıcı hakkında bildikleri"
+  /// stay fresh. No-op safe; not wired anywhere by this service.
+  void invalidateTasteCache() {
+    _tasteHint = null;
+    _cachedPersonalContext = null;
+    _tasteHintAt = null;
+  }
+
+  /// Build the "[KULLANICI HAKKINDA NE BİLİYORUZ]" block from a TasteProfile.
+  /// Uses fields that actually exist on TasteProfile: topStyles, topRooms,
+  /// sampleCount, isActive. No `dominantStyle` / `dominantRoom` fields exist —
+  /// we derive them from topStyles.first / topRooms.first.
+  /// Returns '' if profile is inactive or empty — caller appends nothing then.
+  String _personalContextFromProfile(TasteProfile profile) {
+    if (!profile.isActive || profile.topStyles.isEmpty) return '';
+    final lines = <String>[];
+    final dominant = profile.topStyles.first;
+    if (profile.sampleCount >= 3) {
+      lines.add(
+        '• Tarz tercihi: ${dominant.style} (${profile.sampleCount} beğeni)',
+      );
+    }
+    if (profile.topStyles.isNotEmpty) {
+      final tops =
+          profile.topStyles.take(3).map((s) => s.style).join(', ');
+      lines.add('• Sevdiği stiller: $tops');
+    }
+    if (profile.topRooms.isNotEmpty) {
+      lines.add('• Çok ilgilendiği oda: ${profile.topRooms.first}');
+    }
+    if (profile.blockedStyles.isNotEmpty) {
+      lines.add(
+        '• Sık geçtiği (zorlama): ${profile.blockedStyles.join(', ')}',
+      );
+    }
+    if (lines.isEmpty) return '';
+    return '\n\n[KULLANICI HAKKINDA NE BİLİYORUZ]\n${lines.join('\n')}\n'
+        'Bu bilgileri doğal şekilde kullan, sürekli sorma. Önerilerinde göz önünde bulundur.';
+  }
+
+  /// Sliding-window for history sent to the model.
+  /// Full chat history is still persisted locally & rendered in UI — only the
+  /// payload to the backend is windowed to keep tokens & relevance in check.
+  List<Map<String, String>>? _windowHistory(List<Map<String, String>>? full) {
+    if (full == null) return null;
+    const maxTurns = 30; // last 30 messages — sliding window
+    if (full.length <= maxTurns) return full;
+    return full.sublist(full.length - maxTurns);
   }
 
   /// Injects user profile into any prompt
@@ -329,9 +388,15 @@ class KoalaAIService {
         lines.add('Önceki öneri: ${_chatContext['last_cards']}');
       }
       if (lines.isNotEmpty) {
-        return '$base\n\n## SOHBET BAĞLAMI\n${lines.join('\n')}\n'
+        final out = '$base\n\n## SOHBET BAĞLAMI\n${lines.join('\n')}\n'
             'Tool çağrılarında bu bağlamı kullan — kullanıcı tekrar söylemesin.';
+        return includeProfile && (_cachedPersonalContext?.isNotEmpty ?? false)
+            ? '$out${_cachedPersonalContext!}'
+            : out;
       }
+    }
+    if (includeProfile && (_cachedPersonalContext?.isNotEmpty ?? false)) {
+      return '$base${_cachedPersonalContext!}';
     }
     return base;
   }
@@ -581,15 +646,16 @@ class KoalaAIService {
     final systemInstruction = {'parts': [{'text': systemText}]};
     final contents = <Map<String, dynamic>>[];
 
-    // Conversation history — karakter-first pruning (gerçek sınır karakter,
-    // mesaj sayısı sadece güvenlik tamponu).
-    if (history != null && history.isNotEmpty) {
+    // Conversation history — token windowing first (son 30 mesaj), ardından
+    // karakter-first pruning. Full history UI'da kalır; payload windowed.
+    final windowed = _windowHistory(history);
+    if (windowed != null && windowed.isNotEmpty) {
       int totalChars = 0;
       const maxHistoryChars = 6000;
       const maxMessages = 12; // daha geniş tampon, karakter gerçek sınır
       int added = 0;
-      for (int i = history.length - 1; i >= 0 && added < maxMessages; i--) {
-        final msg = history[i];
+      for (int i = windowed.length - 1; i >= 0 && added < maxMessages; i--) {
+        final msg = windowed[i];
         final text = (msg['content'] ?? '').toString();
         if (text.isEmpty) continue;
         if (totalChars + text.length > maxHistoryChars) break;
@@ -927,15 +993,16 @@ class KoalaAIService {
     // Fix C: History'deki önceki functionCall/functionResponse part'larını temizle
     // Bunlar yeni user mesajı için alakasız ve Gemini'yi yanıltır
     final contents = <Map<String, dynamic>>[];
-    // Karakter-first pruning (gerçek sınır karakter). Uzun tek mesaj history'yi
-    // uçurmasın diye; mesaj sayısı sadece güvenlik tamponu.
-    if (history != null && history.isNotEmpty) {
+    // Token windowing (son 30) + karakter-first pruning. Full history UI'da
+    // kalır; modele yalnız son 30 mesajın karakter-budget'li kısmı gider.
+    final windowed = _windowHistory(history);
+    if (windowed != null && windowed.isNotEmpty) {
       int totalChars = 0;
       const maxHistoryChars = 6000;
       const maxMessages = 12; // daha geniş tampon, karakter gerçek sınır
       int added = 0;
-      for (int i = history.length - 1; i >= 0 && added < maxMessages; i--) {
-        final msg = history[i];
+      for (int i = windowed.length - 1; i >= 0 && added < maxMessages; i--) {
+        final msg = windowed[i];
         final text = (msg['content'] ?? '').toString();
         if (text.isEmpty) continue;
         if (totalChars + text.length > maxHistoryChars) break;
@@ -1765,8 +1832,9 @@ class KoalaAIService {
     List<Map<String, String>>? history,
   }) async* {
     final contents = <Map<String, dynamic>>[];
-    if (history != null) {
-      final recent = history.length > 10 ? history.sublist(history.length - 10) : history;
+    final windowed = _windowHistory(history);
+    if (windowed != null) {
+      final recent = windowed.length > 10 ? windowed.sublist(windowed.length - 10) : windowed;
       // Token limiti: toplam 12000 karakter
       int charBudget = 12000;
       final trimmed = <Map<String, String>>[];

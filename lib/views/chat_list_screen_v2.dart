@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -35,6 +36,8 @@ abstract final class _V2 {
   static const rust     = Color(0xFFB0502E); // single warm accent (unread bar)
   static const gold     = Color(0xFF8E6B2A); // premium thread
   static const goldSoft = Color(0xFFD4AE6B);
+  static const purple     = Color(0xFF6C63FF); // AI assistant accent
+  static const purpleDeep = Color(0xFF9B5CFF); // AI assistant gradient stop
 
   // Serif display — google_fonts Fraunces (variable, editorial)
   static TextStyle serif({double size = 34, FontWeight weight = FontWeight.w400, Color? color, double spacing = -0.8}) =>
@@ -451,8 +454,16 @@ class _ChatListScreenV2State extends State<ChatListScreenV2> {
     );
   }
 
-  // ─── Koala AI — slim featured row (ex-hero) ───
+  // ─── Koala AI — premium featured row (pinned top, AI accent) ───
   Widget _buildKoalaAiRow() {
+    // Pull last AI message preview + timestamp from most recent ai_chat_sessions
+    final ChatSummary? latestAi = _aiChats.isNotEmpty ? _aiChats.first : null;
+    final String? lastPreview = (latestAi?.lastMessage ?? '').trim().isEmpty
+        ? null
+        : latestAi!.lastMessage!.trim();
+    final DateTime? lastAt = latestAi?.updatedAt;
+    final int sessionCount = _aiChats.length;
+
     return SliverToBoxAdapter(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(20, 14, 20, 4),
@@ -462,39 +473,115 @@ class _ChatListScreenV2State extends State<ChatListScreenV2> {
             MaterialPageRoute(builder: (_) => const ChatDetailScreen()),
           ),
           child: Container(
-            padding: const EdgeInsets.fromLTRB(16, 14, 14, 14),
+            padding: const EdgeInsets.fromLTRB(16, 16, 14, 16),
             decoration: BoxDecoration(
-              color: _V2.paper,
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: _V2.line, width: 0.8),
+              // Subtle purple gradient over paper — low alpha for editorial feel
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  _V2.purple.withValues(alpha: 0.10),
+                  _V2.paper,
+                  _V2.purpleDeep.withValues(alpha: 0.08),
+                ],
+                stops: const [0.0, 0.55, 1.0],
+              ),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: _V2.purple.withValues(alpha: 0.22),
+                width: 0.9,
+              ),
               boxShadow: [
                 BoxShadow(
+                  color: _V2.purple.withValues(alpha: 0.08),
+                  blurRadius: 18,
+                  offset: const Offset(0, 4),
+                ),
+                BoxShadow(
                   color: Colors.black.withValues(alpha: 0.025),
-                  blurRadius: 14,
-                  offset: const Offset(0, 3),
+                  blurRadius: 10,
+                  offset: const Offset(0, 2),
                 ),
               ],
             ),
             child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                // Koala avatar — circular with subtle ink ring
-                Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    color: _V2.ink,
-                    shape: BoxShape.circle,
-                  ),
-                  child: ClipOval(
-                    child: Image.asset(
-                      'assets/images/koalas.webp',
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => const Icon(
-                        LucideIcons.sparkles,
-                        color: _V2.goldSoft,
-                        size: 20,
+                // Avatar + sparkle badge — 56px premium
+                SizedBox(
+                  width: 60,
+                  height: 60,
+                  child: Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      Container(
+                        width: 56,
+                        height: 56,
+                        decoration: BoxDecoration(
+                          color: _V2.ink,
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: _V2.purple.withValues(alpha: 0.35),
+                            width: 1.2,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: _V2.purple.withValues(alpha: 0.18),
+                              blurRadius: 12,
+                              spreadRadius: 0.5,
+                            ),
+                          ],
+                        ),
+                        child: ClipOval(
+                          child: Image.asset(
+                            'assets/images/koalas.webp',
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => const Icon(
+                              LucideIcons.sparkles,
+                              color: _V2.goldSoft,
+                              size: 22,
+                            ),
+                          ),
+                        ),
                       ),
-                    ),
+                      // Animated sparkle badge — bottom-right, pulses
+                      Positioned(
+                        right: -2,
+                        bottom: -2,
+                        child: Container(
+                          width: 22,
+                          height: 22,
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(
+                              colors: [_V2.purple, _V2.purpleDeep],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
+                            shape: BoxShape.circle,
+                            border: Border.all(color: _V2.paper, width: 1.6),
+                            boxShadow: [
+                              BoxShadow(
+                                color: _V2.purple.withValues(alpha: 0.45),
+                                blurRadius: 6,
+                              ),
+                            ],
+                          ),
+                          child: const Icon(
+                            Icons.auto_awesome,
+                            size: 11,
+                            color: Colors.white,
+                          ),
+                        )
+                            .animate(onPlay: (c) => c.repeat(reverse: true))
+                            .scale(
+                              duration: 1400.ms,
+                              begin: const Offset(0.92, 0.92),
+                              end: const Offset(1.08, 1.08),
+                              curve: Curves.easeInOut,
+                            )
+                            .fadeIn(duration: 600.ms),
+                      ),
+                    ],
                   ),
                 ),
                 const SizedBox(width: 14),
@@ -504,13 +591,29 @@ class _ChatListScreenV2State extends State<ChatListScreenV2> {
                     children: [
                       Row(
                         children: [
-                          Text('Koala AI', style: _V2.serif(size: 18, weight: FontWeight.w500, spacing: -0.3)),
+                          Flexible(
+                            child: Text(
+                              'Koala AI',
+                              style: _V2.serif(
+                                size: 19,
+                                weight: FontWeight.w500,
+                                spacing: -0.3,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
                           const SizedBox(width: 8),
-                          // tiny sparkle mark
+                          // Purple "asistan" pill
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 7, vertical: 2.5),
                             decoration: BoxDecoration(
-                              color: _V2.ink,
+                              gradient: const LinearGradient(
+                                colors: [_V2.purple, _V2.purpleDeep],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                              ),
                               borderRadius: BorderRadius.circular(100),
                             ),
                             child: Text(
@@ -518,31 +621,102 @@ class _ChatListScreenV2State extends State<ChatListScreenV2> {
                               style: _V2.body(
                                 size: 9.5,
                                 weight: FontWeight.w700,
-                                color: _V2.goldSoft,
-                                spacing: 0.6,
+                                color: Colors.white,
+                                spacing: 0.7,
                               ),
                             ),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 2),
+                      const SizedBox(height: 3),
                       Text(
-                        'Odanı fotoğrafla · stil bul · ürün öner',
-                        style: _V2.body(size: 12.5, color: _V2.inkSoft, weight: FontWeight.w400),
+                        lastPreview ??
+                            'Senin tasarım asistanın · sınırsız sor',
+                        style: _V2.body(
+                          size: 12.5,
+                          color: lastPreview != null
+                              ? _V2.inkSoft
+                              : _V2.purple.withValues(alpha: 0.85),
+                          weight: lastPreview != null
+                              ? FontWeight.w500
+                              : FontWeight.w600,
+                          height: 1.3,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ],
                   ),
                 ),
-                // Gold thread hint
-                Container(
-                  width: 28,
-                  height: 28,
-                  decoration: BoxDecoration(
-                    color: _V2.bg,
-                    shape: BoxShape.circle,
-                    border: Border.all(color: _V2.goldSoft.withValues(alpha: 0.5), width: 0.8),
-                  ),
-                  child: const Icon(LucideIcons.arrowUpRight, size: 15, color: _V2.ink),
+                const SizedBox(width: 8),
+                // Top-right column: timestamp + session-count pill
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    if (lastAt != null)
+                      Text(
+                        timeAgo(lastAt),
+                        style: _V2.body(
+                          size: 11,
+                          weight: FontWeight.w600,
+                          color: _V2.purple,
+                          spacing: 0.2,
+                        ),
+                      ),
+                    if (sessionCount > 0) ...[
+                      const SizedBox(height: 6),
+                      Container(
+                        constraints:
+                            const BoxConstraints(minWidth: 20, minHeight: 18),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 7, vertical: 2),
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            colors: [_V2.purple, _V2.purpleDeep],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                          borderRadius: BorderRadius.circular(100),
+                          boxShadow: [
+                            BoxShadow(
+                              color: _V2.purple.withValues(alpha: 0.35),
+                              blurRadius: 4,
+                            ),
+                          ],
+                        ),
+                        alignment: Alignment.center,
+                        child: Text(
+                          sessionCount > 9 ? '9+' : '$sessionCount',
+                          style: _V2.body(
+                            size: 10.5,
+                            weight: FontWeight.w700,
+                            color: Colors.white,
+                            height: 1.0,
+                          ),
+                        ),
+                      ),
+                    ] else ...[
+                      const SizedBox(height: 6),
+                      Container(
+                        width: 28,
+                        height: 28,
+                        decoration: BoxDecoration(
+                          color: _V2.paper,
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: _V2.purple.withValues(alpha: 0.45),
+                            width: 0.9,
+                          ),
+                        ),
+                        child: const Icon(
+                          LucideIcons.arrowUpRight,
+                          size: 15,
+                          color: _V2.purple,
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
               ],
             ),

@@ -1378,7 +1378,15 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
                         padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
                         itemCount: _msgs.length + (_loading ? 1 : 0),
                         itemBuilder: (_, i) {
-                          if (i == _msgs.length) return _buildLoading();
+                          if (i == _msgs.length) {
+                            // Plain typing indicator when no contextual loading text
+                            // and the user has already sent at least one message.
+                            final hasUserMsg = _msgs.any((m) => m.role == 'user');
+                            if (_loadingOverrideText == null && hasUserMsg) {
+                              return const _TypingBubble();
+                            }
+                            return _buildLoading();
+                          }
                           return _buildMsg(_msgs[i]);
                         },
                       ),
@@ -1809,61 +1817,128 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
 
   // ── Empty state with profile-aware suggestion chips ──
   Widget _buildEmptyState() {
+    final starters = _getProfileAwareStarters();
+    final top3 = starters.length > 3 ? starters.sublist(0, 3) : starters;
     return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Image.asset(
-              'assets/images/koalas.webp',
-              width: 64,
-              height: 64,
-              filterQuality: FilterQuality.high,
-              errorBuilder: (_, _, _) =>
-                  const Icon(LucideIcons.sparkles, size: 48, color: _accent),
+            // Avatar 72px with soft purple gradient ring
+            Container(
+              width: 84,
+              height: 84,
+              padding: const EdgeInsets.all(3),
+              decoration: const BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [Color(0xFF6C63FF), Color(0xFF9B5CFF)],
+                ),
+              ),
+              child: Container(
+                decoration: const BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.white,
+                ),
+                padding: const EdgeInsets.all(3),
+                child: ClipOval(
+                  child: Image.asset(
+                    'assets/images/koalas.webp',
+                    width: 72,
+                    height: 72,
+                    fit: BoxFit.cover,
+                    filterQuality: FilterQuality.high,
+                    errorBuilder: (_, _, _) =>
+                        const Icon(LucideIcons.sparkles, size: 48, color: _accent),
+                  ),
+                ),
+              ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 20),
             const Text(
               'Merhaba! Ben Koala 🐨',
               style: TextStyle(
-                fontSize: 18,
+                fontFamily: 'Manrope',
+                fontSize: 22,
                 fontWeight: FontWeight.w800,
                 color: _ink,
               ),
             ),
-            const SizedBox(height: 6),
+            const SizedBox(height: 8),
             Text(
               'İç mekan tasarımı hakkında\nher şeyi sorabilirsin',
-              style: TextStyle(fontSize: 14, color: Colors.grey.shade500),
+              style: TextStyle(
+                fontSize: 13,
+                color: Colors.grey.shade500,
+                height: 1.45,
+              ),
               textAlign: TextAlign.center,
             ),
-            const SizedBox(height: 20),
-            // Camera prompt
-            GestureDetector(
-              onTap: _showPicker,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(14),
-                  gradient: const LinearGradient(
-                    colors: [KoalaColors.accentDeep, KoalaColors.accentMuted],
+            const SizedBox(height: 28),
+            // Camera CTA — purple gradient pill, height 52, full-width
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 0),
+              child: SizedBox(
+                width: double.infinity,
+                height: 52,
+                child: Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(26),
+                    onTap: _showPicker,
+                    child: Ink(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(26),
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFF6C63FF), Color(0xFF9B5CFF)],
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFF6C63FF).withValues(alpha: 0.25),
+                            blurRadius: 16,
+                            offset: const Offset(0, 6),
+                          ),
+                        ],
+                      ),
+                      child: const Center(
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(LucideIcons.camera, size: 19, color: Colors.white),
+                            SizedBox(width: 10),
+                            Text(
+                              'Odanın fotoğrafını çek, analiz edeyim',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
                   ),
-                ),
-                child: const Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(LucideIcons.camera, size: 18, color: Colors.white),
-                    SizedBox(width: 8),
-                    Text('Odanın fotoğrafını çek, analiz edeyim',
-                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.white)),
-                  ],
                 ),
               ),
             ),
-            // 2026-05-02: 4 quick-suggestion pill kaldırıldı (kullanıcı talebi).
-            // Sadece "Odanın fotoğrafını çek, analiz edeyim" CTA kalsın.
-            // Kullanıcı yine de istediği soruyu free-text alanına yazabilir.
+            const SizedBox(height: 20),
+            // Top 3 starter prompt chips — horizontal scroll
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  for (int i = 0; i < top3.length; i++) ...[
+                    if (i > 0) const SizedBox(width: 8),
+                    top3[i],
+                  ],
+                ],
+              ),
+            ),
           ],
         ),
       ),
@@ -1887,8 +1962,6 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
         if (budget != null && budget.isNotEmpty)
           _suggestionChip(LucideIcons.wallet, '$budget bütçeyle plan', KoalaColors.greenAlt,
             () => _onChipTap('$roomLabel için $budget bütçeyle $style dekorasyon bütçe planı çıkar')),
-        _suggestionChip(LucideIcons.users, 'Bana uygun tasarımcı', KoalaColors.blue,
-          () => _onChipTap('$style tarzda çalışan bir iç mimar öner')),
       ];
     }
 
@@ -1900,10 +1973,11 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
         () => _onChipTap('Odama uygun renk paleti öner')),
       _suggestionChip(LucideIcons.wallet, 'Bütçe planla', KoalaColors.greenAlt,
         () => _onChipTap('Bütçe planı çıkar')),
-      _suggestionChip(LucideIcons.users, 'Tasarımcı bul', KoalaColors.blue,
-        () => _onChipTap('Bana uygun tasarımcı öner')),
     ];
   }
+
+  // Soft purple border for refined suggestion chips
+  static const Color _kPurpleSoft = Color(0xFFF3F0FF);
 
   Widget _suggestionChip(IconData icon, String label, Color color, VoidCallback onTap) => Semantics(
     button: true,
@@ -1911,11 +1985,11 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
     child: GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(14),
-          color: color.withValues(alpha: 0.06),
-          border: Border.all(color: color.withValues(alpha: 0.15)),
+          color: Colors.white,
+          border: Border.all(color: _kPurpleSoft, width: 1),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -1924,10 +1998,10 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
             const SizedBox(width: 6),
             Text(
               label,
-              style: TextStyle(
+              style: const TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w600,
-                color: color,
+                color: KoalaColors.text,
               ),
             ),
           ],
@@ -3215,4 +3289,76 @@ class _SwipeSparkPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _SwipeSparkPainter old) => old.color != color;
+}
+
+// ═══════════════════════════════════════════════════════
+// TYPING BUBBLE — minimal "AI is responding" indicator
+// ═══════════════════════════════════════════════════════
+class _TypingBubble extends StatelessWidget {
+  const _TypingBubble();
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: const Color(0xFFE5E7EB)),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: List.generate(3, (i) => _AnimatedDot(delay: i * 200)),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AnimatedDot extends StatefulWidget {
+  final int delay;
+  const _AnimatedDot({required this.delay});
+  @override
+  State<_AnimatedDot> createState() => _AnimatedDotState();
+}
+
+class _AnimatedDotState extends State<_AnimatedDot>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _c;
+  @override
+  void initState() {
+    super.initState();
+    _c = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 800),
+    );
+    Future.delayed(Duration(milliseconds: widget.delay), () {
+      if (mounted) _c.repeat(reverse: true);
+    });
+  }
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _c,
+      builder: (_, __) => Container(
+        width: 7,
+        height: 7,
+        margin: const EdgeInsets.symmetric(horizontal: 2),
+        decoration: BoxDecoration(
+          color: const Color(0xFF6C63FF)
+              .withValues(alpha: 0.35 + 0.55 * _c.value),
+          shape: BoxShape.circle,
+        ),
+      ),
+    );
+  }
 }
