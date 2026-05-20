@@ -141,10 +141,14 @@ class _StyleDiscoveryLiveScreenState
     _loadSavedCategory().then((_) => _bootstrap());
     unawaited(_refreshQuota());
     Analytics.screenViewed('style_discovery_live');
-    // Tab her aktive olduğunda "Hepsi"ye reset et.
+    // Tab her aktive olduğunda "Hepsi"ye reset et + tutorial kontrolü.
     MainShell.activeTab.addListener(_onTabActivate);
-    // Realize tutorial — cold-start başına bir kez, ekran açılır açılmaz.
-    WidgetsBinding.instance.addPostFrameCallback((_) => _maybeShowRealizeHint());
+    // İlk mount swipe tab'ında olabilir; tab listener fire etmez. Hemen kontrol et.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (MainShell.activeTab.value == KoalaTab.swipe) {
+        _maybeShowRealizeHint();
+      }
+    });
   }
 
   Future<void> _maybeShowRealizeHint() async {
@@ -768,7 +772,8 @@ class _StyleDiscoveryLiveScreenState
   void _onTabActivate() {
     if (MainShell.activeTab.value != KoalaTab.swipe) return;
     if (_selectedCategory != null) _applyCategory('');
-    // Tutorial sadece ilk açılışta gösterilsin — tab her girişinde değil.
+    // Cold-start başına bir kez tutorial — kullanıcı ilk swipe'a geçtiğinde.
+    _maybeShowRealizeHint();
   }
 
   @override
@@ -1902,44 +1907,144 @@ class _ProUpsellCard extends StatelessWidget {
   }
 }
 
-/// Realize tutorial popup'ının üst görseli. Supabase Storage'dan çekilir,
-/// network başarısız olursa bundled fallback gösterilir.
-/// Gemini ile üretilen final görseli upload etmek için:
-///   pro-assets/realize-tutorial.webp
+/// Realize tutorial popup'ının üst görseli. İki fotoğrafın AI ile birleşip
+/// tek bir mekan tasarımına dönüştüğünü gösterir: sol = beğendiğin tasarım,
+/// sağ = senin mekanın, ortada "+" → tek sonuç.
+///
+/// Gemini ile profesyonel bir illüstrasyon üretmek istersen
+/// `pro-assets/realize-tutorial.webp` path'ine upload et; bu bileşeni
+/// Image.network ile değiştir.
 class _RealizeHintImage extends StatelessWidget {
   const _RealizeHintImage();
-
-  static const _remoteUrl =
-      'https://xgefjepaqnghaotqybpi.supabase.co/storage/v1/object/public/pro-assets/realize-tutorial.webp';
-  static const _fallbackAsset = 'assets/pro/hero_2.png';
 
   @override
   Widget build(BuildContext context) {
     return ClipRRect(
       borderRadius: BorderRadius.circular(20),
-      child: AspectRatio(
-        aspectRatio: 16 / 9,
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [Color(0xFFF7F5FF), Color(0xFFFBF8FF)],
-            ),
-            border: Border.all(color: const Color(0xFFE0DAFF)),
+      child: Container(
+        height: 150,
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xFFF3F0FF), Color(0xFFFAF8FF)],
           ),
-          child: Image.network(
-            _remoteUrl,
-            fit: BoxFit.cover,
-            errorBuilder: (_, __, ___) => Image.asset(
-              _fallbackAsset,
-              fit: BoxFit.cover,
+          border: Border.all(color: const Color(0xFFE0DAFF)),
+        ),
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            // Sol kart: beğendiğin tasarım — küçük etiket "Tasarım"
+            Positioned(
+              left: 8,
+              top: 8,
+              bottom: 8,
+              width: 130,
+              child: Transform.rotate(
+                angle: -0.06,
+                child: _RealizeMiniCard(
+                  asset: 'assets/showcase/after.webp',
+                  label: 'Tasarım',
+                ),
+              ),
             ),
-            loadingBuilder: (ctx, child, progress) {
-              if (progress == null) return child;
-              return Image.asset(_fallbackAsset, fit: BoxFit.cover);
-            },
+            // Sağ kart: senin mekanın
+            Positioned(
+              right: 8,
+              top: 8,
+              bottom: 8,
+              width: 130,
+              child: Transform.rotate(
+                angle: 0.06,
+                child: _RealizeMiniCard(
+                  asset: 'assets/showcase/before.webp',
+                  label: 'Mekanın',
+                ),
+              ),
+            ),
+            // Ortada "+" badge — iki kartın birleştiğini anlatır.
+            Container(
+              width: 44,
+              height: 44,
+              decoration: const BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [Color(0xFF6C63FF), Color(0xFF9B5CFF)],
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Color(0x336C63FF),
+                    blurRadius: 16,
+                    offset: Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: const Icon(Icons.add, color: Colors.white, size: 26),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _RealizeMiniCard extends StatelessWidget {
+  final String asset;
+  final String label;
+  const _RealizeMiniCard({required this.asset, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x1A000000),
+            blurRadius: 12,
+            offset: Offset(0, 4),
           ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(14),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            Image.asset(asset, fit: BoxFit.cover),
+            // Alt etiket
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 5),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.bottomCenter,
+                    end: Alignment.topCenter,
+                    colors: [
+                      Colors.black.withValues(alpha: 0.55),
+                      Colors.transparent,
+                    ],
+                  ),
+                ),
+                child: Text(
+                  label,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white,
+                    letterSpacing: 0.3,
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );

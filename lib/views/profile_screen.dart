@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'dart:io' show Platform;
 
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -507,9 +506,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 40),
           children: [
-            // Editorial header — Fraunces serif, large, left-aligned (matches Mesajlar)
+            // Header — canonical app style (matches Tarzını Keşfet / Projelerim)
             Padding(
-              padding: const EdgeInsets.fromLTRB(0, 0, 0, 12),
+              padding: const EdgeInsets.fromLTRB(0, 8, 0, 14),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
@@ -518,25 +517,20 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     behavior: HitTestBehavior.opaque,
                     child: const Padding(
                       padding: EdgeInsets.fromLTRB(0, 6, 10, 6),
-                      child: Icon(LucideIcons.arrowLeft,
-                          size: 22, color: KoalaColors.text),
+                      child: Icon(LucideIcons.chevronLeft,
+                          size: 24, color: KoalaColors.text),
                     ),
                   ),
                   GestureDetector(
                     onTap: _onAdminTap,
                     behavior: HitTestBehavior.opaque,
-                    child: Text(
+                    child: const Text(
                       'Profil',
-                      style: GoogleFonts.fraunces(
-                        fontSize: 34,
-                        fontWeight: FontWeight.w300,
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.w700,
                         color: KoalaColors.text,
-                        letterSpacing: -1.0,
-                        height: 1.05,
-                        fontFeatures: const [
-                          FontFeature('ss01'),
-                          FontFeature('ss02'),
-                        ],
+                        letterSpacing: -0.5,
                       ),
                     ),
                   ),
@@ -845,35 +839,30 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         borderRadius: BorderRadius.circular(20),
         child: Stack(
           children: [
-            // Right-side furniture image with fade-into-purple on its left edge
+            // Full-width image, soft horizontal mask blends image into purple
+            // bg across a wide ~25% seam — no hard edge.
             Positioned.fill(
-              child: Align(
-                alignment: Alignment.centerRight,
-                child: FractionallySizedBox(
-                  widthFactor: 0.4,
-                  heightFactor: 1,
-                  child: ShaderMask(
-                    blendMode: BlendMode.dstIn,
-                    shaderCallback: (rect) => const LinearGradient(
-                      begin: Alignment.centerLeft,
-                      end: Alignment.centerRight,
-                      colors: [
-                        Colors.transparent,
-                        Colors.black,
-                      ],
-                      stops: [0.0, 0.55],
-                    ).createShader(rect),
-                    child: Image.asset(
-                      'assets/pro/hero_1.png',
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => const SizedBox.shrink(),
-                    ),
-                  ),
+              child: ShaderMask(
+                blendMode: BlendMode.dstIn,
+                shaderCallback: (rect) => LinearGradient(
+                  begin: Alignment.centerLeft,
+                  end: Alignment.centerRight,
+                  colors: [
+                    Colors.transparent,
+                    Colors.transparent,
+                    Colors.black.withValues(alpha: 0.85),
+                    Colors.black,
+                  ],
+                  stops: const [0.0, 0.42, 0.72, 1.0],
+                ).createShader(rect),
+                child: Image.asset(
+                  'assets/pro/hero_1.png',
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => const SizedBox.shrink(),
                 ),
               ),
             ),
-            // Extra purple gradient overlay on the left edge of the image
-            // to guarantee a clean blend even if the asset has light pixels.
+            // Subtle purple inner glow at the seam — purely cosmetic warmth.
             Positioned.fill(
               child: IgnorePointer(
                 child: DecoratedBox(
@@ -884,10 +873,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       colors: [
                         _proPurple1.withValues(alpha: 0.0),
                         _proPurple1.withValues(alpha: 0.0),
-                        _proPurple1.withValues(alpha: 0.55),
+                        _proPurple2.withValues(alpha: 0.22),
                         _proPurple1.withValues(alpha: 0.0),
                       ],
-                      stops: const [0.0, 0.55, 0.66, 0.85],
+                      stops: const [0.0, 0.40, 0.55, 0.75],
                     ),
                   ),
                 ),
