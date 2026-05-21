@@ -817,7 +817,13 @@ class _StyleDiscoveryLiveScreenState
                           children: [
                             Expanded(child: _deckStack()),
                             _buttons(),
-                            const SizedBox(height: 20),
+                            // extendBody:true — aksiyon butonları sistem
+                            // gesture bar'ının arkasında kalmasın.
+                            SizedBox(
+                                height: 20 +
+                                    MediaQuery.of(context)
+                                        .viewPadding
+                                        .bottom),
                           ],
                         ),
             ),

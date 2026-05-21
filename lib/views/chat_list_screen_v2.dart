@@ -491,7 +491,15 @@ class _ChatListScreenV2State extends State<ChatListScreenV2> {
                                     itemBuilder: (_, i) => _buildAiChatRow(_aiChats[i]),
                                   ),
                                 ],
-                                const SliverToBoxAdapter(child: SizedBox(height: 96)),
+                                SliverToBoxAdapter(
+                                  // Yüzen alt nav + sistem gesture bar —
+                                  // son sohbet satırı kesilmesin.
+                                  child: SizedBox(
+                                      height: 96 +
+                                          MediaQuery.of(context)
+                                              .viewPadding
+                                              .bottom),
+                                ),
                               ],
                             ),
                           ),

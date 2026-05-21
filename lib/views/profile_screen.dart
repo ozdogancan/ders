@@ -504,7 +504,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       body: SafeArea(
         bottom: false,
         child: ListView(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 40),
+          // SafeArea bottom:false olduğu için liste alt padding'ine sistem
+          // navigasyon çubuğu (viewPadding.bottom) eklenir — gesture nav'lı
+          // cihazlarda "Hesap Yönetimi" bölümü kesilmesin.
+          padding: EdgeInsets.fromLTRB(
+              16, 8, 16, 40 + MediaQuery.of(context).viewPadding.bottom),
           children: [
             // Header — canonical app style (matches Tarzını Keşfet / Projelerim)
             Padding(

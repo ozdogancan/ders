@@ -481,23 +481,26 @@ class _ResultStageState extends ConsumerState<ResultStage> {
     return Column(
       children: [
         // ─── Top bar ─────────────────────────────────────────
-        Padding(
-          padding: const EdgeInsets.fromLTRB(20, 16, 16, 4),
-          child: Row(
-            children: [
-              const Expanded(
-                child: Text(
-                  'Tasarım Sonucu',
-                  style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.w700,
-                    color: KoalaColors.text,
-                    letterSpacing: -0.5,
+        SafeArea(
+          bottom: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 16, 16, 4),
+            child: Row(
+              children: [
+                const Expanded(
+                  child: Text(
+                    'Tasarım Sonucu',
+                    style: TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.w700,
+                      color: KoalaColors.text,
+                      letterSpacing: -0.5,
+                    ),
                   ),
                 ),
-              ),
-              _IconBtn(icon: LucideIcons.x, onTap: widget.onRestart),
-            ],
+                _IconBtn(icon: LucideIcons.x, onTap: widget.onRestart),
+              ],
+            ),
           ),
         ),
         Expanded(

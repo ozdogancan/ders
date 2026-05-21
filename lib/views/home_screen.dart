@@ -360,41 +360,45 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       context: context,
       backgroundColor: Colors.transparent,
       builder: (_) => Container(
-        padding: const EdgeInsets.fromLTRB(20, 8, 20, 36),
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
         decoration: const BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
         ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 36,
-              height: 4,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(2),
-                color: Colors.grey.shade300,
+        child: SafeArea(
+          top: false,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 36,
+                height: 4,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(2),
+                  color: Colors.grey.shade300,
+                ),
               ),
-            ),
-            const SizedBox(height: 24),
-            Row(
-              children: [
-                Expanded(
-                  child: _PickBtn(LucideIcons.camera, 'Kamera', () {
-                    Navigator.pop(context);
-                    _doPick(ImageSource.camera);
-                  }),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _PickBtn(LucideIcons.image, 'Galeri', () {
-                    Navigator.pop(context);
-                    _doPick(ImageSource.gallery);
-                  }),
-                ),
-              ],
-            ),
-          ],
+              const SizedBox(height: 24),
+              Row(
+                children: [
+                  Expanded(
+                    child: _PickBtn(LucideIcons.camera, 'Kamera', () {
+                      Navigator.pop(context);
+                      _doPick(ImageSource.camera);
+                    }),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _PickBtn(LucideIcons.image, 'Galeri', () {
+                      Navigator.pop(context);
+                      _doPick(ImageSource.gallery);
+                    }),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+            ],
+          ),
         ),
       ),
     );

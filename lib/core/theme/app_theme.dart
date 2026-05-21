@@ -55,6 +55,25 @@ class AppTheme {
         backgroundColor: KoalaColors.accent,
         foregroundColor: KoalaColors.textInv,
       ),
+      // Modern, yumuşak toast görünümü — floating, yuvarlak köşe, hafif gölge.
+      // Tüm SnackBar'lar bu temayı miras alır; call-site değişikliği gerekmez.
+      // Renk/davranış'ı açıkça set eden çağrılar kendi değerini korur.
+      snackBarTheme: SnackBarThemeData(
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: KoalaColors.ink, // #1A1D2A — koyu charcoal
+        elevation: 6,
+        insetPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(17),
+        ),
+        contentTextStyle: GoogleFonts.plusJakartaSans(
+          color: Colors.white,
+          fontSize: 13.5,
+          fontWeight: FontWeight.w600,
+          height: 1.35,
+        ),
+        actionTextColor: KoalaColors.accentMuted,
+      ),
     );
   }
 }

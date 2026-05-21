@@ -16,6 +16,7 @@ import '../services/chat_persistence.dart';
 import '../services/saved_plans_service.dart';
 import '../services/analytics_service.dart';
 import '../services/profile_feedback_service.dart';
+import '../services/taste_profile_service.dart';
 import '../core/theme/koala_tokens.dart';
 import '../services/evlumba_live_service.dart';
 import '../services/quota_service.dart';
@@ -85,6 +86,10 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
   /// Fotoğraf analizi sonrası bağlam — follow-up chip'lerde kullanılır
   Map<String, String>? _photoAnalysisContext;
 
+  /// Swipe beğenilerinden çıkarılan zevk profili — boş sohbet starter'larını
+  /// kişiselleştirir. initState'te async yüklenir; null/inactive ise Case C.
+  TasteProfile? _tasteProfile;
+
   // ── Dinamik hint rotasyonu (empty composer, idle) ──
   static const List<String> _hintRotation = [
     'Salonum için modern bir koltuk öner',
@@ -116,6 +121,7 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
     Analytics.screenViewed('chat_detail');
     _chatId = widget.chatId ?? 'chat_${DateTime.now().millisecondsSinceEpoch}';
     _loadUserPreferences();
+    _loadTasteProfile();
     _scroll.addListener(_onScrollChanged);
     _ctrl.addListener(_onComposerTextChanged);
     _inputFocus.addListener(_onComposerTextChanged);
@@ -402,6 +408,18 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
       dislikedColors: dislikedColors,
       likedDetailsText: likedDetailsText,
     );
+  }
+
+  /// Swipe beğenilerinden zevk profilini yükler — boş sohbet starter'larını
+  /// (Case B/C) bilgilendirir. Hata durumunda sessizce null kalır → Case C.
+  Future<void> _loadTasteProfile() async {
+    try {
+      final profile = await TasteProfileService.computeProfile();
+      if (!mounted) return;
+      setState(() => _tasteProfile = profile);
+    } catch (_) {
+      // Sessizce yut — profil yoksa Case C starter'ları kullanılır.
+    }
   }
 
   // ignore: unused_element
@@ -1798,7 +1816,7 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
 
   // ── Empty state with profile-aware suggestion chips ──
   Widget _buildEmptyState() {
-    final starters = _getProfileAwareStarters();
+    final starters = _contextualStarters();
     final top3 = starters.length > 3 ? starters.sublist(0, 3) : starters;
     return Center(
       child: SingleChildScrollView(
@@ -1916,34 +1934,89 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
     );
   }
 
-  List<Widget> _getProfileAwareStarters() {
-    final style = _ai.userStyle;
-    final room = _ai.userRoom;
-    final budget = _ai.userBudget;
+  /// Bir stil key'ini ('modern', 'iskandinav' ...) kullanıcıya gösterilecek
+  /// Türkçe etikete çevirir. Bilinmeyen değeri olduğu gibi döndürür.
+  static String _styleLabelTr(String key) {
+    switch (key.toLowerCase()) {
+      case 'modern':
+        return 'Modern';
+      case 'minimalist':
+        return 'Minimalist';
+      case 'iskandinav':
+      case 'scandinavian':
+        return 'İskandinav';
+      case 'klasik':
+        return 'Klasik';
+      case 'endüstriyel':
+      case 'endustriyel':
+        return 'Endüstriyel';
+      case 'boho':
+        return 'Boho';
+      case 'rustik':
+        return 'Rustik';
+      case 'japandi':
+        return 'Japandi';
+      case 'mid_century':
+        return 'Mid-century';
+      case 'mediterranean':
+        return 'Akdeniz';
+      default:
+        if (key.isEmpty) return key;
+        return key[0].toUpperCase() + key.substring(1);
+    }
+  }
 
-    // If we have profile data, personalize the suggestions.
-    // _onChipTap → dedicated intent router (designerMatch, roomRenovation, colorAdvice, budgetPlan)
-    if (style != null && style.isNotEmpty) {
-      final roomLabel = room ?? 'Odamı';
+  /// Boş sohbet "Ne yapmak istersin?" starter chip'lerini bağlama göre üretir.
+  ///
+  /// Case A — sohbette zaten oda fotoğrafı var → o görsele atıfta bulunan chip'ler.
+  /// Case B — fotoğraf yok ama swipe zevk profili aktif → baskın stile göre
+  ///          akıllı sorular + fotoğraf yükleme daveti.
+  /// Case C — fotoğraf da profil de yok → zevk keşfi + fotoğraf yükleme daveti.
+  ///
+  /// Not: chip listesinin yalnızca ilk 3'ü gösterilir (_buildEmptyState),
+  /// bu yüzden her case'te en önemli 3 chip başa konur.
+  List<Widget> _contextualStarters() {
+    // ── Case A: sohbette oda görseli mevcut ──
+    if (_hasRecentImage()) {
       return [
-        _suggestionChip(LucideIcons.palette, '$style tarzda $roomLabel yenile', KoalaColors.accentDeep,
-          () => _onChipTap('$roomLabel $style tarzda yeniden tasarla')),
-        _suggestionChip(LucideIcons.palette, '$roomLabel için 3 renk öner', KoalaColors.pink,
-          () => _onChipTap('$roomLabel için $style tarzıma uygun renk paleti öner')),
-        if (budget != null && budget.isNotEmpty)
-          _suggestionChip(LucideIcons.wallet, '$budget bütçeyle plan', KoalaColors.greenAlt,
-            () => _onChipTap('$roomLabel için $budget bütçeyle $style dekorasyon bütçe planı çıkar')),
+        _suggestionChip(LucideIcons.wand2, 'Bu odayı yeniden tasarla', KoalaColors.accentDeep,
+          () => _onChipTap('Bu odayı yeniden tasarla')),
+        _suggestionChip(LucideIcons.palette, 'Renk paletini değiştir', KoalaColors.pink,
+          () => _onChipTap('Bu odanın renk paletini değiştir')),
+        _suggestionChip(LucideIcons.userCheck, 'Bu oda için uzman öner', KoalaColors.greenAlt,
+          () => _onChipTap('Bu oda için uzman öner')),
+        _suggestionChip(LucideIcons.sparkles, 'Farklı bir stil dene', KoalaColors.accentDeep,
+          () => _onChipTap('Bu oda için farklı bir stil dene')),
       ];
     }
 
-    // Default starters (no profile) — _onChipTap intent router'a gidiyor
+    // ── Case B: fotoğraf yok, swipe zevk profili aktif ──
+    final taste = _tasteProfile;
+    if (taste != null && taste.isActive && taste.topStyles.isNotEmpty) {
+      final styleKey = taste.topStyles.first.style;
+      final styleTr = _styleLabelTr(styleKey);
+      return [
+        _suggestionChip(LucideIcons.lightbulb, '$styleTr tarzda salon nasıl olmalı?', KoalaColors.accentDeep,
+          () => _onChipTap('$styleTr tarzda salon nasıl olmalı?')),
+        _suggestionChip(LucideIcons.camera, 'Kendi mekanımın fotoğrafını yükle', KoalaColors.greenAlt,
+          _showPicker),
+        _suggestionChip(LucideIcons.palette, '$styleTr tarz için renk önerileri', KoalaColors.pink,
+          () => _onChipTap('$styleTr tarz için renk önerileri ver')),
+        _suggestionChip(LucideIcons.wand2, 'Mekanımı $styleTr tarza dönüştür', KoalaColors.accentDeep,
+          () => _onChipTap('Mekanımı $styleTr tarza dönüştür')),
+      ];
+    }
+
+    // ── Case C: fotoğraf da zevk profili de yok ──
     return [
-      _suggestionChip(LucideIcons.home, 'Odamı yenile', KoalaColors.accentDeep,
-        () => _onChipTap('Odamı yeniden tasarla')),
-      _suggestionChip(LucideIcons.palette, 'Renk öner', KoalaColors.pink,
-        () => _onChipTap('Odama uygun renk paleti öner')),
-      _suggestionChip(LucideIcons.wallet, 'Bütçe planla', KoalaColors.greenAlt,
-        () => _onChipTap('Bütçe planı çıkar')),
+      _suggestionChip(LucideIcons.compass, 'Hangi tasarım stili bana uygun?', KoalaColors.accentDeep,
+        () => _onChipTap('Hangi tasarım stili bana uygun?')),
+      _suggestionChip(LucideIcons.camera, 'Kendi mekanımın fotoğrafını yükle', KoalaColors.greenAlt,
+        _showPicker),
+      _suggestionChip(LucideIcons.sparkles, 'Tarzımı keşfetmek istiyorum', KoalaColors.pink,
+        () => _onChipTap('Tarzımı keşfetmek istiyorum')),
+      _suggestionChip(LucideIcons.maximize2, 'Küçük bir odayı nasıl ferah gösterebilirim?', KoalaColors.greenAlt,
+        () => _onChipTap('Küçük bir odayı nasıl ferah gösterebilirim?')),
     ];
   }
 
@@ -2404,6 +2477,12 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
                     color: _loading ? Colors.grey.shade300 : Colors.grey.shade400,
                   ),
                   border: InputBorder.none,
+                  // Tema seviyesindeki inputDecorationTheme.focusedBorder mor
+                  // bir kenarlık çiziyordu — focus'ta kenarlık değişmesin diye
+                  // focused/enabled/disabled hepsini border ile aynı yapıyoruz.
+                  focusedBorder: InputBorder.none,
+                  enabledBorder: InputBorder.none,
+                  disabledBorder: InputBorder.none,
                   contentPadding: const EdgeInsets.symmetric(
                     horizontal: 10,
                     vertical: 14,

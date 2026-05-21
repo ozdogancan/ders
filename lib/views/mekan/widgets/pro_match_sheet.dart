@@ -594,8 +594,32 @@ class _MatchCardState extends State<_MatchCard> {
                         ? Image.network(
                             project.coverUrl,
                             fit: BoxFit.cover,
+                            gaplessPlayback: true,
+                            loadingBuilder: (ctx, child, prog) => prog == null
+                                ? child
+                                : Container(
+                                    decoration: const BoxDecoration(
+                                      gradient: LinearGradient(
+                                        begin: Alignment.topLeft,
+                                        end: Alignment.bottomRight,
+                                        colors: [
+                                          KoalaColors.surfaceAlt,
+                                          KoalaColors.surface,
+                                        ],
+                                      ),
+                                    ),
+                                  ),
                             errorBuilder: (_, _, _) => Container(
-                              color: KoalaColors.surfaceAlt,
+                              decoration: const BoxDecoration(
+                                gradient: LinearGradient(
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                  colors: [
+                                    KoalaColors.surfaceAlt,
+                                    KoalaColors.surface,
+                                  ],
+                                ),
+                              ),
                               alignment: Alignment.center,
                               child: const Icon(LucideIcons.image,
                                   color: KoalaColors.textTer, size: 28),

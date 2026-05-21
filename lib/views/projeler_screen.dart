@@ -649,7 +649,11 @@ class _ProjelerScreenState extends State<ProjelerScreen>
   Widget _selectBar() {
     final allSelected =
         _selected.length == _items.length && _items.isNotEmpty;
-    return Container(
+    // SafeArea(top: false) — sistem alt navigasyon çubuğu (gesture bar)
+    // olan cihazlarda silme/seç aksiyon barı kesilmesin.
+    return SafeArea(
+      top: false,
+      child: Container(
       padding: const EdgeInsets.symmetric(vertical: 10),
       decoration: const BoxDecoration(
         color: KoalaColors.bg,
@@ -683,6 +687,7 @@ class _ProjelerScreenState extends State<ProjelerScreen>
           ),
         ],
       ),
+      ),
     );
   }
 
@@ -713,7 +718,10 @@ class _ProjelerScreenState extends State<ProjelerScreen>
     return RefreshIndicator(
       onRefresh: _load,
       child: GridView.builder(
-        padding: const EdgeInsets.fromLTRB(20, 4, 20, 100),
+        // extendBody:true + yüzen alt nav + sistem gesture bar — son satır
+        // kartlar kesilmesin diye 100'e viewPadding.bottom eklenir.
+        padding: EdgeInsets.fromLTRB(
+            20, 4, 20, 100 + MediaQuery.of(context).viewPadding.bottom),
         gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
           crossAxisCount: 2,
           mainAxisSpacing: 14,
@@ -734,13 +742,28 @@ class _ProjelerScreenState extends State<ProjelerScreen>
             onTap: () {
               if (_selectMode) {
                 _toggle(p.id);
-              } else {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => ProjectDetailScreen(item: p),
-                  ),
-                );
+                return;
               }
+              // Eski kayıtlarda before/after görseli hiç olmayabilir —
+              // sessizce blank detay açmak yerine kullanıcıya geri bildir.
+              final hasBefore =
+                  (p.extra['before_url']?.toString() ?? '').isNotEmpty;
+              final hasAfter = p.imageUrl.isNotEmpty;
+              if (!hasBefore && !hasAfter) {
+                ScaffoldMessenger.of(context)
+                  ..clearSnackBars()
+                  ..showSnackBar(
+                    const SnackBar(
+                      content: Text('Bu proje için önizleme mevcut değil'),
+                    ),
+                  );
+                return;
+              }
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => ProjectDetailScreen(item: p),
+                ),
+              );
             },
             onLongPress: () {
               if (!_selectMode) {
