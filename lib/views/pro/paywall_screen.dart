@@ -220,31 +220,51 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: KoalaColors.bg,
-      body: Container(
-        decoration: const BoxDecoration(color: KoalaColors.bg),
-        child: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                _buildHero(),
-                const SizedBox(height: 12),
-                _buildTitle(),
-                const SizedBox(height: 8),
-                _buildBulletsGrid(),
-                const SizedBox(height: 8),
-                if (!_trialUsed) ...[
-                  _buildTrialToggle(),
-                  const SizedBox(height: 8),
-                ],
-                _buildPlanCards(),
-                const Spacer(),
-                const SizedBox(height: 8),
-                _buildCta(),
-                const SizedBox(height: 8),
-                _buildFooter(),
-              ],
+      body: SafeArea(
+        child: Center(
+          // Geniş ekranlarda (tablet / masaüstü web) kenara kenara yayılmaz —
+          // modal gibi ortada, makul genişlikte durur.
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 460),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                // Uyarlanır yükseklik: içerik ekrana SIĞIYORSA Spacer ile
+                // yayılır, kaydırma olmaz. SIĞMIYORSA (küçük cihaz, mobil
+                // tarayıcı adres çubuğu, vs.) kaydırılır — alttaki footer
+                // hiçbir cihazda kırpılmaz.
+                return SingleChildScrollView(
+                  child: ConstrainedBox(
+                    constraints:
+                        BoxConstraints(minHeight: constraints.maxHeight),
+                    child: IntrinsicHeight(
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            _buildHero(),
+                            const SizedBox(height: 12),
+                            _buildTitle(),
+                            const SizedBox(height: 8),
+                            _buildBulletsGrid(),
+                            const SizedBox(height: 8),
+                            if (!_trialUsed) ...[
+                              _buildTrialToggle(),
+                              const SizedBox(height: 8),
+                            ],
+                            _buildPlanCards(),
+                            const Spacer(),
+                            const SizedBox(height: 12),
+                            _buildCta(),
+                            const SizedBox(height: 10),
+                            _buildFooter(),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              },
             ),
           ),
         ),
