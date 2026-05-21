@@ -3,4 +3,7 @@
     <color name="ic_launcher_background">#6B5BE6</color>
     <!-- Accent color applied to FCM status-bar notifications (Koala purple). -->
     <color name="koala_notification_accent">#6C63FF</color>
+    <!-- Splash / launch ekranı arka planı — yumuşak krem (iç-mimari estetiği).
+         Flutter SplashScreen ve Android 12+ native splash ile aynı ton. -->
+    <color name="splash_background">#F7F4EF</color>
 </resources>

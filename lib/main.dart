@@ -23,7 +23,7 @@ import 'services/quota_service.dart';
 import 'helpers/paywall_router.dart';
 import 'core/router/app_router.dart' as koala_router;
 import 'core/config/env.dart';
-import 'widgets/experience_ui.dart';
+import 'views/splash_screen.dart';
 import 'firebase_options.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
@@ -274,14 +274,12 @@ class _BootstrapAppState extends State<_BootstrapApp> {
       future: _initFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState != ConnectionState.done) {
+          // Boot / async init sırasında gösterilen unified splash ekranı.
+          // Android native splash (krem #F7F4EF) ile aynı tonda olduğu için
+          // geçiş kesintisiz; web preloader da aynı tasarımı kullanır.
           return const MaterialApp(
             debugShowCheckedModeBanner: false,
-            home: Scaffold(
-              body: AppBackdrop(
-                showGrid: false,
-                child: Center(child: CircularProgressIndicator()),
-              ),
-            ),
+            home: SplashScreen(),
           );
         }
         if (!_didTrackStartup) {
