@@ -10,6 +10,7 @@ import '../widgets/koala_bottom_nav.dart';
 import 'chat_list_screen.dart';
 import 'home_screen.dart';
 import 'projeler_screen.dart';
+import 'splash_screen.dart';
 import 'style_discovery_live_screen.dart';
 
 /// Cold-start guard — entry paywall should appear at most once per app launch,
@@ -232,10 +233,10 @@ class MainShellState extends ConsumerState<MainShell> {
   @override
   Widget build(BuildContext context) {
     if (_gate != _GateState.passed) {
-      return Scaffold(
-        backgroundColor: KoalaColors.bg,
-        body: const SizedBox.expand(),
-      );
+      // Pro durumu çözülene kadar SplashScreen görünür kalır — SS1'in
+      // progress'i kesintisiz akar, gate çözülünce paywall onun üstüne açılır.
+      // Böylece splash ile Pro popup arasında boş/krem flaş olmaz.
+      return const SplashScreen();
     }
     return _buildHome(context);
   }

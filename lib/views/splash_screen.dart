@@ -2,12 +2,14 @@ import 'package:flutter/material.dart';
 
 /// Uygulama boot / async init sırasında gösterilen splash ekranı.
 ///
-/// Tasarım: yumuşak, ferah iç-mimari estetiği. Arka plan tamamen kod ile
-/// çizilir (hiç asset yüklenmez — splash anında çıkar). Ortada büyük koala
-/// ikonu, altında ince indeterminate gradient progress bar. Hiç metin yok.
+/// Tasarım: yumuşak, ferah iç-mimari estetiği. Kod-çizimli krem gradient
+/// taban ilk frame'i anında kaplar; üstüne ~8KB'lık soft iç-mekan görseli
+/// yumuşakça fade-in olur. Ortada gölgeli koala ikonu, altında ince
+/// indeterminate gradient progress bar. Hiç metin yok.
 ///
-/// Android native splash (values*/styles.xml) ve web preloader (index.html)
-/// aynı krem tonunu (#F7F4EF) kullanır; bu ekran devralınca geçiş kesintisiz.
+/// Android native splash (values*/styles.xml) aynı krem tonunu (#F7F4EF)
+/// kullanır; bu ekran devralınca geçiş kesintisiz. Web tarafında ayrı bir
+/// preloader yok — motor inerken body krem (#F7F4EF) görünür, sonra bu ekran.
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
 
@@ -41,6 +43,12 @@ class _SplashScreenState extends State<SplashScreen>
       const AssetImage('assets/images/koala_splash_icon.png'),
       context,
     );
+    // Soft iç-mekan arka planı — ~8KB webp, kod-çizimli gradient zaten ilk
+    // frame'i kapladığı için yüklenme gecikmesi UI'da görünmez.
+    precacheImage(
+      const AssetImage('assets/images/splash_bg.webp'),
+      context,
+    );
   }
 
   @override
@@ -52,8 +60,8 @@ class _SplashScreenState extends State<SplashScreen>
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
-    // Logo: ekran genişliğinin ~%40'ı, 160-180 arası clamp'lenir.
-    final logoSize = (size.width * 0.40).clamp(160.0, 180.0);
+    // Logo: ekran genişliğinin ~%42'si, 168-188 arası clamp'lenir.
+    final logoSize = (size.width * 0.42).clamp(168.0, 188.0);
 
     return Scaffold(
       body: DecoratedBox(
@@ -71,22 +79,41 @@ class _SplashScreenState extends State<SplashScreen>
           ),
         ),
         child: Stack(
+          fit: StackFit.expand,
           children: [
-            // Derinlik için iki büyük, çok düşük opaklıkta blur daire.
-            Positioned(
-              top: -size.width * 0.35,
-              right: -size.width * 0.30,
-              child: _SoftBlob(
-                diameter: size.width * 0.85,
-                color: const Color(0xFFFFFFFF).withValues(alpha: 0.45),
+            // Soft iç-mekan arka planı — gradient tabanın üstüne yumuşakça
+            // fade-in olur. Görsel hazır değilken gradient görünür (beyaz
+            // flaş yok); ~8KB olduğu için yüklenme gecikme yaşatmaz.
+            Positioned.fill(
+              child: Image.asset(
+                'assets/images/splash_bg.webp',
+                fit: BoxFit.cover,
+                frameBuilder: (context, child, frame, wasSync) {
+                  return AnimatedOpacity(
+                    opacity: (wasSync || frame != null) ? 1.0 : 0.0,
+                    duration: const Duration(milliseconds: 500),
+                    curve: Curves.easeOut,
+                    child: child,
+                  );
+                },
               ),
             ),
-            Positioned(
-              bottom: -size.width * 0.40,
-              left: -size.width * 0.30,
-              child: _SoftBlob(
-                diameter: size.width * 0.90,
-                color: const Color(0xFF9FB4D6).withValues(alpha: 0.20),
+            // Logonun arkasında yumuşak beyaz hale — koala + gölge net
+            // okunsun, arka plan gözü yormasın.
+            Center(
+              child: Container(
+                width: size.width * 0.95,
+                height: size.width * 0.95,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: RadialGradient(
+                    colors: [
+                      Colors.white.withValues(alpha: 0.88),
+                      Colors.white.withValues(alpha: 0.0),
+                    ],
+                    stops: const [0.34, 1.0],
+                  ),
+                ),
               ),
             ),
             // Logo + progress bar.
@@ -100,11 +127,21 @@ class _SplashScreenState extends State<SplashScreen>
                     decoration: BoxDecoration(
                       borderRadius:
                           BorderRadius.circular(logoSize * 0.225),
+                      // İki katmanlı gölge — derinlik + zemine oturma hissi.
                       boxShadow: [
+                        // Geniş, yumuşak ambient gölge (havada süzülme).
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.18),
+                          blurRadius: 64,
+                          offset: const Offset(0, 30),
+                          spreadRadius: -10,
+                        ),
+                        // Dar, koyu temas gölgesi (ikonu zemine bağlar).
                         BoxShadow(
                           color: Colors.black.withValues(alpha: 0.12),
-                          blurRadius: 30,
+                          blurRadius: 20,
                           offset: const Offset(0, 10),
+                          spreadRadius: -6,
                         ),
                       ],
                     ),
@@ -142,28 +179,6 @@ class _SplashScreenState extends State<SplashScreen>
               ),
             ),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-/// Büyük, çok yumuşak (blur'lu) renk lekesi — derinlik hissi için.
-class _SoftBlob extends StatelessWidget {
-  const _SoftBlob({required this.diameter, required this.color});
-
-  final double diameter;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: diameter,
-      height: diameter,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        gradient: RadialGradient(
-          colors: [color, color.withValues(alpha: 0.0)],
         ),
       ),
     );

@@ -75,7 +75,7 @@
        kullanıcıya yeni index.html veriyor (no-cache). -->
   <script>
     (function () {
-      var BUILD_VERSION = '1.0.98+102';
+      var BUILD_VERSION = '1.0.102+106';
       try {
         var KEY = 'koala_build_v';
         var ONCE = 'koala_kill_done';
@@ -163,104 +163,13 @@
       background-color: white !important;
     }
 
-    /* Pre-Flutter loader — yumuşak, ferah iç-mimari estetiği. Arka plan
-       tamamen CSS gradient (asset yüklenmez → splash anında çıkar). Ortada
-       büyük koala ikonu, altında ince gradient progress bar. Metin yok.
-       Flutter mount olunca flt-glass-pane üstünü kapatır ve CSS rule'u ile
-       gizlenir (layout'ta kalmaz). Android/Flutter splash ile aynı tasarım. */
+    /* Motor inerken görünen taban — Flutter SplashScreen'in krem tonuyla
+       (#F7F4EF) birebir aynı. Ayrı bir preloader yok; SplashScreen tek
+       açılış ekranı, geçiş kesintisiz. */
     html, body { margin: 0; padding: 0; background-color: #F7F4EF; }
-    #koala-preloader {
-      position: fixed;
-      inset: 0;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      background: linear-gradient(180deg, #F7F4EF 0%, #EFEAE3 55%, #E8E9EE 100%);
-      z-index: 0;
-      transition: opacity 220ms ease-out;
-    }
-    #koala-preloader .kp-logo {
-      width: 160px;
-      height: 160px;
-      /* Kare canvas üstündeki beyaz köşe üçgenlerini kırp. */
-      border-radius: 22%;
-      /* ?v=2 — Eski Flutter-default ikonu immutable cache'te kalmış
-         kullanıcılara yeni Koala ikonu zorla yüklet. Deploy başına
-         bir kez artır, gerekmedikçe değiştirme. */
-      background-image: url('icons/Icon-512.png?v=2');
-      background-size: cover;
-      background-position: center;
-      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12);
-      margin-bottom: 32px;
-    }
-    /* İnce indeterminate gradient progress bar. */
-    #koala-preloader .kp-bar {
-      position: relative;
-      width: 180px;
-      height: 6px;
-      border-radius: 999px;
-      background-color: #E0DCEC;
-      overflow: hidden;
-    }
-    #koala-preloader .kp-bar::before {
-      content: "";
-      position: absolute;
-      top: 0;
-      left: 0;
-      height: 100%;
-      width: 45%;
-      border-radius: 999px;
-      background: linear-gradient(90deg, #6C63FF 0%, #9B5CFF 100%);
-      animation: kp-sweep 1.4s ease-in-out infinite;
-    }
-    /* Segment soldan sağa sürekli süzülür (içeri/dışarı kayar). */
-    @keyframes kp-sweep {
-      0%   { left: -45%; }
-      100% { left: 100%; }
-    }
-    /* Flutter canvas gelir gelmez loader'ı gizle.
-       Modern tarayıcılar için :has() — eski tarayıcılar için JS fallback (aşağıda). */
-    body:has(flt-glass-pane) #koala-preloader,
-    #koala-preloader.hidden { opacity: 0; pointer-events: none; }
   </style>
 </head>
 <body>
-  <div id="koala-preloader" aria-hidden="true">
-    <div class="kp-logo"></div>
-    <div class="kp-bar"></div>
-  </div>
-  <script>
-    // JS fallback — modern :has() selector çalışmayan tarayıcılar için.
-    // flt-glass-pane DOM'a ekleniyor mu poll et; eklenince preloader'ı gizle.
-    // Ayrıca 20sn hard cap — Flutter'ın bir nedenle mount olamadığı durumda
-    // kullanıcı sonsuz spinner görmesin (en azından beyaz ekrana düş).
-    (function() {
-      var preloader = document.getElementById('koala-preloader');
-      if (!preloader) return;
-      var hidden = false;
-      function hide() {
-        if (hidden) return;
-        hidden = true;
-        preloader.classList.add('hidden');
-        setTimeout(function() {
-          if (preloader.parentNode) preloader.parentNode.removeChild(preloader);
-        }, 300);
-      }
-      // Poll for flt-glass-pane (Flutter mounted) every 100ms.
-      var pollId = setInterval(function() {
-        if (document.querySelector('flt-glass-pane')) {
-          clearInterval(pollId);
-          hide();
-        }
-      }, 100);
-      // Hard 20s cap so we never trap user on the preloader screen.
-      setTimeout(function() {
-        clearInterval(pollId);
-        hide();
-      }, 20000);
-    })();
-  </script>
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>
