@@ -60,8 +60,9 @@ class _SplashScreenState extends State<SplashScreen>
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
-    // Logo: ekran genişliğinin ~%42'si, 168-188 arası clamp'lenir.
-    final logoSize = (size.width * 0.42).clamp(168.0, 188.0);
+    // Logo: ekran genişliğinin ~%56'sı, 216-252 arası clamp'lenir — splash'ın
+    // ana öğesi, belirgin ve büyük dursun.
+    final logoSize = (size.width * 0.56).clamp(216.0, 252.0);
 
     return Scaffold(
       body: DecoratedBox(
@@ -98,24 +99,6 @@ class _SplashScreenState extends State<SplashScreen>
                 },
               ),
             ),
-            // Logonun arkasında yumuşak beyaz hale — koala + gölge net
-            // okunsun, arka plan gözü yormasın.
-            Center(
-              child: Container(
-                width: size.width * 0.95,
-                height: size.width * 0.95,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: RadialGradient(
-                    colors: [
-                      Colors.white.withValues(alpha: 0.88),
-                      Colors.white.withValues(alpha: 0.0),
-                    ],
-                    stops: const [0.34, 1.0],
-                  ),
-                ),
-              ),
-            ),
             // Logo + progress bar.
             Center(
               child: Column(
@@ -127,21 +110,20 @@ class _SplashScreenState extends State<SplashScreen>
                     decoration: BoxDecoration(
                       borderRadius:
                           BorderRadius.circular(logoSize * 0.225),
-                      // İki katmanlı gölge — derinlik + zemine oturma hissi.
+                      // Net, derli toplu gölge — ikonu zemine oturtur ama
+                      // etrafa yayılıp dağınık/puslu görünmez.
                       boxShadow: [
-                        // Geniş, yumuşak ambient gölge (havada süzülme).
                         BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.18),
-                          blurRadius: 64,
-                          offset: const Offset(0, 30),
-                          spreadRadius: -10,
+                          color: Colors.black.withValues(alpha: 0.22),
+                          blurRadius: 34,
+                          offset: const Offset(0, 18),
+                          spreadRadius: -14,
                         ),
-                        // Dar, koyu temas gölgesi (ikonu zemine bağlar).
                         BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.12),
-                          blurRadius: 20,
-                          offset: const Offset(0, 10),
-                          spreadRadius: -6,
+                          color: Colors.black.withValues(alpha: 0.10),
+                          blurRadius: 9,
+                          offset: const Offset(0, 4),
+                          spreadRadius: -3,
                         ),
                       ],
                     ),
