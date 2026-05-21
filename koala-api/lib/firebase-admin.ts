@@ -70,6 +70,17 @@ export function getAdminAuth(): Auth | null {
   }
 }
 
+/**
+ * Init edilmiş Firebase Admin App singleton'ını döndürür (init edemiyorsa null).
+ *
+ * `getAdminAuth` ile AYNI `tryInit()`'i kullanır — yani aynı App, aynı
+ * credential. Push gönderimi (`lib/push.ts`) bu App'i `getMessaging()` için
+ * REUSE eder; ayrı bir initializeApp ÇAĞRILMAZ.
+ */
+export function getAdminApp(): App | null {
+  return tryInit();
+}
+
 export function adminInitFailReason(): string | null {
   return initFailReason;
 }

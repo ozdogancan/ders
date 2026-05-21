@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <color name="ic_launcher_background">#6B5BE6</color>
+    <!-- Accent color applied to FCM status-bar notifications (Koala purple). -->
+    <color name="koala_notification_accent">#6C63FF</color>
 </resources>

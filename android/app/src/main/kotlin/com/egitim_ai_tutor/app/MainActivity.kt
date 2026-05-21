@@ -1,5 +1,9 @@
 package com.egitim_ai_tutor.app
 
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.os.Build
+import android.os.Bundle
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import android.speech.tts.Voice
@@ -14,6 +18,33 @@ class MainActivity : FlutterActivity(), TextToSpeech.OnInitListener {
     private var tts: TextToSpeech? = null
     private var isTtsReady = false
     private var pendingSpeakResult: MethodChannel.Result? = null
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        createNotificationChannels()
+    }
+
+    /**
+     * Creates FCM notification channels with human-readable Turkish names so
+     * status-bar notifications group properly and the channel settings screen
+     * shows meaningful labels (instead of the raw channel id).
+     */
+    private fun createNotificationChannels() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+        val manager = getSystemService(NotificationManager::class.java) ?: return
+        val channels = listOf(
+            Triple("koala_general", "Genel", NotificationManager.IMPORTANCE_DEFAULT),
+            Triple("koala_messages", "Mesajlar", NotificationManager.IMPORTANCE_HIGH),
+            Triple("koala_design", "Tasarım Hazır", NotificationManager.IMPORTANCE_HIGH),
+        )
+        for ((id, name, importance) in channels) {
+            val channel = NotificationChannel(id, name, importance).apply {
+                enableVibration(true)
+                enableLights(true)
+            }
+            manager.createNotificationChannel(channel)
+        }
+    }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)

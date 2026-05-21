@@ -22,10 +22,15 @@ $EVLUMBA_ANON_KEY     = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYm
 # RevenueCat public Android SDK key (goog_...). Required for in-app purchases.
 # Get it from: https://app.revenuecat.com -> Project Settings -> API keys -> Public Android key
 $REVENUECAT_ANDROID_KEY = $env:REVENUECAT_ANDROID_KEY
-if ([string]::IsNullOrEmpty($REVENUECAT_ANDROID_KEY)) {
-    Write-Host "WARN: REVENUECAT_ANDROID_KEY env var not set - purchases will be disabled in this build." -ForegroundColor Yellow
-    Write-Host "      Set with: `$env:REVENUECAT_ANDROID_KEY = 'goog_xxxx...' before running this script." -ForegroundColor Yellow
-    $REVENUECAT_ANDROID_KEY = "YOUR_REVENUECAT_PUBLIC_KEY"
+if ([string]::IsNullOrEmpty($REVENUECAT_ANDROID_KEY) -or $REVENUECAT_ANDROID_KEY -eq "YOUR_REVENUECAT_PUBLIC_KEY") {
+    Write-Host "ERROR: REVENUECAT_ANDROID_KEY env var not set." -ForegroundColor Red
+    Write-Host "       A build without it ships with purchases DISABLED - never publish that." -ForegroundColor Red
+    Write-Host "       Set with: `$env:REVENUECAT_ANDROID_KEY = 'goog_xxxx...' then re-run." -ForegroundColor Yellow
+    exit 1
+}
+if (-not $REVENUECAT_ANDROID_KEY.StartsWith("goog_")) {
+    Write-Host "ERROR: REVENUECAT_ANDROID_KEY must start with 'goog_' (Android public SDK key)." -ForegroundColor Red
+    exit 1
 }
 
 # -- Pre-flight checks --

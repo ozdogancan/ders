@@ -50,6 +50,19 @@
                 <data android:scheme="https" android:host="koala.evlumba.com" />
             </intent-filter>
         </activity>
+        <!-- FCM: monochrome status-bar icon (avoids ugly white square / full-color app icon) -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@drawable/ic_notification" />
+        <!-- FCM: purple accent color applied to the notification -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_color"
+            android:resource="@color/koala_notification_accent" />
+        <!-- FCM: default channel id for notification messages (must match a created channel) -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="koala_general" />
+
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data
