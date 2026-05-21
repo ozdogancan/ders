@@ -194,79 +194,10 @@ class _StyleDiscoveryLiveScreenState
               alignment: Alignment.bottomCenter,
               child: Transform.translate(
                 offset: Offset(0, (1 - t) * 24),
-                child: SafeArea(
+                child: const SafeArea(
                   child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 360),
-                      child: Material(
-                        color: Colors.white,
-                        borderRadius: const BorderRadius.vertical(
-                          top: Radius.circular(28),
-                          bottom: Radius.circular(28),
-                        ),
-                        child: Padding(
-                          padding: const EdgeInsets.all(20),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              // Tutorial üst görseli — Supabase Storage'dan
-                              // gelir, yoksa bundled fallback. Asset'i Gemini
-                              // ile üretip pro-assets/realize-tutorial.webp
-                              // path'ine upload et.
-                              const _RealizeHintImage(),
-                              const SizedBox(height: 18),
-                              const Text(
-                                'Bunu kendi mekanında dene',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.w800,
-                                  color: KoalaColors.text,
-                                  letterSpacing: -0.2,
-                                  height: 1.25,
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              const Text(
-                                'Beğendiğin tasarımı seç, AI senin mekanının fotoğrafına uygular — saniyeler içinde.',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w500,
-                                  color: KoalaColors.textSec,
-                                  height: 1.45,
-                                ),
-                              ),
-                              const SizedBox(height: 20),
-                              Material(
-                                color: const Color(0xFF6C63FF),
-                                borderRadius: BorderRadius.circular(999),
-                                child: InkWell(
-                                  borderRadius: BorderRadius.circular(999),
-                                  onTap: () => Navigator.of(ctx).pop(),
-                                  child: const Padding(
-                                    padding: EdgeInsets.symmetric(
-                                        vertical: 14, horizontal: 20),
-                                    child: Text(
-                                      'Anladım',
-                                      textAlign: TextAlign.center,
-                                      style: TextStyle(
-                                        fontSize: 15,
-                                        fontWeight: FontWeight.w800,
-                                        color: Colors.white,
-                                        letterSpacing: 0.1,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
+                    padding: EdgeInsets.all(16),
+                    child: _SwipeIntroCarousel(),
                   ),
                 ),
               ),
@@ -1917,6 +1848,187 @@ class _ProUpsellCard extends StatelessWidget {
 /// tek bir mekan tasarımına dönüştüğünü gösterir: sol = beğendiğin tasarım,
 /// sağ = senin mekanın, ortada "+" → tek sonuç.
 ///
+/// Swipe ekranı tanıtım carousel'i — sağa kaydırılabilir 3 sayfa:
+/// 1) mekana uygula, 2) tarzını keşfet, 3) sor. Oturum başına bir kez.
+class _IntroPage {
+  const _IntroPage({this.image, required this.title, required this.body});
+
+  /// null → kod-çizimli [_RealizeHintImage]; aksi halde asset yolu.
+  final String? image;
+  final String title;
+  final String body;
+}
+
+class _SwipeIntroCarousel extends StatefulWidget {
+  const _SwipeIntroCarousel();
+
+  @override
+  State<_SwipeIntroCarousel> createState() => _SwipeIntroCarouselState();
+}
+
+class _SwipeIntroCarouselState extends State<_SwipeIntroCarousel> {
+  final PageController _pc = PageController();
+  int _idx = 0;
+
+  static const List<_IntroPage> _pages = [
+    _IntroPage(
+      title: 'Bunu kendi mekanında dene',
+      body: 'Beğendiğin tasarımı seç, AI senin mekanının fotoğrafına '
+          'uygular — saniyeler içinde.',
+    ),
+    _IntroPage(
+      image: 'assets/images/intro_style.webp',
+      title: 'Tarzını keşfet',
+      body: 'Tasarımları kaydır; beğendiğin sağa gitsin. Koala zevkini '
+          'öğrenip sana daha iyi öneriler sunar.',
+    ),
+    _IntroPage(
+      image: 'assets/images/intro_ask.webp',
+      title: 'Merak ettiğini sor',
+      body: 'Beğendiğin tasarımın altındaki "Sor" ile tek dokunuşla '
+          'uzmana danış, fikrini al.',
+    ),
+  ];
+
+  @override
+  void dispose() {
+    _pc.dispose();
+    super.dispose();
+  }
+
+  void _onButton() {
+    if (_idx < _pages.length - 1) {
+      _pc.nextPage(
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOutCubic,
+      );
+    } else {
+      Navigator.of(context).pop();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isLast = _idx == _pages.length - 1;
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 360),
+      child: Material(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(28),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 18),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              SizedBox(
+                height: 300,
+                child: PageView.builder(
+                  controller: _pc,
+                  itemCount: _pages.length,
+                  onPageChanged: (i) => setState(() => _idx = i),
+                  itemBuilder: (_, i) => _IntroPageView(page: _pages[i]),
+                ),
+              ),
+              const SizedBox(height: 14),
+              // Nokta göstergeleri.
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: List.generate(_pages.length, (i) {
+                  final on = i == _idx;
+                  return AnimatedContainer(
+                    duration: const Duration(milliseconds: 240),
+                    margin: const EdgeInsets.symmetric(horizontal: 3),
+                    width: on ? 20 : 7,
+                    height: 7,
+                    decoration: BoxDecoration(
+                      color: on
+                          ? const Color(0xFF6C63FF)
+                          : const Color(0xFFD9D5EC),
+                      borderRadius: BorderRadius.circular(99),
+                    ),
+                  );
+                }),
+              ),
+              const SizedBox(height: 16),
+              Material(
+                color: const Color(0xFF6C63FF),
+                borderRadius: BorderRadius.circular(999),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(999),
+                  onTap: _onButton,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    child: Text(
+                      isLast ? 'Başla' : 'İleri',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.white,
+                        letterSpacing: 0.1,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _IntroPageView extends StatelessWidget {
+  const _IntroPageView({required this.page});
+  final _IntroPage page;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (page.image == null)
+          const _RealizeHintImage()
+        else
+          ClipRRect(
+            borderRadius: BorderRadius.circular(20),
+            child: Image.asset(
+              page.image!,
+              height: 150,
+              fit: BoxFit.cover,
+            ),
+          ),
+        const SizedBox(height: 16),
+        Text(
+          page.title,
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.w800,
+            color: KoalaColors.text,
+            letterSpacing: -0.2,
+            height: 1.25,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          page.body,
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+            color: KoalaColors.textSec,
+            height: 1.45,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 /// Gemini ile profesyonel bir illüstrasyon üretmek istersen
 /// `pro-assets/realize-tutorial.webp` path'ine upload et; bu bileşeni
 /// Image.network ile değiştir.
