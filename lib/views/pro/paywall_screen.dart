@@ -229,11 +229,11 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 _buildHero(),
-                const SizedBox(height: 14),
+                const SizedBox(height: 12),
                 _buildTitle(),
-                const SizedBox(height: 10),
+                const SizedBox(height: 8),
                 _buildBulletsGrid(),
-                const SizedBox(height: 10),
+                const SizedBox(height: 8),
                 if (!_trialUsed) ...[
                   _buildTrialToggle(),
                   const SizedBox(height: 8),
@@ -252,59 +252,30 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
     );
   }
 
-  // ─── Top bar ─────────────────────────────────────────────
-  Widget _buildTopBar() {
-    return SizedBox(
-      height: 40,
-      child: Row(
-        children: [
-          _CircleIconButton(
-            icon: Icons.close,
-            onTap: () => Navigator.of(context).pop(),
-          ),
-          const Spacer(),
-          GestureDetector(
-            onTap: _onRestore,
-            child: Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: _kBorder),
-              ),
-              child: const Text(
-                'Geri Yükle',
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                  color: KoalaColors.text,
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   // ─── Hero (auto-rotating 3-slide value-prop carousel) ───
   Widget _buildHero() {
     return SizedBox(
       height: 170,
       child: DecoratedBox(
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(22),
+          borderRadius: BorderRadius.circular(24),
           boxShadow: [
             BoxShadow(
-              color: _kPurple.withValues(alpha: 0.18),
-              blurRadius: 22,
-              offset: const Offset(0, 8),
+              color: _kPurple.withValues(alpha: 0.10),
+              blurRadius: 28,
+              offset: const Offset(0, 14),
+              spreadRadius: -6,
+            ),
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.05),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+              spreadRadius: -4,
             ),
           ],
         ),
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(22),
+          borderRadius: BorderRadius.circular(24),
           child: Stack(
             fit: StackFit.expand,
             children: [
@@ -430,13 +401,21 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
       children: [
         for (final b in bullets)
           Padding(
-            padding: const EdgeInsets.symmetric(vertical: 4),
+            padding: const EdgeInsets.symmetric(vertical: 3),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                const Icon(Icons.workspace_premium,
-                    color: _kPurple, size: 20),
-                const SizedBox(width: 10),
+                Container(
+                  width: 30,
+                  height: 30,
+                  decoration: BoxDecoration(
+                    color: _kPurpleSoft,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.workspace_premium,
+                      color: _kPurple, size: 17),
+                ),
+                const SizedBox(width: 12),
                 Expanded(
                   child: Text(
                     b,
@@ -459,12 +438,12 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
   // ─── Trial toggle row ───────────────────────────────────
   Widget _buildTrialToggle() {
     return Container(
-      height: 44,
-      padding: const EdgeInsets.symmetric(horizontal: 14),
+      height: 46,
+      padding: const EdgeInsets.symmetric(horizontal: 16),
       decoration: BoxDecoration(
         color: _kPurpleSoft,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: _kBorder),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _kBorder.withValues(alpha: 0.6)),
       ),
       child: Row(
         children: [
@@ -535,23 +514,27 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
 
   // ─── CTA — purple gradient + looping shimmer sweep ──────
   Widget _buildCta() {
-    final button = SizedBox(
+    final button = Container(
       width: double.infinity,
-      height: 52,
+      height: 54,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+            color: _kPurple.withValues(alpha: 0.34),
+            blurRadius: 24,
+            offset: const Offset(0, 10),
+            spreadRadius: -4,
+          ),
+        ],
+      ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(18),
         child: DecoratedBox(
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
               colors: [_kPurple, _kPurpleDeep],
             ),
-            boxShadow: [
-              BoxShadow(
-                color: _kPurple.withValues(alpha: 0.32),
-                blurRadius: 16,
-                offset: const Offset(0, 6),
-              ),
-            ],
           ),
           child: Material(
             color: Colors.transparent,
@@ -670,7 +653,13 @@ class _CircleIconButton extends StatelessWidget {
         decoration: BoxDecoration(
           color: Colors.white,
           shape: BoxShape.circle,
-          border: Border.all(color: _kBorder),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.12),
+              blurRadius: 10,
+              offset: const Offset(0, 3),
+            ),
+          ],
         ),
         child: Icon(icon, color: KoalaColors.text, size: 20),
       ),
@@ -706,15 +695,26 @@ class _PlanCard extends StatelessWidget {
         clipBehavior: Clip.none,
         children: [
           AnimatedContainer(
-            duration: const Duration(milliseconds: 160),
-            padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+            duration: const Duration(milliseconds: 180),
+            curve: Curves.easeOut,
+            padding: const EdgeInsets.fromLTRB(16, 13, 16, 13),
             decoration: BoxDecoration(
               color: selected ? _kPurpleSoft : Colors.white,
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(18),
               border: Border.all(
-                color: selected ? _kPurple : _kBorder,
-                width: selected ? 2 : 1,
+                color: selected ? _kPurple : _kBorder.withValues(alpha: 0.55),
+                width: selected ? 1.8 : 1,
               ),
+              boxShadow: [
+                BoxShadow(
+                  color: selected
+                      ? _kPurple.withValues(alpha: 0.16)
+                      : Colors.black.withValues(alpha: 0.05),
+                  blurRadius: selected ? 18 : 12,
+                  offset: const Offset(0, 6),
+                  spreadRadius: -4,
+                ),
+              ],
             ),
             child: Row(
               children: [
@@ -776,10 +776,10 @@ class _PlanCard extends StatelessWidget {
           if (badge != null)
             Positioned(
               top: -10,
-              left: 14,
+              left: 16,
               child: Container(
                 padding:
-                    const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
                   gradient: const LinearGradient(
                       colors: [_kPurple, _kPurpleDeep]),
