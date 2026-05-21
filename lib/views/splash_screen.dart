@@ -40,7 +40,7 @@ class _SplashScreenState extends State<SplashScreen>
     super.didChangeDependencies();
     // İkonu önceden cache'le — devam eden ekranlarda anında hazır olsun.
     precacheImage(
-      const AssetImage('assets/images/koala_splash_icon.png'),
+      const AssetImage('assets/images/koala_splash_logo.webp'),
       context,
     );
     // Soft iç-mekan arka planı — ~8KB webp, kod-çizimli gradient zaten ilk
@@ -131,7 +131,7 @@ class _SplashScreenState extends State<SplashScreen>
                       borderRadius:
                           BorderRadius.circular(logoSize * 0.225),
                       child: Image.asset(
-                        'assets/images/koala_splash_icon.png',
+                        'assets/images/koala_splash_logo.webp',
                         width: logoSize,
                         height: logoSize,
                         fit: BoxFit.cover,
