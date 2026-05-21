@@ -237,7 +237,7 @@ class _MekanWizardScreenState extends State<MekanWizardScreen> {
       );
       if (mounted) setState(() => _step++);
     } else {
-      _finish();
+      await _finish();
     }
   }
 
@@ -254,7 +254,17 @@ class _MekanWizardScreenState extends State<MekanWizardScreen> {
     setState(() => _step--);
   }
 
-  void _finish() {
+  Future<void> _finish() async {
+    // Pro paywall — kullanıcı widget'ı baştan sona gezdi; tasarım üretimi
+    // Pro özelliği olduğu için paywall tam burada (yerleşim seçilip
+    // "Devam Et"e basıldıktan sonra) çıkar.
+    final snap = await QuotaService.fetch();
+    if (!snap.isPro) {
+      if (!mounted) return;
+      await showPaywall(context, trigger: 'wizard_finish');
+      final after = await QuotaService.fetch();
+      if (!after.isPro || !mounted) return; // abone olmadı → wizard'da kal
+    }
     // Pro stiller için customPromptFlavor'ı prompt'a inject et — backend'de
     // henüz preview/recipe yok, AI customPrompt ile premium varyantı üretir.
     String? effectiveCustomPrompt = _customPrompt;
@@ -272,6 +282,7 @@ class _MekanWizardScreenState extends State<MekanWizardScreen> {
       paletteColors: _palette!.colors,
       layout: _layout,
     );
+    if (!mounted) return;
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(
         builder: (_) => MekanFlowScreen(
@@ -325,17 +336,8 @@ class _MekanWizardScreenState extends State<MekanWizardScreen> {
                     selectedTheme: _theme,
                     customPrompt: _customPrompt,
                     onSelectTheme: (t) async {
-                      // Pro stiller: önce paywall gate. Pro user direkt seçer
-                      // ve customPromptFlavor _finish()'te prompt'a inject edilir.
-                      if (t.isPro) {
-                        final snap = await QuotaService.fetch();
-                        if (!snap.isPro) {
-                          if (!mounted) return;
-                          await showPaywall(context, trigger: 'premium_styles');
-                          return;
-                        }
-                      }
-                      if (!mounted) return;
+                      // Pro stiller dahil tüm stiller serbestçe seçilebilir;
+                      // tek Pro paywall wizard sonunda (_finish) çıkar.
                       setState(() {
                         _theme = t;
                         _customPrompt = null;

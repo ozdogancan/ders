@@ -14,7 +14,6 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../core/theme/koala_tokens.dart';
-import '../helpers/paywall_router.dart';
 import '../providers/pro_status_provider.dart';
 import '../services/chat_persistence.dart';
 import '../services/analytics_service.dart';
@@ -348,14 +347,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   }
 
   Future<void> _showPicker() async {
-    // Pro paywall gate — restyle is Pro-only. Block at the BUTTON onTap so
-    // free users never enter the picker / MekanFlow / waiting screen.
-    final pro = ref.read(proStatusProvider).value?.isPro ?? false;
-    if (!pro) {
-      await showPaywall(context, trigger: 'home_hero_button');
-      return;
-    }
-    if (!mounted) return;
+    // Paywall artık burada DEĞİL — kullanıcı widget'ı (wizard) baştan sona
+    // serbestçe gezsin; Pro paywall wizard'ın sonunda (yerleşim adımında
+    // "Devam Et"e basınca) çıkar. Bkz. mekan_wizard_screen `_finish()`.
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
