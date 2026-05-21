@@ -407,7 +407,9 @@ class _StyleDiscoveryLiveScreenState
   }
 
   void _precacheNext() {
-    for (int i = _index + 1; i < math.min(_index + 3, _deck.length); i++) {
+    // 3 kart ileriyi ısıt — deck'te current + next zaten mount; ekstra bir
+    // kart daha cache'te hazır olunca hızlı kaydırmada bile boş kart olmaz.
+    for (int i = _index + 1; i < math.min(_index + 4, _deck.length); i++) {
       final url = _coverOf(_deck[i]);
       if (url.isNotEmpty) {
         precacheImage(CachedNetworkImageProvider(url), context);
@@ -489,6 +491,10 @@ class _StyleDiscoveryLiveScreenState
     }
     final card = _currentCard;
     if (card == null) return;
+    // Swipe başlar başlamaz sıradaki kartların görsellerini ısıt — çıkış
+    // animasyonu (280ms) bitip yeni kart öne geçmeden cache'e girsinler.
+    // Önceden yalnızca _onExitComplete'te (animasyon bitince) çağrılıyordu.
+    _precacheNext();
     // Undo için snapshot al — exit animasyonu bitince _index++ oluyor.
     _history.add({
       'index': _index,
