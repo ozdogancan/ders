@@ -45,6 +45,12 @@
   <!-- Preload -->
   <link rel="preload" href="flutter_bootstrap.js" as="script">
 
+  <!-- Splash görselleri — preloader ve Flutter SplashScreen aynı dosyaları
+       kullanır; preload ile logo/arka plan ilk anda hazır olur, "sonradan
+       gelme" olmaz. Flutter tarafı da bu cache'ten anında okur. -->
+  <link rel="preload" as="image" href="assets/assets/images/koala_splash_logo.webp" type="image/webp">
+  <link rel="preload" as="image" href="assets/assets/images/splash_bg.webp" type="image/webp">
+
   <!-- Plus Jakarta Sans preload — google_fonts paketi runtime'da font
        indirdiği için ilk paint'te Roboto fallback gösterilip sonra
        custom font geldiğinde text re-layout oluyordu ("snap"). Headline
@@ -75,7 +81,7 @@
        kullanıcıya yeni index.html veriyor (no-cache). -->
   <script>
     (function () {
-      var BUILD_VERSION = '1.0.104+108';
+      var BUILD_VERSION = '1.0.105+109';
       try {
         var KEY = 'koala_build_v';
         var ONCE = 'koala_kill_done';
@@ -163,13 +169,98 @@
       background-color: white !important;
     }
 
-    /* Motor inerken görünen taban — Flutter SplashScreen'in krem tonuyla
-       (#F7F4EF) birebir aynı. Ayrı bir preloader yok; SplashScreen tek
-       açılış ekranı, geçiş kesintisiz. */
+    /* Motor inerken görünen taban — Flutter SplashScreen'in krem tonuyla aynı. */
     html, body { margin: 0; padding: 0; background-color: #F7F4EF; }
+
+    /* Pre-Flutter splash — Flutter SplashScreen ile BİREBİR aynı: aynı
+       koala logosu, aynı soft iç-mekan arka planı, aynı boyut/gölge/bar.
+       HTML parse olur olmaz görünür (logo anında gelir, motor inmesini
+       beklemez). Flutter mount olunca aynı görüntü devralır → geçiş
+       görünmez, "ikinci ekran" hissi yok. */
+    #koala-preloader {
+      position: fixed;
+      inset: 0;
+      z-index: 10;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background-color: #F7F4EF;
+      background-image: url('assets/assets/images/splash_bg.webp');
+      background-size: cover;
+      background-position: center;
+      transition: opacity 250ms ease-out;
+    }
+    #koala-preloader .kp-logo {
+      width: clamp(216px, 56vw, 252px);
+      aspect-ratio: 1 / 1;
+      border-radius: 22.5%;
+      background-image: url('assets/assets/images/koala_splash_logo.webp');
+      background-size: cover;
+      background-position: center;
+      /* Flutter'daki iki katmanlı net gölgenin CSS karşılığı. */
+      box-shadow: 0 18px 34px -14px rgba(0, 0, 0, 0.22),
+                  0 4px 9px -3px rgba(0, 0, 0, 0.10);
+      margin-bottom: 32px;
+    }
+    #koala-preloader .kp-bar {
+      position: relative;
+      width: 180px;
+      height: 6px;
+      border-radius: 999px;
+      background-color: #E0DCEC;
+      overflow: hidden;
+    }
+    #koala-preloader .kp-bar::before {
+      content: "";
+      position: absolute;
+      top: 0;
+      left: 0;
+      height: 100%;
+      width: 45%;
+      border-radius: 999px;
+      background: linear-gradient(90deg, #6C63FF 0%, #9B5CFF 100%);
+      animation: kp-sweep 1.4s ease-in-out infinite;
+    }
+    @keyframes kp-sweep {
+      0%   { left: -45%; }
+      100% { left: 100%; }
+    }
+    #koala-preloader.hidden { opacity: 0; pointer-events: none; }
   </style>
 </head>
 <body>
+  <div id="koala-preloader" aria-hidden="true">
+    <div class="kp-logo"></div>
+    <div class="kp-bar"></div>
+  </div>
+  <script>
+    // Preloader, Flutter SplashScreen ile birebir aynı. Flutter mount olunca
+    // (flt-glass-pane) HEMEN gizlemeyiz — Flutter tarafı aynı görseli decode
+    // edip çizene kadar ~450ms bekleriz, sonra 250ms fade ile devrederiz.
+    // İki ekran aynı olduğu için bu bekleme görünmez; tek amacı handoff'ta
+    // flaş/boşluk olmaması. 20sn hard cap: Flutter mount olamazsa takılma.
+    (function () {
+      var preloader = document.getElementById('koala-preloader');
+      if (!preloader) return;
+      var hidden = false;
+      function hide() {
+        if (hidden) return;
+        hidden = true;
+        preloader.classList.add('hidden');
+        setTimeout(function () {
+          if (preloader.parentNode) preloader.parentNode.removeChild(preloader);
+        }, 300);
+      }
+      var pollId = setInterval(function () {
+        if (document.querySelector('flt-glass-pane')) {
+          clearInterval(pollId);
+          setTimeout(hide, 450);
+        }
+      }, 80);
+      setTimeout(function () { clearInterval(pollId); hide(); }, 20000);
+    })();
+  </script>
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>

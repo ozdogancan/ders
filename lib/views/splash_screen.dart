@@ -3,13 +3,13 @@ import 'package:flutter/material.dart';
 /// Uygulama boot / async init sırasında gösterilen splash ekranı.
 ///
 /// Tasarım: yumuşak, ferah iç-mimari estetiği. Kod-çizimli krem gradient
-/// taban ilk frame'i anında kaplar; üstüne ~8KB'lık soft iç-mekan görseli
-/// yumuşakça fade-in olur. Ortada gölgeli koala ikonu, altında ince
-/// indeterminate gradient progress bar. Hiç metin yok.
+/// taban ilk frame'i kaplar; üstüne soft iç-mekan görseli + gölgeli koala
+/// logosu gelir, altında ince indeterminate gradient progress bar. Metin yok.
 ///
-/// Android native splash (values*/styles.xml) aynı krem tonunu (#F7F4EF)
-/// kullanır; bu ekran devralınca geçiş kesintisiz. Web tarafında ayrı bir
-/// preloader yok — motor inerken body krem (#F7F4EF) görünür, sonra bu ekran.
+/// Android native splash (values*/styles.xml) ve web preloader (index.html
+/// #koala-preloader) BU ekranla birebir aynı tasarımı kullanır — aynı logo,
+/// arka plan, boyut, gölge. Böylece preloader → bu ekran geçişi görünmezdir;
+/// kullanıcı tek, kesintisiz bir splash görür.
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
 
@@ -82,21 +82,13 @@ class _SplashScreenState extends State<SplashScreen>
         child: Stack(
           fit: StackFit.expand,
           children: [
-            // Soft iç-mekan arka planı — gradient tabanın üstüne yumuşakça
-            // fade-in olur. Görsel hazır değilken gradient görünür (beyaz
-            // flaş yok); ~8KB olduğu için yüklenme gecikme yaşatmaz.
+            // Soft iç-mekan arka planı — HTML preloader ile AYNI dosya;
+            // tarayıcı cache'inden anında gelir. Fade yok: preloader'dan
+            // devralırken birebir aynı görüntü, geç gelme/oynama olmaz.
             Positioned.fill(
               child: Image.asset(
                 'assets/images/splash_bg.webp',
                 fit: BoxFit.cover,
-                frameBuilder: (context, child, frame, wasSync) {
-                  return AnimatedOpacity(
-                    opacity: (wasSync || frame != null) ? 1.0 : 0.0,
-                    duration: const Duration(milliseconds: 500),
-                    curve: Curves.easeOut,
-                    child: child,
-                  );
-                },
               ),
             ),
             // Logo + progress bar.
