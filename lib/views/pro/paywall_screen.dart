@@ -525,7 +525,7 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
           topLabel: 'Yıllık',
           subLabel: '$_yearlyPrice / yıl',
           priceMain: _yearlyPerWeek,
-          priceUnit: '/ haftada',
+          priceUnit: '/ hafta',
           badge: '%76 TASARRUF',
         ),
       ],
