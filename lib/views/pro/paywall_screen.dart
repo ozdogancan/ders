@@ -19,9 +19,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:purchases_flutter/purchases_flutter.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/theme/koala_tokens.dart';
+import '../legal_sheet.dart';
 import '../../providers/pro_status_provider.dart';
 import '../../services/analytics_service.dart';
 import '../../services/billing_service.dart';
@@ -207,13 +207,6 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
         behavior: SnackBarBehavior.floating,
       ),
     );
-  }
-
-  Future<void> _openLink(String url) async {
-    final uri = Uri.parse(url);
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    }
   }
 
   @override
@@ -639,12 +632,12 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
           children: [
             _FooterLink(
               label: 'Gizlilik',
-              onTap: () => _openLink('https://www.koalatutor.com/privacy'),
+              onTap: () => showLegalSheet(context, LegalDoc.privacy),
             ),
             const _FooterDot(),
             _FooterLink(
               label: 'Şartlar',
-              onTap: () => _openLink('https://www.koalatutor.com/terms'),
+              onTap: () => showLegalSheet(context, LegalDoc.terms),
             ),
             const _FooterDot(),
             _FooterLink(label: 'Geri Yükle', onTap: _onRestore),

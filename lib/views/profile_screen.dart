@@ -24,6 +24,7 @@ import '../services/saved_items_service.dart';
 import 'admin/admin_shell.dart';
 import 'auth_common.dart';
 import 'auth_entry_screen.dart';
+import 'legal_sheet.dart';
 
 /// Profile / Settings — simple, modern, well-organized.
 /// SnapHome-inspired structure:
@@ -51,10 +52,12 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   static const String _appVersion = '1.0.98';
   static const String _supportEmail = 'info@evlumba.com';
   static const String _feedbackEmail = 'info@evlumba.com';
-  static const String _privacyUrl = 'https://www.koalatutor.com/privacy';
-  static const String _termsUrl = 'https://www.koalatutor.com/terms';
   static const String _kvkkUrl = 'https://www.koalatutor.com/kvkk';
   static const String _shareUrl = 'https://www.evlumba.com';
+  // Google Play abonelik yönetim sayfası — uygulama içinden abonelik iptali
+  // Google politikası gereği mümkün değil; kullanıcı buraya yönlendirilir.
+  static const String _playSubscriptionsUrl =
+      'https://play.google.com/store/account/subscriptions';
   static const String _wipeDataEndpoint =
       'https://koala-api-olive.vercel.app/api/account/wipe-data';
   // TODO: confirm Play Store package name + iOS App Store id.
@@ -208,6 +211,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   }
 
   Future<void> _deleteAccount() async {
+    final isPro = ref.read(proStatusProvider).value?.isPro ?? false;
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -219,14 +223,45 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 fontSize: 16,
                 fontWeight: FontWeight.w700,
                 color: _dangerRed)),
-        content: const Text(
-          'Hesabın ve TÜM verilerin kalıcı olarak silinecek. '
-          'Bu işlem GERİ ALINAMAZ. Devam etmek istediğinden emin misin?',
-          style: TextStyle(
-              fontFamily: 'Manrope',
-              fontSize: 14,
-              height: 1.45,
-              color: KoalaColors.textMed),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Hesabın ve TÜM verilerin kalıcı olarak silinecek. '
+              'Bu işlem GERİ ALINAMAZ. Devam etmek istediğinden emin misin?',
+              style: TextStyle(
+                  fontFamily: 'Manrope',
+                  fontSize: 14,
+                  height: 1.45,
+                  color: KoalaColors.textMed),
+            ),
+            // Aktif aboneliği olan kullanıcıyı uyar — hesap silmek Google Play
+            // aboneliğini iptal etmez, Google faturalandırmaya devam eder.
+            if (isPro) ...[
+              const SizedBox(height: 14),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFF4E5),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFFF6C97A)),
+                ),
+                child: const Text(
+                  '⚠️ Aktif bir Pro aboneliğin var. Hesabını silmek '
+                  'aboneliğini İPTAL ETMEZ — Google seni faturalandırmaya '
+                  'devam eder. Önce Google Play > Abonelikler bölümünden '
+                  'aboneliğini iptal etmelisin.',
+                  style: TextStyle(
+                      fontFamily: 'Manrope',
+                      fontSize: 12.5,
+                      height: 1.5,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF8A5A00)),
+                ),
+              ),
+            ],
+          ],
         ),
         actions: [
           TextButton(
@@ -299,6 +334,44 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     } finally {
       if (mounted) setState(() => _restoring = false);
     }
+  }
+
+  /// Aboneliği yönet / iptal et. Uygulama içinden Google Play aboneliği
+  /// iptal etmek Google politikası gereği mümkün değil — kullanıcı onaydan
+  /// sonra Google Play abonelik sayfasına yönlendirilir, iptal orada yapılır.
+  Future<void> _manageSubscription() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(KoalaRadius.lg)),
+        title: const Text('Aboneliği Yönet', style: KoalaText.h3),
+        content: const Text(
+          'Aboneliğini Google Play üzerinden yönetebilir veya iptal '
+          'edebilirsin. Devam edersen Google Play abonelik sayfasına '
+          'yönlendirileceksin; iptal işlemi orada tamamlanır.',
+          style: TextStyle(
+              fontFamily: 'Manrope',
+              fontSize: 14,
+              height: 1.45,
+              color: KoalaColors.textMed),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Vazgeç')),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: FilledButton.styleFrom(
+                backgroundColor: KoalaColors.accentDeep),
+            child: const Text("Google Play'e Git"),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+    await _openExternal(_playSubscriptionsUrl);
   }
 
   Future<void> _shareApp() async {
@@ -607,6 +680,19 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             ]),
             const SizedBox(height: 24),
 
+            // ─── Abonelik (yalnızca aktif Pro üyelerde görünür)
+            if (isPro) ...[
+              const _SectionHeader('ABONELİK'),
+              _SettingsCard(rows: [
+                _SettingsTile(
+                  icon: LucideIcons.creditCard,
+                  label: 'Aboneliği Yönet',
+                  onTap: _manageSubscription,
+                ),
+              ]),
+              const SizedBox(height: 24),
+            ],
+
             // ─── Hakkında
             const _SectionHeader('HAKKINDA'),
             _SettingsCard(rows: [
@@ -628,12 +714,12 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               _SettingsTile(
                 icon: LucideIcons.shield,
                 label: 'Gizlilik Politikası',
-                onTap: () => _openExternal(_privacyUrl),
+                onTap: () => showLegalSheet(context, LegalDoc.privacy),
               ),
               _SettingsTile(
                 icon: LucideIcons.fileText,
                 label: 'Kullanım Şartları',
-                onTap: () => _openExternal(_termsUrl),
+                onTap: () => showLegalSheet(context, LegalDoc.terms),
               ),
               _SettingsTile(
                 icon: LucideIcons.gavel,
