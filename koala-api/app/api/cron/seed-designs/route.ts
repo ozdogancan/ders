@@ -102,8 +102,9 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   }
 
-  const countParam = Number(new URL(req.url).searchParams.get('count'));
-  const batchSize = Number.isFinite(countParam)
+  const countRaw = new URL(req.url).searchParams.get('count');
+  const countParam = countRaw != null ? Number(countRaw) : NaN;
+  const batchSize = Number.isFinite(countParam) && countParam > 0
     ? Math.max(1, Math.min(12, Math.floor(countParam)))
     : BATCH_SIZE;
 
