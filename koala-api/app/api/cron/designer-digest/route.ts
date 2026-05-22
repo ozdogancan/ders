@@ -28,7 +28,7 @@ const FROM = 'Koala <info@evlumba.com>';
 const SMTP_USER = 'info@evlumba.com';
 const CTA_URL = 'https://www.evlumba.com';
 const REMINDER_DAYS = 3;
-const MAX_MSGS_PER_DESIGNER = 8;
+const MAX_PER_SENDER = 6;
 
 interface PendingRow {
   designer_id: string;
@@ -119,36 +119,51 @@ function renderEmail(opts: {
       ? 'Bir müşteri Koala üzerinden size ulaştı.'
       : `${userCount} farklı müşteri Koala üzerinden size ulaştı.`;
 
-  let shown = 0;
+  // Gönderen başına TEK balon: ardışık mesajlar içeride ince ayraçlı
+  // satırlar halinde, en fazla MAX_PER_SENDER tanesi gösterilir.
   const senderBlocks = userGroups
     .map((g, idx) => {
       const latest = g.messages[g.messages.length - 1];
-      const msgHtml = g.messages
-        .filter(() => shown < MAX_MSGS_PER_DESIGNER && ++shown <= MAX_MSGS_PER_DESIGNER)
+      const shownMsgs = g.messages.slice(0, MAX_PER_SENDER);
+      const extra = g.messages.length - shownMsgs.length;
+
+      const rows = shownMsgs
         .map((m) => {
-          const text =
-            m.content && m.content.trim()
-              ? `<p style="margin:0;font-size:14px;line-height:1.6;color:#3C3C44;">${esc(clamp(m.content))}</p>`
-              : '';
-          const img = m.attachment_url
-            ? `<div style="margin-top:${text ? '10' : '0'}px;"><img src="${esc(m.attachment_url)}" alt="Görsel" width="200" style="display:block;width:200px;max-width:100%;border-radius:8px;border:1px solid #EAEAEE;"></div>`
-            : '';
-          return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:8px;"><tr><td style="background:#FAFAFB;border:1px solid #EDEDF0;border-radius:10px;padding:12px 14px;">${text}${img}</td></tr></table>`;
+          const parts: string[] = [];
+          if (m.content && m.content.trim()) {
+            parts.push(
+              `<p style="margin:0;font-size:14px;line-height:1.55;color:#3C3C44;">${esc(clamp(m.content, 150))}</p>`,
+            );
+          }
+          if (m.attachment_url) {
+            parts.push(
+              `<div style="margin-top:${parts.length ? '7' : '0'}px;"><img src="${esc(m.attachment_url)}" alt="Görsel" width="190" style="display:block;width:190px;max-width:100%;border-radius:8px;border:1px solid #EAEAEE;"></div>`,
+            );
+          }
+          return `<tr><td style="padding:9px 0;">${parts.join('')}</td></tr>`;
         })
-        .join('');
+        .join(
+          '<tr><td style="border-top:1px solid #F0F0F3;font-size:0;line-height:0;">&nbsp;</td></tr>',
+        );
+      const more =
+        extra > 0
+          ? `<tr><td style="border-top:1px solid #F0F0F3;padding:9px 0 0;font-size:12.5px;color:#9A9AA4;">+${extra} mesaj daha</td></tr>`
+          : '';
+      const bubble = `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:11px;background:#FAFAFB;border:1px solid #EDEDF0;border-radius:10px;"><tr><td style="padding:3px 14px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0">${rows}${more}</table></td></tr></table>`;
+
       const divider =
         idx < userGroups.length - 1
-          ? '<tr><td colspan="2" style="border-top:1px solid #EFEFF2;font-size:0;line-height:0;height:20px;">&nbsp;</td></tr>'
+          ? '<tr><td colspan="2" style="padding-top:24px;"><div style="border-top:1px solid #EFEFF2;font-size:0;line-height:0;">&nbsp;</div></td></tr>'
           : '';
       return `
         <tr>
-          <td width="40" valign="top" style="padding:20px 12px 0 0;">
+          <td width="40" valign="top" style="padding:24px 12px 0 0;">
             <div style="width:40px;height:40px;border-radius:50%;background:#F0EFF6;color:#6C5CE7;font-size:14px;font-weight:700;line-height:40px;text-align:center;">${esc(initials(g.name))}</div>
           </td>
-          <td valign="top" style="padding-top:20px;">
+          <td valign="top" style="padding-top:24px;">
             <p style="margin:0;font-size:15px;font-weight:700;color:#17171C;">${esc(g.name)}</p>
             <p style="margin:3px 0 0;font-size:12.5px;color:#9A9AA4;">${g.messages.length} mesaj &middot; ${esc(timeAgo(latest.created_at))}</p>
-            ${msgHtml}
+            ${bubble}
           </td>
         </tr>
         ${divider}`;
@@ -238,18 +253,23 @@ export async function GET(req: NextRequest) {
   const testEmail = req.nextUrl.searchParams.get('test');
   const testReminder = req.nextUrl.searchParams.get('reminder') === '1';
   if (testEmail) {
+    // Ahmet: WhatsApp tarzı ardışık burst (8 mesaj) — collapse'i gösterir.
+    const burst = [
+      'Selam',
+      'Nasılsınız?',
+      'Bir sorum olacaktı',
+      'Profilinizdeki salon tasarımını çok beğendim',
+      'Acaba yeni proje için müsait misiniz',
+      'Bütçem orta seviye',
+      'Fiyat ve süre alabilir miyim',
+      'Cevabınızı bekliyorum, teşekkürler',
+    ].map((c, i) => ({
+      content: c,
+      attachment_url: null,
+      created_at: new Date(Date.now() - (8 - i) * 1800_000).toISOString(),
+    }));
     const sample: UserGroup[] = [
-      {
-        name: 'Ahmet Yılmaz',
-        messages: [
-          {
-            content:
-              'Merhaba! Profilinizdeki salon tasarımını çok beğendim. Kendi evim için de benzer, sıcak ve modern bir çalışma yapabilir misiniz?',
-            attachment_url: null,
-            created_at: new Date(Date.now() - 5 * 3600_000).toISOString(),
-          },
-        ],
-      },
+      { name: 'Ahmet Yılmaz', messages: burst },
       {
         name: 'Zeynep Kaya',
         messages: [
@@ -265,7 +285,7 @@ export async function GET(req: NextRequest) {
     const { subject, html } = renderEmail({
       designerName: 'Tasarımcı',
       userGroups: sample,
-      total: 2,
+      total: burst.length + 1,
       isReminder: testReminder,
     });
     const t = transporter(pass);
