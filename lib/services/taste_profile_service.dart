@@ -77,6 +77,10 @@ class TasteProfileService {
     return hits;
   }
 
+  /// Bir kartın stil key'leri — popup/öneri için dışarıya açık.
+  static List<String> stylesOf(Map<String, dynamic> card) =>
+      _extractStyles(card);
+
   /// Proje tipinden ya da metinden oda kategorisi çıkar.
   static String? _extractRoom(Map<String, dynamic> card) {
     final pt = (card['project_type'] ?? '').toString().toLowerCase();

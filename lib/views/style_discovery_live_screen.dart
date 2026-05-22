@@ -27,6 +27,7 @@ import '../core/theme/koala_tokens.dart';
 import '../helpers/paywall_router.dart';
 import '../providers/pro_status_provider.dart';
 import '../widgets/koala_bottom_nav.dart';
+import '../widgets/taste_summary_sheet.dart';
 import 'main_shell.dart';
 import 'mekan/mekan_flow_screen.dart';
 import 'mekan/wizard/mekan_wizard_screen.dart';
@@ -102,6 +103,8 @@ class _StyleDiscoveryLiveScreenState
   // Pro upsell card cadence: free user her 6 swipe'tan sonra (yani 7., 13.,
   // 19. slotta) Pro upgrade kartı görür. Pro user'da hiç gösterilmez.
   int _swipeCount = 0;
+  // Her 10 beğenide tarz özeti popup'ı — session bazlı beğeni sayacı.
+  int _likeCount = 0;
   static const int _proSlotEvery = 6;
   bool get _isProSlot => _isFreeUser && _swipeCount > 0 &&
       _swipeCount % _proSlotEvery == 0;
@@ -522,6 +525,11 @@ class _StyleDiscoveryLiveScreenState
     }
 
     if (liked) {
+      // Her 10 beğenide tarz özeti popup'ı (lokal veri — AI çağrısı yok).
+      _likeCount++;
+      if (_likeCount % 10 == 0) {
+        unawaited(_showTasteSummary());
+      }
       unawaited(SavedItemsService.saveItem(
         type: SavedItemType.design,
         itemId: card['id']?.toString() ?? '',
@@ -542,6 +550,48 @@ class _StyleDiscoveryLiveScreenState
         'project_id': card['id'],
       }));
     }
+  }
+
+  /// Her 10 beğenide gösterilen tarz özeti popup'ı. Tüm veri lokal
+  /// (TasteProfileService) + bellekteki deck — AI çağrısı / maliyet yok.
+  Future<void> _showTasteSummary() async {
+    await Future<void>.delayed(const Duration(milliseconds: 460));
+    if (!mounted) return;
+    final profile = await TasteProfileService.computeProfile();
+    if (!mounted || !profile.isActive || profile.topStyles.isEmpty) return;
+
+    final topStyle = profile.topStyles.first.style;
+
+    // Önerilen tasarım: deck'te ilerideki, baskın stile uyan ilk kart.
+    Map<String, dynamic>? rec;
+    for (int i = _index + 1; i < _deck.length && i < _index + 30; i++) {
+      if (TasteProfileService.stylesOf(_deck[i]).contains(topStyle)) {
+        rec = _deck[i];
+        break;
+      }
+    }
+    rec ??= _nextCard;
+
+    Map<String, String>? recCard;
+    if (rec != null) {
+      recCard = {
+        'id': rec['id']?.toString() ?? '',
+        'title': (rec['title'] ?? '').toString().trim(),
+        'imageUrl': _coverOf(rec),
+        'designerId': (rec['designer_id'] ?? '').toString(),
+        'category': _prettyCategory((rec['project_type'] ?? '').toString()),
+      };
+    }
+
+    if (!mounted) return;
+    HapticFeedback.selectionClick();
+    await TasteSummarySheet.show(
+      context,
+      profile: profile,
+      topStyleKey: topStyle,
+      palette: TasteSummarySheet.paletteFor(topStyle),
+      recCard: recCard,
+    );
   }
 
   Future<void> _undo() async {
