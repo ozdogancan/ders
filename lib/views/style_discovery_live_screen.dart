@@ -692,8 +692,10 @@ class _StyleDiscoveryLiveScreenState
           'designerId': forDesignerId,
         };
 
-    // "Sor" → 3 seçenekli alt-popup. Her seçenek tasarımı ekleyip ilgili
-    // chat'i açar: Koala AI / Evlumba Design stüdyosu / tasarımın sahibi.
+    // "Sor" → alt-popup. Koala AI / Evlumba Design stüdyosu / tasarımın
+    // sahibi. Seeded (designer_id='evlumba-design') kartlarda sahip zaten
+    // Evlumba Design olduğu için 3. seçenek gizlenir → 2 seçenek kalır.
+    final isEvlumbaDesign = designerId == 'evlumba-design';
     Widget askOption({
       required IconData icon,
       required String title,
@@ -804,25 +806,26 @@ class _StyleDiscoveryLiveScreenState
                   });
                 },
               ),
-              askOption(
-                icon: Icons.person_rounded,
-                title: 'Tasarımcısına sor',
-                subtitle: designerName.isNotEmpty
-                    ? '$designerName ile doğrudan konuş'
-                    : 'Bu tasarımı yapan tasarımcıyla konuş',
-                onTap: () {
-                  Navigator.of(ctx).pop();
-                  context.push('/chat/dm/new', extra: {
-                    'designerId': designerId,
-                    if (designerName.isNotEmpty)
-                      'designerName': designerName,
-                    if (designerAvatar.isNotEmpty)
-                      'designerAvatarUrl': designerAvatar,
-                    'projectTitle': displayTitle,
-                    'pendingDesign': pendingDesign(designerId),
-                  });
-                },
-              ),
+              if (!isEvlumbaDesign)
+                askOption(
+                  icon: Icons.person_rounded,
+                  title: 'Tasarımcısına sor',
+                  subtitle: designerName.isNotEmpty
+                      ? '$designerName ile doğrudan konuş'
+                      : 'Bu tasarımı yapan tasarımcıyla konuş',
+                  onTap: () {
+                    Navigator.of(ctx).pop();
+                    context.push('/chat/dm/new', extra: {
+                      'designerId': designerId,
+                      if (designerName.isNotEmpty)
+                        'designerName': designerName,
+                      if (designerAvatar.isNotEmpty)
+                        'designerAvatarUrl': designerAvatar,
+                      'projectTitle': displayTitle,
+                      'pendingDesign': pendingDesign(designerId),
+                    });
+                  },
+                ),
             ],
           ),
         ),
