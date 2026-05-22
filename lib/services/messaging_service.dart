@@ -457,8 +457,12 @@ class MessagingService {
       //    ki tasarımcı evlumba.com/mesajlar'dan görebilsin.
       //    Hem text hem image type'i bridge edilir; image'da attachmentUrl da
       //    iletilir, body caption (boş olabilir).
+      //    'evlumba-design' = Koala içi Evlumba stüdyo kanalı (gerçek bir
+      //    Evlumba tasarımcısı değil) → Evlumba DB'ye mirror EDİLMEZ; bu
+      //    mesajlar n8n Telegram köprüsünden ilerler.
       if (isUser &&
-          (type == MessageType.text || type == MessageType.image)) {
+          (type == MessageType.text || type == MessageType.image) &&
+          (conv['designer_id'] as String?) != 'evlumba-design') {
         unawaited(_bridgeToEvlumba(
           designerId: conv['designer_id'] as String,
           body: content,

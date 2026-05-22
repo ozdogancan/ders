@@ -621,59 +621,164 @@ class _StyleDiscoveryLiveScreenState
     final projectId = card['id']?.toString() ?? '';
     final cat = _prettyCategory((card['project_type'] ?? '').toString());
     final coverUrl = _coverOf(card);
-    // Karttan gizlediğimiz bilgileri chat preview'a taşıyoruz: proje başlığı
-    // + kısa açıklama. "Sor"a basınca kullanıcı neyi sorduğunu görsün diye.
     final projectTitle = (card['title'] ?? '').toString().trim();
     final rawDesc = (card['description'] ?? '').toString().trim();
     final tagline = _quickFirstSentence(rawDesc);
-
-    // ── Optimistic navigation ──
-    // Eskiden burada `getOrCreateConversation` await ediliyordu → 500-1500ms
-    // kullanıcıyı bekletiyordu ("Sor"a basınca buton spinner'da donuyordu).
-    // Artık: designer info cache'den sync al, navigation'ı HEMEN başlat,
-    // conversation'ı ConversationDetailScreen._ensureConversation() ilk
-    // mesaj gönderildiğinde lazy olarak yaratsın. /chat/dm/new sentinel
-    // router'da null convId'ye map ediliyor.
     final d = _designerCache[designerId];
     final designerName =
         ((d?['full_name'] ?? d?['business_name'] ?? '') as String).trim();
     final designerAvatar = ((d?['avatar_url'] ?? '') as String).trim();
+    final displayTitle = projectTitle.isNotEmpty
+        ? projectTitle
+        : (cat.isNotEmpty ? '$cat projesi' : 'Tasarım');
 
-    // Çift-tap koruması: 600ms pencere — ÖNCE navigation tetiklenir,
-    // SONRA flag set edilir. Aksi halde setState rebuild'i action bar'ı
-    // yeniden çizip context.push'u bir frame geciktiriyordu (chat "yavaş
-    // açılıyor" hissinin kaynağı). Flag'i bir sonraki microtask'ta set
-    // ediyoruz — guard çift-tap'i hâlâ yakalar (synchronous tap loop
-    // değilse).
-    context.push('/chat/dm/new', extra: {
-      'designerId': designerId,
-      if (designerName.isNotEmpty) 'designerName': designerName,
-      if (designerAvatar.isNotEmpty) 'designerAvatarUrl': designerAvatar,
-      'projectTitle': projectTitle.isNotEmpty ? projectTitle : cat,
-      'pendingDesign': {
-        'id': projectId,
-        // Başlık önceliği: proje title → oda kategorisi → jenerik
-        'title': projectTitle.isNotEmpty
-            ? projectTitle
-            : (cat.isNotEmpty ? '$cat projesi' : 'Tasarım'),
-        if (tagline.isNotEmpty) 'tagline': tagline,
-        if (cat.isNotEmpty) 'category': cat,
-        'imageUrl': coverUrl,
-        'designerId': designerId,
-        // Context bilgisi: _ensureConversation bu bilgileri
-        // getOrCreateConversation'a geçemez (sadece designerId + projectTitle
-        // kullanıyor) ama projectTitle yeterli — conversation.context_title
-        // doğru kayıt edilecek.
-      },
-    });
+    // pendingDesign — seçilen hedefe göre tasarımı chat'e iliştirir.
+    Map<String, dynamic> pendingDesign(String forDesignerId) => {
+          'id': projectId,
+          'title': displayTitle,
+          if (tagline.isNotEmpty) 'tagline': tagline,
+          if (cat.isNotEmpty) 'category': cat,
+          'imageUrl': coverUrl,
+          'designerId': forDesignerId,
+        };
 
-    // Navigation tetiklendikten SONRA in-flight guard'ı kur. setState yerine
-    // raw assignment + delayed reset — action bar rebuild'i route transition
-    // ile yarışmasın. Tek mounted check yeterli.
+    // "Sor" → 3 seçenekli alt-popup. Her seçenek tasarımı ekleyip ilgili
+    // chat'i açar: Koala AI / Evlumba Design stüdyosu / tasarımın sahibi.
+    Widget askOption({
+      required IconData icon,
+      required String title,
+      required String subtitle,
+      required VoidCallback onTap,
+    }) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 5),
+        child: Material(
+          color: KoalaColors.surface,
+          borderRadius: BorderRadius.circular(16),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(16),
+            onTap: onTap,
+            child: Padding(
+              padding: const EdgeInsets.all(13),
+              child: Row(
+                children: [
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: KoalaColors.accentSoft,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(icon,
+                        color: KoalaColors.accentDeep, size: 22),
+                  ),
+                  const SizedBox(width: 13),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(title, style: KoalaText.h4),
+                        const SizedBox(height: 2),
+                        Text(subtitle, style: KoalaText.bodySmall),
+                      ],
+                    ),
+                  ),
+                  const Icon(Icons.chevron_right_rounded,
+                      color: KoalaColors.textMuted, size: 20),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
     _askingInFlight = true;
-    Future.delayed(const Duration(milliseconds: 600), () {
-      if (mounted) _askingInFlight = false;
-    });
+    HapticFeedback.selectionClick();
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: KoalaColors.bg,
+      barrierColor: Colors.black54,
+      isScrollControlled: false,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) => SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 36,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: KoalaColors.border,
+                    borderRadius: BorderRadius.circular(100),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 14),
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 2),
+                child: Text('Kime soralım?', style: KoalaText.h2),
+              ),
+              const SizedBox(height: 6),
+              askOption(
+                icon: Icons.auto_awesome_rounded,
+                title: "Koala AI'ya sor",
+                subtitle: 'Yapay zekâ asistanından anında fikir al',
+                onTap: () {
+                  Navigator.of(ctx).pop();
+                  context.push('/chat/ai', extra: {
+                    'initialText': 'Bu tasarımı beğendim: "$displayTitle"'
+                        '${cat.isNotEmpty ? ' ($cat)' : ''}. '
+                        'Bunun gibi bir tarzı evime nasıl uygulayabilirim?',
+                  });
+                },
+              ),
+              askOption(
+                icon: Icons.home_work_rounded,
+                title: "Evlumba Design'a sor",
+                subtitle: 'Evlumba stüdyosundan profesyonel destek al',
+                onTap: () {
+                  Navigator.of(ctx).pop();
+                  context.push('/chat/dm/new', extra: {
+                    'designerId': 'evlumba-design',
+                    'designerName': 'Evlumba Design',
+                    'projectTitle': displayTitle,
+                    'pendingDesign': pendingDesign('evlumba-design'),
+                  });
+                },
+              ),
+              askOption(
+                icon: Icons.person_rounded,
+                title: 'Tasarımcısına sor',
+                subtitle: designerName.isNotEmpty
+                    ? '$designerName ile doğrudan konuş'
+                    : 'Bu tasarımı yapan tasarımcıyla konuş',
+                onTap: () {
+                  Navigator.of(ctx).pop();
+                  context.push('/chat/dm/new', extra: {
+                    'designerId': designerId,
+                    if (designerName.isNotEmpty)
+                      'designerName': designerName,
+                    if (designerAvatar.isNotEmpty)
+                      'designerAvatarUrl': designerAvatar,
+                    'projectTitle': displayTitle,
+                    'pendingDesign': pendingDesign(designerId),
+                  });
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (mounted) _askingInFlight = false;
   }
 
   /// İlk cümle — chat preview'da ipucu olarak göstermek için.
