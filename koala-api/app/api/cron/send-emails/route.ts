@@ -16,7 +16,8 @@ export const dynamic = 'force-dynamic';
  * Vercel'den SMTP çalışıyor. n8n bu endpoint'i dakikada bir tetikler.
  *
  * Auth: `Authorization: Bearer <CRON_SECRET>` zorunlu.
- * Env: GMAIL_APP_PASSWORD (info@evlumba.com Google app password).
+ * Secret: koala_bridge_config.gmail_app_password (info@evlumba.com app password) —
+ *         RLS kilitli tabloda, yalnız service_role okur. Vercel env gerekmez.
  */
 
 const FROM = 'Koala <info@evlumba.com>';
@@ -101,29 +102,35 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   }
 
-  const pass = process.env.GMAIL_APP_PASSWORD;
-  if (!pass) {
-    return NextResponse.json(
-      { error: 'GMAIL_APP_PASSWORD env var not set' },
-      { status: 500 },
-    );
-  }
-
   const admin = koalaAdmin();
 
-  // Köprü secret'ını config'ten al (RPC'ler bununla korunuyor).
-  const { data: cfg, error: cfgErr } = await admin
+  // Secret'ları RLS-kilitli config tablosundan al (yalnız service_role okur):
+  //   bridge_secret      -> RPC koruması
+  //   gmail_app_password -> Gmail SMTP şifresi
+  const { data: cfgRows, error: cfgErr } = await admin
     .from('koala_bridge_config')
-    .select('value')
-    .eq('key', 'bridge_secret')
-    .single();
-  if (cfgErr || !cfg?.value) {
+    .select('key, value')
+    .in('key', ['bridge_secret', 'gmail_app_password']);
+  if (cfgErr) {
+    return NextResponse.json({ error: cfgErr.message }, { status: 500 });
+  }
+  const cfg = new Map(
+    (cfgRows ?? []).map((r) => [r.key as string, r.value as string]),
+  );
+  const secret = cfg.get('bridge_secret');
+  const pass = cfg.get('gmail_app_password');
+  if (!secret) {
     return NextResponse.json(
       { error: 'bridge_secret not found in koala_bridge_config' },
       { status: 500 },
     );
   }
-  const secret = cfg.value as string;
+  if (!pass) {
+    return NextResponse.json(
+      { error: 'gmail_app_password not found in koala_bridge_config' },
+      { status: 500 },
+    );
+  }
 
   // Bekleyen e-posta satırlarını atomik olarak claim et (attempts++).
   const { data: rows, error: fetchErr } = await admin.rpc(
