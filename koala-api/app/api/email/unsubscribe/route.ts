@@ -50,14 +50,16 @@ export async function GET(req: NextRequest) {
 
   try {
     const admin = koalaAdmin();
+    const nowIso = new Date().toISOString();
     if (kind === 'designer') {
       await admin.from('koala_designer_email_state').upsert(
-        {
-          designer_id: id,
-          unsubscribed: true,
-          updated_at: new Date().toISOString(),
-        },
+        { designer_id: id, unsubscribed: true, updated_at: nowIso },
         { onConflict: 'designer_id' },
+      );
+    } else if (kind === 'user') {
+      await admin.from('koala_user_email_state').upsert(
+        { user_id: id, unsubscribed: true, updated_at: nowIso },
+        { onConflict: 'user_id' },
       );
     } else {
       return page('Bağlantı geçersiz', 'Bu abonelik bağlantısı tanınmadı.');

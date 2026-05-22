@@ -3,6 +3,7 @@ import crypto from 'crypto';
 import nodemailer from 'nodemailer';
 import { koalaAdmin } from '@/lib/supabase/koala';
 import { evlumbaAdmin } from '@/lib/supabase/evlumba-admin';
+import { getAdminAuth } from '@/lib/firebase-admin';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -11,45 +12,44 @@ export const dynamic = 'force-dynamic';
 /**
  * GET /api/cron/designer-digest
  *
- * Tasarımcılara "cevap bekleyen mesajlarınız" özet e-postası.
- * Kadans: yeni cevapsız mesaj gelince özet; 3 gün sonra tek hatırlatma;
- * günlük darlamak yok. Abonelikten çıkanlar atlanır.
+ * Günlük mesaj özeti — İKİ YÖN:
+ *   - designer: tasarımcılara, cevap bekleyen müşteri mesajları
+ *   - user:     kullanıcılara, cevap bekleyen tasarımcı mesajları
  *
- * Auth: `Authorization: Bearer <CRON_SECRET>`. Test: `?test=<email>[&reminder=1]`.
+ * Kadans: yeni cevapsız mesaj gelince özet; 3 gün sonra tek hatırlatma.
+ * Abonelikten çıkanlar atlanır.
+ *
+ * Auth: `Authorization: Bearer <CRON_SECRET>`.
+ * Test: `?test=<email>[&audience=user][&reminder=1]`.
  */
 
 const FROM = 'Koala by Evlumba <info@evlumba.com>';
 const SMTP_USER = 'info@evlumba.com';
-const CTA_URL = 'https://www.evlumba.com';
+const EVLUMBA_URL = 'https://www.evlumba.com';
+const KOALA_URL = 'https://koalatutor.com';
 const API_BASE = 'https://koala-api-olive.vercel.app';
 const LOGO_URL = 'https://www.koalatutor.com/icons/Icon-512.png';
 const REMINDER_DAYS = 3;
 const MAX_PER_SENDER = 6;
 
-interface PendingRow {
-  designer_id: string;
-  designer_name: string;
-  user_id: string;
-  content: string | null;
-  attachment_url: string | null;
-  created_at: string;
-}
-interface StateRow {
-  designer_id: string;
-  last_notified_at: string | null;
-  last_emailed_at: string | null;
-  reminded: boolean;
-  unsubscribed: boolean;
-}
+type Audience = 'designer' | 'user';
+
 interface MailMessage {
   content: string;
   attachment_url: string | null;
   created_at: string;
 }
-interface UserGroup {
+interface SenderGroup {
   name: string;
   avatar: string | null;
   messages: MailMessage[];
+}
+interface StateRow {
+  recipient_id: string;
+  last_notified_at: string | null;
+  last_emailed_at: string | null;
+  reminded: boolean;
+  unsubscribed: boolean;
 }
 
 function authorized(req: NextRequest): boolean {
@@ -86,7 +86,6 @@ function timeAgo(iso: string): string {
   return d === 1 ? 'dün' : `${d} gün önce`;
 }
 
-/** Abonelikten çıkma imzası — depolama gerektirmez (HMAC). */
 function unsubToken(kind: string, id: string): string {
   return crypto
     .createHmac('sha256', process.env.CRON_SECRET || 'koala')
@@ -95,7 +94,6 @@ function unsubToken(kind: string, id: string): string {
     .slice(0, 24);
 }
 
-/** Avatar: resim varsa daire foto, yoksa baş harf dairesi. */
 function avatarHtml(name: string, avatar: string | null): string {
   if (avatar) {
     return `<img src="${esc(avatar)}" alt="" width="40" height="40" style="display:block;width:40px;height:40px;border-radius:50%;object-fit:cover;border:1px solid #ECECEF;">`;
@@ -104,15 +102,23 @@ function avatarHtml(name: string, avatar: string | null): string {
 }
 
 function renderEmail(opts: {
-  designerName: string;
-  userGroups: UserGroup[];
+  audience: Audience;
+  recipientName: string;
+  groups: SenderGroup[];
   total: number;
   isReminder: boolean;
   unsubscribeUrl: string;
 }): { subject: string; html: string } {
-  const { designerName, userGroups, total, isReminder, unsubscribeUrl } = opts;
-  const firstName = esc(designerName.split(/\s+/)[0] || 'Merhaba');
-  const userCount = userGroups.length;
+  const { audience, recipientName, groups, total, isReminder, unsubscribeUrl } =
+    opts;
+  const isUser = audience === 'user';
+  const firstName = esc(recipientName.split(/\s+/)[0] || 'Merhaba');
+  const groupCount = groups.length;
+  const senderNoun = isUser ? 'tasarımcı' : 'müşteri';
+  const ctaUrl = isUser ? KOALA_URL : EVLUMBA_URL;
+  const appNudge = isUser
+    ? 'Sohbeti kaldığı yerden sürdürmek için <span style="color:#6C5CE7;font-weight:600;">Koala uygulamasını</span> açın.'
+    : 'Müşterilerinize anında cevap vermek için <span style="color:#6C5CE7;font-weight:600;">Evlumba uygulamasını</span> indirin.';
 
   const subject = isReminder
     ? `Hatırlatma — ${total} mesaj hâlâ yanıtınızı bekliyor`
@@ -129,17 +135,16 @@ function renderEmail(opts: {
       : `cevap bekleyen ${total} mesajınız var`;
 
   const sub = isReminder
-    ? 'Bu müşteriler birkaç gündür yanıtınızı bekliyor — kısa bir cevap bile farkı yaratır.'
-    : userCount === 1
-      ? 'Bir müşteri Koala üzerinden size ulaştı.'
-      : `${userCount} farklı müşteri Koala üzerinden size ulaştı.`;
+    ? `Bu ${senderNoun}${isUser ? 'lar' : 'ler'} birkaç gündür yanıtınızı bekliyor — kısa bir cevap bile farkı yaratır.`
+    : groupCount === 1
+      ? `Bir ${senderNoun} Koala üzerinden size ${isUser ? 'yanıt verdi' : 'ulaştı'}.`
+      : `${groupCount} ${senderNoun} Koala üzerinden size ${isUser ? 'yanıt verdi' : 'ulaştı'}.`;
 
-  const senderBlocks = userGroups
+  const senderBlocks = groups
     .map((g, idx) => {
       const latest = g.messages[g.messages.length - 1];
       const shownMsgs = g.messages.slice(0, MAX_PER_SENDER);
       const extra = g.messages.length - shownMsgs.length;
-
       const rows = shownMsgs
         .map((m) => {
           const parts: string[] = [];
@@ -163,9 +168,8 @@ function renderEmail(opts: {
           ? `<tr><td style="border-top:1px solid #F0F0F3;padding:9px 0 0;font-size:12.5px;color:#9A9AA4;">+${extra} mesaj daha</td></tr>`
           : '';
       const bubble = `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:11px;background:#FAFAFB;border:1px solid #EDEDF0;border-radius:10px;"><tr><td style="padding:3px 14px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0">${rows}${more}</table></td></tr></table>`;
-
       const divider =
-        idx < userGroups.length - 1
+        idx < groups.length - 1
           ? '<tr><td colspan="2" style="padding-top:24px;"><div style="border-top:1px solid #EFEFF2;font-size:0;line-height:0;">&nbsp;</div></td></tr>'
           : '';
       return `
@@ -187,8 +191,13 @@ function renderEmail(opts: {
 
   const html = `<!DOCTYPE html>
 <html lang="tr">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
-<body style="margin:0;padding:0;background:#F2F2F4;font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased;">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light">
+<meta name="supported-color-schemes" content="light">
+</head>
+<body style="margin:0;padding:0;background:#F2F2F4;color-scheme:light;font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased;">
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#F2F2F4;padding:40px 16px;">
     <tr><td align="center">
       <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;max-width:544px;background:#FFFFFF;border:1px solid #E7E7EB;border-radius:16px;overflow:hidden;">
@@ -211,10 +220,10 @@ function renderEmail(opts: {
           <table role="presentation" width="100%" cellpadding="0" cellspacing="0">${senderBlocks}</table>
         </td></tr>
         <tr><td style="padding:30px 32px 6px;" align="center">
-          <a href="${CTA_URL}" style="display:inline-block;background:#6C5CE7;color:#ffffff;text-decoration:none;font-size:14.5px;font-weight:600;padding:14px 32px;border-radius:11px;">Tüm mesajları görüntüle</a>
+          <a href="${ctaUrl}" style="display:inline-block;background:#6C5CE7;color:#ffffff;text-decoration:none;font-size:14.5px;font-weight:600;padding:14px 32px;border-radius:11px;">Tüm mesajları görüntüle</a>
         </td></tr>
         <tr><td style="padding:12px 32px 30px;">
-          <p style="margin:0;font-size:13px;line-height:1.6;color:#9A9AA4;text-align:center;">Anında cevap vermek için <span style="color:#6C5CE7;font-weight:600;">Evlumba uygulamasını</span> indirin.</p>
+          <p style="margin:0;font-size:13px;line-height:1.6;color:#9A9AA4;text-align:center;">${appNudge}</p>
         </td></tr>
         <tr><td style="padding:18px 32px;background:#FAFAFB;border-top:1px solid #EEEEF1;">
           <p style="margin:0 0 6px;font-size:12px;line-height:1.55;color:#A8A8B2;">Bu e-posta, Koala'da cevap bekleyen mesajlarınız için gönderildi.</p>
@@ -239,20 +248,36 @@ function transporter(pass: string) {
   });
 }
 
+/** Bir alıcı için kadans kararı: digest / reminder / null. */
+function decideMode(
+  st: StateRow | undefined,
+  newest: string,
+): 'digest' | 'reminder' | null {
+  if (st?.unsubscribed) return null;
+  if (!st || !st.last_notified_at || newest > st.last_notified_at) {
+    return 'digest';
+  }
+  if (
+    !st.reminded &&
+    st.last_emailed_at &&
+    Date.now() - new Date(st.last_emailed_at).getTime() >=
+      REMINDER_DAYS * 86_400_000
+  ) {
+    return 'reminder';
+  }
+  return null;
+}
+
 export async function GET(req: NextRequest) {
   if (!authorized(req)) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   }
 
   const admin = koalaAdmin();
-
-  const { data: cfgRows, error: cfgErr } = await admin
+  const { data: cfgRows } = await admin
     .from('koala_bridge_config')
-    .select('key, value')
+    .select('value')
     .eq('key', 'gmail_app_password');
-  if (cfgErr) {
-    return NextResponse.json({ error: cfgErr.message }, { status: 500 });
-  }
   const pass = cfgRows?.[0]?.value as string | undefined;
   if (!pass) {
     return NextResponse.json(
@@ -263,35 +288,37 @@ export async function GET(req: NextRequest) {
 
   // ─── TEST MODU ───────────────────────────────────────────────
   const testEmail = req.nextUrl.searchParams.get('test');
-  const testReminder = req.nextUrl.searchParams.get('reminder') === '1';
   if (testEmail) {
+    const audience: Audience =
+      req.nextUrl.searchParams.get('audience') === 'user' ? 'user' : 'designer';
+    const isReminder = req.nextUrl.searchParams.get('reminder') === '1';
     const burst = [
       'Selam',
       'Nasılsınız?',
       'Bir sorum olacaktı',
-      'Profilinizdeki salon tasarımını çok beğendim',
-      'Acaba yeni proje için müsait misiniz',
-      'Bütçem orta seviye',
-      'Fiyat ve süre alabilir miyim',
-      'Cevabınızı bekliyorum, teşekkürler',
+      audience === 'user'
+        ? 'Salon projeniz için taslağı hazırladım'
+        : 'Profilinizdeki salon tasarımını çok beğendim',
+      'Müsait olduğunuzda yazışalım',
+      'Teşekkürler',
     ].map((c, i) => ({
       content: c,
-      attachment_url: null,
-      created_at: new Date(Date.now() - (8 - i) * 1800_000).toISOString(),
+      attachment_url: null as string | null,
+      created_at: new Date(Date.now() - (6 - i) * 1800_000).toISOString(),
     }));
-    const sample: UserGroup[] = [
+    const sample: SenderGroup[] = [
       {
-        name: 'Ahmet Yılmaz',
+        name: audience === 'user' ? 'Elif Demir (Tasarımcı)' : 'Ahmet Yılmaz',
         avatar: 'https://i.pravatar.cc/120?img=12',
         messages: burst,
       },
       {
-        name: 'Zeynep Kaya',
+        name: audience === 'user' ? 'Mert Aksoy (Tasarımcı)' : 'Zeynep Kaya',
         avatar: null,
         messages: [
           {
             content:
-              'Yatak odam için fikirlerinizi merak ediyorum. Aşağıdaki gibi bir atmosfer hayal ediyorum:',
+              'Aşağıdaki gibi sıcak bir atmosfer düşünüyorum, ne dersiniz?',
             attachment_url: 'https://picsum.photos/seed/koala/400/260',
             created_at: new Date(Date.now() - 26 * 3600_000).toISOString(),
           },
@@ -299,187 +326,288 @@ export async function GET(req: NextRequest) {
       },
     ];
     const { subject, html } = renderEmail({
-      designerName: 'Elif Demir',
-      userGroups: sample,
+      audience,
+      recipientName: audience === 'user' ? 'Can Yılmaz' : 'Elif Demir',
+      groups: sample,
       total: burst.length + 1,
-      isReminder: testReminder,
-      unsubscribeUrl: `${API_BASE}/api/email/unsubscribe?k=designer&d=test&t=test`,
+      isReminder,
+      unsubscribeUrl: `${API_BASE}/api/email/unsubscribe?k=${audience}&d=test&t=test`,
     });
     const t = transporter(pass);
     try {
-      await t.sendMail({ from: FROM, to: testEmail, subject: `[TEST] ${subject}`, html });
+      await t.sendMail({
+        from: FROM,
+        to: testEmail,
+        subject: `[TEST ${audience}] ${subject}`,
+        html,
+      });
     } finally {
       t.close();
     }
-    return NextResponse.json({ test: true, reminder: testReminder, sentTo: testEmail });
-  }
-
-  // ─── Cevap bekleyen mesajlar ─────────────────────────────────
-  const { data: rows, error: rowsErr } = await admin.rpc(
-    'koala_designer_pending_digest',
-  );
-  if (rowsErr) {
-    return NextResponse.json({ error: rowsErr.message }, { status: 500 });
-  }
-  const list: PendingRow[] = Array.isArray(rows) ? (rows as PendingRow[]) : [];
-  if (list.length === 0) {
-    return NextResponse.json({ designers: 0, digests: 0, reminders: 0 });
-  }
-
-  const { data: stateData } = await admin
-    .from('koala_designer_email_state')
-    .select('designer_id, last_notified_at, last_emailed_at, reminded, unsubscribed');
-  const stateMap = new Map<string, StateRow>(
-    (stateData ?? []).map((s) => [s.designer_id as string, s as StateRow]),
-  );
-
-  // Evlumba: kullanıcı adı + avatar.
-  const userInfo = new Map<string, { name: string; avatar: string | null }>();
-  try {
-    const evl0 = evlumbaAdmin();
-    const { data: u } = await evl0.auth.admin.listUsers({ page: 1, perPage: 1000 });
-    const idToFb = new Map<string, string>();
-    for (const usr of u?.users ?? []) {
-      const fb = (usr.user_metadata?.firebase_uid as string) || '';
-      const nm = (usr.user_metadata?.display_name as string) || '';
-      if (fb) {
-        userInfo.set(fb, { name: nm || 'Koala müşterisi', avatar: null });
-        idToFb.set(usr.id, fb);
-      }
-    }
-    const ids = Array.from(idToFb.keys());
-    if (ids.length > 0) {
-      const { data: profs } = await evl0
-        .from('profiles')
-        .select('id, avatar_url')
-        .in('id', ids);
-      for (const p of profs ?? []) {
-        const fb = idToFb.get(p.id as string);
-        const info = fb && userInfo.get(fb);
-        if (info && p.avatar_url) info.avatar = p.avatar_url as string;
-      }
-    }
-  } catch (e) {
-    console.warn('[digest] evlumba user lookup failed:', e);
-  }
-
-  const byDesigner = new Map<string, { name: string; rows: PendingRow[] }>();
-  for (const r of list) {
-    let d = byDesigner.get(r.designer_id);
-    if (!d) {
-      d = { name: r.designer_name || 'Tasarımcı', rows: [] };
-      byDesigner.set(r.designer_id, d);
-    }
-    d.rows.push(r);
+    return NextResponse.json({ test: true, audience, reminder: isReminder, sentTo: testEmail });
   }
 
   const t = transporter(pass);
-  const evl = evlumbaAdmin();
-  let digests = 0;
-  let reminders = 0;
-  let skipped = 0;
-  const errors: Array<{ designer_id: string; error: string }> = [];
+  const summary = {
+    designer: { digests: 0, reminders: 0, skipped: 0 },
+    user: { digests: 0, reminders: 0, skipped: 0 },
+  };
+  const errors: Array<{ audience: Audience; id: string; error: string }> = [];
 
-  for (const [designerId, group] of byDesigner) {
-    try {
-      const st = stateMap.get(designerId);
-      if (st?.unsubscribed) {
-        skipped++;
-        continue;
-      }
-
-      const newest = group.rows
-        .map((r) => r.created_at)
-        .reduce((a, b) => (a > b ? a : b));
-
-      let mode: 'digest' | 'reminder' | null = null;
-      if (!st || !st.last_notified_at || newest > st.last_notified_at) {
-        mode = 'digest';
-      } else if (
-        !st.reminded &&
-        st.last_emailed_at &&
-        Date.now() - new Date(st.last_emailed_at).getTime() >=
-          REMINDER_DAYS * 86_400_000
-      ) {
-        mode = 'reminder';
-      }
-      if (!mode) {
-        skipped++;
-        continue;
-      }
-
-      const { data: userRes, error: getErr } =
-        await evl.auth.admin.getUserById(designerId);
-      const email = userRes?.user?.email;
-      if (getErr || !email) {
-        skipped++;
-        continue;
-      }
-
-      const byUser = new Map<string, UserGroup>();
-      for (const r of group.rows) {
-        let ug = byUser.get(r.user_id);
-        if (!ug) {
-          const info = userInfo.get(r.user_id);
-          ug = {
-            name: info?.name || 'Koala müşterisi',
-            avatar: info?.avatar || null,
-            messages: [],
-          };
-          byUser.set(r.user_id, ug);
-        }
-        ug.messages.push({
-          content: r.content ?? '',
-          attachment_url: r.attachment_url,
-          created_at: r.created_at,
-        });
-      }
-
-      const unsubscribeUrl = `${API_BASE}/api/email/unsubscribe?k=designer&d=${encodeURIComponent(designerId)}&t=${unsubToken('designer', designerId)}`;
-      const { subject, html } = renderEmail({
-        designerName: group.name,
-        userGroups: Array.from(byUser.values()),
-        total: group.rows.length,
-        isReminder: mode === 'reminder',
-        unsubscribeUrl,
-      });
-      await t.sendMail({
-        from: FROM,
-        to: email,
-        subject,
-        html,
-        headers: { 'List-Unsubscribe': `<${unsubscribeUrl}>` },
-      });
-
-      const nowIso = new Date().toISOString();
-      await admin.from('koala_designer_email_state').upsert(
-        {
-          designer_id: designerId,
-          last_notified_at: newest,
-          last_emailed_at: nowIso,
-          reminded: mode === 'reminder',
-          updated_at: nowIso,
-        },
-        { onConflict: 'designer_id' },
+  // ═══ TASARIMCI YÖNÜ ══════════════════════════════════════════
+  try {
+    const { data: rows } = await admin.rpc('koala_designer_pending_digest');
+    const list = Array.isArray(rows) ? rows : [];
+    if (list.length > 0) {
+      const { data: stateData } = await admin
+        .from('koala_designer_email_state')
+        .select('designer_id, last_notified_at, last_emailed_at, reminded, unsubscribed');
+      const stateMap = new Map<string, StateRow>(
+        (stateData ?? []).map((s) => [
+          s.designer_id as string,
+          { ...s, recipient_id: s.designer_id } as StateRow,
+        ]),
       );
 
-      if (mode === 'reminder') reminders++;
-      else digests++;
-    } catch (e) {
-      errors.push({
-        designer_id: designerId,
-        error: e instanceof Error ? e.message : String(e),
-      });
+      // Müşteri adı + avatar (Evlumba).
+      const userInfo = new Map<string, { name: string; avatar: string | null }>();
+      try {
+        const evl0 = evlumbaAdmin();
+        const { data: u } = await evl0.auth.admin.listUsers({ page: 1, perPage: 1000 });
+        const idToFb = new Map<string, string>();
+        for (const usr of u?.users ?? []) {
+          const fb = (usr.user_metadata?.firebase_uid as string) || '';
+          const nm = (usr.user_metadata?.display_name as string) || '';
+          if (fb) {
+            userInfo.set(fb, { name: nm || 'Koala müşterisi', avatar: null });
+            idToFb.set(usr.id, fb);
+          }
+        }
+        const ids = Array.from(idToFb.keys());
+        if (ids.length > 0) {
+          const { data: profs } = await evl0
+            .from('profiles')
+            .select('id, avatar_url')
+            .in('id', ids);
+          for (const p of profs ?? []) {
+            const fb = idToFb.get(p.id as string);
+            const info = fb && userInfo.get(fb);
+            if (info && p.avatar_url) info.avatar = p.avatar_url as string;
+          }
+        }
+      } catch (e) {
+        console.warn('[digest] designer-pass user lookup failed:', e);
+      }
+
+      const byDesigner = new Map<string, { name: string; rows: typeof list }>();
+      for (const r of list) {
+        let d = byDesigner.get(r.designer_id);
+        if (!d) {
+          d = { name: r.designer_name || 'Tasarımcı', rows: [] };
+          byDesigner.set(r.designer_id, d);
+        }
+        d.rows.push(r);
+      }
+
+      const evl = evlumbaAdmin();
+      for (const [designerId, group] of byDesigner) {
+        try {
+          const st = stateMap.get(designerId);
+          const newest = group.rows
+            .map((r) => r.created_at as string)
+            .reduce((a, b) => (a > b ? a : b));
+          const mode = decideMode(st, newest);
+          if (!mode) {
+            summary.designer.skipped++;
+            continue;
+          }
+          const { data: ures } = await evl.auth.admin.getUserById(designerId);
+          const email = ures?.user?.email;
+          if (!email) {
+            summary.designer.skipped++;
+            continue;
+          }
+          const byUser = new Map<string, SenderGroup>();
+          for (const r of group.rows) {
+            let g = byUser.get(r.user_id);
+            if (!g) {
+              const info = userInfo.get(r.user_id);
+              g = {
+                name: info?.name || 'Koala müşterisi',
+                avatar: info?.avatar || null,
+                messages: [],
+              };
+              byUser.set(r.user_id, g);
+            }
+            g.messages.push({
+              content: r.content ?? '',
+              attachment_url: r.attachment_url,
+              created_at: r.created_at,
+            });
+          }
+          const unsubscribeUrl = `${API_BASE}/api/email/unsubscribe?k=designer&d=${encodeURIComponent(designerId)}&t=${unsubToken('designer', designerId)}`;
+          const { subject, html } = renderEmail({
+            audience: 'designer',
+            recipientName: group.name,
+            groups: Array.from(byUser.values()),
+            total: group.rows.length,
+            isReminder: mode === 'reminder',
+            unsubscribeUrl,
+          });
+          await t.sendMail({
+            from: FROM,
+            to: email,
+            subject,
+            html,
+            headers: { 'List-Unsubscribe': `<${unsubscribeUrl}>` },
+          });
+          const nowIso = new Date().toISOString();
+          await admin.from('koala_designer_email_state').upsert(
+            {
+              designer_id: designerId,
+              last_notified_at: newest,
+              last_emailed_at: nowIso,
+              reminded: mode === 'reminder',
+              updated_at: nowIso,
+            },
+            { onConflict: 'designer_id' },
+          );
+          if (mode === 'reminder') summary.designer.reminders++;
+          else summary.designer.digests++;
+        } catch (e) {
+          errors.push({
+            audience: 'designer',
+            id: designerId,
+            error: e instanceof Error ? e.message : String(e),
+          });
+        }
+      }
     }
+  } catch (e) {
+    errors.push({ audience: 'designer', id: '*', error: String(e) });
+  }
+
+  // ═══ KULLANICI YÖNÜ ══════════════════════════════════════════
+  try {
+    const { data: rows } = await admin.rpc('koala_user_pending_digest');
+    const list = Array.isArray(rows) ? rows : [];
+    if (list.length > 0) {
+      const { data: stateData } = await admin
+        .from('koala_user_email_state')
+        .select('user_id, last_notified_at, last_emailed_at, reminded, unsubscribed');
+      const stateMap = new Map<string, StateRow>(
+        (stateData ?? []).map((s) => [
+          s.user_id as string,
+          { ...s, recipient_id: s.user_id } as StateRow,
+        ]),
+      );
+
+      const byUser = new Map<string, { rows: typeof list }>();
+      for (const r of list) {
+        let u = byUser.get(r.user_id);
+        if (!u) {
+          u = { rows: [] };
+          byUser.set(r.user_id, u);
+        }
+        u.rows.push(r);
+      }
+
+      // Kullanıcı e-postaları — Firebase Admin (telefon kullanıcılarında yok).
+      const emailMap = new Map<string, string>();
+      const adminAuth = getAdminAuth();
+      if (adminAuth) {
+        const uids = Array.from(byUser.keys());
+        for (let i = 0; i < uids.length; i += 100) {
+          const chunk = uids.slice(i, i + 100).map((uid) => ({ uid }));
+          try {
+            const res = await adminAuth.getUsers(chunk);
+            for (const u of res.users) {
+              if (u.email) emailMap.set(u.uid, u.email);
+            }
+          } catch (e) {
+            console.warn('[digest] firebase getUsers failed:', e);
+          }
+        }
+      }
+
+      for (const [userId, group] of byUser) {
+        try {
+          const st = stateMap.get(userId);
+          const newest = group.rows
+            .map((r) => r.created_at as string)
+            .reduce((a, b) => (a > b ? a : b));
+          const mode = decideMode(st, newest);
+          if (!mode) {
+            summary.user.skipped++;
+            continue;
+          }
+          const email = emailMap.get(userId);
+          if (!email) {
+            summary.user.skipped++;
+            continue;
+          }
+          // Kullanıcı adı (Firebase) — opsiyonel; selamlama için.
+          let recipientName = 'Merhaba';
+          // Tasarımcıya göre grupla.
+          const byDesigner = new Map<string, SenderGroup>();
+          for (const r of group.rows) {
+            let g = byDesigner.get(r.designer_id);
+            if (!g) {
+              g = {
+                name: r.designer_name || 'Tasarımcı',
+                avatar: r.designer_avatar || null,
+                messages: [],
+              };
+              byDesigner.set(r.designer_id, g);
+            }
+            g.messages.push({
+              content: r.content ?? '',
+              attachment_url: r.attachment_url,
+              created_at: r.created_at,
+            });
+          }
+          const unsubscribeUrl = `${API_BASE}/api/email/unsubscribe?k=user&d=${encodeURIComponent(userId)}&t=${unsubToken('user', userId)}`;
+          const { subject, html } = renderEmail({
+            audience: 'user',
+            recipientName,
+            groups: Array.from(byDesigner.values()),
+            total: group.rows.length,
+            isReminder: mode === 'reminder',
+            unsubscribeUrl,
+          });
+          await t.sendMail({
+            from: FROM,
+            to: email,
+            subject,
+            html,
+            headers: { 'List-Unsubscribe': `<${unsubscribeUrl}>` },
+          });
+          const nowIso = new Date().toISOString();
+          await admin.from('koala_user_email_state').upsert(
+            {
+              user_id: userId,
+              last_notified_at: newest,
+              last_emailed_at: nowIso,
+              reminded: mode === 'reminder',
+              updated_at: nowIso,
+            },
+            { onConflict: 'user_id' },
+          );
+          if (mode === 'reminder') summary.user.reminders++;
+          else summary.user.digests++;
+        } catch (e) {
+          errors.push({
+            audience: 'user',
+            id: userId,
+            error: e instanceof Error ? e.message : String(e),
+          });
+        }
+      }
+    }
+  } catch (e) {
+    errors.push({ audience: 'user', id: '*', error: String(e) });
   }
 
   t.close();
-
-  return NextResponse.json({
-    designers: byDesigner.size,
-    digests,
-    reminders,
-    skipped,
-    errors,
-  });
+  return NextResponse.json({ ...summary, errors });
 }
