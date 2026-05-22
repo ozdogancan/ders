@@ -73,7 +73,7 @@ flutter build appbundle --release `
   --dart-define=EVLUMBA_SUPABASE_URL=$EVLUMBA_URL `
   --dart-define=EVLUMBA_SUPABASE_ANON_KEY=$EVLUMBA_ANON_KEY `
   --dart-define=REVENUECAT_ANDROID_KEY=$REVENUECAT_ANDROID_KEY `
-  --dart-define=REQUIRE_LOGIN=false
+  --dart-define=REQUIRE_LOGIN=true
 
 if ($LASTEXITCODE -ne 0) {
     Write-Host "ERROR: Flutter AAB build failed" -ForegroundColor Red

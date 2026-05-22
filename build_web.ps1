@@ -39,7 +39,7 @@ flutter build web --release --tree-shake-icons --no-source-maps `
   --dart-define=SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY `
   --dart-define=EVLUMBA_SUPABASE_URL=$EVLUMBA_URL `
   --dart-define=EVLUMBA_SUPABASE_ANON_KEY=$EVLUMBA_ANON_KEY `
-  --dart-define=REQUIRE_LOGIN=false `
+  --dart-define=REQUIRE_LOGIN=true `
   --dart-define=RESTYLE_V2=true
 
 if ($LASTEXITCODE -ne 0) {

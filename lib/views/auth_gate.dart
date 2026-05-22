@@ -39,8 +39,8 @@ class _AuthGateState extends State<AuthGate> {
     final user = FirebaseAuth.instance.currentUser;
 
     // Safari özel durum: localStorage silinebilir ama Firebase IndexedDB kalır
-    // Kullanıcı varsa onboarding'i atla ve flag'i tekrar kaydet
-    if (!onboardingDone && user != null) {
+    // GERÇEK (anonim olmayan) kullanıcı varsa onboarding'i atla.
+    if (!onboardingDone && user != null && !user.isAnonymous) {
       await prefs.setBool('onboarding_done', true);
       return const MainShell();
     }
@@ -49,7 +49,9 @@ class _AuthGateState extends State<AuthGate> {
       return const OnboardingScreen();
     }
 
-    if (user == null && Env.requireLogin) {
+    // REQUIRE_LOGIN=true → giriş yapmamış VE anonim kullanıcılar login
+    // duvarına alınır. Misafir/anonim erişim kapalı (2026-05: hesap zorunlu).
+    if ((user == null || user.isAnonymous) && Env.requireLogin) {
       return const AuthEntryScreen(mode: AuthFlowMode.signup);
     }
 
