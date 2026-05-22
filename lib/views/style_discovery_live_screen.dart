@@ -22,6 +22,7 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' show Supabase;
 
 import '../core/theme/koala_tokens.dart';
 import '../helpers/paywall_router.dart';
@@ -95,6 +96,11 @@ class _StyleDiscoveryLiveScreenState
   bool _askingInFlight = false;
   int _totalCount = 0;
   int _index = 0;
+
+  // Evlumba Design seeded tasarımları (koala_cards, source='gemini-seed').
+  // Evlumba designer_projects feed'ine harmanlanır.
+  final List<Map<String, dynamic>> _seedPool = [];
+  bool _seedLoaded = false;
 
   double _dragDx = 0;
   double _dragDy = 0;
@@ -272,12 +278,22 @@ class _StyleDiscoveryLiveScreenState
   Future<void> _bootstrap() async {
     // 1) Disk cache'den anında deck'i göster — refresh sonrası boş kart yok.
     await _warmFromDiskCache();
+    // 1b) Evlumba Design seeded tasarım havuzunu yükle (Koala DB).
+    await _loadSeedPool();
     // 2) Backend ready'ye paralelden bekle, fresh fetch ile cache'i yenile.
     final ready = await EvlumbaLiveService.waitForReady(
         timeout: const Duration(seconds: 6));
     if (!ready) {
       debugPrint('StyleDiscoveryLive: EvlumbaLiveService NOT ready');
-      if (mounted && _deck.isEmpty) setState(() => _loading = false);
+      // Evlumba erişilemese de seeded tasarımları göster.
+      final seedBatch = <Map<String, dynamic>>[];
+      _blendSeedCards(seedBatch);
+      if (mounted) {
+        setState(() {
+          if (seedBatch.isNotEmpty) _deck.addAll(seedBatch);
+          _loading = false;
+        });
+      }
       return;
     }
     try {
@@ -397,6 +413,8 @@ class _StyleDiscoveryLiveScreenState
         _seenIds.add(id);
         filtered.add(p);
       }
+      // Evlumba Design seeded kartlarını batch'e harmanla.
+      _blendSeedCards(filtered);
       debugPrint(
           'StyleDiscoveryLive: batch=${batch.length} filtered=${filtered.length} deck=${_deck.length + filtered.length} offset=$_offset');
       if (!mounted) return;
@@ -407,6 +425,73 @@ class _StyleDiscoveryLiveScreenState
     } finally {
       _fetchingMore = false;
     }
+  }
+
+  // koala_cards room_type -> designer_projects project_type (TR etiket).
+  static const Map<String, String> _seedRoomTr = {
+    'salon': 'Salon', 'yatak_odasi': 'Yatak Odası', 'mutfak': 'Mutfak',
+    'banyo': 'Banyo', 'cocuk_odasi': 'Çocuk Odası', 'ofis': 'Çalışma Odası',
+    'antre': 'Antre', 'balkon': 'Balkon',
+  };
+
+  /// koala_cards satırını swipe kartı şekline çevirir.
+  Map<String, dynamic> _mapSeedCard(Map<String, dynamic> r) {
+    final rt = (r['room_type'] ?? '').toString();
+    return {
+      'id': r['id'],
+      'designer_id': 'evlumba-design',
+      'title': (r['title'] ?? '').toString(),
+      'description': (r['description'] ?? '').toString(),
+      'project_type': _seedRoomTr[rt] ?? rt,
+      'cover_image_url': (r['cdn_url'] ?? r['original_url'] ?? '').toString(),
+      'created_at': r['created_at'],
+      'tags': const <String>[],
+      'color_palette': const <String>[],
+      '_seed': true,
+    };
+  }
+
+  /// Seeded tasarım havuzunu Koala DB'den bir kez yükler.
+  Future<void> _loadSeedPool() async {
+    if (_seedLoaded) return;
+    _seedLoaded = true;
+    try {
+      final data = await Supabase.instance.client
+          .from('koala_cards')
+          .select('id, title, description, room_type, style, cdn_url, '
+              'original_url, created_at')
+          .eq('source', 'gemini-seed')
+          .eq('is_published', true)
+          .limit(300);
+      _seedPool
+        ..clear()
+        ..addAll(List<Map<String, dynamic>>.from(data).map(_mapSeedCard));
+      debugPrint('StyleDiscoveryLive: seed pool ${_seedPool.length}');
+    } catch (e) {
+      debugPrint('StyleDiscoveryLive: seed pool load failed → $e');
+    }
+  }
+
+  /// Havuzdan, kategoriye uyan ve henüz eklenmemiş seeded kartları
+  /// batch'e harmanlar (en çok 5 / batch).
+  void _blendSeedCards(List<Map<String, dynamic>> batch) {
+    if (_seedPool.isEmpty) return;
+    final cat = _selectedCategory?.trim().toLowerCase();
+    var added = 0;
+    for (final s in _seedPool) {
+      if (added >= 5) break;
+      final id = s['id']?.toString() ?? '';
+      if (id.isEmpty || _seenIds.contains(id)) continue;
+      if (cat != null &&
+          cat.isNotEmpty &&
+          (s['project_type'] ?? '').toString().toLowerCase() != cat) {
+        continue;
+      }
+      _seenIds.add(id);
+      batch.add(s);
+      added++;
+    }
+    if (added > 0) batch.shuffle(_rng);
   }
 
   void _precacheNext() {
