@@ -8,6 +8,7 @@ import '../../widgets/koala_widgets.dart';
 import 'admin_dashboard.dart';
 import 'admin_users_screen.dart';
 import 'admin_messages_screen.dart';
+import 'admin_sla_screen.dart';
 import 'admin_broadcast_screen.dart';
 import 'admin_analytics_screen.dart';
 import 'admin_settings_screen.dart';
@@ -40,25 +41,15 @@ class _AdminShellState extends State<AdminShell> {
 
     try {
       final res = await Supabase.instance.client
-          .from('users')
-          .select('role')
-          .eq('id', uid)
+          .from('koala_admins')
+          .select('uid')
+          .eq('uid', uid)
           .maybeSingle();
-      final role = res?['role'] as String? ?? 'user';
-      setState(() { _checking = false; _isAdmin = role == 'admin'; });
+      setState(() { _checking = false; _isAdmin = res != null; });
     } catch (_) {
       setState(() { _checking = false; _isAdmin = false; });
     }
   }
-
-  final List<Widget> _screens = const [
-    AdminDashboard(),
-    AdminUsersScreen(),
-    AdminMessagesScreen(),
-    AdminBroadcastScreen(),
-    AdminAnalyticsScreen(),
-    AdminSettingsScreen(),
-  ];
 
   @override
   Widget build(BuildContext context) {
@@ -94,10 +85,20 @@ class _AdminShellState extends State<AdminShell> {
       );
     }
 
+    final screens = <Widget>[
+      AdminDashboard(onNavigate: (i) => setState(() => _currentIndex = i)),
+      const AdminUsersScreen(),
+      const AdminMessagesScreen(),
+      const AdminSlaScreen(),
+      const AdminBroadcastScreen(),
+      const AdminAnalyticsScreen(),
+      const AdminSettingsScreen(),
+    ];
+
     return Scaffold(
       body: IndexedStack(
         index: _currentIndex,
-        children: _screens,
+        children: screens,
       ),
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
@@ -111,14 +112,14 @@ class _AdminShellState extends State<AdminShell> {
               vertical: KoalaSpacing.sm,
             ),
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
                 _Tab(icon: Icons.dashboard_rounded, label: 'Panel', active: _currentIndex == 0, onTap: () => setState(() => _currentIndex = 0)),
                 _Tab(icon: Icons.people_rounded, label: 'Kullanıcılar', active: _currentIndex == 1, onTap: () => setState(() => _currentIndex = 1)),
                 _Tab(icon: Icons.chat_rounded, label: 'Mesajlar', active: _currentIndex == 2, onTap: () => setState(() => _currentIndex = 2)),
-                _Tab(icon: Icons.campaign_rounded, label: 'Bildirim', active: _currentIndex == 3, onTap: () => setState(() => _currentIndex = 3)),
-                _Tab(icon: Icons.analytics_rounded, label: 'Analitik', active: _currentIndex == 4, onTap: () => setState(() => _currentIndex = 4)),
-                _Tab(icon: Icons.settings_rounded, label: 'Ayarlar', active: _currentIndex == 5, onTap: () => setState(() => _currentIndex = 5)),
+                _Tab(icon: Icons.timer_rounded, label: 'SLA', active: _currentIndex == 3, onTap: () => setState(() => _currentIndex = 3)),
+                _Tab(icon: Icons.campaign_rounded, label: 'Bildirim', active: _currentIndex == 4, onTap: () => setState(() => _currentIndex = 4)),
+                _Tab(icon: Icons.analytics_rounded, label: 'Analitik', active: _currentIndex == 5, onTap: () => setState(() => _currentIndex = 5)),
+                _Tab(icon: Icons.settings_rounded, label: 'Ayarlar', active: _currentIndex == 6, onTap: () => setState(() => _currentIndex = 6)),
               ],
             ),
           ),
@@ -137,17 +138,22 @@ class _Tab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: SizedBox(
-        width: 56,
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(icon, size: 22, color: active ? KoalaColors.accent : KoalaColors.textTer),
             const SizedBox(height: 2),
-            Text(label, style: TextStyle(fontSize: 9, fontWeight: active ? FontWeight.w600 : FontWeight.w500, color: active ? KoalaColors.accent : KoalaColors.textTer)),
+            Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 9, fontWeight: active ? FontWeight.w600 : FontWeight.w500, color: active ? KoalaColors.accent : KoalaColors.textTer),
+            ),
           ],
         ),
       ),
