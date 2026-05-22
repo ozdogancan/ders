@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import crypto from 'crypto';
 import nodemailer from 'nodemailer';
 import { koalaAdmin } from '@/lib/supabase/koala';
 import { evlumbaAdmin } from '@/lib/supabase/evlumba-admin';
@@ -10,23 +11,18 @@ export const dynamic = 'force-dynamic';
 /**
  * GET /api/cron/designer-digest
  *
- * Tasarımcılara "cevap bekleyen mesajlarınız" özet e-postası gönderir.
+ * Tasarımcılara "cevap bekleyen mesajlarınız" özet e-postası.
+ * Kadans: yeni cevapsız mesaj gelince özet; 3 gün sonra tek hatırlatma;
+ * günlük darlamak yok. Abonelikten çıkanlar atlanır.
  *
- * Kadans (aşırı bildirim engelli):
- *   - Günlük kontrol edilir ama her gün mail atılmaz.
- *   - Yalnızca son bildirimden DAHA YENİ cevapsız mesaj varsa özet gider.
- *   - Yeni mesaj yoksa, ilk mailden REMINDER_DAYS gün sonra TEK hatırlatma.
- *   - Bir grup cevapsız mesaj için en fazla 1 özet + 1 hatırlatma.
- *
- * "Cevap bekleyen" = tasarımcının son cevabından sonra gelen kullanıcı
- * mesajları (tasarımcı cevapları inbound sync ile Koala'ya düşer).
- *
- * Auth: `Authorization: Bearer <CRON_SECRET>`. Test: `?test=<email>`.
+ * Auth: `Authorization: Bearer <CRON_SECRET>`. Test: `?test=<email>[&reminder=1]`.
  */
 
-const FROM = 'Koala <info@evlumba.com>';
+const FROM = 'Koala by Evlumba <info@evlumba.com>';
 const SMTP_USER = 'info@evlumba.com';
 const CTA_URL = 'https://www.evlumba.com';
+const API_BASE = 'https://koala-api-olive.vercel.app';
+const LOGO_URL = 'https://www.koalatutor.com/icons/Icon-512.png';
 const REMINDER_DAYS = 3;
 const MAX_PER_SENDER = 6;
 
@@ -43,6 +39,7 @@ interface StateRow {
   last_notified_at: string | null;
   last_emailed_at: string | null;
   reminded: boolean;
+  unsubscribed: boolean;
 }
 interface MailMessage {
   content: string;
@@ -51,6 +48,7 @@ interface MailMessage {
 }
 interface UserGroup {
   name: string;
+  avatar: string | null;
   messages: MailMessage[];
 }
 
@@ -67,7 +65,7 @@ function esc(s: unknown): string {
     .replace(/"/g, '&quot;');
 }
 
-function clamp(s: string, max = 200): string {
+function clamp(s: string, max = 150): string {
   const t = s.trim();
   return t.length > max ? t.slice(0, max).trimEnd() + '…' : t;
 }
@@ -88,14 +86,31 @@ function timeAgo(iso: string): string {
   return d === 1 ? 'dün' : `${d} gün önce`;
 }
 
-/** Modern, sade tasarımcı bildirim e-postası. */
+/** Abonelikten çıkma imzası — depolama gerektirmez (HMAC). */
+function unsubToken(kind: string, id: string): string {
+  return crypto
+    .createHmac('sha256', process.env.CRON_SECRET || 'koala')
+    .update(`${kind}:${id}`)
+    .digest('hex')
+    .slice(0, 24);
+}
+
+/** Avatar: resim varsa daire foto, yoksa baş harf dairesi. */
+function avatarHtml(name: string, avatar: string | null): string {
+  if (avatar) {
+    return `<img src="${esc(avatar)}" alt="" width="40" height="40" style="display:block;width:40px;height:40px;border-radius:50%;object-fit:cover;border:1px solid #ECECEF;">`;
+  }
+  return `<div style="width:40px;height:40px;border-radius:50%;background:#F0EFF6;color:#6C5CE7;font-size:14px;font-weight:700;line-height:40px;text-align:center;">${esc(initials(name))}</div>`;
+}
+
 function renderEmail(opts: {
   designerName: string;
   userGroups: UserGroup[];
   total: number;
   isReminder: boolean;
+  unsubscribeUrl: string;
 }): { subject: string; html: string } {
-  const { designerName, userGroups, total, isReminder } = opts;
+  const { designerName, userGroups, total, isReminder, unsubscribeUrl } = opts;
   const firstName = esc(designerName.split(/\s+/)[0] || 'Merhaba');
   const userCount = userGroups.length;
 
@@ -110,8 +125,8 @@ function renderEmail(opts: {
       ? '1 mesaj hâlâ yanıtınızı bekliyor'
       : `${total} mesaj hâlâ yanıtınızı bekliyor`
     : total === 1
-      ? 'Cevap bekleyen 1 mesajınız var'
-      : `Cevap bekleyen ${total} mesajınız var`;
+      ? 'cevap bekleyen 1 mesajınız var'
+      : `cevap bekleyen ${total} mesajınız var`;
 
   const sub = isReminder
     ? 'Bu müşteriler birkaç gündür yanıtınızı bekliyor — kısa bir cevap bile farkı yaratır.'
@@ -119,8 +134,6 @@ function renderEmail(opts: {
       ? 'Bir müşteri Koala üzerinden size ulaştı.'
       : `${userCount} farklı müşteri Koala üzerinden size ulaştı.`;
 
-  // Gönderen başına TEK balon: ardışık mesajlar içeride ince ayraçlı
-  // satırlar halinde, en fazla MAX_PER_SENDER tanesi gösterilir.
   const senderBlocks = userGroups
     .map((g, idx) => {
       const latest = g.messages[g.messages.length - 1];
@@ -132,7 +145,7 @@ function renderEmail(opts: {
           const parts: string[] = [];
           if (m.content && m.content.trim()) {
             parts.push(
-              `<p style="margin:0;font-size:14px;line-height:1.55;color:#3C3C44;">${esc(clamp(m.content, 150))}</p>`,
+              `<p style="margin:0;font-size:14px;line-height:1.55;color:#3C3C44;">${esc(clamp(m.content))}</p>`,
             );
           }
           if (m.attachment_url) {
@@ -157,9 +170,7 @@ function renderEmail(opts: {
           : '';
       return `
         <tr>
-          <td width="40" valign="top" style="padding:24px 12px 0 0;">
-            <div style="width:40px;height:40px;border-radius:50%;background:#F0EFF6;color:#6C5CE7;font-size:14px;font-weight:700;line-height:40px;text-align:center;">${esc(initials(g.name))}</div>
-          </td>
+          <td width="40" valign="top" style="padding:24px 12px 0 0;">${avatarHtml(g.name, g.avatar)}</td>
           <td valign="top" style="padding-top:24px;">
             <p style="margin:0;font-size:15px;font-weight:700;color:#17171C;">${esc(g.name)}</p>
             <p style="margin:3px 0 0;font-size:12.5px;color:#9A9AA4;">${g.messages.length} mesaj &middot; ${esc(timeAgo(latest.created_at))}</p>
@@ -181,17 +192,17 @@ function renderEmail(opts: {
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#F2F2F4;padding:40px 16px;">
     <tr><td align="center">
       <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;max-width:544px;background:#FFFFFF;border:1px solid #E7E7EB;border-radius:16px;overflow:hidden;">
-        <tr><td style="padding:22px 32px;border-bottom:1px solid #EEEEF1;">
-          <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
-            <td style="font-size:18px;font-weight:800;color:#6C5CE7;letter-spacing:-0.3px;">Koala</td>
-            <td align="right" style="font-size:12px;color:#A8A8B2;">Tasarımcı bildirimi</td>
+        <tr><td style="padding:20px 32px;border-bottom:1px solid #EEEEF1;">
+          <table role="presentation" cellpadding="0" cellspacing="0"><tr>
+            <td width="40" style="padding-right:11px;"><img src="${LOGO_URL}" alt="Koala" width="40" height="40" style="display:block;width:40px;height:40px;border-radius:10px;"></td>
+            <td style="font-size:17px;font-weight:800;color:#17171C;letter-spacing:-0.3px;">Koala <span style="font-weight:500;color:#9A9AA4;font-size:13px;">by Evlumba</span></td>
           </tr></table>
         </td></tr>
-        <tr><td style="padding:32px 32px 8px;">
+        <tr><td style="padding:30px 32px 8px;">
           <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
             ${reminderPill}
             <tr><td>
-              <p style="margin:0;font-size:20px;font-weight:800;line-height:1.35;color:#17171C;">Merhaba ${firstName}, ${esc(headline)}</p>
+              <p style="margin:0;font-size:18px;font-weight:600;line-height:1.4;color:#23232A;">Merhaba ${firstName}, ${esc(headline)}</p>
               <p style="margin:8px 0 0;font-size:14px;line-height:1.6;color:#6E6E78;">${esc(sub)}</p>
             </td></tr>
           </table>
@@ -206,7 +217,8 @@ function renderEmail(opts: {
           <p style="margin:0;font-size:13px;line-height:1.6;color:#9A9AA4;text-align:center;">Anında cevap vermek için <span style="color:#6C5CE7;font-weight:600;">Evlumba uygulamasını</span> indirin.</p>
         </td></tr>
         <tr><td style="padding:18px 32px;background:#FAFAFB;border-top:1px solid #EEEEF1;">
-          <p style="margin:0;font-size:12px;line-height:1.55;color:#A8A8B2;">Bu e-posta, Koala'da cevap bekleyen mesajlarınız için gönderildi. Sorularınız için <a href="mailto:info@evlumba.com" style="color:#8A82E0;text-decoration:none;">info@evlumba.com</a>.</p>
+          <p style="margin:0 0 6px;font-size:12px;line-height:1.55;color:#A8A8B2;">Bu e-posta, Koala'da cevap bekleyen mesajlarınız için gönderildi.</p>
+          <p style="margin:0;font-size:12px;line-height:1.55;color:#A8A8B2;"><a href="${unsubscribeUrl}" style="color:#8A82E0;text-decoration:underline;">Bu bildirimleri almayı durdur</a> &nbsp;&middot;&nbsp; <a href="mailto:info@evlumba.com" style="color:#8A82E0;text-decoration:none;">info@evlumba.com</a></p>
         </td></tr>
       </table>
       <p style="margin:16px 0 0;font-size:11px;color:#B4B4BC;">&copy; Evlumba &middot; evlumba.com</p>
@@ -253,7 +265,6 @@ export async function GET(req: NextRequest) {
   const testEmail = req.nextUrl.searchParams.get('test');
   const testReminder = req.nextUrl.searchParams.get('reminder') === '1';
   if (testEmail) {
-    // Ahmet: WhatsApp tarzı ardışık burst (8 mesaj) — collapse'i gösterir.
     const burst = [
       'Selam',
       'Nasılsınız?',
@@ -269,9 +280,14 @@ export async function GET(req: NextRequest) {
       created_at: new Date(Date.now() - (8 - i) * 1800_000).toISOString(),
     }));
     const sample: UserGroup[] = [
-      { name: 'Ahmet Yılmaz', messages: burst },
+      {
+        name: 'Ahmet Yılmaz',
+        avatar: 'https://i.pravatar.cc/120?img=12',
+        messages: burst,
+      },
       {
         name: 'Zeynep Kaya',
+        avatar: null,
         messages: [
           {
             content:
@@ -283,10 +299,11 @@ export async function GET(req: NextRequest) {
       },
     ];
     const { subject, html } = renderEmail({
-      designerName: 'Tasarımcı',
+      designerName: 'Elif Demir',
       userGroups: sample,
       total: burst.length + 1,
       isReminder: testReminder,
+      unsubscribeUrl: `${API_BASE}/api/email/unsubscribe?k=designer&d=test&t=test`,
     });
     const t = transporter(pass);
     try {
@@ -309,31 +326,43 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ designers: 0, digests: 0, reminders: 0 });
   }
 
-  // Durum tablosu.
   const { data: stateData } = await admin
     .from('koala_designer_email_state')
-    .select('designer_id, last_notified_at, last_emailed_at, reminded');
+    .select('designer_id, last_notified_at, last_emailed_at, reminded, unsubscribed');
   const stateMap = new Map<string, StateRow>(
     (stateData ?? []).map((s) => [s.designer_id as string, s as StateRow]),
   );
 
-  // Evlumba: kullanıcı adları (firebase_uid → display_name).
-  const userNames = new Map<string, string>();
+  // Evlumba: kullanıcı adı + avatar.
+  const userInfo = new Map<string, { name: string; avatar: string | null }>();
   try {
-    const { data: u } = await evlumbaAdmin().auth.admin.listUsers({
-      page: 1,
-      perPage: 1000,
-    });
+    const evl0 = evlumbaAdmin();
+    const { data: u } = await evl0.auth.admin.listUsers({ page: 1, perPage: 1000 });
+    const idToFb = new Map<string, string>();
     for (const usr of u?.users ?? []) {
       const fb = (usr.user_metadata?.firebase_uid as string) || '';
       const nm = (usr.user_metadata?.display_name as string) || '';
-      if (fb && nm) userNames.set(fb, nm);
+      if (fb) {
+        userInfo.set(fb, { name: nm || 'Koala müşterisi', avatar: null });
+        idToFb.set(usr.id, fb);
+      }
+    }
+    const ids = Array.from(idToFb.keys());
+    if (ids.length > 0) {
+      const { data: profs } = await evl0
+        .from('profiles')
+        .select('id, avatar_url')
+        .in('id', ids);
+      for (const p of profs ?? []) {
+        const fb = idToFb.get(p.id as string);
+        const info = fb && userInfo.get(fb);
+        if (info && p.avatar_url) info.avatar = p.avatar_url as string;
+      }
     }
   } catch (e) {
-    console.warn('[digest] evlumba listUsers failed:', e);
+    console.warn('[digest] evlumba user lookup failed:', e);
   }
 
-  // Tasarımcıya göre grupla.
   const byDesigner = new Map<string, { name: string; rows: PendingRow[] }>();
   for (const r of list) {
     let d = byDesigner.get(r.designer_id);
@@ -353,10 +382,15 @@ export async function GET(req: NextRequest) {
 
   for (const [designerId, group] of byDesigner) {
     try {
+      const st = stateMap.get(designerId);
+      if (st?.unsubscribed) {
+        skipped++;
+        continue;
+      }
+
       const newest = group.rows
         .map((r) => r.created_at)
         .reduce((a, b) => (a > b ? a : b));
-      const st = stateMap.get(designerId);
 
       let mode: 'digest' | 'reminder' | null = null;
       if (!st || !st.last_notified_at || newest > st.last_notified_at) {
@@ -374,7 +408,6 @@ export async function GET(req: NextRequest) {
         continue;
       }
 
-      // Tasarımcı e-postası — Evlumba auth'tan.
       const { data: userRes, error: getErr } =
         await evl.auth.admin.getUserById(designerId);
       const email = userRes?.user?.email;
@@ -383,12 +416,16 @@ export async function GET(req: NextRequest) {
         continue;
       }
 
-      // Kullanıcıya göre alt grupla.
       const byUser = new Map<string, UserGroup>();
       for (const r of group.rows) {
         let ug = byUser.get(r.user_id);
         if (!ug) {
-          ug = { name: userNames.get(r.user_id) || 'Koala müşterisi', messages: [] };
+          const info = userInfo.get(r.user_id);
+          ug = {
+            name: info?.name || 'Koala müşterisi',
+            avatar: info?.avatar || null,
+            messages: [],
+          };
           byUser.set(r.user_id, ug);
         }
         ug.messages.push({
@@ -398,13 +435,21 @@ export async function GET(req: NextRequest) {
         });
       }
 
+      const unsubscribeUrl = `${API_BASE}/api/email/unsubscribe?k=designer&d=${encodeURIComponent(designerId)}&t=${unsubToken('designer', designerId)}`;
       const { subject, html } = renderEmail({
         designerName: group.name,
         userGroups: Array.from(byUser.values()),
         total: group.rows.length,
         isReminder: mode === 'reminder',
+        unsubscribeUrl,
       });
-      await t.sendMail({ from: FROM, to: email, subject, html });
+      await t.sendMail({
+        from: FROM,
+        to: email,
+        subject,
+        html,
+        headers: { 'List-Unsubscribe': `<${unsubscribeUrl}>` },
+      });
 
       const nowIso = new Date().toISOString();
       await admin.from('koala_designer_email_state').upsert(
