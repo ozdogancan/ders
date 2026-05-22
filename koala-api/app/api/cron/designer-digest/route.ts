@@ -180,6 +180,51 @@ export async function GET(req: NextRequest) {
       { status: 500 },
     );
   }
+
+  // ─── TEST MODU ───────────────────────────────────────────────
+  // ?test=<email> → örnek verili bir digest yalnız o adrese gönderilir.
+  // Gerçek mesaj/tasarımcı sorgulanmaz, last_digest_at ilerletilmez.
+  const testEmail = req.nextUrl.searchParams.get('test');
+  if (testEmail) {
+    const sampleGroups: UserGroup[] = [
+      {
+        name: 'Ahmet Yılmaz',
+        messages: [
+          {
+            content:
+              'Merhaba! Profilinizdeki salon tasarımını çok beğendim. Kendi evim için de benzer bir çalışma yapabilir misiniz? Bütçe ve süreç hakkında bilgi alabilir miyim?',
+            attachment_url: null,
+            created_at: new Date().toISOString(),
+          },
+        ],
+      },
+      {
+        name: 'Zeynep Kaya',
+        messages: [
+          {
+            content:
+              'Yatak odası için fikirlerinizi merak ediyorum. Aşağıdaki gibi sıcak bir atmosfer istiyorum:',
+            attachment_url: 'https://picsum.photos/seed/koala/360/240',
+            created_at: new Date().toISOString(),
+          },
+        ],
+      },
+    ];
+    const { subject, html } = renderDigest('Tasarımcı', sampleGroups, 2);
+    const t = nodemailer.createTransport({
+      host: 'smtp.gmail.com',
+      port: 465,
+      secure: true,
+      auth: { user: SMTP_USER, pass },
+    });
+    try {
+      await t.sendMail({ from: FROM, to: testEmail, subject: `[TEST] ${subject}`, html });
+    } finally {
+      t.close();
+    }
+    return NextResponse.json({ test: true, sentTo: testEmail });
+  }
+
   const since =
     cfg.get('last_digest_at') ||
     new Date(Date.now() - 24 * 3600 * 1000).toISOString();
