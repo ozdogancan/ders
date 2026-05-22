@@ -41150,7 +41150,7 @@ _.c=c
 _.d=d
 _.e=e},
 bmb:function bmb(){},
-bmc:function bmc(a,b,c,d,e,f,g,h){var _=this
+bmc:function bmc(a,b,c,d,e,f,g,h,i){var _=this
 _.a=a
 _.b=b
 _.c=c
@@ -41158,7 +41158,8 @@ _.d=d
 _.e=e
 _.f=f
 _.r=g
-_.w=h},
+_.w=h
+_.x=i},
 bm8:function bm8(a,b,c,d){var _=this
 _.a=a
 _.b=b
@@ -146893,7 +146894,7 @@ A.ff()
 n=p.c
 n.toString
 s=3
-return A.c(A.eT(B.Q,B.ay,new A.bmc(p,new A.bmb(),c,j,new A.bmd(k,c,g,j,i),e,l,d),n,!1,B.ue,!1,t.H),$async$Jc)
+return A.c(A.eT(B.Q,B.ay,new A.bmc(p,new A.bmb(),c,j,new A.bmd(k,c,g,j,i),l==="evlumba-design",e,l,d),n,!1,B.ue,!1,t.H),$async$Jc)
 case 3:if(p.c!=null)p.CW=!1
 case 1:return A.k(q,r)}})
 return A.l($async$Jc,r)},
@@ -147093,8 +147094,10 @@ $4$icon$onTap$subtitle$title(a,b,c,d){var s=null,r=A.C(16),q=A.C(16),p=A.C(12),o
 return new A.W(B.yM,A.cR(!1,B.K,!0,r,A.d9(!1,q,!0,new A.W(B.YH,A.a6(A.a([A.t(s,A.bt(a,B.o,s,22),B.f,s,s,new A.D(B.a2,s,s,p,s,s,B.l),s,44,s,s,s,s,s,44),B.asL,A.ar(A.a5(A.a([A.w(d,s,s,s,s,s,B.d9,s,s),B.bj,A.w(c,s,s,s,s,s,B.c3,s,s)],o),B.v,s,B.h,B.j),1,s),B.a1w],o),B.k,B.h,B.j,0,s),s),s,!0,s,s,s,s,s,s,s,s,s,b,s,s,s,s),B.f,B.i,0,s,s,s,s,s,B.ap),s)},
 $S:939}
 A.bmc.prototype={
-$1(a){var s=this,r=null,q=A.bk(A.t(r,r,B.f,r,r,new A.D(B.N,r,r,A.C(100),r,r,B.l),r,4,r,r,r,r,r,36),r,r),p=s.b,o=s.a,n=s.c,m=p.$4$icon$onTap$subtitle$title(B.zY,new A.bm8(o,a,n,s.d),"Yapay zek\xe2 asistan\u0131ndan an\u0131nda fikir al","Koala AI'ya sor"),l=s.e,k=p.$4$icon$onTap$subtitle$title(B.a0J,new A.bm9(o,a,n,l),"Evlumba st\xfcdyosundan profesyonel destek al","Evlumba Design'a sor"),j=s.f,i=j.length!==0?j+" ile do\u011frudan konu\u015f":"Bu tasar\u0131m\u0131 yapan tasar\u0131mc\u0131yla konu\u015f"
-return A.dj(!0,new A.W(B.yU,A.a5(A.a([q,B.b7,B.anf,B.bt,m,k,p.$4$icon$onTap$subtitle$title(B.A3,new A.bma(o,a,s.r,j,s.w,n,l),i,"Tasar\u0131mc\u0131s\u0131na sor")],t.p),B.v,r,B.h,B.u),r),B.V,!1)},
+$1(a){var s,r,q=this,p=null,o=q.b,n=q.a,m=q.c,l=q.e,k=A.a([A.bk(A.t(p,p,B.f,p,p,new A.D(B.N,p,p,A.C(100),p,p,B.l),p,4,p,p,p,p,p,36),p,p),B.b7,B.anf,B.bt,o.$4$icon$onTap$subtitle$title(B.zY,new A.bm8(n,a,m,q.d),"Yapay zek\xe2 asistan\u0131ndan an\u0131nda fikir al","Koala AI'ya sor"),o.$4$icon$onTap$subtitle$title(B.a0J,new A.bm9(n,a,m,l),"Evlumba st\xfcdyosundan profesyonel destek al","Evlumba Design'a sor")],t.p)
+if(!q.f){s=q.r
+r=s.length!==0?s+" ile do\u011frudan konu\u015f":"Bu tasar\u0131m\u0131 yapan tasar\u0131mc\u0131yla konu\u015f"
+k.push(o.$4$icon$onTap$subtitle$title(B.A3,new A.bma(n,a,q.w,s,q.x,m,l),r,"Tasar\u0131mc\u0131s\u0131na sor"))}return A.dj(!0,new A.W(B.yU,A.a5(k,B.v,p,B.h,B.u),p),B.V,!1)},
 $S:304}
 A.bm8.prototype={
 $0(){var s,r,q,p=this
