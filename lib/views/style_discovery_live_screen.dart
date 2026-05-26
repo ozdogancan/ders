@@ -84,10 +84,16 @@ class _StyleDiscoveryLiveScreenState
   // 'real' (yalnız tasarımcı projeleri). Filtre ikonundan ayarlanır.
   String _sourceFilter = 'all';
 
-  // Onboarding gesture demo — kullanıcının lifetime'ında bir kez çalışır.
+  // Onboarding gesture demo — idle bekleyince çalışır; kullanıcı dokunursa
+  // iptal edilir. Session başına bir kez tetiklenir.
   late AnimationController _demoCtrl;
   bool _demoRunning = false;
-  static const String _demoFlagKey = 'koala_swipe_demo_shown_v1';
+  bool _demoShownInSession = false;
+  Timer? _demoIdleTimer;
+  static const Duration _demoIdleWait = Duration(seconds: 5);
+
+  // Kategori bazlı deck önbelleği — sekme değişiminde tekrar fetch yapma.
+  final Map<String, _CatSnapshot> _catCache = {};
 
   final List<Map<String, dynamic>> _deck = [];
   final Set<String> _seenIds = <String>{};
@@ -328,7 +334,7 @@ class _StyleDiscoveryLiveScreenState
       setState(() => _loading = false);
       _prefetchCurrentDesigner();
       _persistDeckCache();
-      unawaited(_maybeShowDemo());
+      _scheduleDemoIdleTimer();
     } catch (e) {
       debugPrint('StyleDiscoveryLive: bootstrap failed → $e');
       if (mounted) setState(() => _loading = false);
@@ -568,6 +574,8 @@ class _StyleDiscoveryLiveScreenState
 
   void _onPanUpdate(DragUpdateDetails d) {
     if (_animatingExit) return;
+    if (_demoRunning) _cancelDemo();
+    _demoIdleTimer?.cancel();
     setState(() {
       _dragDx += d.delta.dx;
       _dragDy += d.delta.dy * 0.4;
@@ -993,6 +1001,35 @@ class _StyleDiscoveryLiveScreenState
     context.push('/profile');
   }
 
+  /// Karta dokunulduğunda açılan tasarımcı profil sheet'i. Mekana uygula
+  /// aksiyonu artık altın pillte; tap = profil.
+  Future<void> _openDesignerSheet(Map<String, dynamic> card) async {
+    HapticFeedback.selectionClick();
+    final designerId = (card['designer_id'] ?? '').toString();
+    if (designerId.isEmpty) return;
+    await _loadDesigner(designerId);
+    if (!mounted) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: KoalaColors.bg,
+      barrierColor: Colors.black54,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      builder: (ctx) => DesignerProfileSheet(
+        designerId: designerId,
+        designer: _designerCache[designerId],
+        seedPool:
+            designerId == 'evlumba-design' ? List.of(_seedPool) : null,
+        onAsk: () {
+          Navigator.pop(ctx);
+          _onAskDesigner();
+        },
+      ),
+    );
+  }
+
   /// Onboarding gesture demo — lifetime'da bir kez. Önce kart Evlumba Design
   /// seeded, sağa hafifçe salınır, sola hafifçe salınır, kart commit
   /// edilmez. Kullanıcı kartların yön semantiğini öğrenir.
@@ -1017,12 +1054,39 @@ class _StyleDiscoveryLiveScreenState
     setState(() => _dragDx = dx);
   }
 
+  /// Deck hazır olduğunda 5 saniye idle bekler, ardından `_maybeShowDemo()`
+  /// çalışır. Kullanıcı bu süre içinde herhangi bir gestürü yaparsa timer
+  /// (ve demo) iptal edilir.
+  void _scheduleDemoIdleTimer() {
+    if (_demoShownInSession || _demoRunning) return;
+    _demoIdleTimer?.cancel();
+    _demoIdleTimer = Timer(_demoIdleWait, () {
+      if (!mounted) return;
+      if (_demoShownInSession || _demoRunning) return;
+      // Kullanıcı home tab'ında ve etkileşimsiz değilse sustur.
+      if (MainShell.activeTab.value != KoalaTab.home) return;
+      unawaited(_maybeShowDemo());
+    });
+  }
+
+  void _cancelDemo() {
+    if (!_demoRunning) return;
+    _demoCtrl.stop();
+    _demoShownInSession = true;
+    if (mounted) {
+      setState(() {
+        _demoRunning = false;
+        _dragDx = 0;
+        _dragDy = 0;
+      });
+    }
+  }
+
   Future<void> _maybeShowDemo() async {
+    if (_demoShownInSession || _demoRunning) return;
+    if (!mounted || _deck.isEmpty) return;
     try {
-      final prefs = await SharedPreferences.getInstance();
-      if (prefs.getBool(_demoFlagKey) ?? false) return;
-      if (!mounted || _deck.isEmpty) return;
-      // İlk Evlumba Design seeded kartı bul, deck[0]'a taşı / ekle.
+      // Evlumba Design seeded kartı deck[0]'a taşı / ekle — ilk kart o olsun.
       Map<String, dynamic>? evCard;
       int existingIdx = -1;
       for (int i = 0; i < _deck.length; i++) {
@@ -1033,7 +1097,6 @@ class _StyleDiscoveryLiveScreenState
         }
       }
       if (evCard == null) {
-        // Pool'dan seçim — henüz deck'e girmeyen ilk uygun kart.
         for (final s in _seedPool) {
           final id = s['id']?.toString() ?? '';
           if (id.isEmpty || _seenIds.contains(id)) continue;
@@ -1051,13 +1114,15 @@ class _StyleDiscoveryLiveScreenState
           });
         }
       }
-      // Bir frame bekle ki kart ekranda render olsun, sonra animasyonu çalıştır.
-      await Future<void>.delayed(const Duration(milliseconds: 600));
+      // Bir frame bekle ki kart ekranda render olsun.
+      await Future<void>.delayed(const Duration(milliseconds: 200));
       if (!mounted) return;
+      // Tekrar kontrol — kullanıcı bu arada dokunmuş olabilir.
+      if (_demoShownInSession || _demoRunning) return;
       setState(() => _demoRunning = true);
       HapticFeedback.lightImpact();
       await _demoCtrl.forward(from: 0);
-      await prefs.setBool(_demoFlagKey, true);
+      _demoShownInSession = true;
     } catch (e) {
       debugPrint('demo show failed: $e');
     }
@@ -1273,6 +1338,45 @@ class _StyleDiscoveryLiveScreenState
       await prefs.setString(_prefsCategoryKey, normalized);
     } catch (_) {}
     if (!mounted) return;
+
+    // Mevcut kategorinin durumunu önbelleğe al — kullanıcı geri dönerse tekrar
+    // fetch yapılmasın.
+    final currentKey = current ?? '';
+    _catCache[currentKey] = _CatSnapshot(
+      deck: List.of(_deck),
+      seenIds: Set.of(_seenIds),
+      history: List.of(_history),
+      index: _index,
+      offset: _offset,
+      totalCount: _totalCount,
+    );
+
+    // Hedef kategori önbellekte varsa anında geri yükle, fetch yapma.
+    final nextKey = next ?? '';
+    final cached = _catCache[nextKey];
+    if (cached != null && cached.deck.isNotEmpty) {
+      setState(() {
+        _selectedCategory = next;
+        _deck
+          ..clear()
+          ..addAll(cached.deck);
+        _seenIds
+          ..clear()
+          ..addAll(cached.seenIds);
+        _history
+          ..clear()
+          ..addAll(cached.history);
+        _index = cached.index;
+        _offset = cached.offset;
+        _totalCount = cached.totalCount;
+        _dragDx = 0;
+        _dragDy = 0;
+        _loading = false;
+      });
+      _precacheNext();
+      return;
+    }
+
     setState(() {
       _selectedCategory = next;
       _deck.clear();
@@ -1398,7 +1502,7 @@ class _StyleDiscoveryLiveScreenState
                                   showPaywall(context,
                                       trigger: 'swipe_premium_styles');
                                 }
-                              : () => _onCardTap(current),
+                              : () => _openDesignerSheet(current),
                           child: Stack(
                             children: [
                               if (_isProSlot)
@@ -1410,6 +1514,7 @@ class _StyleDiscoveryLiveScreenState
                                 prettyCategory: _prettyCategory,
                                 designer: _designerCache[
                                     (current['designer_id'] ?? '').toString()],
+                                onApply: () => _onCardTap(current),
                               ),
                               // Tap hint kalıcı olarak kaldırıldı — kullanıcı
                               // direktifi: hiçbir tutorial/hint gösterilmesin.
@@ -1533,12 +1638,14 @@ class _Card extends StatelessWidget {
     required this.coverOf,
     required this.prettyCategory,
     this.designer,
+    this.onApply,
   });
   final Map<String, dynamic> project;
   final String Function(Map<String, dynamic>) coverOf;
   // ignore: unused_element_parameter
   final String Function(String) prettyCategory;
   final Map<String, dynamic>? designer;
+  final VoidCallback? onApply;
 
   // ignore: unused_element
   IconData _roomIcon(String raw) {
@@ -1663,7 +1770,7 @@ class _Card extends StatelessWidget {
           // Kart üstü: oda pill + başlık + tagline kaldırıldı (Sor'a basınca
           // chat preview'da info olarak gösteriliyor). Sadece tasarımcı chip'i
           // ve palet alt tarafta kalıyor — kim yapmış görsel olarak anlaşılsın.
-          if (designer != null || palette.isNotEmpty)
+          if (designer != null || palette.isNotEmpty || onApply != null)
             Positioned(
               bottom: 0,
               left: 0,
@@ -1674,6 +1781,13 @@ class _Card extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
+                    if (onApply != null) ...[
+                      Align(
+                        alignment: Alignment.center,
+                        child: _ApplyPill(onTap: onApply!),
+                      ),
+                      const SizedBox(height: 16),
+                    ],
                     if (designer != null) _DesignerChip(designer: designer!),
                     if (palette.isNotEmpty) ...[
                       const SizedBox(height: 12),
@@ -3003,6 +3117,522 @@ class _SettingsButton extends StatelessWidget {
       alignment: Alignment.center,
       child: const Icon(LucideIcons.settings,
           size: 19, color: KoalaColors.text),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// Mekana uygula pill + Kategori snapshot + Designer profile sheet
+// ═══════════════════════════════════════════════════════════
+
+/// Karta yerleşen altın aksan CTA: "Mekanıma uygula" (AI restyle başlatır).
+class _ApplyPill extends StatelessWidget {
+  final VoidCallback onTap;
+  const _ApplyPill({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(100),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(100),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [Color(0xFFFFD66B), Color(0xFFEFA01F)],
+            ),
+            borderRadius: BorderRadius.circular(100),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.32),
+                blurRadius: 14,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: const Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(LucideIcons.wand, size: 16, color: Colors.white),
+              SizedBox(width: 8),
+              Text(
+                'Mekanıma uygula',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.white,
+                  letterSpacing: -0.1,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Kategori değişiminde önbelleğe alınan deck durumu — geri dönünce tekrar
+/// fetch yapılmasın.
+class _CatSnapshot {
+  final List<Map<String, dynamic>> deck;
+  final Set<String> seenIds;
+  final List<Map<String, dynamic>> history;
+  final int index;
+  final int offset;
+  final int totalCount;
+  const _CatSnapshot({
+    required this.deck,
+    required this.seenIds,
+    required this.history,
+    required this.index,
+    required this.offset,
+    required this.totalCount,
+  });
+}
+
+/// Tasarımcı profil sheet'i — karta dokununca açılır. Bilgi + diğer
+/// projeler grid + Sor aksiyonu.
+class DesignerProfileSheet extends StatefulWidget {
+  final String designerId;
+  final Map<String, dynamic>? designer;
+  final List<Map<String, dynamic>>? seedPool;
+  final VoidCallback onAsk;
+
+  const DesignerProfileSheet({
+    super.key,
+    required this.designerId,
+    required this.designer,
+    required this.onAsk,
+    this.seedPool,
+  });
+
+  @override
+  State<DesignerProfileSheet> createState() => _DesignerProfileSheetState();
+}
+
+class _DesignerProfileSheetState extends State<DesignerProfileSheet> {
+  List<Map<String, dynamic>> _projects = const [];
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadProjects();
+  }
+
+  Future<void> _loadProjects() async {
+    try {
+      List<Map<String, dynamic>> list;
+      if (widget.designerId == 'evlumba-design') {
+        list = List<Map<String, dynamic>>.from(widget.seedPool ?? const []);
+      } else {
+        list = await EvlumbaLiveService.getProjects(
+          designerId: widget.designerId,
+          limit: 30,
+        );
+      }
+      if (mounted) {
+        setState(() {
+          _projects = list;
+          _loading = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('profile sheet load failed: $e');
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  String _coverOf(Map<String, dynamic> p) {
+    for (final k in ['cover_image_url', 'cover_url', 'image_url']) {
+      final v = (p[k] ?? '').toString().trim();
+      if (v.isNotEmpty && !v.startsWith('data:')) return v;
+    }
+    final imgs = p['designer_project_images'] as List?;
+    if (imgs != null && imgs.isNotEmpty) {
+      final sorted = List<Map<String, dynamic>>.from(
+        imgs.whereType<Map>().map((e) => Map<String, dynamic>.from(e)),
+      )..sort((a, b) => ((a['sort_order'] as num?)?.toInt() ?? 9999)
+          .compareTo((b['sort_order'] as num?)?.toInt() ?? 9999));
+      return (sorted.first['image_url'] ?? '').toString();
+    }
+    return '';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final d = widget.designer;
+    final name = ((d?['full_name'] ?? d?['business_name'] ?? '') as String)
+        .trim();
+    final profession = ((d?['profession'] ?? d?['specialty'] ?? '') as String)
+        .trim();
+    final city = ((d?['city'] ?? '') as String).trim();
+    final avatar = ((d?['avatar_url'] ?? '') as String).trim();
+    final bio = ((d?['bio'] ?? d?['about'] ?? '') as String).trim();
+    final isEvlumba = widget.designerId == 'evlumba-design';
+
+    return DraggableScrollableSheet(
+      initialChildSize: 0.92,
+      minChildSize: 0.55,
+      maxChildSize: 0.96,
+      expand: false,
+      builder: (context, scrollController) {
+        return Column(
+          children: [
+            const SizedBox(height: 10),
+            Container(
+              width: 42,
+              height: 4,
+              decoration: BoxDecoration(
+                color: KoalaColors.border,
+                borderRadius: BorderRadius.circular(100),
+              ),
+            ),
+            Expanded(
+              child: ListView(
+                controller: scrollController,
+                padding: EdgeInsets.zero,
+                children: [
+                  _hero(name, profession, city, avatar, isEvlumba),
+                  _stats(),
+                  _actions(),
+                  if (bio.isNotEmpty) _aboutSection(bio),
+                  _projectsHeader(),
+                  _projectsGrid(),
+                  const SizedBox(height: 32),
+                ],
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _hero(String name, String profession, String city, String avatar,
+      bool isEvlumba) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            KoalaColors.accentSoft.withValues(alpha: 0.55),
+            KoalaColors.bg,
+          ],
+        ),
+      ),
+      child: Column(
+        children: [
+          _avatar(avatar, isEvlumba),
+          const SizedBox(height: 14),
+          Text(
+            name.isNotEmpty ? name : 'Tasarımcı',
+            style: KoalaText.h2,
+            textAlign: TextAlign.center,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+          if (profession.isNotEmpty || city.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text(
+              [profession, if (city.isNotEmpty) city]
+                  .where((s) => s.isNotEmpty)
+                  .join(' · '),
+              style: KoalaText.bodySec,
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _avatar(String url, bool isEvlumba) {
+    final hasUrl = url.isNotEmpty;
+    return Container(
+      width: 96,
+      height: 96,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: isEvlumba
+            ? const SweepGradient(
+                colors: [
+                  KoalaColors.accentDeep,
+                  KoalaColors.brandLight,
+                  Color(0xFFFFC44C),
+                  KoalaColors.accent,
+                  KoalaColors.accentDeep,
+                ],
+              )
+            : null,
+        color: isEvlumba ? null : Colors.transparent,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.10),
+            blurRadius: 18,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      padding: EdgeInsets.all(isEvlumba ? 3 : 0),
+      child: Container(
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: hasUrl ? Colors.white : KoalaColors.accentSoft,
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: hasUrl
+            ? CachedNetworkImage(
+                imageUrl: url,
+                fit: BoxFit.cover,
+                placeholder: (_, _) =>
+                    Container(color: KoalaColors.accentSoft),
+                errorWidget: (_, _, _) => const Center(
+                    child: Icon(LucideIcons.user,
+                        size: 36, color: KoalaColors.accentDeep)),
+              )
+            : const Center(
+                child: Icon(LucideIcons.user,
+                    size: 36, color: KoalaColors.accentDeep),
+              ),
+      ),
+    );
+  }
+
+  Widget _stats() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 4, 20, 16),
+      child: Row(
+        children: [
+          _stat(label: 'Tasarım', value: '${_projects.length}'),
+          _statDiv(),
+          _stat(label: 'Değerlendirme', value: '—', subtle: true),
+          _statDiv(),
+          _stat(label: 'Yanıt', value: '24s'),
+        ],
+      ),
+    );
+  }
+
+  Widget _stat(
+      {required String label, required String value, bool subtle = false}) {
+    return Expanded(
+      child: Column(
+        children: [
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w700,
+              color: subtle ? KoalaColors.textTer : KoalaColors.text,
+              letterSpacing: -0.3,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(label, style: KoalaText.labelSmall),
+        ],
+      ),
+    );
+  }
+
+  Widget _statDiv() =>
+      Container(width: 1, height: 26, color: KoalaColors.border);
+
+  Widget _actions() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 18),
+      child: SizedBox(
+        width: double.infinity,
+        child: ElevatedButton.icon(
+          onPressed: widget.onAsk,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: KoalaColors.accentDeep,
+            foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(vertical: 14),
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14)),
+            elevation: 0,
+          ),
+          icon: const Icon(LucideIcons.messageCircle, size: 18),
+          label: const Text('Sor', style: KoalaText.button),
+        ),
+      ),
+    );
+  }
+
+  Widget _aboutSection(String bio) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('HAKKINDA', style: KoalaText.caption),
+          const SizedBox(height: 6),
+          Text(bio, style: KoalaText.body),
+        ],
+      ),
+    );
+  }
+
+  Widget _projectsHeader() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 4, 20, 10),
+      child: Row(
+        children: [
+          const Text('TASARIMLARI', style: KoalaText.caption),
+          const Spacer(),
+          if (_projects.isNotEmpty)
+            Text('${_projects.length} adet', style: KoalaText.labelSmall),
+        ],
+      ),
+    );
+  }
+
+  Widget _projectsGrid() {
+    if (_loading) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 32),
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+    if (_projects.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 24),
+        child: Center(
+          child: Text(
+            'Henüz yayınlanmış tasarım yok.',
+            style: KoalaText.bodySec,
+            textAlign: TextAlign.center,
+          ),
+        ),
+      );
+    }
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: GridView.builder(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 2,
+          crossAxisSpacing: 10,
+          mainAxisSpacing: 10,
+          childAspectRatio: 0.78,
+        ),
+        itemCount: _projects.length,
+        itemBuilder: (_, i) {
+          final p = _projects[i];
+          final cover = _coverOf(p);
+          final title = (p['title'] ?? '').toString();
+          return GestureDetector(
+            onTap: () => _showProjectPreview(cover, title),
+            behavior: HitTestBehavior.opaque,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(14),
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  if (cover.isNotEmpty)
+                    CachedNetworkImage(
+                      imageUrl: cover,
+                      fit: BoxFit.cover,
+                      memCacheWidth: 400,
+                      placeholder: (_, _) =>
+                          Container(color: KoalaColors.surfaceAlt),
+                      errorWidget: (_, _, _) =>
+                          Container(color: KoalaColors.surfaceAlt),
+                    )
+                  else
+                    Container(color: KoalaColors.surfaceAlt),
+                  Positioned.fill(
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            Colors.transparent,
+                            Colors.black.withValues(alpha: 0.55),
+                          ],
+                          stops: const [0.55, 1.0],
+                        ),
+                      ),
+                    ),
+                  ),
+                  if (title.isNotEmpty)
+                    Positioned(
+                      left: 10,
+                      right: 10,
+                      bottom: 10,
+                      child: Text(
+                        title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: -0.1,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  void _showProjectPreview(String cover, String title) {
+    if (cover.isEmpty) return;
+    showDialog<void>(
+      context: context,
+      barrierColor: Colors.black.withValues(alpha: 0.9),
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(18),
+              child: CachedNetworkImage(
+                imageUrl: cover,
+                fit: BoxFit.contain,
+              ),
+            ),
+            const SizedBox(height: 12),
+            if (title.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Text(
+                  title,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            const SizedBox(height: 12),
+            IconButton(
+              icon: const Icon(LucideIcons.x, color: Colors.white),
+              onPressed: () => Navigator.pop(ctx),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
