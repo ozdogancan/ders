@@ -72,7 +72,7 @@ class _StyleDiscoveryLiveScreenState
   // Sadece canlı verilerde gerçekten proje olan kategoriler listelenir.
   static const List<({String key, String label, IconData icon})>
       _categoryOptions = [
-    (key: '', label: 'Hepsi', icon: LucideIcons.sparkles),
+    (key: '', label: 'Hepsi', icon: LucideIcons.layoutGrid),
     (key: 'Oturma Odası', label: 'Oturma Odası', icon: LucideIcons.sofa),
     (key: 'Yatak Odası', label: 'Yatak Odası', icon: LucideIcons.bed),
     (key: 'Mutfak', label: 'Mutfak', icon: LucideIcons.chefHat),
@@ -80,6 +80,9 @@ class _StyleDiscoveryLiveScreenState
     (key: 'Antre', label: 'Antre', icon: LucideIcons.doorOpen),
   ];
   String? _selectedCategory; // null = Hepsi
+  // Tasarım kaynağı filtresi — 'all' (hepsi), 'evlumba' (yalnız Evlumba Design),
+  // 'real' (yalnız tasarımcı projeleri). Filtre ikonundan ayarlanır.
+  String _sourceFilter = 'all';
 
   final List<Map<String, dynamic>> _deck = [];
   final Set<String> _seenIds = <String>{};
@@ -154,7 +157,7 @@ class _StyleDiscoveryLiveScreenState
     MainShell.activeTab.addListener(_onTabActivate);
     // İlk mount swipe tab'ında olabilir; tab listener fire etmez. Hemen kontrol et.
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (MainShell.activeTab.value == KoalaTab.swipe) {
+      if (MainShell.activeTab.value == KoalaTab.home) {
         _maybeShowRealizeHint();
       }
     });
@@ -384,26 +387,32 @@ class _StyleDiscoveryLiveScreenState
     if (_fetchingMore) return;
     _fetchingMore = true;
     try {
-      final batch = await EvlumbaLiveService.getProjects(
-        limit: _batchSize,
-        offset: _offset,
-        projectType: _selectedCategory,
-      );
-      _offset += _batchSize;
-      // Wrap-around: bir tur tamamlandıysa başa dön ve seenIds temizle
-      if (batch.isEmpty) {
-        _offset = 0;
-        _seenIds.clear();
-        final retry = await EvlumbaLiveService.getProjects(
+      // Kaynak filtresi 'evlumba' iken Evlumba projelerini hiç çekme —
+      // sadece seeded havuzdan harmanla.
+      final List<Map<String, dynamic>> batch;
+      if (_sourceFilter == 'evlumba') {
+        batch = <Map<String, dynamic>>[];
+      } else {
+        batch = await EvlumbaLiveService.getProjects(
           limit: _batchSize,
-          offset: 0,
+          offset: _offset,
           projectType: _selectedCategory,
         );
-        _offset = _batchSize;
-        batch.addAll(retry);
+        _offset += _batchSize;
+        // Wrap-around: bir tur tamamlandıysa başa dön ve seenIds temizle
+        if (batch.isEmpty) {
+          _offset = 0;
+          _seenIds.clear();
+          final retry = await EvlumbaLiveService.getProjects(
+            limit: _batchSize,
+            offset: 0,
+            projectType: _selectedCategory,
+          );
+          _offset = _batchSize;
+          batch.addAll(retry);
+        }
+        batch.shuffle(_rng);
       }
-      // Batch'i karıştır — random sıra
-      batch.shuffle(_rng);
       // Dedup + görsel filtrele
       final filtered = <Map<String, dynamic>>[];
       for (final p in batch) {
@@ -413,7 +422,8 @@ class _StyleDiscoveryLiveScreenState
         _seenIds.add(id);
         filtered.add(p);
       }
-      // Evlumba Design seeded kartlarını batch'e harmanla.
+      // Evlumba Design seeded kartlarını batch'e harmanla (kaynak filtresi
+      // 'real' değilse).
       _blendSeedCards(filtered);
       debugPrint(
           'StyleDiscoveryLive: batch=${batch.length} filtered=${filtered.length} deck=${_deck.length + filtered.length} offset=$_offset');
@@ -476,6 +486,8 @@ class _StyleDiscoveryLiveScreenState
   /// batch'e harmanlar (en çok 5 / batch).
   void _blendSeedCards(List<Map<String, dynamic>> batch) {
     if (_seedPool.isEmpty) return;
+    // Kaynak filtresi 'real' iken seeded kartları gizle.
+    if (_sourceFilter == 'real') return;
     final cat = _selectedCategory?.trim().toLowerCase();
     var added = 0;
     for (final s in _seedPool) {
@@ -782,7 +794,7 @@ class _StyleDiscoveryLiveScreenState
     // Evlumba Design olduğu için 3. seçenek gizlenir → 2 seçenek kalır.
     final isEvlumbaDesign = designerId == 'evlumba-design';
     Widget askOption({
-      required IconData icon,
+      required Widget leading,
       required String title,
       required String subtitle,
       required VoidCallback onTap,
@@ -791,24 +803,15 @@ class _StyleDiscoveryLiveScreenState
         padding: const EdgeInsets.symmetric(vertical: 5),
         child: Material(
           color: KoalaColors.surface,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(18),
           child: InkWell(
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(18),
             onTap: onTap,
             child: Padding(
-              padding: const EdgeInsets.all(13),
+              padding: const EdgeInsets.fromLTRB(12, 12, 14, 12),
               child: Row(
                 children: [
-                  Container(
-                    width: 44,
-                    height: 44,
-                    decoration: BoxDecoration(
-                      color: KoalaColors.accentSoft,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Icon(icon,
-                        color: KoalaColors.accentDeep, size: 22),
-                  ),
+                  SizedBox(width: 48, height: 48, child: leading),
                   const SizedBox(width: 13),
                   Expanded(
                     child: Column(
@@ -865,7 +868,10 @@ class _StyleDiscoveryLiveScreenState
               ),
               const SizedBox(height: 6),
               askOption(
-                icon: Icons.auto_awesome_rounded,
+                leading: const _AskLeading(
+                  icon: Icons.auto_awesome_rounded,
+                  gradient: true,
+                ),
                 title: "Koala AI'ya sor",
                 subtitle: 'Yapay zekâ asistanından anında fikir al',
                 onTap: () {
@@ -878,7 +884,10 @@ class _StyleDiscoveryLiveScreenState
                 },
               ),
               askOption(
-                icon: Icons.home_work_rounded,
+                leading: const _AskLeading(
+                  imageUrl: _evlumbaDesignAvatarUrl,
+                  icon: Icons.home_work_rounded,
+                ),
                 title: "Evlumba Design'a sor",
                 subtitle: 'Evlumba stüdyosundan profesyonel destek al',
                 onTap: () {
@@ -893,7 +902,11 @@ class _StyleDiscoveryLiveScreenState
               ),
               if (!isEvlumbaDesign)
                 askOption(
-                  icon: Icons.person_rounded,
+                  leading: _AskLeading(
+                    imageUrl:
+                        designerAvatar.isNotEmpty ? designerAvatar : null,
+                    icon: Icons.person_rounded,
+                  ),
                   title: 'Tasarımcısına sor',
                   subtitle: designerName.isNotEmpty
                       ? '$designerName ile doğrudan konuş'
@@ -934,12 +947,54 @@ class _StyleDiscoveryLiveScreenState
   Future<void> _loadDesigner(String designerId) async {
     if (designerId.isEmpty) return;
     if (_designerCache.containsKey(designerId)) return;
+    // Evlumba Design seeded kartları için sentetik tasarımcı — Evlumba
+    // marketplace DB'sinde böyle bir profil yok; UI badge + avatar için
+    // sabit bir kayıt kullanıyoruz.
+    if (designerId == 'evlumba-design') {
+      const synthetic = <String, dynamic>{
+        'id': 'evlumba-design',
+        'full_name': 'Evlumba Design',
+        'business_name': 'Evlumba Design',
+        'profession': 'İç Mimari Stüdyosu',
+        'avatar_url':
+            'https://xgefjepaqnghaotqybpi.supabase.co/storage/v1/object/public/koala-seed/avatars/evlumba-design.webp',
+      };
+      if (mounted) setState(() => _designerCache[designerId] = synthetic);
+      return;
+    }
     if (_designerInFlight.contains(designerId)) return;
     _designerInFlight.add(designerId);
     final d = await EvlumbaLiveService.getDesigner(designerId);
     _designerInFlight.remove(designerId);
     if (!mounted || d == null) return;
     setState(() => _designerCache[designerId] = d);
+  }
+
+  /// AppBar filtre ikonundan açılır: tasarım kaynağı 3-yönlü filtre.
+  Future<void> _openFilters() async {
+    HapticFeedback.selectionClick();
+    final next = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: KoalaColors.bg,
+      barrierColor: Colors.black54,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) => _FiltersSheet(current: _sourceFilter),
+    );
+    if (next == null || next == _sourceFilter || !mounted) return;
+    setState(() {
+      _sourceFilter = next;
+      _deck.clear();
+      _seenIds.clear();
+      _history.clear();
+      _index = 0;
+      _offset = 0;
+      _dragDx = 0;
+      _dragDy = 0;
+      _loading = true;
+    });
+    await _bootstrap();
   }
 
   @override
@@ -950,7 +1005,7 @@ class _StyleDiscoveryLiveScreenState
   }
 
   void _onTabActivate() {
-    if (MainShell.activeTab.value != KoalaTab.swipe) return;
+    if (MainShell.activeTab.value != KoalaTab.home) return;
     if (_selectedCategory != null) _applyCategory('');
     // Cold-start başına bir kez tutorial — kullanıcı ilk swipe'a geçtiğinde.
     _maybeShowRealizeHint();
@@ -972,16 +1027,19 @@ class _StyleDiscoveryLiveScreenState
         elevation: 0,
         automaticallyImplyLeading: false,
         titleSpacing: 20,
-        toolbarHeight: 64,
-        title: const Text(
-          'Tarzını Keşfet',
-          style: TextStyle(
-            fontSize: 24,
-            fontWeight: FontWeight.w700,
-            color: KoalaColors.text,
-            letterSpacing: -0.5,
+        toolbarHeight: 88,
+        title: const _BrandLockup(),
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: IconButton(
+              icon: const Icon(LucideIcons.slidersHorizontal,
+                  size: 22, color: KoalaColors.text),
+              tooltip: 'Filtreler',
+              onPressed: _openFilters,
+            ),
           ),
-        ),
+        ],
       ),
       body: SafeArea(
         top: false,
@@ -2636,6 +2694,279 @@ class _SwipeOpt extends StatelessWidget {
                 ),
               ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// Brand lockup + Sor popup avatarları + Filtreler sheet
+// ═══════════════════════════════════════════════════════════
+
+const String _evlumbaDesignAvatarUrl =
+    'https://xgefjepaqnghaotqybpi.supabase.co/storage/v1/object/public/koala-seed/avatars/evlumba-design.webp';
+
+/// AppBar başlığı: "koala by evlumba" wordmark + slogan. Inter (theme).
+class _BrandLockup extends StatelessWidget {
+  const _BrandLockup();
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisAlignment: MainAxisAlignment.center,
+      mainAxisSize: MainAxisSize.min,
+      children: const [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.baseline,
+          textBaseline: TextBaseline.alphabetic,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'koala',
+              style: TextStyle(
+                fontSize: 28,
+                fontWeight: FontWeight.w800,
+                color: KoalaColors.ink,
+                letterSpacing: -1.2,
+                height: 1.0,
+              ),
+            ),
+            SizedBox(width: 5),
+            Padding(
+              padding: EdgeInsets.only(bottom: 2),
+              child: Text(
+                'by evlumba',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: KoalaColors.accentDeep,
+                  letterSpacing: 0.1,
+                ),
+              ),
+            ),
+          ],
+        ),
+        SizedBox(height: 3),
+        Text(
+          'Evin için ilham ve hızlı tasarım.',
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+            color: KoalaColors.textTer,
+            letterSpacing: -0.1,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Sor popup'ında her seçenek için 48x48 yuvarlak başlangıç.
+/// `imageUrl` varsa CachedNetworkImage; yoksa gradient/soft daire + ikon.
+class _AskLeading extends StatelessWidget {
+  final String? imageUrl;
+  final IconData? icon;
+  final bool gradient;
+  const _AskLeading({this.imageUrl, this.icon, this.gradient = false});
+
+  @override
+  Widget build(BuildContext context) {
+    final hasImage = imageUrl != null && imageUrl!.isNotEmpty;
+    return Container(
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: gradient && !hasImage
+            ? const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [KoalaColors.accentDeep, KoalaColors.accent],
+              )
+            : null,
+        color: hasImage
+            ? null
+            : (gradient ? null : KoalaColors.accentSoft),
+        boxShadow: [
+          BoxShadow(
+            color: KoalaColors.accent.withValues(alpha: 0.16),
+            blurRadius: 8,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      clipBehavior: hasImage ? Clip.antiAlias : Clip.none,
+      child: hasImage
+          ? CachedNetworkImage(
+              imageUrl: imageUrl!,
+              fit: BoxFit.cover,
+              placeholder: (_, _) => Container(color: KoalaColors.accentSoft),
+              errorWidget: (_, _, _) => Container(
+                color: KoalaColors.accentSoft,
+                child: Icon(
+                  icon ?? Icons.person_rounded,
+                  color: KoalaColors.accentDeep,
+                  size: 22,
+                ),
+              ),
+            )
+          : Center(
+              child: Icon(
+                icon ?? Icons.help_outline_rounded,
+                size: 22,
+                color: gradient ? Colors.white : KoalaColors.accentDeep,
+              ),
+            ),
+    );
+  }
+}
+
+/// AppBar filtre ikonundan açılır: tasarım kaynağı 3-yönlü filtre.
+class _FiltersSheet extends StatefulWidget {
+  final String current;
+  const _FiltersSheet({required this.current});
+  @override
+  State<_FiltersSheet> createState() => _FiltersSheetState();
+}
+
+class _FiltersSheetState extends State<_FiltersSheet> {
+  late String _value = widget.current;
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 18),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 36,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: KoalaColors.border,
+                  borderRadius: BorderRadius.circular(100),
+                ),
+              ),
+            ),
+            const SizedBox(height: 14),
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 2),
+              child: Text('Filtreler', style: KoalaText.h2),
+            ),
+            const SizedBox(height: 14),
+            const Padding(
+              padding: EdgeInsets.only(left: 4, bottom: 8),
+              child: Text('Tasarım kaynağı', style: KoalaText.caption),
+            ),
+            _FilterTile(
+              icon: LucideIcons.layoutGrid,
+              title: 'Hepsi',
+              subtitle: 'Tüm tasarımları göster',
+              selected: _value == 'all',
+              onTap: () => setState(() => _value = 'all'),
+            ),
+            _FilterTile(
+              icon: LucideIcons.sparkles,
+              title: 'Evlumba Design',
+              subtitle: 'Yalnız stüdyo tasarımları',
+              selected: _value == 'evlumba',
+              onTap: () => setState(() => _value = 'evlumba'),
+            ),
+            _FilterTile(
+              icon: LucideIcons.users,
+              title: 'Tasarımcı projeleri',
+              subtitle: 'Yalnız gerçek tasarımcı projeleri',
+              selected: _value == 'real',
+              onTap: () => setState(() => _value = 'real'),
+            ),
+            const SizedBox(height: 14),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: KoalaColors.accentDeep,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  elevation: 0,
+                ),
+                onPressed: () => Navigator.pop(context, _value),
+                child: const Text('Uygula', style: KoalaText.button),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _FilterTile extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final bool selected;
+  final VoidCallback onTap;
+  const _FilterTile({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Material(
+        color: selected ? KoalaColors.accentSoft : KoalaColors.surface,
+        borderRadius: BorderRadius.circular(14),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(14),
+          child: Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: selected
+                    ? KoalaColors.accentDeep.withValues(alpha: 0.4)
+                    : KoalaColors.borderSolid,
+                width: selected ? 1.2 : 0.8,
+              ),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  icon,
+                  color: selected
+                      ? KoalaColors.accentDeep
+                      : KoalaColors.textSec,
+                  size: 22,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(title, style: KoalaText.h4),
+                      const SizedBox(height: 1),
+                      Text(subtitle, style: KoalaText.bodySmall),
+                    ],
+                  ),
+                ),
+                if (selected)
+                  const Icon(Icons.check_circle_rounded,
+                      color: KoalaColors.accentDeep, size: 20),
+              ],
+            ),
           ),
         ),
       ),

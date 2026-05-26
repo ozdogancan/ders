@@ -102,9 +102,26 @@ class BillingService {
     }
   }
 
+  /// Son satın alma denemesinden kalan tanı verileri. UI bu üçünü okuyup
+  /// kullanıcıya neyin yanlış gittiğini söyleyebilir ya da iptali sessizce
+  /// geçebilir.
+  static String? _lastErrorCode;
+  static String? _lastErrorMessage;
+  static bool _lastWasCancellation = false;
+  static String? get lastErrorCode => _lastErrorCode;
+  static String? get lastErrorMessage => _lastErrorMessage;
+  static bool get lastWasCancellation => _lastWasCancellation;
+
   /// Purchase a package, then verify with backend. Returns true on success.
+  /// Hata/iptal halinde [lastErrorMessage]/[lastWasCancellation] doldurulur.
   static Future<bool> purchase(Package pkg) async {
-    if (!_initialized) return false;
+    _lastErrorCode = null;
+    _lastErrorMessage = null;
+    _lastWasCancellation = false;
+    if (!_initialized) {
+      _lastErrorMessage = 'Satın alma servisi başlatılamadı (RevenueCat).';
+      return false;
+    }
     try {
       final result = await Purchases.purchasePackage(pkg);
       // RevenueCat already grants entitlement client-side. Verify with our backend
@@ -113,6 +130,8 @@ class BillingService {
       final entitlement = result.customerInfo.entitlements.active['pro'];
       if (entitlement == null) {
         debugPrint('[billing] purchase ok but no pro entitlement');
+        _lastErrorMessage =
+            'Satın alma alındı ama Pro hakkı aktive edilemedi.';
         return false;
       }
       // RevenueCat doesn't expose the raw Play purchaseToken on the entitlement.
@@ -125,9 +144,19 @@ class BillingService {
       return true;
     } on PlatformException catch (e) {
       debugPrint('[billing] purchase failed: ${e.code} ${e.message}');
+      _lastErrorCode = e.code;
+      _lastErrorMessage = e.message;
+      final lower = (e.message ?? '').toLowerCase();
+      if (e.code == 'PURCHASE_CANCELLED' ||
+          e.code == '1' ||
+          lower.contains('cancel') ||
+          lower.contains('iptal')) {
+        _lastWasCancellation = true;
+      }
       return false;
     } catch (e) {
       debugPrint('[billing] purchase failed: $e');
+      _lastErrorMessage = e.toString();
       return false;
     }
   }

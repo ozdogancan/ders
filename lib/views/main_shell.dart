@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
 import '../core/theme/koala_tokens.dart';
@@ -7,20 +8,19 @@ import '../helpers/paywall_router.dart';
 import '../providers/pro_status_provider.dart';
 import '../services/background_gen.dart';
 import '../widgets/koala_bottom_nav.dart';
+import 'chat_detail_screen.dart';
 import 'chat_list_screen.dart';
-import 'home_screen.dart';
+import 'mekan/wizard/mekan_wizard_screen.dart';
 import 'projeler_screen.dart';
 import 'splash_screen.dart';
 import 'style_discovery_live_screen.dart';
 
-/// Cold-start guard — entry paywall should appear at most once per app launch,
-/// regardless of MainShell rebuilds, tab switches or remounts.
+/// Cold-start guard — entry paywall should appear at most once per app launch.
 bool _entryPaywallShownThisLaunch = false;
 
-/// Ana 4-tab kabuk — Ana Sayfa | Mesajlar | Swipe | Projeler.
-/// Nav SABİT kalır, tab değişince sadece içerik IndexedStack ile değişir
-/// (animasyon yok, sıçrama yok). Detay ekranları bu shell'in ÜSTÜNE
-/// Navigator.push ile gelir; o sırada nav doğal olarak gizlenir.
+/// Ana 4-sekme kabuk + ortada "Paylaş" FAB.
+/// L→R: Ana Sayfa (swipe) | Mesajlar | [Paylaş] | AI | Projeler.
+/// Paylaş bir sekme DEĞİL — bir aksiyon (foto yükle → MekanWizard).
 class MainShell extends ConsumerStatefulWidget {
   final int initialIndex;
   const MainShell({super.key, this.initialIndex = 0});
@@ -28,16 +28,11 @@ class MainShell extends ConsumerStatefulWidget {
   @override
   ConsumerState<MainShell> createState() => MainShellState();
 
-  /// Singleton instance — pushed route'lar (mekan flow, project detail vs)
-  /// için context ağacı üzerinden bulunamaz. initState/dispose'da set edilir.
   static MainShellState? _instance;
 
-  /// MainShell state'ine globalden eriş — sekme değiştirmek, nav göster/gizle.
-  /// Context şart değil; pushed route'tan da çağrılabilir.
   static MainShellState? of([BuildContext? _]) => _instance;
 
-  /// Sekme değişimi olduğunda yayın yapan global notifier — ekranlar buna
-  /// abone olup "ben az önce göründüm" anında state reset edebilir.
+  /// Sekme değişimi olduğunda yayın yapan global notifier.
   static final ValueNotifier<KoalaTab> activeTab =
       ValueNotifier<KoalaTab>(KoalaTab.home);
 }
@@ -49,6 +44,7 @@ class MainShellState extends ConsumerState<MainShell> {
   int _unread = 0;
   bool _navVisible = true;
   _GateState _gate = _GateState.loading;
+  final ImagePicker _picker = ImagePicker();
 
   @override
   void initState() {
@@ -59,8 +55,6 @@ class MainShellState extends ConsumerState<MainShell> {
   }
 
   Future<void> _resolveGate() async {
-    // Hard fail-safe: gate ne olursa olsun 5sn içinde açılır. Boş ekran takılı
-    // kalmasın diye. Pro fetch / paywall render hata verirse bile home gelir.
     Future.delayed(const Duration(seconds: 5), () {
       if (!mounted) return;
       if (_gate != _GateState.passed) {
@@ -139,7 +133,7 @@ class MainShellState extends ConsumerState<MainShell> {
                 Container(
                   width: 32,
                   height: 32,
-                  decoration: BoxDecoration(
+                  decoration: const BoxDecoration(
                     shape: BoxShape.circle,
                     color: KoalaColors.accentDeep,
                   ),
@@ -184,10 +178,7 @@ class MainShellState extends ConsumerState<MainShell> {
   void switchTab(KoalaTab tab) {
     final next = _tabToIndex(tab);
     if (next == _index) return;
-    // Visual change first — paint the new tab synchronously.
     setState(() => _index = next);
-    // Notify global listeners on the next microtask so any expensive
-    // "I just became active" listener work doesn't block the frame.
     Future<void>.delayed(Duration.zero, () {
       MainShell.activeTab.value = tab;
     });
@@ -198,7 +189,6 @@ class MainShellState extends ConsumerState<MainShell> {
     setState(() => _unread = count);
   }
 
-  /// Sekme nav'ı geçici olarak gizle (örn. select-mode bottom bar'a yer aç).
   void setNavVisible(bool visible) {
     if (visible == _navVisible) return;
     setState(() => _navVisible = visible);
@@ -210,7 +200,7 @@ class MainShellState extends ConsumerState<MainShell> {
         return 0;
       case KoalaTab.chat:
         return 1;
-      case KoalaTab.swipe:
+      case KoalaTab.ai:
         return 2;
       case KoalaTab.projeler:
         return 3;
@@ -222,7 +212,7 @@ class MainShellState extends ConsumerState<MainShell> {
       case 1:
         return KoalaTab.chat;
       case 2:
-        return KoalaTab.swipe;
+        return KoalaTab.ai;
       case 3:
         return KoalaTab.projeler;
       default:
@@ -230,12 +220,44 @@ class MainShellState extends ConsumerState<MainShell> {
     }
   }
 
+  /// Paylaş aksiyonu — Pro gate sonrası foto seçici → MekanWizardScreen.
+  Future<void> _onPaylasTap() async {
+    final pro = ref.read(proStatusProvider).value?.isPro ?? false;
+    if (!pro) {
+      await showPaywall(context, trigger: 'paylas_tab');
+      return;
+    }
+    if (!mounted) return;
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      backgroundColor: KoalaColors.bg,
+      barrierColor: Colors.black54,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (_) => const _PaylasSourceSheet(),
+    );
+    if (source == null || !mounted) return;
+    try {
+      final f = await _picker.pickImage(
+        source: source,
+        maxWidth: 1024,
+        imageQuality: 60,
+      );
+      if (f == null || !mounted) return;
+      final bytes = await f.readAsBytes();
+      if (!mounted) return;
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => MekanWizardScreen(photoBytes: bytes),
+        ),
+      );
+    } catch (_) {/* swallow — kullanıcı iptal */}
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_gate != _GateState.passed) {
-      // Pro durumu çözülene kadar SplashScreen görünür kalır — SS1'in
-      // progress'i kesintisiz akar, gate çözülünce paywall onun üstüne açılır.
-      // Böylece splash ile Pro popup arasında boş/krem flaş olmaz.
       return const SplashScreen();
     }
     return _buildHome(context);
@@ -249,9 +271,9 @@ class MainShellState extends ConsumerState<MainShell> {
       body: IndexedStack(
         index: _index,
         children: const [
-          HomeScreen(),
-          ChatListScreen(),
           StyleDiscoveryLiveScreen(),
+          ChatListScreen(),
+          ChatDetailScreen(),
           ProjelerScreen(),
         ],
       ),
@@ -260,9 +282,105 @@ class MainShellState extends ConsumerState<MainShell> {
               current: _indexToTab(_index),
               unreadMessages: _unread,
               onSelect: (tab) => switchTab(tab),
+              onPaylasTap: _onPaylasTap,
             )
           : null,
     );
   }
 }
 
+// ─── Paylaş source picker sheet ───
+class _PaylasSourceSheet extends StatelessWidget {
+  const _PaylasSourceSheet();
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Center(
+              child: Container(
+                width: 36,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: KoalaColors.border,
+                  borderRadius: BorderRadius.circular(100),
+                ),
+              ),
+            ),
+            const SizedBox(height: 18),
+            const Text('Mekânını paylaş', style: KoalaText.h2),
+            const SizedBox(height: 6),
+            const Text(
+              'Bir oda fotoğrafı yükle, AI senin için yeniden tasarlasın.',
+              textAlign: TextAlign.center,
+              style: KoalaText.bodySec,
+            ),
+            const SizedBox(height: 22),
+            Row(
+              children: [
+                Expanded(
+                  child: _SourceBtn(
+                    icon: LucideIcons.camera,
+                    label: 'Kamera',
+                    onTap: () => Navigator.pop(context, ImageSource.camera),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _SourceBtn(
+                    icon: LucideIcons.image,
+                    label: 'Galeri',
+                    onTap: () => Navigator.pop(context, ImageSource.gallery),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SourceBtn extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  const _SourceBtn({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: KoalaColors.surface,
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 22),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: KoalaColors.borderSolid),
+          ),
+          child: Column(
+            children: [
+              Icon(icon, size: 26, color: KoalaColors.accentDeep),
+              const SizedBox(height: 8),
+              Text(label, style: KoalaText.label),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}

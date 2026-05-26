@@ -180,35 +180,32 @@ abstract final class KoalaDeco {
 
 // ─── Text Styles ───
 //
-// NOT: `brand` + `serif` eskiden `fontFamily: 'Georgia'` idi — ancak Georgia
-// pubspec'te declared DEĞİL, Flutter web'de sessizce browser serif'ine (Times)
-// fallback ediyordu. Cihaz/OS'ye göre aynı kelime farklı görünüyordu, marka
-// tutarsızlığı yaratıyordu.
-//
-// Çözüm: `google_fonts` paketi zaten dep. Fraunces editorial serif, Koala'nın
-// sıcak-krem estetiğine Georgia'dan daha iyi oturuyor. İlk web load'da ufak
-// CDN fetch (~40KB), cache'leniyor. Mobile'da package otomatik local cache'e
-// yazıyor. `const` kaybını kabul ediyoruz — brand style'ı zaten sık kullanılmaz.
+// 2026-05-25: Tipografi Inter'e geçti. Instagram/WhatsApp/ChatGPT seviyesi
+// günlük netlik. Editorial serif (Fraunces) ve Plus Jakarta Sans'ın yerine
+// tek nötr, okunaklı aile. Theme `app_theme.dart`'ta interTextTheme() ile
+// global olarak set ediliyor; const TextStyle'lar Inter'i theme üzerinden
+// miras alır.
 abstract final class KoalaText {
-  // Brand — hero lockup (44px serif)
-  static TextStyle get brand => GoogleFonts.fraunces(
+  // Brand — hero lockup (44px, sıkı letter-spacing).
+  static TextStyle get brand => GoogleFonts.inter(
         fontSize: 44,
-        fontWeight: FontWeight.w700,
+        fontWeight: FontWeight.w800,
         color: KoalaColors.text,
-        letterSpacing: -1.9,
+        letterSpacing: -1.7,
+        height: 1.0,
       );
 
-  /// Editorial serif helper — h1/h2 seviyesinde "magazine" his vermek için.
-  /// Eski `fontFamily: 'Georgia'` kullanımlarının yerine geçer.
+  /// Eskiden serif (Fraunces). Geçişi kırmamak için aynı imza ile Inter
+  /// dönüyor — heading/magazine yerlerinde kalın Inter ile aynı etki.
   static TextStyle serif({
     double fontSize = 18,
-    FontWeight fontWeight = FontWeight.w600,
+    FontWeight fontWeight = FontWeight.w700,
     Color color = KoalaColors.text,
-    double letterSpacing = -0.2,
+    double letterSpacing = -0.3,
     double? height,
     FontStyle? fontStyle,
   }) =>
-      GoogleFonts.fraunces(
+      GoogleFonts.inter(
         fontSize: fontSize,
         fontWeight: fontWeight,
         color: color,

@@ -17,7 +17,7 @@ class AppTheme {
 
     return ThemeData(
       useMaterial3: true,
-      textTheme: GoogleFonts.plusJakartaSansTextTheme(),
+      textTheme: GoogleFonts.interTextTheme(),
       colorScheme: colorScheme,
       // Single source of truth for app-wide screen background.
       // Chat screens override explicitly (see chat_detail_screen.dart:1298).
@@ -66,7 +66,7 @@ class AppTheme {
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(17),
         ),
-        contentTextStyle: GoogleFonts.plusJakartaSans(
+        contentTextStyle: GoogleFonts.inter(
           color: Colors.white,
           fontSize: 13.5,
           fontWeight: FontWeight.w600,

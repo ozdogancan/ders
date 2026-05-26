@@ -5,18 +5,25 @@ import 'package:lucide_icons/lucide_icons.dart';
 
 import '../core/theme/koala_tokens.dart';
 
-/// Glassmorphism alt navigasyon — snaphome benzeri, floating, rounded pill.
-/// 4 sekme: Ana Sayfa | Mesajlar | Swipe | Projeler. Seçili sekme accentSoft
-/// dolgulu ve büyütülmüş.
+/// Alt nav — 4 hedef + ortada "Paylaş" FAB.
+///
+/// Sekmeler L→R: Ana Sayfa | Mesajlar | [Paylaş] | AI | Projeler.
+/// Paylaş bir tab değil, bir aksiyondur — foto yükleyip MekanWizard'a girer.
+///
+/// Görsel: floating glass-pill (önceki nav'la aynı silüet), seçili durumda
+/// göze batmayan ince renk + minik scale + bold-leşen etiket. Geçişler
+/// AnimatedScale / AnimatedDefaultTextStyle ile yumuşak.
 class KoalaBottomNav extends StatelessWidget {
   final KoalaTab current;
   final void Function(KoalaTab) onSelect;
+  final VoidCallback onPaylasTap;
   final int unreadMessages;
 
   const KoalaBottomNav({
     super.key,
     required this.current,
     required this.onSelect,
+    required this.onPaylasTap,
     this.unreadMessages = 0,
   });
 
@@ -25,37 +32,37 @@ class KoalaBottomNav extends StatelessWidget {
     final bottom = MediaQuery.of(context).padding.bottom;
     return SafeArea(
       top: false,
-      minimum: EdgeInsets.only(bottom: bottom > 0 ? 6 : 14),
+      minimum: EdgeInsets.only(bottom: bottom > 0 ? 8 : 16),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16),
+        padding: const EdgeInsets.symmetric(horizontal: 14),
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(38),
+          borderRadius: BorderRadius.circular(34),
           child: BackdropFilter(
-            filter: ui.ImageFilter.blur(sigmaX: 26, sigmaY: 26),
+            filter: ui.ImageFilter.blur(sigmaX: 24, sigmaY: 24),
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+              height: 64,
+              padding: const EdgeInsets.symmetric(horizontal: 8),
               decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.62),
-                borderRadius: BorderRadius.circular(38),
+                color: Colors.white.withValues(alpha: 0.68),
+                borderRadius: BorderRadius.circular(34),
                 border: Border.all(
-                  color: Colors.white.withValues(alpha: 0.72),
+                  color: Colors.white.withValues(alpha: 0.7),
                   width: 0.8,
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.12),
-                    blurRadius: 28,
-                    offset: const Offset(0, 10),
+                    color: Colors.black.withValues(alpha: 0.10),
+                    blurRadius: 24,
+                    offset: const Offset(0, 8),
                   ),
                   BoxShadow(
-                    color: KoalaColors.accent.withValues(alpha: 0.06),
+                    color: KoalaColors.accent.withValues(alpha: 0.05),
                     blurRadius: 18,
                     offset: const Offset(0, 4),
                   ),
                 ],
               ),
               child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [
                   _NavItem(
                     icon: LucideIcons.home,
@@ -70,11 +77,12 @@ class KoalaBottomNav extends StatelessWidget {
                     badge: unreadMessages,
                     onTap: () => onSelect(KoalaTab.chat),
                   ),
+                  _PaylasFab(onTap: onPaylasTap),
                   _NavItem(
                     icon: LucideIcons.sparkles,
-                    label: 'Swipe',
-                    selected: current == KoalaTab.swipe,
-                    onTap: () => onSelect(KoalaTab.swipe),
+                    label: 'AI',
+                    selected: current == KoalaTab.ai,
+                    onTap: () => onSelect(KoalaTab.ai),
                   ),
                   _NavItem(
                     icon: LucideIcons.folder,
@@ -92,7 +100,7 @@ class KoalaBottomNav extends StatelessWidget {
   }
 }
 
-enum KoalaTab { home, chat, swipe, projeler }
+enum KoalaTab { home, chat, ai, projeler }
 
 class _NavItem extends StatelessWidget {
   final IconData icon;
@@ -111,100 +119,122 @@ class _NavItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(30),
-        // İstenmeyen "ışık sönmesi" → splash/highlight kapalı.
-        splashColor: Colors.transparent,
-        highlightColor: Colors.transparent,
-        hoverColor: Colors.transparent,
-        focusColor: Colors.transparent,
-        child: Container(
-          // Animation YOK — sekme değişiminde fade-out şovu görünmesin.
-          padding: EdgeInsets.symmetric(
-            horizontal: selected ? 18 : 14,
-            vertical: 10,
-          ),
-          decoration: BoxDecoration(
-            gradient: selected
-                ? LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      KoalaColors.accentDeep,
-                      KoalaColors.accent,
-                    ],
-                  )
-                : null,
-            borderRadius: BorderRadius.circular(30),
-            boxShadow: selected
-                ? [
-                    BoxShadow(
-                      color: KoalaColors.accent.withValues(alpha: 0.36),
-                      blurRadius: 14,
-                      offset: const Offset(0, 5),
-                    ),
-                  ]
-                : null,
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
+    final color = selected ? KoalaColors.accentDeep : KoalaColors.textSec;
+    return Expanded(
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(24),
+          splashColor: Colors.transparent,
+          highlightColor: Colors.transparent,
+          hoverColor: Colors.transparent,
+          focusColor: Colors.transparent,
+          child: Stack(
+            clipBehavior: Clip.none,
+            alignment: Alignment.center,
             children: [
-              Stack(
-                clipBehavior: Clip.none,
+              Column(
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(
-                    icon,
-                    size: 21,
-                    color: selected ? Colors.white : KoalaColors.textSec,
+                  AnimatedScale(
+                    scale: selected ? 1.08 : 1.0,
+                    duration: const Duration(milliseconds: 220),
+                    curve: Curves.easeOutBack,
+                    child: Icon(icon, size: 22, color: color),
                   ),
-                  if (badge > 0)
-                    Positioned(
-                      top: -5,
-                      right: -7,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 4, vertical: 1),
-                        decoration: BoxDecoration(
-                          color: KoalaColors.error,
-                          borderRadius: BorderRadius.circular(99),
-                          border: Border.all(
-                              color: Colors.white, width: 1.4),
-                        ),
-                        constraints: const BoxConstraints(
-                          minWidth: 16,
-                          minHeight: 16,
-                        ),
-                        child: Text(
-                          badge > 9 ? '9+' : '$badge',
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(
-                            fontSize: 9,
-                            fontWeight: FontWeight.w800,
-                            color: Colors.white,
-                            height: 1.2,
-                          ),
-                        ),
-                      ),
+                  const SizedBox(height: 3),
+                  AnimatedDefaultTextStyle(
+                    duration: const Duration(milliseconds: 220),
+                    style: TextStyle(
+                      fontSize: 10.5,
+                      fontWeight:
+                          selected ? FontWeight.w700 : FontWeight.w500,
+                      color: color,
+                      letterSpacing: -0.1,
                     ),
+                    child: Text(label),
+                  ),
                 ],
               ),
-              if (selected) ...[
-                const SizedBox(width: 8),
-                Text(
-                  label,
-                  style: const TextStyle(
-                    fontSize: 13.5,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.white,
-                    letterSpacing: -0.1,
+              if (badge > 0)
+                Positioned(
+                  top: 4,
+                  right: 14,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 4, vertical: 1),
+                    decoration: BoxDecoration(
+                      color: KoalaColors.error,
+                      borderRadius: BorderRadius.circular(99),
+                      border: Border.all(color: Colors.white, width: 1.4),
+                    ),
+                    constraints:
+                        const BoxConstraints(minWidth: 16, minHeight: 16),
+                    child: Text(
+                      badge > 9 ? '9+' : '$badge',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        fontSize: 9,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.white,
+                        height: 1.2,
+                      ),
+                    ),
                   ),
                 ),
-              ],
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PaylasFab extends StatelessWidget {
+  final VoidCallback onTap;
+  const _PaylasFab({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: const LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [KoalaColors.accentDeep, KoalaColors.accent],
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: KoalaColors.accent.withValues(alpha: 0.38),
+                    blurRadius: 14,
+                    offset: const Offset(0, 5),
+                  ),
+                ],
+              ),
+              child: const Icon(LucideIcons.plus, size: 22, color: Colors.white),
+            ),
+            const SizedBox(height: 3),
+            const Text(
+              'Paylaş',
+              style: TextStyle(
+                fontSize: 10.5,
+                fontWeight: FontWeight.w700,
+                color: KoalaColors.accentDeep,
+                letterSpacing: -0.1,
+              ),
+            ),
+          ],
         ),
       ),
     );

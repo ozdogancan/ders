@@ -144,7 +144,11 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
         }
       }
       if (match == null) {
-        await _showFailureDialog();
+        await _showFailureDialog(
+          detail:
+              'Ürün listesi alınamadı. Google Play hesabınla giriş yaptığından '
+              've uygulamayı Play Store üzerinden kurduğundan emin olur musun?',
+        );
         return;
       }
       final ok = await BillingService.purchase(match);
@@ -162,16 +166,18 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
         );
         Navigator.of(context).pop();
       } else {
-        await _showFailureDialog();
+        // Kullanıcı satın almayı iptal ettiyse dialog gösterme — sessiz geç.
+        if (BillingService.lastWasCancellation) return;
+        await _showFailureDialog(detail: BillingService.lastErrorMessage);
       }
-    } catch (_) {
-      await _showFailureDialog();
+    } catch (e) {
+      await _showFailureDialog(detail: e.toString());
     } finally {
       if (mounted) setState(() => _purchasing = false);
     }
   }
 
-  Future<void> _showFailureDialog() async {
+  Future<void> _showFailureDialog({String? detail}) async {
     if (!mounted) return;
     await showDialog<void>(
       context: context,
@@ -179,10 +185,41 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
         backgroundColor: KoalaColors.surface,
         shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(KoalaRadius.lg)),
-        title: const Text('Bir sorun oluştu', style: KoalaText.h3),
-        content: const Text(
-          'Satın alma şu an tamamlanamadı. Lütfen biraz sonra tekrar deneyin.',
-          style: TextStyle(fontSize: 14, color: KoalaColors.textMed),
+        title: const Text('Satın alma tamamlanamadı', style: KoalaText.h3),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Bir aksaklık oldu. Şunları denersen yardımcı olabilir:',
+              style: TextStyle(fontSize: 14, color: KoalaColors.textMed),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              '• Cihazda Google Play hesabınla giriş yap\n'
+              '• Uygulamayı Play Store üzerinden güncelle/yeniden kur\n'
+              '• İnternet bağlantını kontrol et\n'
+              '• Kart bilgilerin Play Store hesabında ekli mi bak',
+              style: TextStyle(fontSize: 13, color: KoalaColors.textMed, height: 1.5),
+            ),
+            if (detail != null && detail.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: KoalaColors.surfaceAlt,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  'Teknik detay: $detail',
+                  style: const TextStyle(
+                    fontSize: 11,
+                    color: KoalaColors.textTer,
+                  ),
+                ),
+              ),
+            ],
+          ],
         ),
         actions: [
           FilledButton(

@@ -526,7 +526,7 @@ class _ChatListScreenV1State extends State<ChatListScreenV1> {
         // değiştir — kullanıcı swipe (Tarz Keşfi) sekmesine gider, nav görünür.
         final shell = MainShell.of(context);
         if (shell != null) {
-          shell.switchTab(KoalaTab.swipe);
+          shell.switchTab(KoalaTab.home);
         } else {
           Navigator.of(context).push(
             MaterialPageRoute(
