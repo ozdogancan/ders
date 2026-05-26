@@ -602,7 +602,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     onTap: _onAdminTap,
                     behavior: HitTestBehavior.opaque,
                     child: const Text(
-                      'Profil',
+                      'Ayarlar',
                       style: TextStyle(
                         fontSize: 24,
                         fontWeight: FontWeight.w700,

@@ -8,8 +8,8 @@ import '../helpers/paywall_router.dart';
 import '../providers/pro_status_provider.dart';
 import '../services/background_gen.dart';
 import '../widgets/koala_bottom_nav.dart';
-import 'chat_detail_screen.dart';
 import 'chat_list_screen.dart';
+import 'home_screen.dart';
 import 'mekan/wizard/mekan_wizard_screen.dart';
 import 'projeler_screen.dart';
 import 'splash_screen.dart';
@@ -273,7 +273,7 @@ class MainShellState extends ConsumerState<MainShell> {
         children: const [
           StyleDiscoveryLiveScreen(),
           ChatListScreen(),
-          ChatDetailScreen(),
+          HomeScreen(),
           ProjelerScreen(),
         ],
       ),

@@ -222,17 +222,7 @@ class _PaylasFab extends StatelessWidget {
                   ),
                 ],
               ),
-              child: const Icon(LucideIcons.plus, size: 22, color: Colors.white),
-            ),
-            const SizedBox(height: 3),
-            const Text(
-              'Paylaş',
-              style: TextStyle(
-                fontSize: 10.5,
-                fontWeight: FontWeight.w700,
-                color: KoalaColors.accentDeep,
-                letterSpacing: -0.1,
-              ),
+              child: const Icon(LucideIcons.plus, size: 24, color: Colors.white),
             ),
           ],
         ),

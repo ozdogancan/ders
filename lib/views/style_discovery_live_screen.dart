@@ -155,12 +155,8 @@ class _StyleDiscoveryLiveScreenState
     Analytics.screenViewed('style_discovery_live');
     // Tab her aktive olduğunda "Hepsi"ye reset et + tutorial kontrolü.
     MainShell.activeTab.addListener(_onTabActivate);
-    // İlk mount swipe tab'ında olabilir; tab listener fire etmez. Hemen kontrol et.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (MainShell.activeTab.value == KoalaTab.home) {
-        _maybeShowRealizeHint();
-      }
-    });
+    // Swipe onboarding tutorial geçici olarak devre dışı — yeni bir onboarding
+    // tasarımı planlanıyor.
   }
 
   Future<void> _maybeShowRealizeHint() async {
@@ -970,31 +966,10 @@ class _StyleDiscoveryLiveScreenState
     setState(() => _designerCache[designerId] = d);
   }
 
-  /// AppBar filtre ikonundan açılır: tasarım kaynağı 3-yönlü filtre.
-  Future<void> _openFilters() async {
+  /// AppBar ayarlar ikonundan açılır — Ayarlar ekranı.
+  void _openSettings() {
     HapticFeedback.selectionClick();
-    final next = await showModalBottomSheet<String>(
-      context: context,
-      backgroundColor: KoalaColors.bg,
-      barrierColor: Colors.black54,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (ctx) => _FiltersSheet(current: _sourceFilter),
-    );
-    if (next == null || next == _sourceFilter || !mounted) return;
-    setState(() {
-      _sourceFilter = next;
-      _deck.clear();
-      _seenIds.clear();
-      _history.clear();
-      _index = 0;
-      _offset = 0;
-      _dragDx = 0;
-      _dragDy = 0;
-      _loading = true;
-    });
-    await _bootstrap();
+    context.push('/profile');
   }
 
   @override
@@ -1007,8 +982,6 @@ class _StyleDiscoveryLiveScreenState
   void _onTabActivate() {
     if (MainShell.activeTab.value != KoalaTab.home) return;
     if (_selectedCategory != null) _applyCategory('');
-    // Cold-start başına bir kez tutorial — kullanıcı ilk swipe'a geçtiğinde.
-    _maybeShowRealizeHint();
   }
 
   @override
@@ -1031,12 +1004,10 @@ class _StyleDiscoveryLiveScreenState
         title: const _BrandLockup(),
         actions: [
           Padding(
-            padding: const EdgeInsets.only(right: 8),
-            child: IconButton(
-              icon: const Icon(LucideIcons.slidersHorizontal,
-                  size: 22, color: KoalaColors.text),
-              tooltip: 'Filtreler',
-              onPressed: _openFilters,
+            padding: const EdgeInsets.only(right: 12),
+            child: _SettingsButton(
+              isPro: ref.watch(proStatusProvider).value?.isPro ?? false,
+              onTap: _openSettings,
             ),
           ),
         ],
@@ -2821,152 +2792,84 @@ class _AskLeading extends StatelessWidget {
   }
 }
 
-/// AppBar filtre ikonundan açılır: tasarım kaynağı 3-yönlü filtre.
-class _FiltersSheet extends StatefulWidget {
-  final String current;
-  const _FiltersSheet({required this.current});
-  @override
-  State<_FiltersSheet> createState() => _FiltersSheetState();
-}
-
-class _FiltersSheetState extends State<_FiltersSheet> {
-  late String _value = widget.current;
-
-  @override
-  Widget build(BuildContext context) {
-    return SafeArea(
-      top: false,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 18),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Container(
-                width: 36,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: KoalaColors.border,
-                  borderRadius: BorderRadius.circular(100),
-                ),
-              ),
-            ),
-            const SizedBox(height: 14),
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 2),
-              child: Text('Filtreler', style: KoalaText.h2),
-            ),
-            const SizedBox(height: 14),
-            const Padding(
-              padding: EdgeInsets.only(left: 4, bottom: 8),
-              child: Text('Tasarım kaynağı', style: KoalaText.caption),
-            ),
-            _FilterTile(
-              icon: LucideIcons.layoutGrid,
-              title: 'Hepsi',
-              subtitle: 'Tüm tasarımları göster',
-              selected: _value == 'all',
-              onTap: () => setState(() => _value = 'all'),
-            ),
-            _FilterTile(
-              icon: LucideIcons.sparkles,
-              title: 'Evlumba Design',
-              subtitle: 'Yalnız stüdyo tasarımları',
-              selected: _value == 'evlumba',
-              onTap: () => setState(() => _value = 'evlumba'),
-            ),
-            _FilterTile(
-              icon: LucideIcons.users,
-              title: 'Tasarımcı projeleri',
-              subtitle: 'Yalnız gerçek tasarımcı projeleri',
-              selected: _value == 'real',
-              onTap: () => setState(() => _value = 'real'),
-            ),
-            const SizedBox(height: 14),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: KoalaColors.accentDeep,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  elevation: 0,
-                ),
-                onPressed: () => Navigator.pop(context, _value),
-                child: const Text('Uygula', style: KoalaText.button),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _FilterTile extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final bool selected;
+/// AppBar sağındaki ayarlar düğmesi. Pro kullanıcılarda gradient daire +
+/// minik yıldız rozeti ile vurgulanır; serbest kullanıcılarda nötr.
+class _SettingsButton extends StatelessWidget {
+  final bool isPro;
   final VoidCallback onTap;
-  const _FilterTile({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.selected,
-    required this.onTap,
-  });
+  const _SettingsButton({required this.isPro, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Material(
-        color: selected ? KoalaColors.accentSoft : KoalaColors.surface,
-        borderRadius: BorderRadius.circular(14),
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(14),
-          child: Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(
-                color: selected
-                    ? KoalaColors.accentDeep.withValues(alpha: 0.4)
-                    : KoalaColors.borderSolid,
-                width: selected ? 1.2 : 0.8,
-              ),
-            ),
-            child: Row(
-              children: [
-                Icon(
-                  icon,
-                  color: selected
-                      ? KoalaColors.accentDeep
-                      : KoalaColors.textSec,
-                  size: 22,
+    return Material(
+      color: Colors.transparent,
+      shape: const CircleBorder(),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        customBorder: const CircleBorder(),
+        child: SizedBox(
+          width: 44,
+          height: 44,
+          child: Stack(
+            clipBehavior: Clip.none,
+            alignment: Alignment.center,
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: isPro
+                      ? const LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [
+                            KoalaColors.accentDeep,
+                            KoalaColors.accent,
+                          ],
+                        )
+                      : null,
+                  color: isPro ? null : KoalaColors.surface,
+                  border: isPro
+                      ? null
+                      : Border.all(
+                          color: KoalaColors.borderSolid, width: 0.8),
+                  boxShadow: isPro
+                      ? [
+                          BoxShadow(
+                            color:
+                                KoalaColors.accent.withValues(alpha: 0.30),
+                            blurRadius: 10,
+                            offset: const Offset(0, 3),
+                          ),
+                        ]
+                      : null,
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(title, style: KoalaText.h4),
-                      const SizedBox(height: 1),
-                      Text(subtitle, style: KoalaText.bodySmall),
-                    ],
+                alignment: Alignment.center,
+                child: Icon(
+                  LucideIcons.settings,
+                  size: 19,
+                  color: isPro ? Colors.white : KoalaColors.text,
+                ),
+              ),
+              if (isPro)
+                Positioned(
+                  top: 2,
+                  right: 2,
+                  child: Container(
+                    width: 14,
+                    height: 14,
+                    decoration: BoxDecoration(
+                      color: KoalaColors.star,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: KoalaColors.bg, width: 1.4),
+                    ),
+                    child: const Icon(Icons.star_rounded,
+                        size: 9, color: Colors.white),
                   ),
                 ),
-                if (selected)
-                  const Icon(Icons.check_circle_rounded,
-                      color: KoalaColors.accentDeep, size: 20),
-              ],
-            ),
+            ],
           ),
         ),
       ),
