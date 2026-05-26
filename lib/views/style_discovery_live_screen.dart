@@ -53,6 +53,14 @@ class StyleDiscoveryLiveScreen extends ConsumerStatefulWidget {
   static final ValueNotifier<GlobalKey?> bellKeyNotifier =
       ValueNotifier<GlobalKey?>(null);
 
+  /// Swipe gesture demo'su (veya ilk gerçek swipe) tamamlandığında true.
+  /// MainShell coachmark'ı yalnız bu true olunca tetiklenir — kullanıcı
+  /// swipe'ı görmeden coachmark açılmasın. Lifetime: SharedPreferences
+  /// 'swipe_demo_seen_v1' okunarak başlatılır.
+  static final ValueNotifier<bool> swipeDemoSeenNotifier =
+      ValueNotifier<bool>(false);
+  static const String prefsSwipeDemoSeenKey = 'swipe_demo_seen_v1';
+
   @override
   ConsumerState<StyleDiscoveryLiveScreen> createState() =>
       _StyleDiscoveryLiveScreenState();
@@ -207,6 +215,9 @@ class _StyleDiscoveryLiveScreenState
     Analytics.screenViewed('style_discovery_live');
     // Bell ikonun GlobalKey'ini MainShell coachmark'a yayınla.
     StyleDiscoveryLiveScreen.bellKeyNotifier.value = _bellKey;
+    // Lifetime swipe-demo-seen flag'ini yükle — daha önce gördüyse notifier'ı
+    // hemen true yap, MainShell coachmark'ı geciktirme.
+    unawaited(_initSwipeDemoSeen());
     // Tab her aktive olduğunda "Hepsi"ye reset et + tutorial kontrolü.
     MainShell.activeTab.addListener(_onTabActivate);
     // Swipe onboarding tutorial geçici olarak devre dışı — yeni bir onboarding
@@ -646,6 +657,8 @@ class _StyleDiscoveryLiveScreenState
   Future<void> _swipe({required bool liked}) async {
     // Paywall açıkken yeni swipe tetiklenmesin — çift popup'ı engelle.
     if (_paywallOpen) return;
+    // İlk gerçek swipe demo'yu görmüş sayar — coachmark tetiklenebilir.
+    _markSwipeDemoSeen();
     // ── Pro upsell slot? ──
     // Free user her 6 swipe'tan sonra normal kart yerine Pro upgrade kartı
     // görüyor. Like → paywall + kart geri gelir; skip → bir sonraki karta geç.
@@ -1198,6 +1211,7 @@ class _StyleDiscoveryLiveScreenState
     if (!_demoRunning) return;
     _demoCtrl.stop();
     _demoShownInSession = true;
+    _markSwipeDemoSeen();
     if (mounted) {
       setState(() {
         _demoRunning = false;
@@ -1205,6 +1219,26 @@ class _StyleDiscoveryLiveScreenState
         _dragDy = 0;
       });
     }
+  }
+
+  Future<void> _markSwipeDemoSeen() async {
+    if (StyleDiscoveryLiveScreen.swipeDemoSeenNotifier.value) return;
+    StyleDiscoveryLiveScreen.swipeDemoSeenNotifier.value = true;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(
+          StyleDiscoveryLiveScreen.prefsSwipeDemoSeenKey, true);
+    } catch (_) {/* sessiz */}
+  }
+
+  Future<void> _initSwipeDemoSeen() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (prefs.getBool(StyleDiscoveryLiveScreen.prefsSwipeDemoSeenKey) ==
+          true) {
+        StyleDiscoveryLiveScreen.swipeDemoSeenNotifier.value = true;
+      }
+    } catch (_) {/* sessiz */}
   }
 
   Future<void> _maybeShowDemo() async {
@@ -1248,6 +1282,7 @@ class _StyleDiscoveryLiveScreenState
       HapticFeedback.lightImpact();
       await _demoCtrl.forward(from: 0);
       _demoShownInSession = true;
+      _markSwipeDemoSeen();
     } catch (e) {
       debugPrint('demo show failed: $e');
     }
@@ -1755,6 +1790,17 @@ class _StyleDiscoveryLiveScreenState
             onTap: disabled ? null : () => _swipe(liked: true),
             variant: _ActionVariant.primary,
             large: true,
+          ),
+          _ActionBtn(
+            icon: LucideIcons.wand,
+            label: 'Uygula',
+            onTap: disabled
+                ? null
+                : () {
+                    final c = _currentCard;
+                    if (c != null) _onCardTap(c);
+                  },
+            variant: _ActionVariant.gold,
           ),
           _ActionBtn(
             icon: LucideIcons.messageCircle,

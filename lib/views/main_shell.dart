@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:lucide_icons/lucide_icons.dart';
@@ -14,6 +15,7 @@ import 'chat_list_screen.dart';
 import 'home_screen.dart';
 import 'mekan/wizard/mekan_wizard_screen.dart';
 import 'profile_tab_screen.dart';
+import 'share/share_upload_screen.dart';
 import 'splash_screen.dart';
 import 'style_discovery_live_screen.dart';
 
@@ -74,31 +76,17 @@ class MainShellState extends ConsumerState<MainShell> {
         setState(() => _gate = _GateState.passed);
       }
     });
+    // 2026-05-26: Kullanıcı kararı — app-launch paywall'ı KALDIRILDI.
+    // Açılışta otomatik Pro popup'ı çıkmasın; paywall yalnız belirli
+    // aksiyonlarda (paylas FAB, wizard finish, vs.) gösterilsin.
     try {
-      final status = await ref
-          .read(proStatusProvider.future)
-          .timeout(const Duration(seconds: 2), onTimeout: () => ProStatus.free);
-      if (!mounted) return;
-      if (status.isPro || _entryPaywallShownThisLaunch) {
-        setState(() => _gate = _GateState.passed);
-        return;
-      }
-      _entryPaywallShownThisLaunch = true;
-      setState(() => _gate = _GateState.gated);
-      WidgetsBinding.instance.addPostFrameCallback((_) async {
-        if (!mounted) return;
-        try {
-          await showPaywall(context, trigger: 'app_launch');
-        } catch (_) {/* paywall render hatası — yine de home'a düş */}
-        if (!mounted) return;
-        if (_gate != _GateState.passed) {
-          setState(() => _gate = _GateState.passed);
-        }
-      });
-    } catch (_) {
-      if (!mounted) return;
-      setState(() => _gate = _GateState.passed);
-    }
+      await ref.read(proStatusProvider.future).timeout(
+            const Duration(seconds: 2),
+            onTimeout: () => ProStatus.free,
+          );
+    } catch (_) {/* sessiz */}
+    if (!mounted) return;
+    setState(() => _gate = _GateState.passed);
   }
 
   @override
@@ -233,39 +221,17 @@ class MainShellState extends ConsumerState<MainShell> {
     }
   }
 
-  /// Paylaş aksiyonu — Pro gate sonrası foto seçici → MekanWizardScreen.
+  /// Paylaş aksiyonu — IG-tarzı composer (foto + caption + AI moderation).
+  /// Pro gate YOK; paylaşım tüm kullanıcılara açık. AI re-design ayrı bir
+  /// feature (mekan wizard) — burada sadece feed'e post.
   Future<void> _onPaylasTap() async {
-    final pro = ref.read(proStatusProvider).value?.isPro ?? false;
-    if (!pro) {
-      await showPaywall(context, trigger: 'paylas_tab');
-      return;
-    }
     if (!mounted) return;
-    final source = await showModalBottomSheet<ImageSource>(
-      context: context,
-      backgroundColor: KoalaColors.bg,
-      barrierColor: Colors.black54,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => const ShareUploadScreen(),
+        fullscreenDialog: true,
       ),
-      builder: (_) => const _PaylasSourceSheet(),
     );
-    if (source == null || !mounted) return;
-    try {
-      final f = await _picker.pickImage(
-        source: source,
-        maxWidth: 1024,
-        imageQuality: 60,
-      );
-      if (f == null || !mounted) return;
-      final bytes = await f.readAsBytes();
-      if (!mounted) return;
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) => MekanWizardScreen(photoBytes: bytes),
-        ),
-      );
-    } catch (_) {/* swallow — kullanıcı iptal */}
   }
 
   @override
@@ -320,10 +286,33 @@ class MainShellState extends ConsumerState<MainShell> {
       try {
         final prefs = await SharedPreferences.getInstance();
         if (prefs.getBool(_prefsCoachmarkKey) == true) return;
-        // 600ms idle — gate sonrası ilk frame'de değil, kullanıcı UI'ı algıladıktan
-        // sonra. Paywall hâlâ üstte ise overlay onun ALTINDA çizilir — yine de
-        // gate==passed kontrolü bu yarışı engelliyor.
-        await Future<void>.delayed(const Duration(milliseconds: 600));
+        // Coachmark SADECE kullanıcı swipe animasyonunu (veya ilk gerçek
+        // swipe'ını) gördükten SONRA tetiklenir. Notifier henüz false ise
+        // bir kez bekleyip true'ya dönüşünü dinleriz.
+        if (!StyleDiscoveryLiveScreen.swipeDemoSeenNotifier.value) {
+          final completer = Completer<void>();
+          void listener() {
+            if (StyleDiscoveryLiveScreen.swipeDemoSeenNotifier.value &&
+                !completer.isCompleted) {
+              completer.complete();
+            }
+          }
+          StyleDiscoveryLiveScreen.swipeDemoSeenNotifier.addListener(listener);
+          try {
+            await completer.future
+                .timeout(const Duration(minutes: 3), onTimeout: () {});
+          } finally {
+            StyleDiscoveryLiveScreen.swipeDemoSeenNotifier
+                .removeListener(listener);
+          }
+          if (!StyleDiscoveryLiveScreen.swipeDemoSeenNotifier.value) {
+            // Timeout — sonraki açılışta tekrar denesin.
+            _coachmarkTriggered = false;
+            return;
+          }
+        }
+        // Swipe görüldü; küçük bir nefes payı bırakıp UI'a soluk al.
+        await Future<void>.delayed(const Duration(milliseconds: 900));
         if (!mounted || _gate != _GateState.passed) {
           _coachmarkTriggered = false;
           return;

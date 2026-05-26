@@ -1,6 +1,8 @@
-// Profil sekmesi — Instagram-clean. Avatar + isim/rol + 3 numara + 2 tab grid.
-// Pro CTA settings ekranında, burada YOK. Profil düzenleme tek nötr buton.
-// Avatar kısa-tap → fotoğraf sheet, uzun-bas → /profile (ayarlar).
+// Profil sekmesi — Medium/Instagram/LinkedIn benchmark.
+// Hero: avatar + isim + (rating?) + bio + stats (Tasarım / Takipçi / Takip)
+//       + (eğer hem pro hem ev sahibi) role-switch + (pro değilse) "Profesyonel ol" CTA.
+// Bu sayfada AYAR satırı YOK. Ayarlar yalnız avatar long-press ile.
+// Tap design → swipe-detail (PageView). Long-press tile → action sheet.
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:firebase_auth/firebase_auth.dart' show FirebaseAuth;
@@ -11,14 +13,23 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show Supabase, FileOptions;
 
 import '../core/theme/koala_tokens.dart';
+import '../services/follow_service.dart';
 import '../services/saved_items_service.dart';
 import '../services/user_profile_service.dart';
+import '../widgets/ask_and_apply_sheet.dart';
 import '../widgets/verified_badge.dart';
 import 'mekan/wizard/mekan_wizard_screen.dart';
-import 'my_designs/design_detail_screen.dart';
+import 'profile/follow_list_sheet.dart';
+import 'profile/profile_design_swipe.dart';
+import 'profile/profile_design_tile.dart';
+import 'profile/profile_photo_view.dart';
+
+// Persisted role choice key.
+const _kRoleSwitchPrefKey = 'profile_role_view'; // 'homeowner' | 'pro'
 
 class ProfileTabScreen extends ConsumerStatefulWidget {
   const ProfileTabScreen({super.key});
@@ -29,12 +40,20 @@ class ProfileTabScreen extends ConsumerStatefulWidget {
 
 class _ProfileTabScreenState extends ConsumerState<ProfileTabScreen>
     with SingleTickerProviderStateMixin {
-  // AI Tasarımları — Koala AI ile üretilen (saved_items type='project').
+  // AI tasarımları (saved_items type='project') — kullanıcının kendi üretimi.
   List<Map<String, dynamic>> _aiDesigns = const [];
-  // Paylaştıklarım — kullanıcının yüklediği. Şimdilik ayrı tablo yok.
+  // Paylaştıkları — kullanıcı yüklemeleri. Ayrı tablo yok, şimdilik boş.
   List<Map<String, dynamic>> _sharedDesigns = const [];
   bool _designsLoading = true;
   bool _uploadingAvatar = false;
+
+  int _followers = 0;
+  int _following = 0;
+
+  /// 'homeowner' (varsayılan) ya da 'pro'. Kullanıcı hem pro hem ev sahibiyse
+  /// switch ile değiştirebilir, son seçim persist.
+  String _viewRole = 'homeowner';
+
   late final TabController _designsTab;
 
   @override
@@ -44,13 +63,32 @@ class _ProfileTabScreenState extends ConsumerState<ProfileTabScreen>
     _designsTab.addListener(() {
       if (mounted) setState(() {});
     });
+    _restoreRole();
     _loadDesigns();
+    _loadCounts();
   }
 
   @override
   void dispose() {
     _designsTab.dispose();
     super.dispose();
+  }
+
+  Future<void> _restoreRole() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final r = prefs.getString(_kRoleSwitchPrefKey);
+      if (r != null && mounted) {
+        setState(() => _viewRole = r);
+      }
+    } catch (_) {/* swallow */}
+  }
+
+  Future<void> _saveRole(String role) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_kRoleSwitchPrefKey, role);
+    } catch (_) {/* swallow */}
   }
 
   Future<void> _loadDesigns() async {
@@ -70,9 +108,20 @@ class _ProfileTabScreenState extends ConsumerState<ProfileTabScreen>
     }
   }
 
+  Future<void> _loadCounts() async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+    final c = await FollowService.counts(uid);
+    if (!mounted) return;
+    setState(() {
+      _followers = c.followers;
+      _following = c.following;
+    });
+  }
+
   Future<void> _refreshAll() async {
     ref.invalidate(userProfileProvider);
-    await _loadDesigns();
+    await Future.wait([_loadDesigns(), _loadCounts()]);
   }
 
   @override
@@ -80,6 +129,7 @@ class _ProfileTabScreenState extends ConsumerState<ProfileTabScreen>
     final user = FirebaseAuth.instance.currentUser;
     final bundle = ref.watch(userProfileProvider).asData?.value;
     final profile = bundle?.profile;
+    final application = bundle?.application;
     final stored = profile?.displayName?.trim();
     final displayName = (stored?.isNotEmpty == true
             ? stored
@@ -94,8 +144,13 @@ class _ProfileTabScreenState extends ConsumerState<ProfileTabScreen>
         : profile?.avatarUrl;
     final verified = profile?.verified == true;
     final about = (profile?.about ?? '').trim();
-    final role = profile?.isPro == true
-        ? (about.isNotEmpty ? 'Profesyonel Tasarımcı' : 'Koala Pro')
+    final isPro = profile?.isPro == true;
+    final canSwitch = isPro; // pro user can toggle "Ev Sahibi / Profesyonel"
+    final effectiveRole = canSwitch ? _viewRole : 'homeowner';
+    final roleLabel = isPro
+        ? (effectiveRole == 'pro'
+            ? (about.isNotEmpty ? 'Profesyonel Tasarımcı' : 'Koala Pro')
+            : 'Ev Sahibi')
         : 'Ev Sahibi';
 
     return Scaffold(
@@ -108,16 +163,56 @@ class _ProfileTabScreenState extends ConsumerState<ProfileTabScreen>
               parent: BouncingScrollPhysics()),
           slivers: [
             SliverToBoxAdapter(
-              child: _hero(name, role, about, photo, verified),
+              child: _Hero(
+                uid: user?.uid ?? '',
+                name: name,
+                role: roleLabel,
+                photo: photo,
+                verified: verified,
+                uploading: _uploadingAvatar,
+                onAvatarTap: () => _openAvatarActions(photo),
+                onAvatarLongPress: () => context.push('/profile'),
+              ),
             ),
-            SliverToBoxAdapter(child: _statsRow()),
+            SliverToBoxAdapter(
+              child: _StatsRow(
+                designs: _designsLoading
+                    ? 0
+                    : (_aiDesigns.length + _sharedDesigns.length),
+                followers: _followers,
+                following: _following,
+                onFollowers: () => _openFollowList(FollowListMode.followers),
+                onFollowing: () => _openFollowList(FollowListMode.following),
+              ),
+            ),
+            if (canSwitch) ...[
+              const SliverToBoxAdapter(child: SizedBox(height: 16)),
+              SliverToBoxAdapter(
+                child: _RoleSwitch(
+                  selected: effectiveRole,
+                  onSelect: (r) {
+                    setState(() => _viewRole = r);
+                    _saveRole(r);
+                    HapticFeedback.selectionClick();
+                  },
+                ),
+              ),
+            ],
+            if (about.isNotEmpty) ...[
+              const SliverToBoxAdapter(child: SizedBox(height: 16)),
+              SliverToBoxAdapter(child: _AboutSection(about: about)),
+            ],
             const SliverToBoxAdapter(child: SizedBox(height: 18)),
             SliverToBoxAdapter(child: _editButton()),
+            if (!isPro &&
+                application?.isPending != true &&
+                application?.isApproved != true) ...[
+              const SliverToBoxAdapter(child: SizedBox(height: 14)),
+              SliverToBoxAdapter(child: _proCta()),
+            ],
             const SliverToBoxAdapter(child: SizedBox(height: 22)),
             SliverToBoxAdapter(child: _tabBar()),
             SliverToBoxAdapter(child: _designsTabBody()),
-            const SliverToBoxAdapter(child: SizedBox(height: 28)),
-            SliverToBoxAdapter(child: _settingsRow()),
             const SliverToBoxAdapter(child: SizedBox(height: 40)),
           ],
         ),
@@ -125,173 +220,7 @@ class _ProfileTabScreenState extends ConsumerState<ProfileTabScreen>
     );
   }
 
-  // ─── Hero — flat, minimal: avatar + isim + rol + bio ───
-  Widget _hero(String name, String role, String about, String? photo,
-      bool verified) {
-    final topPad = MediaQuery.of(context).padding.top;
-    return Padding(
-      padding: EdgeInsets.fromLTRB(20, topPad + 18, 20, 14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          // Avatar — kısa-tap fotoğraf, uzun-bas ayarlar.
-          GestureDetector(
-            onTap: () {
-              HapticFeedback.selectionClick();
-              _openAvatarActions(photo);
-            },
-            onLongPress: () {
-              HapticFeedback.mediumImpact();
-              context.push('/profile');
-            },
-            child: _avatar(photo, verified),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            name,
-            style: KoalaText.h1.copyWith(
-              fontSize: 22,
-              letterSpacing: -0.4,
-              height: 1.1,
-            ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 4),
-          Text(
-            role,
-            style: const TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w500,
-              color: KoalaColors.textSec,
-              letterSpacing: -0.1,
-            ),
-          ),
-          if (about.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            Text(
-              about,
-              style: KoalaText.bodySmall,
-              maxLines: 3,
-              overflow: TextOverflow.ellipsis,
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _avatar(String? url, bool verified) {
-    final hasUrl = (url ?? '').isNotEmpty;
-    return Stack(
-      clipBehavior: Clip.none,
-      children: [
-        Container(
-          width: 88,
-          height: 88,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: hasUrl ? Colors.white : KoalaColors.accentSoft,
-            border: Border.all(color: KoalaColors.borderSolid, width: 0.6),
-          ),
-          clipBehavior: Clip.antiAlias,
-          child: hasUrl
-              ? CachedNetworkImage(imageUrl: url!, fit: BoxFit.cover)
-              : const Icon(LucideIcons.user,
-                  size: 38, color: KoalaColors.accentDeep),
-        ),
-        if (_uploadingAvatar)
-          Positioned.fill(
-            child: ClipOval(
-              child: Container(
-                color: Colors.black.withValues(alpha: 0.35),
-                alignment: Alignment.center,
-                child: const SizedBox(
-                  width: 24,
-                  height: 24,
-                  child: CircularProgressIndicator(
-                      color: Colors.white, strokeWidth: 2.4),
-                ),
-              ),
-            ),
-          )
-        // Kamera ikonu YALNIZCA henüz fotoğraf yokken görünür — kullanıcıya
-        // "buraya dokunup foto ekle" sinyali. Foto eklendikten sonra
-        // affordance kalkar (Instagram pattern).
-        else if (!verified && !hasUrl)
-          Positioned(
-            right: -2,
-            bottom: -2,
-            child: Container(
-              width: 26,
-              height: 26,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: KoalaColors.accentDeep,
-                border: Border.all(color: KoalaColors.bg, width: 2),
-              ),
-              child: const Icon(LucideIcons.camera,
-                  size: 13, color: Colors.white),
-            ),
-          ),
-        if (verified)
-          const Positioned(
-            right: -2,
-            bottom: -2,
-            child: VerifiedBadge(size: 22),
-          ),
-      ],
-    );
-  }
-
-  // ─── Stats — placeholder dash YOK; sadece veri olan stat'leri göster.
-  // Instagram pattern: "—" yerine hiç gösterme. "Kayıt" backend yokken
-  // gizleniyor, eklenince geri açılır.
-  Widget _statsRow() {
-    final designCount =
-        _designsLoading ? null : (_aiDesigns.length + _sharedDesigns.length);
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Expanded(child: _statTile(designCount?.toString() ?? '0', 'Tasarım')),
-        ],
-      ),
-    );
-  }
-
-  Widget _statTile(String value, String label) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(
-          value,
-          style: const TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.w800,
-            color: KoalaColors.text,
-            letterSpacing: -0.3,
-            height: 1.05,
-          ),
-        ),
-        const SizedBox(height: 2),
-        Text(
-          label,
-          style: const TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w500,
-            color: KoalaColors.textSec,
-            letterSpacing: -0.1,
-          ),
-        ),
-      ],
-    );
-  }
-
-  // ─── Tek nötr "Profili düzenle" butonu — Instagram pattern ───
+  // ─── Edit button ───
   Widget _editButton() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -326,13 +255,96 @@ class _ProfileTabScreenState extends ConsumerState<ProfileTabScreen>
     );
   }
 
-  // ─── 2 tab — underline, sade ───
+  // ─── "Profesyonel ol" gradient CTA (only when not pro & no pending app) ───
+  Widget _proCta() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: () async {
+            HapticFeedback.selectionClick();
+            final submitted = await showProApplicationSheet(context);
+            if (submitted == true) ref.invalidate(userProfileProvider);
+          },
+          child: Ink(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(16),
+              gradient: const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [KoalaColors.accentDeep, KoalaColors.accent],
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: KoalaColors.accentDeep.withValues(alpha: 0.22),
+                  blurRadius: 16,
+                  offset: const Offset(0, 6),
+                ),
+              ],
+            ),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 14, 14),
+              child: Row(
+                children: [
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Colors.white.withValues(alpha: 0.18),
+                    ),
+                    child: const Icon(LucideIcons.badgeCheck,
+                        color: Colors.white, size: 22),
+                  ),
+                  const SizedBox(width: 12),
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          'Profesyonel ol',
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w800,
+                            color: Colors.white,
+                            letterSpacing: -0.2,
+                          ),
+                        ),
+                        SizedBox(height: 2),
+                        Text(
+                          'Tasarımlarını paylaş, müşterilerle eşleş.',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.white,
+                            height: 1.25,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Icon(LucideIcons.chevronRight,
+                      color: Colors.white, size: 20),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ─── 2 tab — underline ───
   Widget _tabBar() {
     return Container(
-      decoration: const Border(
-        top: BorderSide(color: KoalaColors.borderSolid, width: 0.6),
-        bottom: BorderSide(color: KoalaColors.borderSolid, width: 0.6),
-      ).toBoxDecoration(),
+      decoration: const BoxDecoration(
+        border: Border(
+          top: BorderSide(color: KoalaColors.borderSolid, width: 0.6),
+          bottom: BorderSide(color: KoalaColors.borderSolid, width: 0.6),
+        ),
+      ),
       child: TabBar(
         controller: _designsTab,
         indicatorSize: TabBarIndicatorSize.tab,
@@ -384,7 +396,6 @@ class _ProfileTabScreenState extends ConsumerState<ProfileTabScreen>
     return _designsGrid(items, isAi: isAi);
   }
 
-  // 3 kolon kare grid — Instagram. 2px gutter, chrome yok.
   Widget _designsGrid(List<Map<String, dynamic>> items, {required bool isAi}) {
     return GridView.builder(
       shrinkWrap: true,
@@ -399,9 +410,11 @@ class _ProfileTabScreenState extends ConsumerState<ProfileTabScreen>
       itemCount: items.length,
       itemBuilder: (_, i) {
         final item = items[i];
-        return _DesignGridTile(
+        return ProfileDesignTile(
           item: item,
-          type: isAi ? SavedItemType.project : SavedItemType.design,
+          onTap: () => _openSwipeDetail(items, i),
+          onApply: () => _applyDesign(item),
+          onAsk: () => _askAboutDesign(item),
           onEdit: () => _openEditDesignSheet(item, isAi: isAi),
           onDelete: () => _confirmDeleteDesign(item, isAi: isAi),
         );
@@ -409,11 +422,80 @@ class _ProfileTabScreenState extends ConsumerState<ProfileTabScreen>
     );
   }
 
+  void _openSwipeDetail(List<Map<String, dynamic>> items, int index) {
+    HapticFeedback.selectionClick();
+    Navigator.of(context).push(
+      PageRouteBuilder(
+        transitionDuration: const Duration(milliseconds: 360),
+        reverseTransitionDuration: const Duration(milliseconds: 280),
+        pageBuilder: (_, _, _) =>
+            ProfileDesignSwipeScreen(items: items, initialIndex: index),
+        transitionsBuilder: (_, anim, _, child) =>
+            FadeTransition(opacity: anim, child: child),
+      ),
+    );
+  }
+
+  Future<void> _applyDesign(Map<String, dynamic> item) async {
+    HapticFeedback.selectionClick();
+    // "Sor ve Uygula" sheet'i hem "tasarımcıya sor" hem "mekânıma uygula"
+    // seçeneklerini sunar — Uygula CTA buraya bağlanır.
+    await _openAskAndApply(item);
+  }
+
+  Future<void> _askAboutDesign(Map<String, dynamic> item) async {
+    HapticFeedback.selectionClick();
+    await _openAskAndApply(item);
+  }
+
+  Future<void> _openAskAndApply(Map<String, dynamic> item) async {
+    final id = (item['item_id'] ?? item['id'] ?? '').toString();
+    final title = (item['title'] ?? 'Tasarım').toString();
+    final imageUrl = (item['image_url'] ?? '').toString();
+    final subtitle = (item['subtitle'] ?? '').toString();
+    final extra = item['extra_data'];
+    String? designerId;
+    String? designerName;
+    String? designerAvatarUrl;
+    String? category;
+    if (extra is Map) {
+      designerId = (extra['designer_id'] ?? '').toString();
+      if (designerId.isEmpty) designerId = null;
+      designerName = (extra['designer_name'] ?? '').toString();
+      if (designerName.isEmpty) designerName = null;
+      designerAvatarUrl = (extra['designer_avatar_url'] ?? '').toString();
+      if (designerAvatarUrl.isEmpty) designerAvatarUrl = null;
+      category = (extra['category'] ?? extra['style_tr'] ?? '').toString();
+      if (category.isEmpty) category = null;
+    }
+    await showAskAndApplySheet(
+      context,
+      designId: id,
+      title: title,
+      imageUrl: imageUrl,
+      subtitle: subtitle.isNotEmpty ? subtitle : null,
+      designerId: designerId,
+      designerName: designerName,
+      designerAvatarUrl: designerAvatarUrl,
+      category: category,
+    );
+  }
+
+  Future<void> _openFollowList(FollowListMode mode) async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+    HapticFeedback.selectionClick();
+    await FollowListSheet.open(context, ownerUid: uid, mode: mode);
+    // refresh counts in case user toggled follows from within
+    _loadCounts();
+  }
+
   Widget _emptyShared() {
     return _emptyState(
       icon: LucideIcons.upload,
       title: 'Henüz paylaşımın yok',
-      subtitle: 'Kendi mekanının fotoğrafını yükle, Koala farklı tarzlarda tasarlasın.',
+      subtitle:
+          'Kendi mekanının fotoğrafını yükle, Koala farklı tarzlarda tasarlasın.',
       cta: 'İlk tasarımını paylaş',
       ctaIcon: LucideIcons.plus,
       onTap: _openShareUpload,
@@ -459,8 +541,6 @@ class _ProfileTabScreenState extends ConsumerState<ProfileTabScreen>
           Text(subtitle,
               style: KoalaText.bodySmall, textAlign: TextAlign.center),
           const SizedBox(height: 16),
-          // Instagram pattern: empty-state CTA outlined, marketing-y filled
-          // pill DEĞİL. Tıkalanabilir ama dikkat çekmeyen.
           OutlinedButton.icon(
             onPressed: onTap,
             style: OutlinedButton.styleFrom(
@@ -501,17 +581,15 @@ class _ProfileTabScreenState extends ConsumerState<ProfileTabScreen>
             _dragHandle(),
             const SizedBox(height: 8),
             ListTile(
-              leading: const Icon(LucideIcons.camera,
-                  color: KoalaColors.accentDeep),
-              title:
-                  const Text('Fotoğraf çek', style: KoalaText.bodyMedium),
+              leading:
+                  const Icon(LucideIcons.camera, color: KoalaColors.accentDeep),
+              title: const Text('Fotoğraf çek', style: KoalaText.bodyMedium),
               onTap: () => Navigator.pop(ctx, ImageSource.camera),
             ),
             ListTile(
-              leading: const Icon(LucideIcons.image,
-                  color: KoalaColors.accentDeep),
-              title:
-                  const Text('Galeriden seç', style: KoalaText.bodyMedium),
+              leading:
+                  const Icon(LucideIcons.image, color: KoalaColors.accentDeep),
+              title: const Text('Galeriden seç', style: KoalaText.bodyMedium),
               onTap: () => Navigator.pop(ctx, ImageSource.gallery),
             ),
             const SizedBox(height: 8),
@@ -615,44 +693,7 @@ class _ProfileTabScreenState extends ConsumerState<ProfileTabScreen>
     }
   }
 
-  // ─── Sessiz "Ayarlar" satırı, low-key ───
-  Widget _settingsRow() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: () {
-            HapticFeedback.selectionClick();
-            context.push('/profile');
-          },
-          borderRadius: BorderRadius.circular(10),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 10),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: const [
-                Icon(LucideIcons.settings,
-                    size: 15, color: KoalaColors.textSec),
-                SizedBox(width: 8),
-                Text(
-                  'Ayarlar',
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: KoalaColors.textSec,
-                    letterSpacing: -0.1,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  // ─── Profil fotoğrafı: tap → kaynak sheet → upload/remove ───
+  // ─── Profil fotoğrafı: tap → kaynak sheet → upload/remove + view ───
   Future<void> _openAvatarActions(String? currentUrl) async {
     if (_uploadingAvatar) return;
     final hasPhoto = (currentUrl ?? '').isNotEmpty;
@@ -670,19 +711,27 @@ class _ProfileTabScreenState extends ConsumerState<ProfileTabScreen>
             const SizedBox(height: 8),
             _dragHandle(),
             const SizedBox(height: 8),
+            if (hasPhoto)
+              ListTile(
+                leading: const Icon(LucideIcons.expand,
+                    color: KoalaColors.accentDeep),
+                title: const Text('Fotoğrafı göster',
+                    style: KoalaText.bodyMedium),
+                onTap: () => Navigator.pop(ctx, 'view'),
+              ),
             if (!kIsWeb)
               ListTile(
                 leading: const Icon(LucideIcons.camera,
                     color: KoalaColors.accentDeep),
-                title: const Text('Fotoğraf çek',
-                    style: KoalaText.bodyMedium),
+                title:
+                    const Text('Fotoğraf çek', style: KoalaText.bodyMedium),
                 onTap: () => Navigator.pop(ctx, 'camera'),
               ),
             ListTile(
               leading: const Icon(LucideIcons.image,
                   color: KoalaColors.accentDeep),
-              title: const Text('Galeriden seç',
-                  style: KoalaText.bodyMedium),
+              title:
+                  const Text('Galeriden seç', style: KoalaText.bodyMedium),
               onTap: () => Navigator.pop(ctx, 'gallery'),
             ),
             if (hasPhoto)
@@ -712,6 +761,16 @@ class _ProfileTabScreenState extends ConsumerState<ProfileTabScreen>
     );
     if (action == null || !mounted) return;
     switch (action) {
+      case 'view':
+        if (hasPhoto) {
+          await ProfilePhotoView.open(
+            context,
+            url: currentUrl!,
+            heroTag: profilePhotoHeroTag(
+                FirebaseAuth.instance.currentUser?.uid ?? 'me'),
+          );
+        }
+        break;
       case 'camera':
         await _pickAndUploadAvatar(ImageSource.camera);
         break;
@@ -856,6 +915,368 @@ class _ProfileTabScreenState extends ConsumerState<ProfileTabScreen>
   }
 }
 
+// ─── Hero widget — avatar + name + role + bio + photo-view affordance ───
+class _Hero extends StatelessWidget {
+  final String uid;
+  final String name;
+  final String role;
+  final String? photo;
+  final bool verified;
+  final bool uploading;
+  final VoidCallback onAvatarTap;
+  final VoidCallback onAvatarLongPress;
+  const _Hero({
+    required this.uid,
+    required this.name,
+    required this.role,
+    required this.photo,
+    required this.verified,
+    required this.uploading,
+    required this.onAvatarTap,
+    required this.onAvatarLongPress,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final topPad = MediaQuery.of(context).padding.top;
+    final hasUrl = (photo ?? '').isNotEmpty;
+    final tag = profilePhotoHeroTag(uid.isEmpty ? 'me' : uid);
+    return Padding(
+      padding: EdgeInsets.fromLTRB(20, topPad + 18, 20, 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          GestureDetector(
+            onTap: () {
+              HapticFeedback.selectionClick();
+              onAvatarTap();
+            },
+            onLongPress: () {
+              HapticFeedback.mediumImpact();
+              onAvatarLongPress();
+            },
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Hero(
+                  tag: tag,
+                  child: Container(
+                    width: 92,
+                    height: 92,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: hasUrl ? Colors.white : KoalaColors.accentSoft,
+                      border: Border.all(
+                          color: KoalaColors.borderSolid, width: 0.6),
+                    ),
+                    clipBehavior: Clip.antiAlias,
+                    child: hasUrl
+                        ? CachedNetworkImage(
+                            imageUrl: photo!, fit: BoxFit.cover)
+                        : const Icon(LucideIcons.user,
+                            size: 40, color: KoalaColors.accentDeep),
+                  ),
+                ),
+                if (uploading)
+                  Positioned.fill(
+                    child: ClipOval(
+                      child: Container(
+                        color: Colors.black.withValues(alpha: 0.35),
+                        alignment: Alignment.center,
+                        child: const SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: CircularProgressIndicator(
+                              color: Colors.white, strokeWidth: 2.4),
+                        ),
+                      ),
+                    ),
+                  )
+                else if (!verified && !hasUrl)
+                  Positioned(
+                    right: -2,
+                    bottom: -2,
+                    child: Container(
+                      width: 26,
+                      height: 26,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: KoalaColors.accentDeep,
+                        border: Border.all(color: KoalaColors.bg, width: 2),
+                      ),
+                      child: const Icon(LucideIcons.camera,
+                          size: 13, color: Colors.white),
+                    ),
+                  ),
+                if (verified)
+                  const Positioned(
+                    right: -2,
+                    bottom: -2,
+                    child: VerifiedBadge(size: 22),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            name,
+            style: KoalaText.h1.copyWith(
+              fontSize: 22,
+              letterSpacing: -0.4,
+              height: 1.1,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 4),
+          Text(
+            role,
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+              color: KoalaColors.textSec,
+              letterSpacing: -0.1,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Stats row — 3 columns, taps open follow lists ───
+class _StatsRow extends StatelessWidget {
+  final int designs;
+  final int followers;
+  final int following;
+  final VoidCallback onFollowers;
+  final VoidCallback onFollowing;
+  const _StatsRow({
+    required this.designs,
+    required this.followers,
+    required this.following,
+    required this.onFollowers,
+    required this.onFollowing,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Row(
+        children: [
+          Expanded(child: _stat(designs, 'Tasarım', null)),
+          Expanded(child: _stat(followers, 'Takipçi', onFollowers)),
+          Expanded(child: _stat(following, 'Takip', onFollowing)),
+        ],
+      ),
+    );
+  }
+
+  Widget _stat(int n, String label, VoidCallback? onTap) {
+    final content = Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          n.toString(),
+          style: const TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.w800,
+            color: KoalaColors.text,
+            letterSpacing: -0.3,
+            height: 1.05,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+            color: KoalaColors.textSec,
+            letterSpacing: -0.1,
+          ),
+        ),
+      ],
+    );
+    if (onTap == null) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        child: content,
+      );
+    }
+    return InkWell(
+      onTap: () {
+        HapticFeedback.selectionClick();
+        onTap();
+      },
+      borderRadius: BorderRadius.circular(8),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        child: content,
+      ),
+    );
+  }
+}
+
+// ─── Pro/Homeowner role switch — segmented pill ───
+class _RoleSwitch extends StatelessWidget {
+  final String selected; // 'homeowner' | 'pro'
+  final ValueChanged<String> onSelect;
+  const _RoleSwitch({required this.selected, required this.onSelect});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Container(
+        height: 38,
+        padding: const EdgeInsets.all(3),
+        decoration: BoxDecoration(
+          color: KoalaColors.surfaceAlt,
+          borderRadius: BorderRadius.circular(100),
+        ),
+        child: Row(
+          children: [
+            _seg(
+              label: 'Ev Sahibi',
+              selected: selected == 'homeowner',
+              onTap: () => onSelect('homeowner'),
+            ),
+            _seg(
+              label: 'Profesyonel',
+              selected: selected == 'pro',
+              onTap: () => onSelect('pro'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _seg(
+      {required String label,
+      required bool selected,
+      required VoidCallback onTap}) {
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOut,
+          decoration: BoxDecoration(
+            color: selected ? Colors.white : Colors.transparent,
+            borderRadius: BorderRadius.circular(100),
+            boxShadow: selected
+                ? [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.06),
+                      blurRadius: 6,
+                      offset: const Offset(0, 2),
+                    ),
+                  ]
+                : const [],
+          ),
+          alignment: Alignment.center,
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+              color: selected ? KoalaColors.text : KoalaColors.textSec,
+              letterSpacing: -0.1,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─── About section — bio + "Daha fazla" expand (LinkedIn-style) ───
+class _AboutSection extends StatefulWidget {
+  final String about;
+  const _AboutSection({required this.about});
+
+  @override
+  State<_AboutSection> createState() => _AboutSectionState();
+}
+
+class _AboutSectionState extends State<_AboutSection> {
+  bool _expanded = false;
+  static const _kCollapsedMax = 3;
+  static const _kLongLength = 140;
+
+  @override
+  Widget build(BuildContext context) {
+    final long = widget.about.length > _kLongLength;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+        decoration: BoxDecoration(
+          color: KoalaColors.surface,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: KoalaColors.borderSolid, width: 0.6),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Hakkımda',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+                color: KoalaColors.textSec,
+                letterSpacing: 0.6,
+              ),
+            ),
+            const SizedBox(height: 6),
+            AnimatedSize(
+              duration: const Duration(milliseconds: 180),
+              curve: Curves.easeOut,
+              alignment: Alignment.topCenter,
+              child: Text(
+                widget.about,
+                style: const TextStyle(
+                  fontSize: 14,
+                  height: 1.4,
+                  color: KoalaColors.text,
+                  letterSpacing: -0.1,
+                ),
+                maxLines: _expanded ? null : _kCollapsedMax,
+                overflow: _expanded
+                    ? TextOverflow.visible
+                    : TextOverflow.ellipsis,
+              ),
+            ),
+            if (long) ...[
+              const SizedBox(height: 4),
+              InkWell(
+                onTap: () => setState(() => _expanded = !_expanded),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: Text(
+                    _expanded ? 'Daha az' : 'Daha fazla',
+                    style: const TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w700,
+                      color: KoalaColors.accentDeep,
+                      letterSpacing: -0.1,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 Widget _dragHandle() => Container(
       width: 40,
       height: 4,
@@ -865,14 +1286,7 @@ Widget _dragHandle() => Container(
       ),
     );
 
-// Border'ı BoxDecoration'a çevirmek için küçük yardımcı.
-extension on Border {
-  BoxDecoration toBoxDecoration() => BoxDecoration(border: this);
-}
-
 /// Profesyonel başvuru sheet'ini açar. Settings ekranı bunu kullanır.
-/// Submit edilirse `true` döner; çağıran `userProfileProvider`'ı
-/// invalidate etmeli.
 Future<bool?> showProApplicationSheet(BuildContext context) {
   return showModalBottomSheet<bool>(
     context: context,
@@ -1044,7 +1458,7 @@ class _ProfileEditorSheetState extends State<_ProfileEditorSheet> {
   }
 }
 
-// ─── Profesyonel başvuru sheet (settings'ten çağrılır) ───
+// ─── Profesyonel başvuru sheet (settings'ten ve profilden çağrılır) ───
 class ProApplicationSheet extends StatefulWidget {
   const ProApplicationSheet({super.key});
   @override
@@ -1288,126 +1702,6 @@ class _ProApplicationSheetState extends State<ProApplicationSheet> {
           ),
         ),
       ],
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────
-// Tasarım grid tile — Instagram. Tap → DesignDetailScreen. Long-press → menü.
-// Chrome yok: başlık, "…" buton, gradient — hepsi kalktı.
-// ─────────────────────────────────────────────────────────
-class _DesignGridTile extends StatelessWidget {
-  final Map<String, dynamic> item;
-  final SavedItemType type;
-  final VoidCallback onEdit;
-  final VoidCallback onDelete;
-  const _DesignGridTile({
-    required this.item,
-    required this.type,
-    required this.onEdit,
-    required this.onDelete,
-  });
-
-  void _openMenu(BuildContext context) {
-    HapticFeedback.selectionClick();
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: KoalaColors.bg,
-      isDismissible: true,
-      enableDrag: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (ctx) => SafeArea(
-        top: false,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SizedBox(height: 8),
-            _dragHandle(),
-            const SizedBox(height: 8),
-            ListTile(
-              leading: const Icon(LucideIcons.pencil,
-                  color: KoalaColors.accentDeep),
-              title: const Text('Düzenle', style: KoalaText.bodyMedium),
-              onTap: () {
-                Navigator.pop(ctx);
-                onEdit();
-              },
-            ),
-            ListTile(
-              leading: const Icon(LucideIcons.trash2,
-                  color: KoalaColors.error),
-              title: const Text(
-                'Sil',
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                  color: KoalaColors.error,
-                ),
-              ),
-              onTap: () {
-                Navigator.pop(ctx);
-                onDelete();
-              },
-            ),
-            ListTile(
-              leading:
-                  const Icon(LucideIcons.x, color: KoalaColors.textSec),
-              title: const Text('İptal', style: KoalaText.bodyMedium),
-              onTap: () => Navigator.pop(ctx),
-            ),
-            const SizedBox(height: 8),
-          ],
-        ),
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final imageUrl = (item['image_url'] as String?) ?? '';
-    final title = (item['title'] as String?) ?? 'Mekan';
-    final id = item['id']?.toString() ?? title;
-
-    return GestureDetector(
-      onTap: () {
-        HapticFeedback.selectionClick();
-        Navigator.of(context).push(
-          PageRouteBuilder(
-            transitionDuration: const Duration(milliseconds: 360),
-            reverseTransitionDuration: const Duration(milliseconds: 280),
-            pageBuilder: (_, _, _) => DesignDetailScreen(item: item),
-            transitionsBuilder: (_, anim, _, child) =>
-                FadeTransition(opacity: anim, child: child),
-          ),
-        );
-      },
-      onLongPress: () => _openMenu(context),
-      child: Hero(
-        tag: 'design-$id',
-        child: Container(
-          color: KoalaColors.surfaceAlt,
-          child: imageUrl.isNotEmpty
-              ? CachedNetworkImage(
-                  imageUrl: imageUrl,
-                  fit: BoxFit.cover,
-                  placeholder: (_, _) =>
-                      Container(color: KoalaColors.surfaceAlt),
-                  errorWidget: (_, _, _) => Container(
-                    color: KoalaColors.surfaceAlt,
-                    child: Center(
-                      child: Semantics(
-                        label: title,
-                        child: const Icon(LucideIcons.imageOff,
-                            color: KoalaColors.textTer, size: 22),
-                      ),
-                    ),
-                  ),
-                )
-              : Container(color: KoalaColors.surfaceAlt),
-        ),
-      ),
     );
   }
 }

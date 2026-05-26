@@ -1,36 +1,35 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:lucide_icons/lucide_icons.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/router/app_router.dart';
 import '../core/theme/koala_tokens.dart';
 
 // ════════════════════════════════════════════════════════════════════════════
-// OnboardingScreen — Snaphome-style 3-step intro.
+// OnboardingScreen — premium 3-page intro (2026-05 redesign).
 //
-// Layout (her adım):
+// Layout per page:
 //   ┌─────────────────────────────────┐
-//   │  ◀                       Atla   │  Top bar (back gizli step 0'da)
+//   │                          Atla   │  Top-right skip
+//   │  ╔═══════════════════════════╗  │
+//   │  ║                           ║  │
+//   │  ║   Full-bleed hero image   ║  │  ~55% h, rounded bottom 32
+//   │  ║   (step1/2/3.png)         ║  │  subtle dark gradient overlay
+//   │  ╚═══════════════════════════╝  │
 //   │                                 │
-//   │      ╔═════════════════╗        │
-//   │      ║  Hero Image     ║        │  ~55% h, full-bleed
-//   │      ║  (Gemini)       ║        │
-//   │      ╚═════════════════╝        │
+//   │   ●  •  •                       │  pill page-dots
 //   │                                 │
-//   ├─ cream sheet (~45% h) ──────────┤
-//   │   Saniyeler içinde              │  Fraunces serif w600 28
-//   │   hayalindeki tasarım           │
-//   │                                 │
-//   │   Bir fotoğraf çek, AI...       │  Manrope w500 15, textMed
-//   │                                 │
-//   │   ●  •  •                       │  page indicator
+//   │   Tarzını keşfet                │  h1 28-32 w800
+//   │   Yüzlerce tasarımı kaydır…     │  body 15 w500 muted
 //   │                                 │
 //   │   ┌─────────────────────────┐   │
-//   │   │       Sonraki           │   │  KoalaColors.text bg
+//   │   │      Devam et / Başla   │   │  primary CTA
 //   │   └─────────────────────────┘   │
 //   └─────────────────────────────────┘
+//
+// Animation: image scales 0.96→1.0 over 280ms easeOutCubic; content fades
+// in 80ms after image settles. Background is flat KoalaColors.bg.
 // ════════════════════════════════════════════════════════════════════════════
 
 class OnboardingScreen extends StatefulWidget {
@@ -47,21 +46,21 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   static const List<_OnboardingPage> _pages = [
     _OnboardingPage(
       image: 'assets/onboarding/step1.png',
-      title: 'Saniyeler içinde\nhayalindeki tasarım',
+      title: 'Tarzını keşfet',
       subtitle:
-          'Bir fotoğraf çek, AI saniyeler içinde mekanını yeniden tasarlasın. Yüzlerce stil arasından seç.',
+          'Yüzlerce tasarımı kaydır, neyi beğendiğini koala öğrensin.',
     ),
     _OnboardingPage(
       image: 'assets/onboarding/step2.png',
-      title: 'Türkiye’nin en iyi\niç mimarlarıyla tanış',
+      title: 'Mekânını dönüştür',
       subtitle:
-          'Beğendiğin tasarımı seç, profesyonele tek tıkla danış. Mesajlaş, ilham al, gerçeğe dönüştür.',
+          'Bir fotoğraf yükle, AI senin için yeniden tasarlasın.',
     ),
     _OnboardingPage(
       image: 'assets/onboarding/step3.png',
-      title: 'Tasarım koleksiyonun\nher zaman yanında',
+      title: 'Tasarımcılarla buluş',
       subtitle:
-          'Beğendiğin tasarımları kaydet, koleksiyonlar oluştur, ilham defteri biriktir.',
+          'Soru sor, fiyat al, projeyi başlat.',
     ),
   ];
 
@@ -80,15 +79,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       return;
     }
     await _pc.nextPage(
-      duration: const Duration(milliseconds: 320),
-      curve: Curves.easeOutCubic,
-    );
-  }
-
-  Future<void> _back() async {
-    if (_idx == 0) return;
-    await _pc.previousPage(
-      duration: const Duration(milliseconds: 280),
+      duration: const Duration(milliseconds: 360),
       curve: Curves.easeOutCubic,
     );
   }
@@ -103,247 +94,62 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final mq = MediaQuery.of(context);
-    final h = mq.size.height;
-    // Hero ~55% of available height, sheet ~45%.
-    final heroH = h * 0.55;
-
     return Scaffold(
       backgroundColor: KoalaColors.bg,
-      body: Stack(
-        children: [
-          // ── Pages ────────────────────────────────────────────────────────
-          PageView.builder(
-            controller: _pc,
-            itemCount: _pages.length,
-            onPageChanged: (i) {
-              setState(() => _idx = i);
-            },
-            itemBuilder: (_, i) => _PageBody(
-              page: _pages[i],
-              heroH: heroH,
-            ),
-          ),
-
-          // ── Top bar (back + skip) ────────────────────────────────────────
-          Positioned(
-            top: 0,
-            left: 0,
-            right: 0,
-            child: SafeArea(
-              bottom: false,
+      body: SafeArea(
+        child: Column(
+          children: [
+            // ── Top bar: skip only ─────────────────────────────────────────
+            SizedBox(
+              height: 44,
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(8, 8, 16, 0),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    AnimatedOpacity(
-                      duration: const Duration(milliseconds: 200),
-                      opacity: _idx == 0 ? 0 : 1,
-                      child: IconButton(
-                        onPressed: _idx == 0 ? null : _back,
-                        icon: Container(
-                          width: 36,
-                          height: 36,
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.85),
-                            shape: BoxShape.circle,
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.06),
-                                blurRadius: 6,
-                                offset: const Offset(0, 2),
-                              ),
-                            ],
-                          ),
-                          child: const Icon(
-                            LucideIcons.chevronLeft,
-                            size: 20,
-                            color: KoalaColors.text,
-                          ),
-                        ),
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton(
+                    onPressed: _busy ? null : _finish,
+                    style: TextButton.styleFrom(
+                      foregroundColor: KoalaColors.textMed,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 8,
                       ),
                     ),
-                    TextButton(
-                      onPressed: _busy ? null : _finish,
-                      style: TextButton.styleFrom(
-                        foregroundColor: KoalaColors.textMed,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 8,
-                        ),
+                    child: Text(
+                      'Atla',
+                      style: GoogleFonts.inter(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: KoalaColors.textMed,
                       ),
-                      child: Text(
-                        'Atla',
-                        style: GoogleFonts.manrope(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: KoalaColors.textMed,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-
-          // ── Bottom sheet (text + dots + CTA) ─────────────────────────────
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: 0,
-            child: _BottomSheet(
-              page: _pages[_idx],
-              idx: _idx,
-              total: _pages.length,
-              busy: _busy,
-              isLast: _idx == _pages.length - 1,
-              onNext: _next,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ─── Per-page body: full-bleed hero + soft fade ─────────────────────────────
-class _PageBody extends StatelessWidget {
-  const _PageBody({required this.page, required this.heroH});
-  final _OnboardingPage page;
-  final double heroH;
-
-  @override
-  Widget build(BuildContext context) {
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        // Hero image — top portion
-        Positioned(
-          top: 0,
-          left: 0,
-          right: 0,
-          height: heroH + 24, // small overlap behind sheet
-          child: Image.asset(
-            page.image,
-            fit: BoxFit.cover,
-            alignment: Alignment.center,
-            errorBuilder: (_, _, _) => Container(
-              color: KoalaColors.accentLight,
-              child: const Center(
-                child: Icon(LucideIcons.image, size: 48, color: KoalaColors.textMed),
-              ),
-            ),
-          ),
-        ),
-        // Soft gradient fade at the bottom of the hero into the cream sheet
-        Positioned(
-          top: heroH - 80,
-          left: 0,
-          right: 0,
-          height: 100,
-          child: IgnorePointer(
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    KoalaColors.bg.withValues(alpha: 0.0),
-                    KoalaColors.bg,
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-// ─── Bottom cream sheet with headline / subtitle / dots / CTA ───────────────
-class _BottomSheet extends StatelessWidget {
-  const _BottomSheet({
-    required this.page,
-    required this.idx,
-    required this.total,
-    required this.busy,
-    required this.isLast,
-    required this.onNext,
-  });
-
-  final _OnboardingPage page;
-  final int idx;
-  final int total;
-  final bool busy;
-  final bool isLast;
-  final VoidCallback onNext;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: const BoxDecoration(
-        color: KoalaColors.bg,
-      ),
-      child: SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(28, 28, 28, 24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Headline — Manrope w800 (uygulama canon dili, Tarzını Keşfet /
-              // Projelerim ile aynı; Fraunces serif variable-axis sayfa
-              // değişimlerinde metrik kayması yapıyordu, sabit Manrope ile çözüldü).
-              SizedBox(
-                height: 72,
-                child: AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 280),
-                  child: Text(
-                    page.title,
-                    key: ValueKey('t$idx'),
-                    style: GoogleFonts.manrope(
-                      fontSize: 26,
-                      fontWeight: FontWeight.w800,
-                      color: KoalaColors.text,
-                      height: 1.18,
-                      letterSpacing: -0.5,
                     ),
                   ),
                 ),
               ),
-              const SizedBox(height: 12),
-              // Subtitle (Manrope) — fixed min-height to keep layout stable
-              // across pages with different line counts.
-              SizedBox(
-                height: 72,
-                child: AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 280),
-                  child: Text(
-                    page.subtitle,
-                    key: ValueKey('s$idx'),
-                    style: GoogleFonts.manrope(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w500,
-                      color: KoalaColors.textMed,
-                      height: 1.5,
-                    ),
-                  ),
-                ),
+            ),
+
+            // ── Page view ──────────────────────────────────────────────────
+            Expanded(
+              child: PageView.builder(
+                controller: _pc,
+                itemCount: _pages.length,
+                onPageChanged: (i) => setState(() => _idx = i),
+                itemBuilder: (_, i) => _PageBody(page: _pages[i]),
               ),
-              const SizedBox(height: 24),
-              // Dots
-              Row(
-                mainAxisAlignment: MainAxisAlignment.start,
-                children: List.generate(total, (i) {
-                  final on = i == idx;
+            ),
+
+            // ── Dots ───────────────────────────────────────────────────────
+            Padding(
+              padding: const EdgeInsets.only(top: 4, bottom: 16),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: List.generate(_pages.length, (i) {
+                  final on = i == _idx;
                   return AnimatedContainer(
-                    duration: const Duration(milliseconds: 250),
-                    margin: const EdgeInsets.only(right: 6),
-                    width: on ? 24 : 8,
+                    duration: const Duration(milliseconds: 260),
+                    curve: Curves.easeOutCubic,
+                    margin: const EdgeInsets.symmetric(horizontal: 4),
+                    width: on ? 26 : 8,
                     height: 8,
                     decoration: BoxDecoration(
                       color: on
@@ -354,13 +160,16 @@ class _BottomSheet extends StatelessWidget {
                   );
                 }),
               ),
-              const SizedBox(height: 20),
-              // CTA
-              SizedBox(
+            ),
+
+            // ── CTA ────────────────────────────────────────────────────────
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+              child: SizedBox(
                 width: double.infinity,
                 height: 56,
                 child: ElevatedButton(
-                  onPressed: busy ? null : onNext,
+                  onPressed: _busy ? null : _next,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: KoalaColors.text,
                     foregroundColor: Colors.white,
@@ -371,7 +180,7 @@ class _BottomSheet extends StatelessWidget {
                       borderRadius: BorderRadius.circular(KoalaRadius.lg),
                     ),
                   ),
-                  child: busy
+                  child: _busy
                       ? const SizedBox(
                           width: 22,
                           height: 22,
@@ -381,8 +190,8 @@ class _BottomSheet extends StatelessWidget {
                           ),
                         )
                       : Text(
-                          isLast ? 'Hemen Başla' : 'Sonraki',
-                          style: GoogleFonts.manrope(
+                          _idx == _pages.length - 1 ? 'Başla' : 'Devam et',
+                          style: GoogleFonts.inter(
                             fontSize: 16,
                             fontWeight: FontWeight.w700,
                             color: Colors.white,
@@ -391,9 +200,161 @@ class _BottomSheet extends StatelessWidget {
                         ),
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
+      ),
+    );
+  }
+}
+
+// ─── Per-page body: hero image (55%) + title + body, with entry animation ───
+class _PageBody extends StatefulWidget {
+  const _PageBody({required this.page});
+  final _OnboardingPage page;
+
+  @override
+  State<_PageBody> createState() => _PageBodyState();
+}
+
+class _PageBodyState extends State<_PageBody>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+  late final Animation<double> _imgScale;
+  late final Animation<double> _contentOpacity;
+
+  @override
+  void initState() {
+    super.initState();
+    // Image: 0..280ms scale 0.96→1.0 easeOutCubic.
+    // Content fade: starts 80ms after image settles (offset 360ms),
+    // duration 240ms → controller total 600ms.
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 600),
+    );
+    _imgScale = Tween<double>(begin: 0.96, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _ctrl,
+        curve: const Interval(0.0, 0.467, curve: Curves.easeOutCubic),
+        // 280 / 600 = 0.467
+      ),
+    );
+    _contentOpacity = CurvedAnimation(
+      parent: _ctrl,
+      curve: const Interval(0.6, 1.0, curve: Curves.easeOut),
+      // (280 + 80) / 600 = 0.6
+    );
+    _ctrl.forward();
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final mq = MediaQuery.of(context);
+    // Available height inside the PageView (Scaffold body minus top bar 44,
+    // dots ~32, CTA 80, paddings). Hero ~55% of full screen still feels
+    // right; we cap so small phones stay balanced.
+    final heroH = (mq.size.height * 0.50).clamp(280.0, 520.0);
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Hero image — full-bleed of card, rounded bottom corners 32.
+          ScaleTransition(
+            scale: _imgScale,
+            child: ClipRRect(
+              borderRadius: const BorderRadius.all(Radius.circular(32)),
+              child: SizedBox(
+                width: double.infinity,
+                height: heroH,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    Image.asset(
+                      widget.page.image,
+                      fit: BoxFit.cover,
+                      alignment: Alignment.center,
+                      errorBuilder: (_, _, _) => Container(
+                        color: KoalaColors.accentLight,
+                        alignment: Alignment.center,
+                        child: const Icon(
+                          Icons.image_outlined,
+                          size: 48,
+                          color: KoalaColors.textMed,
+                        ),
+                      ),
+                    ),
+                    // Subtle dark gradient overlay at the bottom for depth.
+                    IgnorePointer(
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [
+                              Colors.black.withValues(alpha: 0.0),
+                              Colors.black.withValues(alpha: 0.18),
+                            ],
+                            stops: const [0.6, 1.0],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 28),
+          // Content: title + body, fades in after image settles.
+          Expanded(
+            child: FadeTransition(
+              opacity: _contentOpacity,
+              child: SlideTransition(
+                position: Tween<Offset>(
+                  begin: const Offset(0, 0.08),
+                  end: Offset.zero,
+                ).animate(_contentOpacity),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        widget.page.title,
+                        style: GoogleFonts.inter(
+                          fontSize: 30,
+                          fontWeight: FontWeight.w800,
+                          color: KoalaColors.text,
+                          height: 1.15,
+                          letterSpacing: -0.6,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        widget.page.subtitle,
+                        style: GoogleFonts.inter(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w500,
+                          color: KoalaColors.textMed,
+                          height: 1.5,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

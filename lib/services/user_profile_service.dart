@@ -62,6 +62,25 @@ class ProApplicationStatus {
 class UserProfileService {
   static String? get _uid => FirebaseAuth.instance.currentUser?.uid;
 
+  /// Birden çok kullanıcının profil satırını tek seferde çek.
+  /// Tek "in" sorgu — follow list bottom-sheet için gerekli.
+  static Future<List<KoalaUserProfile>> getMany(List<String> uids) async {
+    if (uids.isEmpty) return const [];
+    try {
+      final unique = uids.toSet().toList();
+      final data = await Supabase.instance.client
+          .from('koala_user_profiles')
+          .select()
+          .inFilter('uid', unique);
+      return List<Map<String, dynamic>>.from(data)
+          .map((r) => KoalaUserProfile.fromRow(r))
+          .toList();
+    } catch (e) {
+      debugPrint('[user_profile] getMany failed: $e');
+      return const [];
+    }
+  }
+
   static Future<KoalaUserProfile?> get() async {
     final uid = _uid;
     if (uid == null) return null;

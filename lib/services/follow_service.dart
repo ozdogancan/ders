@@ -2,7 +2,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:supabase_flutter/supabase_flutter.dart' show Supabase;
+import 'package:supabase_flutter/supabase_flutter.dart' show Supabase, CountOption;
 
 class FollowState {
   final bool following;
@@ -66,6 +66,63 @@ class FollowService {
     } catch (e) {
       debugPrint('[follow] mute failed: $e');
       return FollowState.empty;
+    }
+  }
+
+  /// Bir kullanıcının takip ettiği designer_id listesi.
+  static Future<List<String>> followingIds(String userId) async {
+    if (userId.isEmpty) return const [];
+    try {
+      final data = await Supabase.instance.client
+          .from('koala_follows')
+          .select('designer_id')
+          .eq('user_id', userId);
+      return List<Map<String, dynamic>>.from(data)
+          .map((r) => (r['designer_id'] ?? '').toString())
+          .where((s) => s.isNotEmpty)
+          .toList();
+    } catch (e) {
+      debugPrint('[follow] followingIds failed: $e');
+      return const [];
+    }
+  }
+
+  /// Bir designer'ı takip eden user_id listesi.
+  static Future<List<String>> followerIds(String designerId) async {
+    if (designerId.isEmpty) return const [];
+    try {
+      final data = await Supabase.instance.client
+          .from('koala_follows')
+          .select('user_id')
+          .eq('designer_id', designerId);
+      return List<Map<String, dynamic>>.from(data)
+          .map((r) => (r['user_id'] ?? '').toString())
+          .where((s) => s.isNotEmpty)
+          .toList();
+    } catch (e) {
+      debugPrint('[follow] followerIds failed: $e');
+      return const [];
+    }
+  }
+
+  /// (followers, following) ikilisi tek seferde.
+  static Future<({int followers, int following})> counts(String uid) async {
+    if (uid.isEmpty) return (followers: 0, following: 0);
+    try {
+      final followers = await Supabase.instance.client
+          .from('koala_follows')
+          .select('user_id')
+          .eq('designer_id', uid)
+          .count(CountOption.exact);
+      final following = await Supabase.instance.client
+          .from('koala_follows')
+          .select('designer_id')
+          .eq('user_id', uid)
+          .count(CountOption.exact);
+      return (followers: followers.count, following: following.count);
+    } catch (e) {
+      debugPrint('[follow] counts failed: $e');
+      return (followers: 0, following: 0);
     }
   }
 
