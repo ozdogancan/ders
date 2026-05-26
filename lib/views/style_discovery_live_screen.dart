@@ -27,6 +27,7 @@ import 'package:supabase_flutter/supabase_flutter.dart' show Supabase;
 import '../core/theme/koala_tokens.dart';
 import '../helpers/paywall_router.dart';
 import '../providers/pro_status_provider.dart';
+import '../widgets/free_consult_sheet.dart';
 import '../widgets/koala_bottom_nav.dart';
 import '../widgets/taste_summary_sheet.dart';
 import 'main_shell.dart';
@@ -1012,12 +1013,13 @@ class _StyleDiscoveryLiveScreenState
                 subtitle: 'Evlumba stüdyosundan profesyonel destek al',
                 onTap: () {
                   Navigator.of(ctx).pop();
-                  context.push('/chat/dm/new', extra: {
-                    'designerId': 'evlumba-design',
-                    'designerName': 'Evlumba Design',
-                    'projectTitle': displayTitle,
-                    'pendingDesign': pendingDesign('evlumba-design'),
-                  });
+                  // Tek-konuşma + free-consult gate.
+                  enterEvlumbaConversation(
+                    context,
+                    ref,
+                    projectTitle: displayTitle,
+                    pendingDesign: pendingDesign('evlumba-design'),
+                  );
                 },
               ),
               if (!isEvlumbaDesign)

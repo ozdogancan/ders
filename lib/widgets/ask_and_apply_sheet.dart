@@ -9,6 +9,7 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:lucide_icons/lucide_icons.dart';
@@ -16,6 +17,7 @@ import 'package:lucide_icons/lucide_icons.dart';
 import '../core/theme/koala_tokens.dart';
 import '../services/evlumba_live_service.dart';
 import '../views/mekan/wizard/mekan_wizard_screen.dart';
+import 'free_consult_sheet.dart';
 
 const String _evlumbaDesignAvatarUrl =
     'https://xgefjepaqnghaotqybpi.supabase.co/storage/v1/object/public/koala-seed/avatars/evlumba-design.webp';
@@ -57,7 +59,7 @@ Future<void> showAskAndApplySheet(
   );
 }
 
-class _AskAndApplySheet extends StatefulWidget {
+class _AskAndApplySheet extends ConsumerStatefulWidget {
   final String designId;
   final String title;
   final String imageUrl;
@@ -79,10 +81,10 @@ class _AskAndApplySheet extends StatefulWidget {
   });
 
   @override
-  State<_AskAndApplySheet> createState() => _AskAndApplySheetState();
+  ConsumerState<_AskAndApplySheet> createState() => _AskAndApplySheetState();
 }
 
-class _AskAndApplySheetState extends State<_AskAndApplySheet> {
+class _AskAndApplySheetState extends ConsumerState<_AskAndApplySheet> {
   String? _designerName;
   String? _designerAvatar;
 
@@ -210,12 +212,14 @@ class _AskAndApplySheetState extends State<_AskAndApplySheet> {
               subtitle: 'Evlumba stüdyosundan profesyonel destek al',
               onTap: () {
                 Navigator.of(ctx).pop();
-                ctx.push('/chat/dm/new', extra: {
-                  'designerId': 'evlumba-design',
-                  'designerName': 'Evlumba Design',
-                  'projectTitle': widget.title,
-                  'pendingDesign': _pendingDesign('evlumba-design'),
-                });
+                // Tek-konuşma + free-consult gate. Yeni thread yaratmaz —
+                // her zaman aynı Evlumba conv'a gider.
+                enterEvlumbaConversation(
+                  ctx,
+                  ref,
+                  projectTitle: widget.title,
+                  pendingDesign: _pendingDesign('evlumba-design'),
+                );
               },
             ),
             if (showDesignerOption)

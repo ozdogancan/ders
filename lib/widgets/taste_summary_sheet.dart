@@ -1,16 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../core/theme/koala_tokens.dart';
 import '../services/saved_items_service.dart';
 import '../services/taste_profile_service.dart';
+import 'free_consult_sheet.dart';
 
 /// Her 10 beğenide swipe ekranında gösterilen "tarz özeti" alt-popup'ı.
 ///
 /// Tüm veri LOKAL: `TasteProfileService.computeProfile()` (SharedPreferences,
 /// ağ yok) + bellekteki deck. AI çağrısı / runtime image-gen YOK — maliyet
 /// kuralına uygun.
-class TasteSummarySheet extends StatelessWidget {
+class TasteSummarySheet extends ConsumerWidget {
   const TasteSummarySheet({
     super.key,
     required this.profile,
@@ -99,7 +101,7 @@ class TasteSummarySheet extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final rc = recCard;
     final hasRec = rc != null && (rc['imageUrl'] ?? '').isNotEmpty;
 
@@ -246,16 +248,14 @@ class TasteSummarySheet extends StatelessWidget {
                       label: 'Evlumba Design',
                       onTap: () {
                         Navigator.of(context).pop();
-                        final extra = <String, dynamic>{
-                          'designerId': 'evlumba-design',
-                          'designerName': 'Evlumba Design',
-                        };
+                        // Tek-konuşma + free-consult gate.
+                        String? projectTitle;
+                        Map<String, dynamic>? pendingDesign;
                         if (hasRec && (rc['id'] ?? '').isNotEmpty) {
-                          extra['projectTitle'] =
-                              (rc['title'] ?? '').isNotEmpty
-                                  ? rc['title']
-                                  : 'Tasarım';
-                          extra['pendingDesign'] = {
+                          projectTitle = (rc['title'] ?? '').isNotEmpty
+                              ? rc['title']
+                              : 'Tasarım';
+                          pendingDesign = {
                             'id': rc['id'],
                             'title': (rc['title'] ?? '').isNotEmpty
                                 ? rc['title']
@@ -266,7 +266,12 @@ class TasteSummarySheet extends StatelessWidget {
                             'designerId': 'evlumba-design',
                           };
                         }
-                        context.push('/chat/dm/new', extra: extra);
+                        enterEvlumbaConversation(
+                          context,
+                          ref,
+                          projectTitle: projectTitle,
+                          pendingDesign: pendingDesign,
+                        );
                       },
                     ),
                   ),

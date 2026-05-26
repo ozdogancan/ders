@@ -253,6 +253,44 @@ class _ConversationDetailScreenState extends ConsumerState<ConversationDetailScr
 
   Future<void> _loadDesignerDetail() async {
     if (widget.designerId == null || widget.designerId!.isEmpty) return;
+
+    // Evlumba Design SENTETİK — EvlumbaLiveService'te bir designer satırı yok.
+    // Portfolio'yu koala_cards'tan (source='gemini-seed') çek. Diğer
+    // tasarımcılarda eski akış (Evlumba marketplace DB) çalışmaya devam eder.
+    if (_isEvlumba) {
+      try {
+        final res = await Supabase.instance.client
+            .from('koala_cards')
+            .select('id, title, description, room_type, style, cdn_url, '
+                'original_url, quality_score, created_at')
+            .eq('source', 'gemini-seed')
+            .eq('is_published', true)
+            .order('quality_score', ascending: false, nullsFirst: false)
+            .limit(60);
+        final rows = List<Map<String, dynamic>>.from(res);
+        final projects = rows.map<Map<String, dynamic>>((r) {
+          final img = (r['cdn_url'] ?? r['original_url'] ?? '').toString();
+          return {
+            'id': r['id'],
+            'title': (r['title'] ?? '').toString(),
+            'description': (r['description'] ?? '').toString(),
+            'room_type': (r['room_type'] ?? '').toString(),
+            'category': (r['room_type'] ?? '').toString(),
+            'cover_image_url': img,
+            'image_url': img,
+          };
+        }).toList();
+        if (mounted) {
+          setState(() {
+            _designerProjects = projects;
+          });
+        }
+      } catch (e) {
+        debugPrint('ConversationDetail: Evlumba portfolio fetch error: $e');
+      }
+      return;
+    }
+
     try {
       if (!EvlumbaLiveService.isReady) {
         await EvlumbaLiveService.waitForReady(timeout: const Duration(seconds: 5));
@@ -603,6 +641,12 @@ class _ConversationDetailScreenState extends ConsumerState<ConversationDetailScr
         if (sentMsg != null) {
         // BAŞARI: input'u temizle.
         _textController.clear();
+        // Evlumba'da ilk kullanıcı mesajı atıldı → free-consult tüketildi.
+        // hasUsedFreeConsult cache'ini güncelle ki bir sonraki entry popup
+        // tekrar açılmasın.
+        if (_isEvlumba) {
+          MessagingService.markFreeConsultUsed(cid);
+        }
 
         // Design paylaşımı ise koala_shares + analytics log (fire-and-forget).
         final designId = _pendingDesignId;
@@ -1577,6 +1621,7 @@ class _ConversationDetailScreenState extends ConsumerState<ConversationDetailScr
   }
 
   Widget _buildEmptyStateWithPresets() {
+    if (_isEvlumba) return _buildEvlumbaEmptyState();
     // Minimal boş state: tek bir narin outline mesaj balonu (stroke 1.5px) +
     // küçük tek sparkle aksanı + iki satır tipografi.
     //
@@ -1652,6 +1697,124 @@ class _ConversationDetailScreenState extends ConsumerState<ConversationDetailScr
                 color: KoalaColors.textTer,
               ),
               textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Evlumba Design kanalı için premium boş state. Champagne gradient halo +
+  /// gold sparkle + iki satır tipografi. Diğer tasarımcı kanalları için
+  /// _buildEmptyStateWithPresets() default akışı çalışır.
+  Widget _buildEvlumbaEmptyState() {
+    return Align(
+      alignment: Alignment.topCenter,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(32, 72, 32, 0),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SizedBox(
+              width: 108,
+              height: 108,
+              child: Stack(
+                clipBehavior: Clip.none,
+                alignment: Alignment.center,
+                children: [
+                  // Soft champagne radial halo
+                  Container(
+                    width: 108,
+                    height: 108,
+                    decoration: const BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: RadialGradient(
+                        colors: [
+                          Color(0x33D4A853),
+                          Color(0x00D4A853),
+                        ],
+                      ),
+                    ),
+                  ),
+                  // Inner gold disc
+                  Container(
+                    width: 64,
+                    height: 64,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFFD4A853), Color(0xFFE8C76A)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFFD4A853).withValues(alpha: 0.35),
+                          blurRadius: 18,
+                          offset: const Offset(0, 6),
+                        ),
+                      ],
+                    ),
+                    child: const Icon(
+                      LucideIcons.sparkles,
+                      color: Colors.white,
+                      size: 28,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 22),
+            const Text(
+              'Evlumba Design ile başlat',
+              style: TextStyle(
+                fontSize: 17,
+                fontWeight: FontWeight.w800,
+                color: Color(0xFF3D2E12),
+                letterSpacing: -0.3,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 6),
+            const Text(
+              'Tasarımına dair her şeyi sorabilirsin.',
+              style: TextStyle(
+                fontSize: 13.5,
+                fontWeight: FontWeight.w500,
+                color: KoalaColors.textSec,
+                height: 1.4,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 14),
+            Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFDF8EC),
+                borderRadius: BorderRadius.circular(KoalaRadius.pill),
+                border: Border.all(
+                  color: const Color(0xFFE8D7A8),
+                  width: 0.8,
+                ),
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(LucideIcons.clock,
+                      size: 12, color: Color(0xFFD4A853)),
+                  SizedBox(width: 5),
+                  Text(
+                    '1 saat içinde yanıt',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFFD4A853),
+                      letterSpacing: 0.3,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ],
         ),

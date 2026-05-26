@@ -240,7 +240,7 @@ class _ProfileNavItem extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               AnimatedScale(
-                scale: selected ? 1.08 : 1.0,
+                scale: selected ? 1.06 : 1.0,
                 duration: const Duration(milliseconds: 220),
                 curve: Curves.easeOutBack,
                 child: StreamBuilder<User?>(
@@ -252,23 +252,25 @@ class _ProfileNavItem extends StatelessWidget {
                     if (url.isEmpty) {
                       return Icon(LucideIcons.user, size: 22, color: color);
                     }
+                    // Polished round avatar: solid 30px, brand ring on active,
+                    // subtle border off-state, soft glow on selection.
                     return Container(
-                      width: 26,
-                      height: 26,
+                      width: 30,
+                      height: 30,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         border: Border.all(
                           color: selected
                               ? KoalaColors.accentDeep
-                              : Colors.white.withValues(alpha: 0.9),
-                          width: selected ? 2 : 1.2,
+                              : KoalaColors.border,
+                          width: selected ? 2 : 1,
                         ),
                         boxShadow: selected
                             ? [
                                 BoxShadow(
                                   color: KoalaColors.accentDeep
-                                      .withValues(alpha: 0.25),
-                                  blurRadius: 6,
+                                      .withValues(alpha: 0.22),
+                                  blurRadius: 8,
                                   offset: const Offset(0, 2),
                                 ),
                               ]
@@ -278,11 +280,12 @@ class _ProfileNavItem extends StatelessWidget {
                       child: CachedNetworkImage(
                         imageUrl: url,
                         fit: BoxFit.cover,
+                        fadeInDuration: const Duration(milliseconds: 120),
                         placeholder: (_, _) =>
                             Container(color: KoalaColors.accentSoft),
                         errorWidget: (_, _, _) => Icon(
                           LucideIcons.user,
-                          size: 16,
+                          size: 18,
                           color: color,
                         ),
                       ),

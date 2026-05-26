@@ -2,9 +2,11 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'main_shell.dart';
 import 'style_discovery_live_screen.dart';
 import '../widgets/koala_bottom_nav.dart';
+import '../widgets/free_consult_sheet.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' hide User;
@@ -22,13 +24,13 @@ import 'chat_detail_screen.dart';
 /// [v1 — archived] Mesajlar ekranı — ilk jenerasyon (mor AI hero + yığılı
 /// bölümler). `chat_list_screen.dart` içindeki `kUseChatListV2 = false`
 /// yapılarak geri aktive edilebilir. Üretim için v2 kullanılıyor.
-class ChatListScreenV1 extends StatefulWidget {
+class ChatListScreenV1 extends ConsumerStatefulWidget {
   const ChatListScreenV1({super.key});
   @override
-  State<ChatListScreenV1> createState() => _ChatListScreenV1State();
+  ConsumerState<ChatListScreenV1> createState() => _ChatListScreenV1State();
 }
 
-class _ChatListScreenV1State extends State<ChatListScreenV1> {
+class _ChatListScreenV1State extends ConsumerState<ChatListScreenV1> {
   List<Map<String, dynamic>> _conversations = [];
   List<ChatSummary> _aiChats = [];
   bool _loading = true;
@@ -2024,14 +2026,12 @@ class _ChatListScreenV1State extends State<ChatListScreenV1> {
   }
 
   void _openEvlumbaDesign() {
-    // TODO: Sonraki iterasyonda WhatsApp entegrasyonu ile birlikte
-    // Şimdilik bilgi popup'ı göster
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => const _EvlumbaDesignSheet(),
-    );
+    // Tek-konuşma + free-consult gate'ini tek noktadan yürüt.
+    // Pro ise → doğrudan chat'e gir.
+    // Free + ilk danışma kullanılmamış → premium "İlk danışma ücretsiz" sheet.
+    // Free + ilk danışma kullanılmış → doğrudan chat'e gir (paywall gönderirken
+    // tetiklenir).
+    enterEvlumbaConversation(context, ref);
   }
 
   // ═══════════════════════════════════════════════════════

@@ -268,6 +268,64 @@ class MessagingService {
     String? title,
   }) => getOrCreateConversation(designerId: designerId, contextTitle: title);
 
+  // ═══════════════════════════════════════════════════════
+  // EVLUMBA TEK-KONUŞMA HELPERS
+  // ═══════════════════════════════════════════════════════
+  // Kullanıcı isteği: Evlumba Design'a "Sor" tüm entry point'lerinden
+  // HER ZAMAN tek bir conversation kullanılır — her tap yeni bir thread
+  // yaratmaz. Bu fonksiyonlar bu kontratı sağlar.
+
+  static const String _kEvlumbaDesignerId = 'evlumba-design';
+
+  /// Aktif kullanıcının Evlumba conversation'ı — yoksa yaratır.
+  /// `getOrCreateConversation` zaten upsert davranışında (önce SELECT, sonra
+  /// INSERT) çalıştığı için bu metod yalnızca semantik bir alias. Çağıran
+  /// kod nicelik olarak okunabilir kalsın diye ayrı isim verildi.
+  static Future<Map<String, dynamic>?> findOrCreateEvlumbaConversation({
+    String? title,
+  }) {
+    return getOrCreateConversation(
+      designerId: _kEvlumbaDesignerId,
+      contextTitle: title,
+    );
+  }
+
+  // Session-scope cache. Free-consult sorgusu bir kere true dönerse session
+  // sonuna kadar tekrar DB'ye gitmeye gerek yok. False değer cache'lenmez
+  // (kullanıcı henüz mesaj atmadıysa ilk send sonrası TRUE'ya dönmesi
+  // gerekir; bunu chat ekranı `markFreeConsultUsed()` çağırarak set eder).
+  static final Set<String> _freeConsultUsedCache = <String>{};
+
+  /// Verilen conv'da kullanıcının (kendisinin) GÖNDERDİĞİ en az bir mesaj
+  /// var mı? "Free consult kullanıldı mı?" sorusunun cevabı budur.
+  ///
+  /// Defensive: koala_direct_messages select'i exception fırlatırsa
+  /// (RLS/network) false döner — popup'ı GÖSTER (kullanıcı UX'i kaybetmesin).
+  static Future<bool> hasUsedFreeConsult(String conversationId) async {
+    if (_freeConsultUsedCache.contains(conversationId)) return true;
+    final uid = await _waitForUid();
+    if (uid == null) return false;
+    try {
+      final res = await _db
+          .from('koala_direct_messages')
+          .select('id')
+          .eq('conversation_id', conversationId)
+          .eq('sender_id', uid)
+          .limit(1);
+      final used = (res as List).isNotEmpty;
+      if (used) _freeConsultUsedCache.add(conversationId);
+      return used;
+    } catch (e) {
+      debugPrint('MessagingService.hasUsedFreeConsult error: $e');
+      return false;
+    }
+  }
+
+  /// İlk başarılı mesajdan sonra çağrılır → sonraki giriş popup açmaz.
+  static void markFreeConsultUsed(String conversationId) {
+    _freeConsultUsedCache.add(conversationId);
+  }
+
   /// Kullanicinin tum sohbetlerini getir (son mesaja gore sirali)
   static Future<List<Map<String, dynamic>>> getConversations({
     int limit = 50,
