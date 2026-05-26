@@ -42,6 +42,7 @@ import '../services/follow_service.dart';
 import '../services/notifications_feed_service.dart';
 import '../services/taste_profile_service.dart';
 import '../services/usage_limit_service.dart';
+import '../widgets/verified_badge.dart';
 
 class StyleDiscoveryLiveScreen extends ConsumerStatefulWidget {
   const StyleDiscoveryLiveScreen({super.key});
@@ -2216,6 +2217,11 @@ class _DesignerChip extends StatelessWidget {
               ),
             ),
           ),
+          if (isVerifiedDesignerId(
+              (designer['id'] ?? designer['designer_id'] ?? '').toString())) ...[
+            const SizedBox(width: 5),
+            const VerifiedBadge(size: 13),
+          ],
         ],
       ),
     );
@@ -3551,12 +3557,24 @@ class _DesignerProfileSheetState extends State<DesignerProfileSheet> {
         children: [
           _avatar(avatar, isEvlumba),
           const SizedBox(height: 14),
-          Text(
-            name.isNotEmpty ? name : 'Tasarımcı',
-            style: KoalaText.h2,
-            textAlign: TextAlign.center,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Flexible(
+                child: Text(
+                  name.isNotEmpty ? name : 'Tasarımcı',
+                  style: KoalaText.h2,
+                  textAlign: TextAlign.center,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              if (isVerifiedDesignerId(widget.designerId)) ...[
+                const SizedBox(width: 6),
+                const VerifiedBadge(size: 18),
+              ],
+            ],
           ),
           if (profession.isNotEmpty || city.isNotEmpty) ...[
             const SizedBox(height: 4),
