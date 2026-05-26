@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:http/http.dart' as http;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -47,6 +48,7 @@ class ChatDetailScreen extends ConsumerStatefulWidget {
     this.fromDiscovery = false,
     this.hiddenContext,
     this.testAssetPhoto = false,
+    this.pendingImageUrl,
   });
 
   final String? initialText;
@@ -61,6 +63,12 @@ class ChatDetailScreen extends ConsumerStatefulWidget {
 
   /// true ise assets/images/test_room.webp'den test görseli yükler
   final bool testAssetPhoto;
+
+  /// Swipe kartından "Koala AI'ya sor" akışı: bu URL initState'te indirilip
+  /// `_pendingPhoto` olarak input'un üstünde preview olarak gösterilir —
+  /// sanki kullanıcı kart görselini kameradan/galeriden eklemiş gibi. İlk
+  /// gönderimde resim ve metin birlikte AI'a iletilir.
+  final String? pendingImageUrl;
 
   @override
   ConsumerState<ChatDetailScreen> createState() => _ChatDetailScreenState();
@@ -188,6 +196,15 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
           intent: widget.intent!,
           params: widget.intentParams ?? {},
         );
+      } else if (widget.pendingImageUrl != null &&
+          widget.pendingImageUrl!.isNotEmpty) {
+        // Swipe → Sor → Koala AI: kart görseli sanki kullanıcı kameradan
+        // çekmiş gibi input üstünde preview olarak görünür. initialText composer'a
+        // ön-doldurulur ama AUTO-SEND YAPILMAZ — kullanıcı isterse düzenler.
+        if (widget.initialText != null && widget.initialText!.isNotEmpty) {
+          _ctrl.text = widget.initialText!;
+        }
+        unawaited(_loadPendingImageFromUrl(widget.pendingImageUrl!));
       } else if (widget.initialText != null || widget.initialPhoto != null) {
         _sendToAI(
           text: widget.initialText,
@@ -326,6 +343,22 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
           text: 'Test görseli yüklenemedi: $e',
         ));
       });
+    }
+  }
+
+  /// Swipe kartından gelen tasarım URL'sini bytes'a çevirip _pendingPhoto
+  /// olarak set eder — input üstündeki preview kullanıcı kart fotoğrafını
+  /// "ekledim" gibi gösterir. URL erişilemezse sessizce pas geç.
+  Future<void> _loadPendingImageFromUrl(String url) async {
+    try {
+      final resp = await http
+          .get(Uri.parse(url))
+          .timeout(const Duration(seconds: 8));
+      if (resp.statusCode != 200) return;
+      if (!mounted) return;
+      setState(() => _pendingPhoto = resp.bodyBytes);
+    } catch (e) {
+      debugPrint('chat_detail: pendingImageUrl fetch failed → $e');
     }
   }
 

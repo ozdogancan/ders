@@ -129,6 +129,7 @@ final GoRouter appRouter = GoRouter(
         return ChatDetailScreen(
           chatId: extra?['chatId'] as String?,
           initialText: extra?['initialText'] as String?,
+          pendingImageUrl: extra?['pendingImageUrl'] as String?,
         );
       },
     ),

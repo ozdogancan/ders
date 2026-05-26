@@ -997,10 +997,14 @@ class _StyleDiscoveryLiveScreenState
                 subtitle: 'Yapay zekâ asistanından anında fikir al',
                 onTap: () {
                   Navigator.of(ctx).pop();
+                  // Kart görselini Koala AI sohbetine "kullanıcı fotoyu eklemiş
+                  // gibi" iliştir — initState'te pendingImageUrl indirilip
+                  // input üstünde preview olarak görünür. Kullanıcı isterse
+                  // metni düzenleyip gönderir, foto ile birlikte AI'a gider.
                   context.push('/chat/ai', extra: {
-                    'initialText': 'Bu tasarımı beğendim: "$displayTitle"'
-                        '${cat.isNotEmpty ? ' ($cat)' : ''}. '
-                        'Bunun gibi bir tarzı evime nasıl uygulayabilirim?',
+                    'initialText':
+                        'Bu tasarımı evimde nasıl uygulayabilirim?',
+                    if (coverUrl.isNotEmpty) 'pendingImageUrl': coverUrl,
                   });
                 },
               ),

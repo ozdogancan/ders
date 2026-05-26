@@ -20,6 +20,7 @@ import '../services/share_service.dart';
 import '../widgets/koala_widgets.dart';
 import '../widgets/media_upload_helper.dart';
 import 'chat/widgets/quote_card.dart';
+import 'designer_profile_screen.dart';
 
 /// Evlumba Design = Koala'nın resmî tasarım stüdyosu kanalı. n8n köprüsü
 /// üzerinden Telegram'a yansıtılır. Chat detayı bu kanal için premium görünür:
@@ -280,9 +281,12 @@ class _ConversationDetailScreenState extends ConsumerState<ConversationDetailScr
             'image_url': img,
           };
         }).toList();
+        // Defansif dedupe: aynı cover_image_url'yi tekrar eden satır yok et,
+        // sonra portfolyo barını 8 ile sınırla.
+        final deduped = _dedupeByCover(projects);
         if (mounted) {
           setState(() {
-            _designerProjects = projects;
+            _designerProjects = deduped.take(8).toList();
           });
         }
       } catch (e) {
@@ -315,14 +319,54 @@ class _ConversationDetailScreenState extends ConsumerState<ConversationDetailScr
         }
       }
 
+      // Real-designer dedupe: Bahar Temirci gibi tasarımcılarda DB'de aynı
+      // cover_image_url'in farklı project_type rowlarıyla tekrar ettiği görüldü
+      // (örn yatak odası = antre aynı görsel). Client-side cover URL'yle dedupe
+      // edip 8'e cap'liyoruz.
+      final deduped = _dedupeByCover(projects).take(8).toList();
+
       if (mounted) {
         setState(() {
           _designerDetail = detail;
-          _designerProjects = projects;
+          _designerProjects = deduped;
           _contextProject = matched;
         });
       }
     } catch (_) {}
+  }
+
+  /// Aynı cover_image_url'a sahip yinelenen project rowlarını eler — ilk
+  /// görüleni tutar. cover_image_url yoksa cover_url / image_url /
+  /// designer_project_images[0].image_url fallback'i kullanılır. URL üretilemeyen
+  /// satırlar olduğu gibi listeye katılır (bilgi kaybetmeyelim).
+  List<Map<String, dynamic>> _dedupeByCover(List<Map<String, dynamic>> rows) {
+    final seen = <String>{};
+    final out = <Map<String, dynamic>>[];
+    for (final p in rows) {
+      String url = (p['cover_image_url'] ??
+              p['cover_url'] ??
+              p['image_url'] ??
+              '')
+          .toString()
+          .trim();
+      if (url.isEmpty) {
+        final imgs = p['designer_project_images'] as List?;
+        if (imgs != null && imgs.isNotEmpty) {
+          final first = imgs.first;
+          if (first is Map) {
+            url = (first['image_url'] ?? '').toString().trim();
+          }
+        }
+      }
+      if (url.isEmpty) {
+        out.add(p);
+        continue;
+      }
+      if (seen.contains(url)) continue;
+      seen.add(url);
+      out.add(p);
+    }
+    return out;
   }
 
   Future<void> _loadMessages() async {
@@ -824,6 +868,117 @@ class _ConversationDetailScreenState extends ConsumerState<ConversationDetailScr
         .join(' ');
   }
 
+  /// Header avatar/isim tap → tasarımcı profil sayfası (gerçek tasarımcı) veya
+  /// Evlumba Design için kısa stüdyo info bottom sheet'i.
+  void _openDesignerProfileFromHeader() {
+    HapticFeedback.selectionClick();
+    final did = widget.designerId;
+    if (did == null || did.isEmpty) return;
+    if (_isEvlumba) {
+      _showEvlumbaStudioSheet();
+      return;
+    }
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => DesignerProfileScreen(
+          designerId: did,
+          designerName: widget.designerName,
+        ),
+      ),
+    );
+  }
+
+  void _showEvlumbaStudioSheet() {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: KoalaColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (_) => SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 14, 20, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 36,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: KoalaColors.border,
+                    borderRadius: BorderRadius.circular(100),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Container(
+                    width: 48,
+                    height: 48,
+                    decoration: const BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: LinearGradient(
+                        colors: [Color(0xFFD4A853), Color(0xFFB8874A)],
+                      ),
+                    ),
+                    child: ClipOval(
+                      child: Image.network(
+                        _kEvlumbaAvatarUrl,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => const SizedBox(),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Text('Evlumba Design',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w700,
+                                  color: KoalaColors.text,
+                                )),
+                            SizedBox(width: 4),
+                            Icon(LucideIcons.badgeCheck,
+                                size: 16, color: Color(0xFF1DA1F2)),
+                          ],
+                        ),
+                        Text('Tasarım stüdyosu',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: KoalaColors.textTer,
+                            )),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              const Text(
+                'Evlumba Design, Koala\'nın resmî iç mimari stüdyosudur. '
+                'Profesyonel ekibimizden tasarım danışmanlığı ve uygulama '
+                'desteği alabilirsin.',
+                style: TextStyle(
+                  fontSize: 13.5,
+                  height: 1.45,
+                  color: KoalaColors.textSec,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   /// Portfolio görseline tıklanınca proje detay overlay aç
   void _openProjectViewer(Map<String, dynamic> project, int startIndex) {
     showModalBottomSheet<void>(
@@ -1300,6 +1455,17 @@ class _ConversationDetailScreenState extends ConsumerState<ConversationDetailScr
                   icon: const Icon(LucideIcons.arrowLeft,
                       color: KoalaColors.text, size: 22),
                 ),
+                // Avatar + name → tap = designer profile (real designer) veya
+                // Evlumba stüdyo info sheet. InkWell ile cömert tap target,
+                // hafif ripple + haptic.
+                Expanded(
+                  child: InkWell(
+                    onTap: _openDesignerProfileFromHeader,
+                    borderRadius: BorderRadius.circular(8),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      child: Row(
+                        children: [
                 // Avatar
                 Container(
                   width: 36,
@@ -1399,6 +1565,11 @@ class _ConversationDetailScreenState extends ConsumerState<ConversationDetailScr
                           ),
                         ),
                     ],
+                  ),
+                ),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
                 // Sağ uçta: spesifik projeden gelindiyse pinli mini-thumbnail.
