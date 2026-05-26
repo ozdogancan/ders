@@ -33,9 +33,16 @@ import '../widgets/style_discovery_pull.dart'; // GlobalKey type için tutuldu
 // import 'home/widgets/continue_design_card.dart'; // 2026-04-30 kaldırıldı
 
 class HomeScreen extends ConsumerStatefulWidget {
-  const HomeScreen({super.key, this.openStyleDiscovery = false});
+  const HomeScreen({
+    super.key,
+    this.openStyleDiscovery = false,
+    this.embedded = false,
+  });
   /// `/?openPull=1` deep-link ile true gelir — postFrame'de pull otomatik açılır.
   final bool openStyleDiscovery;
+  /// AI sekmesinden gömülü açıldığında üstteki brand barı gizler,
+  /// "AI Araçları" başlığını gösterir.
+  final bool embedded;
   @override
   ConsumerState<HomeScreen> createState() => _HomeScreenState();
 }
@@ -492,8 +499,26 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
               child: SingleChildScrollView(
                 child: Column(
                   children: [
-            // ─── Top bar — sol: logo+slogan, sağ: 3 ikon ───
-            _staggered(
+            // ─── Top bar ───
+            // AI sekmesinde "AI Araçları" başlığı; ana sayfada brand block
+            // + profil ikonu (mevcut tasarım).
+            if (widget.embedded)
+              _staggered(
+                0,
+                const Padding(
+                  padding: EdgeInsets.fromLTRB(20, 16, 16, 4),
+                  child: Text(
+                    'AI Araçları',
+                    style: TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.w700,
+                      color: KoalaColors.text,
+                      letterSpacing: -0.5,
+                    ),
+                  ),
+                ),
+              ),
+            if (!widget.embedded) _staggered(
               0,
               Padding(
                 padding: const EdgeInsets.fromLTRB(20, 14, 16, 0),

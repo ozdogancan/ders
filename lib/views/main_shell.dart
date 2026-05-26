@@ -273,7 +273,7 @@ class MainShellState extends ConsumerState<MainShell> {
         children: const [
           StyleDiscoveryLiveScreen(),
           ChatListScreen(),
-          HomeScreen(),
+          HomeScreen(embedded: true),
           ProjelerScreen(),
         ],
       ),

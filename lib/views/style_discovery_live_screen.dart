@@ -95,6 +95,10 @@ class _StyleDiscoveryLiveScreenState
   // Kategori bazlı deck önbelleği — sekme değişiminde tekrar fetch yapma.
   final Map<String, _CatSnapshot> _catCache = {};
 
+  // Paywall yarış engelleyici — paywall açıkken yeni swipe / yeni paywall yok.
+  bool _paywallOpen = false;
+  bool _quotaPaywallShown = false;
+
   final List<Map<String, dynamic>> _deck = [];
   final Set<String> _seenIds = <String>{};
   // Tap hint kaldırıldı — direktif gereği hiçbir tutorial gösterilmiyor.
@@ -142,6 +146,16 @@ class _StyleDiscoveryLiveScreenState
   @override
   void initState() {
     super.initState();
+    // Evlumba Design sentetik tasarımcı kaydını cache'e ÖNDEN yerleştir —
+    // ilk kart render olduğunda badge anında görünsün, frame race olmasın.
+    _designerCache['evlumba-design'] = const <String, dynamic>{
+      'id': 'evlumba-design',
+      'full_name': 'Evlumba Design',
+      'business_name': 'Evlumba Design',
+      'profession': 'İç Mimari Stüdyosu',
+      'avatar_url':
+          'https://xgefjepaqnghaotqybpi.supabase.co/storage/v1/object/public/koala-seed/avatars/evlumba-design.webp',
+    };
     _exitCtrl = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 280),
@@ -201,8 +215,15 @@ class _StyleDiscoveryLiveScreenState
       final can = await UsageLimitService.canSwipe();
       if (!mounted) return;
       final next = !can;
+      final justExhausted = next && !_quotaExhausted;
       if (next != _quotaExhausted) {
         setState(() => _quotaExhausted = next);
+      }
+      // Free kullanıcı kotayı az önce doldurduysa paywall'ı bir kez otomatik aç.
+      // Kullanıcı kapatırsa _ProQuotaCard görünür kalır (deck-level gate).
+      if (justExhausted && _isFreeUser && !_quotaPaywallShown) {
+        _quotaPaywallShown = true;
+        await _showPaywallSafe(trigger: 'swipe_quota_end');
       }
     } catch (_) {/* sessiz — UI hint */}
   }
@@ -331,6 +352,7 @@ class _StyleDiscoveryLiveScreenState
       }
       await _fetchBatch();
       if (!mounted) return;
+      _ensureEvlumbaFirst();
       setState(() => _loading = false);
       _prefetchCurrentDesigner();
       _persistDeckCache();
@@ -599,19 +621,47 @@ class _StyleDiscoveryLiveScreenState
   }
 
   Future<void> _swipe({required bool liked}) async {
+    // Paywall açıkken yeni swipe tetiklenmesin — çift popup'ı engelle.
+    if (_paywallOpen) return;
     // ── Pro upsell slot? ──
     // Free user her 6 swipe'tan sonra normal kart yerine Pro upgrade kartı
-    // görüyor. Burada özel davranış: like → paywall, skip → next.
+    // görüyor. Like → paywall + kart geri gelir; skip → bir sonraki karta geç.
     if (_isProSlot) {
       HapticFeedback.selectionClick();
       if (liked) {
         unawaited(Analytics.log('upsell_swipe_card_clicked', const {}));
-        await showPaywall(context, trigger: 'swipe_premium_styles');
-      } else {
-        unawaited(Analytics.log('upsell_swipe_card_skipped', const {}));
+        await _showPaywallSafe(trigger: 'swipe_premium_styles');
+        // Kullanıcı paywall'ı kapattıysa kartı bulunduğu yere geri al;
+        // _swipeCount'u BUMP ETME — aynı slot kalsın.
+        if (mounted) {
+          setState(() {
+            _dragDx = 0;
+            _dragDy = 0;
+          });
+        }
+        return;
       }
-      // Slot'u tüket — _swipeCount'u bump et, render normal karta dönsün.
-      if (mounted) setState(() => _swipeCount++);
+      // Skip: slot'u tüket, sonraki karta geç.
+      unawaited(Analytics.log('upsell_swipe_card_skipped', const {}));
+      if (mounted) {
+        setState(() {
+          _swipeCount++;
+          _dragDx = 0;
+          _dragDy = 0;
+        });
+      }
+      return;
+    }
+    // Free kullanıcı günlük kotayı doldurmuşsa swipe çalıştırma — paywall.
+    if (_isFreeUser && _quotaExhausted) {
+      HapticFeedback.selectionClick();
+      await _showPaywallSafe(trigger: 'swipe_quota_end');
+      if (mounted) {
+        setState(() {
+          _dragDx = 0;
+          _dragDy = 0;
+        });
+      }
       return;
     }
     final card = _currentCard;
@@ -993,6 +1043,40 @@ class _StyleDiscoveryLiveScreenState
     _designerInFlight.remove(designerId);
     if (!mounted || d == null) return;
     setState(() => _designerCache[designerId] = d);
+  }
+
+  /// Paywall'ı yarış güvenli aç: aynı anda iki popup çıkmasın.
+  Future<void> _showPaywallSafe({required String trigger}) async {
+    if (_paywallOpen) return;
+    _paywallOpen = true;
+    try {
+      await showPaywall(context, trigger: trigger);
+    } catch (_) {/* render hatası — sessiz */} finally {
+      _paywallOpen = false;
+    }
+  }
+
+  /// Deck'in ilk kartının Evlumba Design seeded kart olduğunu garantile —
+  /// kullanıcı home'a girdiği an başka tasarımcı kartı parlamasın.
+  void _ensureEvlumbaFirst() {
+    if (_deck.isEmpty) return;
+    if ((_deck[0]['designer_id'] ?? '') == 'evlumba-design') return;
+    // Deck içinde varsa öne taşı.
+    for (int i = 1; i < _deck.length; i++) {
+      if ((_deck[i]['designer_id'] ?? '') == 'evlumba-design') {
+        final c = _deck.removeAt(i);
+        _deck.insert(0, c);
+        return;
+      }
+    }
+    // Yoksa havuzdan ilk uygun olanı ekle.
+    for (final s in _seedPool) {
+      final id = s['id']?.toString() ?? '';
+      if (id.isEmpty || _seenIds.contains(id)) continue;
+      _seenIds.add(id);
+      _deck.insert(0, s);
+      return;
+    }
   }
 
   /// AppBar ayarlar ikonundan açılır — Ayarlar ekranı.
@@ -1514,7 +1598,6 @@ class _StyleDiscoveryLiveScreenState
                                 prettyCategory: _prettyCategory,
                                 designer: _designerCache[
                                     (current['designer_id'] ?? '').toString()],
-                                onApply: () => _onCardTap(current),
                               ),
                               // Tap hint kalıcı olarak kaldırıldı — kullanıcı
                               // direktifi: hiçbir tutorial/hint gösterilmesin.
@@ -1620,6 +1703,17 @@ class _StyleDiscoveryLiveScreenState
             large: true,
           ),
           _ActionBtn(
+            icon: LucideIcons.wand,
+            label: 'Uygula',
+            onTap: disabled
+                ? null
+                : () {
+                    final c = _currentCard;
+                    if (c != null) _onCardTap(c);
+                  },
+            variant: _ActionVariant.gold,
+          ),
+          _ActionBtn(
             icon: LucideIcons.messageCircle,
             label: 'Sor',
             onTap: askDisabled ? null : _onAskDesigner,
@@ -1638,14 +1732,12 @@ class _Card extends StatelessWidget {
     required this.coverOf,
     required this.prettyCategory,
     this.designer,
-    this.onApply,
   });
   final Map<String, dynamic> project;
   final String Function(Map<String, dynamic>) coverOf;
   // ignore: unused_element_parameter
   final String Function(String) prettyCategory;
   final Map<String, dynamic>? designer;
-  final VoidCallback? onApply;
 
   // ignore: unused_element
   IconData _roomIcon(String raw) {
@@ -1770,7 +1862,7 @@ class _Card extends StatelessWidget {
           // Kart üstü: oda pill + başlık + tagline kaldırıldı (Sor'a basınca
           // chat preview'da info olarak gösteriliyor). Sadece tasarımcı chip'i
           // ve palet alt tarafta kalıyor — kim yapmış görsel olarak anlaşılsın.
-          if (designer != null || palette.isNotEmpty || onApply != null)
+          if (designer != null || palette.isNotEmpty)
             Positioned(
               bottom: 0,
               left: 0,
@@ -1781,13 +1873,6 @@ class _Card extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    if (onApply != null) ...[
-                      Align(
-                        alignment: Alignment.center,
-                        child: _ApplyPill(onTap: onApply!),
-                      ),
-                      const SizedBox(height: 16),
-                    ],
                     if (designer != null) _DesignerChip(designer: designer!),
                     if (palette.isNotEmpty) ...[
                       const SizedBox(height: 12),
@@ -1924,7 +2009,7 @@ class _Stamp extends StatelessWidget {
   }
 }
 
-enum _ActionVariant { outlined, soft, primary }
+enum _ActionVariant { outlined, soft, primary, gold }
 
 /// Modern aksiyon butonu — ikon dairesi + alt label.
 /// Koala aksent paletine sadık, hepsi aynı görsel dilde.
@@ -1991,6 +2076,20 @@ class _ActionBtn extends StatelessWidget {
             color: KoalaColors.accentDeep.withValues(alpha: 0.30),
             blurRadius: 16,
             offset: const Offset(0, 6),
+          ),
+        ];
+        break;
+      case _ActionVariant.gold:
+        // "Mekanıma uygula" — Pro restyle entry. Sıcak altın, soft kuşatan
+        // gölge ile; mor primary'yi gölgelemeden dikkat çekmeli.
+        bg = const Color(0xFFFFC54D);
+        fg = Colors.white;
+        border = null;
+        shadow = [
+          BoxShadow(
+            color: const Color(0xFFEFA01F).withValues(alpha: 0.34),
+            blurRadius: 14,
+            offset: const Offset(0, 5),
           ),
         ];
         break;
