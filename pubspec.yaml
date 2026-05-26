@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 1.0.125+129
+version: 1.0.126+130
 
 environment:
   sdk: ^3.10.8
@@ -148,6 +148,11 @@ flutter:
     # sayesinde CLS biter, 1 DNS lookup + 1 TLS handshake kaybolur, privacy iyileşir.
     # Aynı Manrope fontları, sadece kaynak lokalden.
     - assets/google_fonts/
+    # Chat-specific bundled assets. Şu an Evlumba Design konuşma ekranı için
+    # opsiyonel `evlumba_bg.webp` (Gemini ile üretilen premium arka plan).
+    # Dosya yoksa `_PremiumBackdrop` errorBuilder ile soft gradient fallback'e
+    # düşer — eklemek/kaldırmak zarar vermez.
+    - assets/chat/
     # NOT: assets/launcher/ runtime'da kullanılmıyor — sadece
     # flutter_launcher_icons + flutter_native_splash dev-time tool'ları
     # için kaynak. AAB/APK'ya paketlemeye gerek yok (~1 MB kazanç).

@@ -15,6 +15,7 @@ class KoalaUserProfile {
   final Map<String, dynamic> contact;
   final String mode; // 'homeowner' | 'pro'
   final bool verified;
+  final String? avatarUrl;
 
   const KoalaUserProfile({
     required this.uid,
@@ -23,6 +24,7 @@ class KoalaUserProfile {
     this.contact = const {},
     this.mode = 'homeowner',
     this.verified = false,
+    this.avatarUrl,
   });
 
   bool get isPro => mode == 'pro';
@@ -36,6 +38,7 @@ class KoalaUserProfile {
             : const {},
         mode: (r['mode'] ?? 'homeowner').toString(),
         verified: r['verified'] == true,
+        avatarUrl: r['avatar_url']?.toString(),
       );
 
   static const empty = KoalaUserProfile(uid: '');
@@ -96,6 +99,32 @@ class UserProfileService {
       return true;
     } catch (e) {
       debugPrint('[user_profile] upsert failed: $e');
+      return false;
+    }
+  }
+
+  /// Avatar URL'i koala_user_profiles tablosuna yazar.
+  /// null gönderirsek mevcut avatar temizlenir.
+  static Future<bool> setAvatarUrl(String? url) async {
+    final uid = _uid;
+    if (uid == null) return false;
+    try {
+      // Mevcut profili koru — display_name/about/contact'ı yeniden gönder.
+      final current = await get();
+      await Supabase.instance.client.rpc(
+        'koala_user_profile_upsert',
+        params: {
+          'p_uid': uid,
+          'p_display_name': current?.displayName,
+          'p_about': current?.about,
+          'p_contact': current?.contact ?? const {},
+          'p_avatar_url': url,
+          'p_set_avatar': true,
+        },
+      );
+      return true;
+    } catch (e) {
+      debugPrint('[user_profile] setAvatarUrl failed: $e');
       return false;
     }
   }

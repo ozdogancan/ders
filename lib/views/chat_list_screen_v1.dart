@@ -339,6 +339,14 @@ class _ChatListScreenV1State extends State<ChatListScreenV1> {
   /// Tüm tasarımcıların profil bilgilerini tek sorguda yükle (N+1 → 1)
   Future<void> _loadDesignerAvatars() async {
     if (_conversations.isEmpty) return;
+    // Sentetik 'evlumba-design' kaydı — EvlumbaLiveService.getDesignersByIds
+    // bunu marketplace DB'sinde bulamaz. Cache'i elimizle seed et.
+    _designerCache.putIfAbsent('evlumba-design', () => const {
+          'name': 'Evlumba Design',
+          'avatar':
+              'https://xgefjepaqnghaotqybpi.supabase.co/storage/v1/object/public/koala-seed/avatars/evlumba-design.webp',
+          'profession': 'Tasarım stüdyosu',
+        });
     try {
       if (!EvlumbaLiveService.isReady) {
         await EvlumbaLiveService.waitForReady(timeout: const Duration(seconds: 5));
@@ -2043,11 +2051,22 @@ class _ChatListScreenV1State extends State<ChatListScreenV1> {
 
     final designerId = (conv['designer_id'] ?? '').toString();
     final cached = _designerCache[designerId];
-    final designerName = (cached?['name'] ?? '').toString().trim().isEmpty
-        ? 'Tasarımcı'
-        : cached!['name']!;
-    final avatarUrl = cached?['avatar'];
-    final profession = (cached?['profession'] ?? '').toString().trim();
+    final isEvlumba = designerId == 'evlumba-design';
+    // Evlumba Design için isim / avatar / meslek SABİT — cache boş gelse
+    // bile "Tasarımcı" placeholder'ı GÖSTERME (kullanıcı "tasarımcı" copy'sini
+    // istemiyor — her zaman "Evlumba Design").
+    final designerName = isEvlumba
+        ? 'Evlumba Design'
+        : ((cached?['name'] ?? '').toString().trim().isEmpty
+            ? 'Tasarımcı'
+            : cached!['name']!);
+    final avatarUrl = isEvlumba
+        ? (cached?['avatar'] ??
+            'https://xgefjepaqnghaotqybpi.supabase.co/storage/v1/object/public/koala-seed/avatars/evlumba-design.webp')
+        : cached?['avatar'];
+    final profession = isEvlumba
+        ? 'Tasarım stüdyosu'
+        : (cached?['profession'] ?? '').toString().trim();
 
     // Tile'da isim yanında gösterilecek alt-başlık. Mantık:
     //   1) conv.title varsa VE designer adını içermiyorsa → onu göster
@@ -2178,18 +2197,33 @@ class _ChatListScreenV1State extends State<ChatListScreenV1> {
       child: Container(
         margin: const EdgeInsets.only(top: KoalaSpacing.sm),
         padding: const EdgeInsets.all(KoalaSpacing.lg),
-        decoration: KoalaDeco.card,
+        // Evlumba Design satırı — champagne tint + altın border. Zarif, push'lu
+        // değil. Diğer tasarımcı satırları standart KoalaDeco.card.
+        decoration: isEvlumba
+            ? BoxDecoration(
+                color: const Color(0xFFFBF7EE),
+                borderRadius: BorderRadius.circular(KoalaRadius.lg),
+                border: Border.all(
+                  color: const Color(0xFFE8D7A8),
+                  width: 0.8,
+                ),
+              )
+            : KoalaDeco.card,
         child: Row(
           children: [
             // Avatar — profil fotosu varsa göster
             Container(
               width: 48,
               height: 48,
-              decoration: const BoxDecoration(
+              decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                gradient: LinearGradient(
-                  colors: [KoalaColors.accent, KoalaColors.accentMuted],
-                ),
+                gradient: isEvlumba
+                    ? const LinearGradient(
+                        colors: [Color(0xFFD4A853), Color(0xFFB8874A)],
+                      )
+                    : const LinearGradient(
+                        colors: [KoalaColors.accent, KoalaColors.accentMuted],
+                      ),
               ),
               child: avatarUrl != null && avatarUrl.isNotEmpty
                   ? ClipOval(
@@ -2226,6 +2260,20 @@ class _ChatListScreenV1State extends State<ChatListScreenV1> {
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
+                      if (isEvlumba) ...[
+                        const SizedBox(width: 4),
+                        // Mini "verified" — Twitter mavi tik (Evlumba Design
+                        // resmî kanal). Baseline'a oturt; ufak shift için
+                        // Padding ile dengele.
+                        const Padding(
+                          padding: EdgeInsets.only(bottom: 1),
+                          child: Icon(
+                            LucideIcons.badgeCheck,
+                            size: 14,
+                            color: Color(0xFF1DA1F2),
+                          ),
+                        ),
+                      ],
                       if (projectTitle.isNotEmpty) ...[
                         Text(
                           '  ·  ',
@@ -2252,10 +2300,31 @@ class _ChatListScreenV1State extends State<ChatListScreenV1> {
                   ),
                   if (lastMessage.isNotEmpty) ...[
                     const SizedBox(height: 4),
-                    _LastMessagePreview(
-                      raw: lastMessage,
-                      unread: unread > 0,
-                    ),
+                    if (isEvlumba)
+                      // Evlumba mesaj preview'ı — ince çerçeveli kapsül.
+                      // Push'lu durmasın diye background çok soft; sadece
+                      // diğer tasarımcılardan AYRIŞSIN (kullanıcı isteği).
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFFFDF6),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: const Color(0xFFE8D7A8),
+                            width: 0.6,
+                          ),
+                        ),
+                        child: _LastMessagePreview(
+                          raw: lastMessage,
+                          unread: unread > 0,
+                        ),
+                      )
+                    else
+                      _LastMessagePreview(
+                        raw: lastMessage,
+                        unread: unread > 0,
+                      ),
                   ],
                 ],
               ),
@@ -2370,13 +2439,17 @@ class _EvlumbaDesignSheet extends StatelessWidget {
             child: ElevatedButton(
               onPressed: () {
                 Navigator.pop(context);
-                // TODO: WhatsApp entegrasyonu gelecek
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Evlumba Design yakında aktif olacak!'),
-                    behavior: SnackBarBehavior.floating,
-                  ),
-                );
+                // Evlumba Design AKTİF — `/chat/dm/new` lazy chat route'una
+                // git. Aynı path: style_discovery_live_screen._onAskDesigner.
+                // Conversation ilk mesajda lazy yaratılır; pendingDesign yok
+                // çünkü kullanıcı doğrudan stüdyodan başlatıyor (proje seçimi
+                // değil).
+                context.push('/chat/dm/new', extra: const {
+                  'designerId': 'evlumba-design',
+                  'designerName': 'Evlumba Design',
+                  'designerAvatarUrl':
+                      'https://xgefjepaqnghaotqybpi.supabase.co/storage/v1/object/public/koala-seed/avatars/evlumba-design.webp',
+                });
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFFD4A853),

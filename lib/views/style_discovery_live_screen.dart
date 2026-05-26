@@ -41,11 +41,17 @@ import '../services/analytics_service.dart';
 import '../services/follow_service.dart';
 import '../services/notifications_feed_service.dart';
 import '../services/taste_profile_service.dart';
+import '../services/swipe_feed_service.dart';
 import '../services/usage_limit_service.dart';
 import '../widgets/verified_badge.dart';
 
 class StyleDiscoveryLiveScreen extends ConsumerStatefulWidget {
   const StyleDiscoveryLiveScreen({super.key});
+
+  /// MainShell coachmark'ı bu key üzerinden bell ikonunu spotlight'a alır.
+  /// Ekran mount edildiğinde fresh GlobalKey atanır; dispose'ta null'lanır.
+  static final ValueNotifier<GlobalKey?> bellKeyNotifier =
+      ValueNotifier<GlobalKey?>(null);
 
   @override
   ConsumerState<StyleDiscoveryLiveScreen> createState() =>
@@ -146,6 +152,9 @@ class _StyleDiscoveryLiveScreenState
   double _exitTargetDx = 0;
   double _exitTargetDy = 0;
 
+  // Bell ikonu için GlobalKey — MainShell coachmark spotlight için kullanır.
+  final GlobalKey _bellKey = GlobalKey(debugLabel: 'home_bell');
+
   @override
   void initState() {
     super.initState();
@@ -196,6 +205,8 @@ class _StyleDiscoveryLiveScreenState
     _loadSavedCategory().then((_) => _bootstrap());
     unawaited(_refreshQuota());
     Analytics.screenViewed('style_discovery_live');
+    // Bell ikonun GlobalKey'ini MainShell coachmark'a yayınla.
+    StyleDiscoveryLiveScreen.bellKeyNotifier.value = _bellKey;
     // Tab her aktive olduğunda "Hepsi"ye reset et + tutorial kontrolü.
     MainShell.activeTab.addListener(_onTabActivate);
     // Swipe onboarding tutorial geçici olarak devre dışı — yeni bir onboarding
@@ -471,12 +482,21 @@ class _StyleDiscoveryLiveScreenState
         filtered.add(p);
       }
       // Evlumba Design seeded kartlarını batch'e harmanla (kaynak filtresi
-      // 'real' değilse).
+      // 'real' değilse). Sıralama öncesi blend yapıyoruz ki ranker hem real
+      // hem seed kartları tek havuzda puanlasın.
       _blendSeedCards(filtered);
+      // Feed ranker: taste-profile + variety + discovery + addiction slot.
+      // currentDeckTail ile pencere sürekliliğini koruyor.
+      final ranked = await SwipeFeedService.rankBatch(
+        candidates: filtered,
+        currentDeckTail: _deck.length <= 10
+            ? List<Map<String, dynamic>>.from(_deck)
+            : _deck.sublist(_deck.length - 10),
+      );
       debugPrint(
-          'StyleDiscoveryLive: batch=${batch.length} filtered=${filtered.length} deck=${_deck.length + filtered.length} offset=$_offset');
+          'StyleDiscoveryLive: batch=${batch.length} filtered=${filtered.length} ranked=${ranked.length} deck=${_deck.length + ranked.length} offset=$_offset');
       if (!mounted) return;
-      setState(() => _deck.addAll(filtered));
+      setState(() => _deck.addAll(ranked));
       _precacheNext();
     } catch (e) {
       debugPrint('StyleDiscoveryLive: fetchBatch failed → $e');
@@ -700,11 +720,13 @@ class _StyleDiscoveryLiveScreenState
     }
 
     if (liked) {
-      // Her 10 beğenide tarz özeti popup'ı (lokal veri — AI çağrısı yok).
       _likeCount++;
-      if (_likeCount % 10 == 0) {
-        unawaited(_showTasteSummary());
-      }
+      // NOTE: TasteSummarySheet (her 10 beğenide tarz özeti) kullanıcı isteği
+      // üzerine geçici olarak devre dışı bırakıldı. İleride yeniden açmak için
+      // aşağıdaki bloğu uncomment et:
+      // if (_likeCount % 10 == 0) {
+      //   unawaited(_showTasteSummary());
+      // }
       unawaited(SavedItemsService.saveItem(
         type: SavedItemType.design,
         itemId: card['id']?.toString() ?? '',
@@ -795,6 +817,13 @@ class _StyleDiscoveryLiveScreenState
   }
 
   void _onExitComplete() {
+    // Az önce ekrandan çıkan kartı "görüldü" ring buffer'ına işle —
+    // aynı kart 200 kart boyunca tekrar gelmesin. Async, animasyonu bloklamaz.
+    final justShown = _index < _deck.length ? _deck[_index] : null;
+    if (justShown != null) {
+      final id = (justShown['id'] ?? '').toString();
+      if (id.isNotEmpty) unawaited(SwipeFeedService.markShown(id));
+    }
     setState(() {
       _index++;
       _dragDx = 0;
@@ -1064,18 +1093,27 @@ class _StyleDiscoveryLiveScreenState
   void _ensureEvlumbaFirst() {
     if (_deck.isEmpty) return;
     if ((_deck[0]['designer_id'] ?? '') == 'evlumba-design') return;
-    // Deck içinde varsa öne taşı.
+    if (_sourceFilter == 'real') return;
+    final cat = _selectedCategory?.trim().toLowerCase();
+    bool matchesCat(Map<String, dynamic> c) {
+      if (cat == null || cat.isEmpty) return true;
+      return (c['project_type'] ?? '').toString().trim().toLowerCase() == cat;
+    }
+    // Deck içinde kategoriye uyan Evlumba kartı varsa öne taşı.
     for (int i = 1; i < _deck.length; i++) {
-      if ((_deck[i]['designer_id'] ?? '') == 'evlumba-design') {
-        final c = _deck.removeAt(i);
-        _deck.insert(0, c);
+      final c = _deck[i];
+      if ((c['designer_id'] ?? '') == 'evlumba-design' && matchesCat(c)) {
+        final card = _deck.removeAt(i);
+        _deck.insert(0, card);
         return;
       }
     }
-    // Yoksa havuzdan ilk uygun olanı ekle.
+    // Yoksa havuzdan SADECE kategoriye uyan ilkini ekle. Uygun yoksa hiç
+    // ekleme — kullanıcının seçtiği kategoride yanlış oda görüntülenmesin.
     for (final s in _seedPool) {
       final id = s['id']?.toString() ?? '';
       if (id.isEmpty || _seenIds.contains(id)) continue;
+      if (!matchesCat(s)) continue;
       _seenIds.add(id);
       _deck.insert(0, s);
       return;
@@ -1218,6 +1256,9 @@ class _StyleDiscoveryLiveScreenState
   @override
   void dispose() {
     MainShell.activeTab.removeListener(_onTabActivate);
+    if (StyleDiscoveryLiveScreen.bellKeyNotifier.value == _bellKey) {
+      StyleDiscoveryLiveScreen.bellKeyNotifier.value = null;
+    }
     _exitCtrl.dispose();
     _demoCtrl.dispose();
     super.dispose();
@@ -1248,6 +1289,7 @@ class _StyleDiscoveryLiveScreenState
         title: const _BrandLockup(),
         actions: [
           _BellButton(
+            key: _bellKey,
             unread: ref.watch(unreadNotificationsProvider).value ?? 0,
             onTap: () async {
               HapticFeedback.selectionClick();
@@ -1713,17 +1755,6 @@ class _StyleDiscoveryLiveScreenState
             onTap: disabled ? null : () => _swipe(liked: true),
             variant: _ActionVariant.primary,
             large: true,
-          ),
-          _ActionBtn(
-            icon: LucideIcons.wand,
-            label: 'Uygula',
-            onTap: disabled
-                ? null
-                : () {
-                    final c = _currentCard;
-                    if (c != null) _onCardTap(c);
-                  },
-            variant: _ActionVariant.gold,
           ),
           _ActionBtn(
             icon: LucideIcons.messageCircle,
@@ -3118,7 +3149,7 @@ class _AskLeading extends StatelessWidget {
 class _BellButton extends StatelessWidget {
   final int unread;
   final VoidCallback onTap;
-  const _BellButton({required this.unread, required this.onTap});
+  const _BellButton({super.key, required this.unread, required this.onTap});
 
   @override
   Widget build(BuildContext context) {

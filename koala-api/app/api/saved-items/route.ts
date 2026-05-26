@@ -33,7 +33,7 @@ export async function OPTIONS(req: NextRequest) {
 }
 
 interface Body {
-  op: 'save' | 'remove' | 'isSaved';
+  op: 'save' | 'remove' | 'isSaved' | 'update';
   userId: string;
   itemType: string;
   itemId: string;
@@ -153,6 +153,28 @@ export async function POST(req: NextRequest) {
       const { error } = await sb
         .from('saved_items')
         .delete()
+        .eq('user_id', userId)
+        .eq('item_type', itemType)
+        .eq('item_id', itemId);
+      if (error) throw error;
+      return NextResponse.json({ ok: true }, { headers });
+    }
+
+    if (op === 'update') {
+      // Tasarım metadata düzenle (title / subtitle / room type within extra_data).
+      // Sadece sahibine ait satırı günceller. Body'de geçilmeyen alan dokunulmaz.
+      const patch: Record<string, unknown> = {};
+      if (typeof body.title === 'string') patch.title = body.title;
+      if (typeof body.subtitle === 'string') patch.subtitle = body.subtitle;
+      if (body.extraData && typeof body.extraData === 'object') {
+        patch.extra_data = body.extraData;
+      }
+      if (Object.keys(patch).length === 0) {
+        return NextResponse.json({ ok: true }, { headers });
+      }
+      const { error } = await sb
+        .from('saved_items')
+        .update(patch)
         .eq('user_id', userId)
         .eq('item_type', itemType)
         .eq('item_id', itemId);

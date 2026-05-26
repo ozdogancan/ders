@@ -1,5 +1,7 @@
 import 'dart:ui' as ui show ImageFilter;
 
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
@@ -18,6 +20,13 @@ class KoalaBottomNav extends StatelessWidget {
   final void Function(KoalaTab) onSelect;
   final VoidCallback onPaylasTap;
   final int unreadMessages;
+  // Optional anchor keys — coachmark overlay attaches its spotlights to these
+  // render boxes. Null in normal usage; supplied by MainShell.
+  final GlobalKey? homeKey;
+  final GlobalKey? chatKey;
+  final GlobalKey? paylasKey;
+  final GlobalKey? aiKey;
+  final GlobalKey? profileKey;
 
   const KoalaBottomNav({
     super.key,
@@ -25,6 +34,11 @@ class KoalaBottomNav extends StatelessWidget {
     required this.onSelect,
     required this.onPaylasTap,
     this.unreadMessages = 0,
+    this.homeKey,
+    this.chatKey,
+    this.paylasKey,
+    this.aiKey,
+    this.profileKey,
   });
 
   @override
@@ -65,28 +79,30 @@ class KoalaBottomNav extends StatelessWidget {
               child: Row(
                 children: [
                   _NavItem(
+                    anchorKey: homeKey,
                     icon: LucideIcons.home,
                     label: 'Ana Sayfa',
                     selected: current == KoalaTab.home,
                     onTap: () => onSelect(KoalaTab.home),
                   ),
                   _NavItem(
+                    anchorKey: chatKey,
                     icon: LucideIcons.messageCircle,
                     label: 'Mesajlar',
                     selected: current == KoalaTab.chat,
                     badge: unreadMessages,
                     onTap: () => onSelect(KoalaTab.chat),
                   ),
-                  _PaylasFab(onTap: onPaylasTap),
+                  _PaylasFab(anchorKey: paylasKey, onTap: onPaylasTap),
                   _NavItem(
+                    anchorKey: aiKey,
                     icon: LucideIcons.sparkles,
                     label: 'AI',
                     selected: current == KoalaTab.ai,
                     onTap: () => onSelect(KoalaTab.ai),
                   ),
-                  _NavItem(
-                    icon: LucideIcons.user,
-                    label: 'Profil',
+                  _ProfileNavItem(
+                    anchorKey: profileKey,
                     selected: current == KoalaTab.projeler,
                     onTap: () => onSelect(KoalaTab.projeler),
                   ),
@@ -108,6 +124,7 @@ class _NavItem extends StatelessWidget {
   final bool selected;
   final VoidCallback onTap;
   final int badge;
+  final GlobalKey? anchorKey;
 
   const _NavItem({
     required this.icon,
@@ -115,12 +132,14 @@ class _NavItem extends StatelessWidget {
     required this.selected,
     required this.onTap,
     this.badge = 0,
+    this.anchorKey,
   });
 
   @override
   Widget build(BuildContext context) {
     final color = selected ? KoalaColors.accentDeep : KoalaColors.textSec;
     return Expanded(
+      key: anchorKey,
       child: Material(
         color: Colors.transparent,
         child: InkWell(
@@ -191,9 +210,109 @@ class _NavItem extends StatelessWidget {
   }
 }
 
+/// Profil nav slotu — kullanıcının avatarı varsa CircleAvatar olarak gösterir;
+/// yoksa user ikonuna düşer. Aktif sekmede ince mor halka + minik scale.
+class _ProfileNavItem extends StatelessWidget {
+  final bool selected;
+  final VoidCallback onTap;
+  final GlobalKey? anchorKey;
+  const _ProfileNavItem({
+    required this.selected,
+    required this.onTap,
+    this.anchorKey,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final color = selected ? KoalaColors.accentDeep : KoalaColors.textSec;
+    return Expanded(
+      key: anchorKey,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(24),
+          splashColor: Colors.transparent,
+          highlightColor: Colors.transparent,
+          hoverColor: Colors.transparent,
+          focusColor: Colors.transparent,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              AnimatedScale(
+                scale: selected ? 1.08 : 1.0,
+                duration: const Duration(milliseconds: 220),
+                curve: Curves.easeOutBack,
+                child: StreamBuilder<User?>(
+                  stream: FirebaseAuth.instance.userChanges(),
+                  builder: (context, snap) {
+                    final user =
+                        snap.data ?? FirebaseAuth.instance.currentUser;
+                    final url = user?.photoURL ?? '';
+                    if (url.isEmpty) {
+                      return Icon(LucideIcons.user, size: 22, color: color);
+                    }
+                    return Container(
+                      width: 26,
+                      height: 26,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: selected
+                              ? KoalaColors.accentDeep
+                              : Colors.white.withValues(alpha: 0.9),
+                          width: selected ? 2 : 1.2,
+                        ),
+                        boxShadow: selected
+                            ? [
+                                BoxShadow(
+                                  color: KoalaColors.accentDeep
+                                      .withValues(alpha: 0.25),
+                                  blurRadius: 6,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ]
+                            : null,
+                      ),
+                      clipBehavior: Clip.antiAlias,
+                      child: CachedNetworkImage(
+                        imageUrl: url,
+                        fit: BoxFit.cover,
+                        placeholder: (_, _) =>
+                            Container(color: KoalaColors.accentSoft),
+                        errorWidget: (_, _, _) => Icon(
+                          LucideIcons.user,
+                          size: 16,
+                          color: color,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(height: 3),
+              AnimatedDefaultTextStyle(
+                duration: const Duration(milliseconds: 220),
+                style: TextStyle(
+                  fontSize: 10.5,
+                  fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                  color: color,
+                  letterSpacing: -0.1,
+                ),
+                child: const Text('Profil'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _PaylasFab extends StatelessWidget {
   final VoidCallback onTap;
-  const _PaylasFab({required this.onTap});
+  final GlobalKey? anchorKey;
+  const _PaylasFab({required this.onTap, this.anchorKey});
 
   @override
   Widget build(BuildContext context) {
@@ -205,6 +324,7 @@ class _PaylasFab extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Container(
+              key: anchorKey,
               width: 42,
               height: 42,
               decoration: BoxDecoration(

@@ -220,6 +220,44 @@ class SavedItemsService {
     return true;
   }
 
+  // ─── GÜNCELLE (title / subtitle / extraData) ─────────
+  static Future<bool> updateItem({
+    required SavedItemType type,
+    required String itemId,
+    String? title,
+    String? subtitle,
+    Map<String, dynamic>? extraData,
+  }) async {
+    if (_uid == null) return false;
+    final res = await _callProxy({
+      'op': 'update',
+      'userId': _uid,
+      'itemType': type.name,
+      'itemId': itemId,
+      if (title != null) 'title': title,
+      if (subtitle != null) 'subtitle': subtitle,
+      if (extraData != null) 'extraData': _stripDataUrlsFromMap(extraData),
+    });
+    if (res == null) {
+      debugPrint('SavedItemsService.updateItem error: $lastError');
+      return false;
+    }
+    CacheService.invalidatePrefix('saved_counts_');
+    // Projeler için disk cache'i de güncelle.
+    if (type == SavedItemType.project && prefetchedProjects != null) {
+      final updated = prefetchedProjects!.map((row) {
+        if ((row['item_id'] ?? '').toString() != itemId) return row;
+        final merged = Map<String, dynamic>.from(row);
+        if (title != null) merged['title'] = title;
+        if (subtitle != null) merged['subtitle'] = subtitle;
+        if (extraData != null) merged['extra_data'] = extraData;
+        return merged;
+      }).toList(growable: false);
+      await persistProjectsCache(updated);
+    }
+    return true;
+  }
+
   // ─── KAYITLI MI? ─────────────────────────────────────
   static Future<bool> isSaved({
     required SavedItemType type,

@@ -21,10 +21,12 @@ import '../services/auth_token_service.dart';
 import '../services/billing_service.dart';
 import '../services/evlumba_live_service.dart';
 import '../services/saved_items_service.dart';
+import '../services/user_profile_service.dart';
 import 'admin/admin_shell.dart';
 import 'auth_common.dart';
 import 'auth_entry_screen.dart';
 import 'legal_sheet.dart';
+import 'profile_tab_screen.dart' show showProApplicationSheet;
 
 /// Profile / Settings — simple, modern, well-organized.
 /// SnapHome-inspired structure:
@@ -615,6 +617,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               ),
             ),
             _buildHeaderCard(),
+            const SizedBox(height: 16),
+            _buildBecomeProDesignerCta(),
             const SizedBox(height: 20),
             _buildProBanner(isPro, proStatus?.proUntil),
             const SizedBox(height: 24),
@@ -768,6 +772,134 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               ]),
             ],
           ],
+        ),
+      ),
+    );
+  }
+
+  // ─── "Profesyonel ol" CTA — only for non-designers without active app ──
+  // Hides if already an approved professional designer (profile.isPro) or
+  // if there is already an approved application. Pending/rejected/none all
+  // surface the CTA (rejected gets a slightly different subtitle).
+  Widget _buildBecomeProDesignerCta() {
+    final bundle = ref.watch(userProfileProvider).asData?.value;
+    final profile = bundle?.profile;
+    final app = bundle?.application ?? ProApplicationStatus.none;
+    final alreadyDesigner = profile?.isPro == true || app.isApproved;
+    if (alreadyDesigner) return const SizedBox.shrink();
+
+    final pending = app.isPending;
+    final rejected = app.isRejected;
+    final title = pending ? 'Başvurun değerlendiriliyor' : 'Profesyonel ol';
+    final subtitle = pending
+        ? 'Evlumba ekibi en kısa sürede dönüş yapacak.'
+        : (rejected
+            ? 'Başvurunu güncelleyip tekrar gönderebilirsin — yeşil tik ve tasarım paylaşma seni bekliyor.'
+            : 'Tasarımlarını sergile, müşterilerle eşleş, kazanmaya başla.');
+
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(20),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(20),
+        onTap: pending
+            ? null
+            : () async {
+                final submitted = await showProApplicationSheet(context);
+                if (submitted == true && mounted) {
+                  ref.invalidate(userProfileProvider);
+                }
+              },
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(18, 18, 14, 18),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(20),
+            gradient: const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [_proPurple1, _proPurple2],
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: _proPurple1.withValues(alpha: 0.32),
+                blurRadius: 18,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.18),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.28),
+                    width: 0.8,
+                  ),
+                ),
+                child: Icon(
+                  pending ? LucideIcons.clock : LucideIcons.sparkles,
+                  size: 22,
+                  color: Colors.white,
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        fontFamily: 'Manrope',
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.white,
+                        letterSpacing: -0.2,
+                        height: 1.2,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      subtitle,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontFamily: 'Manrope',
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                        color: Colors.white.withValues(alpha: 0.92),
+                        height: 1.35,
+                        letterSpacing: -0.05,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (!pending) ...[
+                const SizedBox(width: 8),
+                Container(
+                  width: 32,
+                  height: 32,
+                  alignment: Alignment.center,
+                  decoration: const BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.white,
+                  ),
+                  child: const Icon(
+                    LucideIcons.arrowRight,
+                    size: 16,
+                    color: _proPurple1,
+                  ),
+                ),
+              ],
+            ],
+          ),
         ),
       ),
     );

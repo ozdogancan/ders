@@ -124,7 +124,7 @@ export async function POST(req: NextRequest) {
         `🆔 App: ${res.id}`,
         `👤 UID: ${uid}`,
         '',
-        '_Karar: Supabase'ten koala_pro_application_decide RPC ile_',
+        '_Karar: Supabase’dan koala_pro_application_decide RPC ile_',
       ].filter(Boolean).join('\n');
       await fetch(
         `https://api.telegram.org/bot${tgToken}/sendMessage`,

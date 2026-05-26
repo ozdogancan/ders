@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/theme/koala_tokens.dart';
 import '../helpers/paywall_router.dart';
 import '../providers/pro_status_provider.dart';
 import '../services/background_gen.dart';
+import '../widgets/coachmark_overlay.dart';
 import '../widgets/koala_bottom_nav.dart';
 import 'chat_list_screen.dart';
 import 'home_screen.dart';
@@ -45,6 +47,17 @@ class MainShellState extends ConsumerState<MainShell> {
   bool _navVisible = true;
   _GateState _gate = _GateState.loading;
   final ImagePicker _picker = ImagePicker();
+
+  // Coachmark anchor keys — KoalaBottomNav slot'larına attach edilir.
+  final GlobalKey _kHome = GlobalKey(debugLabel: 'nav_home');
+  final GlobalKey _kChat = GlobalKey(debugLabel: 'nav_chat');
+  final GlobalKey _kPaylas = GlobalKey(debugLabel: 'nav_paylas');
+  final GlobalKey _kAi = GlobalKey(debugLabel: 'nav_ai');
+  final GlobalKey _kProfile = GlobalKey(debugLabel: 'nav_profile');
+
+  // Lifetime-once shell coachmark — paywall geçilince ve key set değilse açılır.
+  static const String _prefsCoachmarkKey = 'coachmark_shell_done_v1';
+  bool _coachmarkTriggered = false;
 
   @override
   void initState() {
@@ -260,6 +273,8 @@ class MainShellState extends ConsumerState<MainShell> {
     if (_gate != _GateState.passed) {
       return const SplashScreen();
     }
+    // Gate geçildi — overlay'i bir kez kurmaya çalış (postFrame).
+    _maybeScheduleCoachmark();
     return _buildHome(context);
   }
 
@@ -283,9 +298,108 @@ class MainShellState extends ConsumerState<MainShell> {
               unreadMessages: _unread,
               onSelect: (tab) => switchTab(tab),
               onPaylasTap: _onPaylasTap,
+              homeKey: _kHome,
+              chatKey: _kChat,
+              paylasKey: _kPaylas,
+              aiKey: _kAi,
+              profileKey: _kProfile,
             )
           : null,
     );
+  }
+
+  /// Lifetime-once shell coachmark — gate=passed olduktan sonra, 600ms idle
+  /// bekleyip prefs flag set değilse overlay'i Overlay.of üzerinden push'lar.
+  /// Bell ikonu için home tab aktifse [StyleDiscoveryLiveScreen.bellKeyNotifier]
+  /// üzerinden ek bir step iliştirilir.
+  void _maybeScheduleCoachmark() {
+    if (_coachmarkTriggered) return;
+    _coachmarkTriggered = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        if (prefs.getBool(_prefsCoachmarkKey) == true) return;
+        // 600ms idle — gate sonrası ilk frame'de değil, kullanıcı UI'ı algıladıktan
+        // sonra. Paywall hâlâ üstte ise overlay onun ALTINDA çizilir — yine de
+        // gate==passed kontrolü bu yarışı engelliyor.
+        await Future<void>.delayed(const Duration(milliseconds: 600));
+        if (!mounted || _gate != _GateState.passed) {
+          _coachmarkTriggered = false;
+          return;
+        }
+        // Sadece Home tab'ında başlat — kullanıcı başka tab'a geçtiyse erteleme
+        // basit tut: yine başlat, anchor görünmediği step'leri overlay otomatik
+        // atlıyor. Ancak akış home odaklı olduğu için home'a switch ediyoruz.
+        if (_index != 0) switchTab(KoalaTab.home);
+        // İki frame bekle ki nav widget'ları layout edilmiş olsun.
+        await Future<void>.delayed(const Duration(milliseconds: 80));
+        if (!mounted) return;
+        final steps = <CoachmarkStep>[
+          CoachmarkStep(
+            anchorKey: _kHome,
+            icon: LucideIcons.home,
+            title: 'Ana Sayfa',
+            body:
+                'Bu koalanın keşif evi. Sağa-sola kaydırarak tarzına uygun mekânları seç, beğen veya geç.',
+          ),
+          CoachmarkStep(
+            anchorKey: _kChat,
+            icon: LucideIcons.messageCircle,
+            title: 'Mesajlar',
+            body:
+                'Tasarımcılarla ve Evlumba Design ile sohbet ettiğin yer burası.',
+          ),
+          CoachmarkStep(
+            anchorKey: _kPaylas,
+            icon: LucideIcons.plus,
+            title: 'Paylaş',
+            body:
+                'Kendi odanın fotoğrafını yükle, koala senin için yeniden tasarlasın ✨',
+            padding: 14,
+            radius: 28,
+          ),
+          CoachmarkStep(
+            anchorKey: _kAi,
+            icon: LucideIcons.sparkles,
+            title: 'AI araçların',
+            body: 'AI araçların burada — boya, restyle, mood board, stil keşfi.',
+          ),
+          CoachmarkStep(
+            anchorKey: _kProfile,
+            icon: LucideIcons.user,
+            title: 'Profil',
+            body:
+                'Tasarımların, koleksiyonların ve hesabın. Avatarın burada görünür.',
+          ),
+        ];
+        // Bell ikonu (StyleDiscoveryLiveScreen üstündeki zil) varsa son step.
+        final bellKey = StyleDiscoveryLiveScreen.bellKeyNotifier.value;
+        if (bellKey != null) {
+          steps.add(CoachmarkStep(
+            anchorKey: bellKey,
+            icon: LucideIcons.bell,
+            title: 'Bildirimler',
+            body: 'Önemli güncellemeler bu zilden düşer.',
+            padding: 8,
+          ));
+        }
+        if (!mounted) return;
+        CoachmarkOverlay.show(
+          context: context,
+          steps: steps,
+          onDone: () async {
+            try {
+              final p = await SharedPreferences.getInstance();
+              await p.setBool(_prefsCoachmarkKey, true);
+            } catch (_) {/* sessiz — bir sonraki açılışta tekrar görünebilir */}
+          },
+        );
+      } catch (_) {
+        // Prefs / overlay hatası: bir sonraki frame'de tekrar dene.
+        _coachmarkTriggered = false;
+      }
+    });
   }
 }
 

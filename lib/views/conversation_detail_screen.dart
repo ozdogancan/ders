@@ -21,6 +21,19 @@ import '../widgets/koala_widgets.dart';
 import '../widgets/media_upload_helper.dart';
 import 'chat/widgets/quote_card.dart';
 
+/// Evlumba Design = Koala'nın resmî tasarım stüdyosu kanalı. n8n köprüsü
+/// üzerinden Telegram'a yansıtılır. Chat detayı bu kanal için premium görünür:
+/// champagne/altın bubble, "Tasarım stüdyosu" subtitle, verified rozet, soft
+/// brand background.
+const String _kEvlumbaDesignerId = 'evlumba-design';
+const String _kEvlumbaAvatarUrl =
+    'https://xgefjepaqnghaotqybpi.supabase.co/storage/v1/object/public/koala-seed/avatars/evlumba-design.webp';
+// TODO(canoz): Kullanıcı Gemini ile özel bir Evlumba background imajı üretip
+// `assets/chat/evlumba_bg.webp` altına bırakacak. Dosya bundle'a girince
+// otomatik kullanılacak (pubspec.yaml `assets/chat/` ekli). Dosya yoksa
+// errorBuilder fallback ile soft brand gradient gösterilir.
+const String _kEvlumbaBgAsset = 'assets/chat/evlumba_bg.webp';
+
 /// Tasarımcı ile mesaj detay ekranı — gerçek zamanlı
 class ConversationDetailScreen extends ConsumerStatefulWidget {
   const ConversationDetailScreen({
@@ -67,6 +80,10 @@ class ConversationDetailScreen extends ConsumerStatefulWidget {
 }
 
 class _ConversationDetailScreenState extends ConsumerState<ConversationDetailScreen> {
+  /// Evlumba Design kanalı mı? Header + bubble + background bu flag ile
+  /// premium varyanta geçer.
+  bool get _isEvlumba => widget.designerId == _kEvlumbaDesignerId;
+
   final _textController = TextEditingController();
   final _scrollController = ScrollController();
   final _picker = ImagePicker();
@@ -813,8 +830,10 @@ class _ConversationDetailScreenState extends ConsumerState<ConversationDetailScr
       // ColoredBox = explicit white paint. Scaffold.backgroundColor bazen
       // ThemeData.scaffoldBackgroundColor ile shadow-override oluyor; chat
       // ekranı için bunu atlamak lazım (status bar'la bitişik beyaz şart).
-      body: ColoredBox(
-        color: Colors.white,
+      // Evlumba Design kanalı → premium background. Önce custom asset
+      // dener, hata olursa soft champagne gradient fallback.
+      body: _PremiumBackdrop(
+        enabled: _isEvlumba,
         child: SafeArea(
         bottom: false,
         child: Column(
@@ -883,6 +902,7 @@ class _ConversationDetailScreenState extends ConsumerState<ConversationDetailScr
                                   _MessageBubble(
                                     message: m,
                                     isMe: isMe,
+                                    isEvlumba: _isEvlumba,
                                     conversationId: _activeConvId,
                                     acceptedQuoteId: _acceptedQuoteId,
                                     onQuoteAccepted: (id) => setState(
@@ -894,6 +914,7 @@ class _ConversationDetailScreenState extends ConsumerState<ConversationDetailScr
                             return _MessageBubble(
                               message: m,
                               isMe: isMe,
+                              isEvlumba: _isEvlumba,
                               conversationId: _activeConvId,
                               acceptedQuoteId: _acceptedQuoteId,
                               onQuoteAccepted: (id) =>
@@ -1202,16 +1223,27 @@ class _ConversationDetailScreenState extends ConsumerState<ConversationDetailScr
         .join()
         .toUpperCase();
 
+    // Evlumba Design: subLine sabit "Tasar\u0131m st\u00fcdyosu" \u2014 designer_detail
+    // tablosunda kay\u0131t yok. Di\u011fer tasar\u0131mc\u0131lar specialty + city.
     final specialty = (_designerDetail?['specialty'] ?? '').toString().trim();
     final city = (_designerDetail?['city'] ?? '').toString().trim();
     final subParts = <String>[
       if (specialty.isNotEmpty) specialty,
       if (city.isNotEmpty) city,
     ];
-    final subLine = subParts.join(' \u00b7 ');
+    final subLine =
+        _isEvlumba ? 'Tasar\u0131m st\u00fcdyosu' : subParts.join(' \u00b7 ');
+
+    // Evlumba avatar URL widget.designerAvatarUrl ile gelmeyebilir (eski
+    // conversation lazy a\u00e7\u0131l\u0131\u015f\u0131 vs.). Fallback olarak sabit Evlumba URL.
+    final effectiveAvatarUrl = _isEvlumba
+        ? (widget.designerAvatarUrl ?? _kEvlumbaAvatarUrl)
+        : widget.designerAvatarUrl;
 
     return Container(
-      color: KoalaColors.surface,
+      // Evlumba header'\u0131 \u00e7ok hafif champagne tint \u2014 beyazdan AYRI\u015eSIN ama
+      // g\u00f6ze batmas\u0131n. Di\u011fer tasar\u0131mc\u0131lar standart surface.
+      color: _isEvlumba ? const Color(0xFFFBF7EE) : KoalaColors.surface,
       child: Column(
         children: [
           // Tek satır kompakt header — back + 36px avatar + name/sub + aktif pulse
@@ -1228,16 +1260,23 @@ class _ConversationDetailScreenState extends ConsumerState<ConversationDetailScr
                 Container(
                   width: 36,
                   height: 36,
-                  decoration: const BoxDecoration(
+                  decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    gradient: LinearGradient(
-                      colors: [KoalaColors.accent, KoalaColors.accentMuted],
-                    ),
+                    gradient: _isEvlumba
+                        ? const LinearGradient(
+                            colors: [Color(0xFFD4A853), Color(0xFFB8874A)],
+                          )
+                        : const LinearGradient(
+                            colors: [
+                              KoalaColors.accent,
+                              KoalaColors.accentMuted
+                            ],
+                          ),
                   ),
-                  child: widget.designerAvatarUrl != null
+                  child: effectiveAvatarUrl != null
                       ? ClipOval(
                           child: Image.network(
-                            widget.designerAvatarUrl!,
+                            effectiveAvatarUrl,
                             fit: BoxFit.cover,
                             errorBuilder: (_, __, ___) => Center(
                               child: Text(initials,
@@ -1262,16 +1301,30 @@ class _ConversationDetailScreenState extends ConsumerState<ConversationDetailScr
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(
-                        widget.designerName,
-                        style: const TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
-                          color: KoalaColors.text,
-                          height: 1.2,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                      Row(
+                        children: [
+                          Flexible(
+                            child: Text(
+                              widget.designerName,
+                              style: const TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w700,
+                                color: KoalaColors.text,
+                                height: 1.2,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          if (_isEvlumba) ...[
+                            const SizedBox(width: 4),
+                            const Icon(
+                              LucideIcons.badgeCheck,
+                              size: 15,
+                              color: Color(0xFF1DA1F2),
+                            ),
+                          ],
+                        ],
                       ),
                       if (subLine.isNotEmpty)
                         Padding(
@@ -2016,12 +2069,17 @@ class _MessageBubble extends StatelessWidget {
   const _MessageBubble({
     required this.message,
     required this.isMe,
+    this.isEvlumba = false,
     this.conversationId,
     this.acceptedQuoteId,
     this.onQuoteAccepted,
   });
   final Map<String, dynamic> message;
   final bool isMe;
+
+  /// Evlumba Design kanalı mı? true ise INCOMING bubble cream/champagne tint +
+  /// gold-ish border alır (premium feel). Kullanıcının bubble'ı brand mor.
+  final bool isEvlumba;
 
   /// Sprint 4 — QuoteCard accept flow için. Null ise kart salt-gösterim.
   final String? conversationId;
@@ -2073,14 +2131,25 @@ class _MessageBubble extends StatelessWidget {
           vertical: KoalaSpacing.md,
         ),
         decoration: BoxDecoration(
-          color: isMe ? KoalaColors.accent : KoalaColors.surface,
+          color: isMe
+              ? KoalaColors.accent
+              : (isEvlumba
+                  ? const Color(0xFFFBF7EE) // cream/champagne
+                  : KoalaColors.surface),
           borderRadius: BorderRadius.only(
             topLeft: const Radius.circular(KoalaRadius.lg),
             topRight: const Radius.circular(KoalaRadius.lg),
             bottomLeft: Radius.circular(isMe ? KoalaRadius.lg : KoalaRadius.xs),
             bottomRight: Radius.circular(isMe ? KoalaRadius.xs : KoalaRadius.lg),
           ),
-          border: isMe ? null : Border.all(color: KoalaColors.border, width: 0.5),
+          border: isMe
+              ? null
+              : Border.all(
+                  color: isEvlumba
+                      ? const Color(0xFFE8D7A8) // gold-ish
+                      : KoalaColors.border,
+                  width: isEvlumba ? 1.0 : 0.5,
+                ),
         ),
         child: Column(
           crossAxisAlignment:
@@ -2100,7 +2169,11 @@ class _MessageBubble extends StatelessWidget {
                 content,
                 style: TextStyle(
                   fontSize: 14,
-                  color: isMe ? Colors.white : KoalaColors.text,
+                  color: isMe
+                      ? Colors.white
+                      : (isEvlumba
+                          ? const Color(0xFF3D2E12) // koyu kahve — premium
+                          : KoalaColors.text),
                   height: 1.4,
                 ),
               ),
@@ -2347,6 +2420,53 @@ class _NewMessagesDivider extends StatelessWidget {
               color: KoalaColors.accent.withValues(alpha: 0.35),
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// PREMIUM BACKDROP — Evlumba Design kanalına özel arka plan.
+// `enabled=false` → düz beyaz (eski davranış aynen korunur).
+// `enabled=true`  → custom asset (assets/chat/evlumba_bg.webp) dener; asset
+//                   yoksa errorBuilder soft champagne gradient fallback'e
+//                   düşer. asset bundle'a girdiğinde otomatik yüklenir.
+// ═══════════════════════════════════════════════════════
+class _PremiumBackdrop extends StatelessWidget {
+  const _PremiumBackdrop({required this.enabled, required this.child});
+  final bool enabled;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!enabled) {
+      return ColoredBox(color: Colors.white, child: child);
+    }
+    return DecoratedBox(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Color(0xFFFBF7EE), Color(0xFFFFFFFF), Color(0xFFFBF7EE)],
+          stops: [0.0, 0.5, 1.0],
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+        ),
+      ),
+      child: Stack(
+        children: [
+          // Custom Gemini-üretilmiş background — opsiyonel. Asset yoksa
+          // errorBuilder pas geçer, sadece gradient kalır.
+          Positioned.fill(
+            child: Opacity(
+              opacity: 0.18,
+              child: Image.asset(
+                _kEvlumbaBgAsset,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+              ),
+            ),
+          ),
+          child,
         ],
       ),
     );

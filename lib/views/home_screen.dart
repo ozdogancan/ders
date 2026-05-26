@@ -29,6 +29,9 @@ import 'mekan/mekan_flow_screen.dart';
 import 'mekan/wizard/mekan_wizard_screen.dart';
 import 'product_entry_screen.dart';
 import 'saved/saved_screen_v2.dart';
+import 'main_shell.dart';
+import 'home/widgets/ai_tools_section.dart';
+import '../widgets/koala_bottom_nav.dart';
 import '../widgets/style_discovery_pull.dart'; // GlobalKey type için tutuldu
 // import 'home/widgets/continue_design_card.dart'; // 2026-04-30 kaldırıldı
 
@@ -506,18 +509,39 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
               _staggered(
                 0,
                 const Padding(
-                  padding: EdgeInsets.fromLTRB(20, 16, 16, 4),
-                  child: Text(
-                    'AI Araçları',
-                    style: TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.w700,
-                      color: KoalaColors.text,
-                      letterSpacing: -0.5,
-                    ),
+                  padding: EdgeInsets.fromLTRB(20, 18, 20, 0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'AI Araçları',
+                        textAlign: TextAlign.left,
+                        style: TextStyle(
+                          fontSize: 30,
+                          fontWeight: FontWeight.w800,
+                          color: KoalaColors.text,
+                          letterSpacing: -0.8,
+                          height: 1.05,
+                        ),
+                      ),
+                      SizedBox(height: 6),
+                      Text(
+                        'Mekânını dönüştürecek her şey, tek yerde.',
+                        textAlign: TextAlign.left,
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                          color: KoalaColors.textSec,
+                          letterSpacing: -0.1,
+                          height: 1.35,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
+            if (widget.embedded) const SizedBox(height: 20),
             if (!widget.embedded) _staggered(
               0,
               Padding(
@@ -686,6 +710,39 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
             // kullanıcı koleksiyonlarını sağ üstteki bookmark ikonundan görür.
             // _SavedPreviewRow widget'ı dosyada duruyor ama artık render
             // edilmiyor.
+            const SizedBox(height: 24),
+
+            // ─── AI Araçları — sectioned tool launcher (2026-05-26) ───
+            // Sol hizalı section header'lar + dense row-tabanlı kart listesi.
+            // Notion / Linear / Things 3 estetiği. Sadece embedded modda
+            // (AI sekmesi) render edilir; ana sayfada hero kart yeterli.
+            if (widget.embedded)
+              _staggered(
+                3,
+                AiToolsSection(
+                  onRestyle: _showPicker,
+                  onMoodBoard: _showPicker,
+                  onBeforeAfter: () => _openChat(
+                    intent: KoalaIntent.beforeAfter,
+                  ),
+                  onStyleDiscovery: () {
+                    // Tarz keşfi alt navigasyondaki Swipe sekmesinde
+                    MainShell.of()?.switchTab(KoalaTab.home);
+                  },
+                  onColorAdvice: () => _openChat(
+                    intent: KoalaIntent.colorAdvice,
+                  ),
+                  onBudget: () => _openChat(
+                    intent: KoalaIntent.budgetPlan,
+                  ),
+                  onDesignerMatch: () => _openChat(
+                    intent: KoalaIntent.designerMatch,
+                  ),
+                  onFreeChat: () => _openChat(
+                    intent: KoalaIntent.freeChat,
+                  ),
+                ),
+              ),
             const SizedBox(height: 16),
                   ],
                 ),

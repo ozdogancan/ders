@@ -1,21 +1,24 @@
-// Profil sekmesi — alt nav'ın son slotu. Header + stats + takip ettiklerim
-// + tasarımlarım kısayolu. Instagram benzeri yoğun ama Koala tasarım diline
-// sadık.
+// Profil sekmesi — Instagram-clean. Avatar + isim/rol + 3 numara + 2 tab grid.
+// Pro CTA settings ekranında, burada YOK. Profil düzenleme tek nötr buton.
+// Avatar kısa-tap → fotoğraf sheet, uzun-bas → /profile (ayarlar).
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:firebase_auth/firebase_auth.dart' show FirebaseAuth;
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' show Supabase, FileOptions;
 
 import '../core/theme/koala_tokens.dart';
-import '../providers/pro_status_provider.dart';
-import '../services/evlumba_live_service.dart';
-import '../services/follow_service.dart';
+import '../services/saved_items_service.dart';
 import '../services/user_profile_service.dart';
 import '../widgets/verified_badge.dart';
-import 'projeler_screen.dart';
+import 'mekan/wizard/mekan_wizard_screen.dart';
+import 'my_designs/design_detail_screen.dart';
 
 class ProfileTabScreen extends ConsumerStatefulWidget {
   const ProfileTabScreen({super.key});
@@ -24,36 +27,59 @@ class ProfileTabScreen extends ConsumerStatefulWidget {
   ConsumerState<ProfileTabScreen> createState() => _ProfileTabScreenState();
 }
 
-class _ProfileTabScreenState extends ConsumerState<ProfileTabScreen> {
-  List<Map<String, dynamic>> _follows = const [];
-  bool _loading = true;
-
-  static const String _evlumbaAvatar =
-      'https://xgefjepaqnghaotqybpi.supabase.co/storage/v1/object/public/koala-seed/avatars/evlumba-design.webp';
+class _ProfileTabScreenState extends ConsumerState<ProfileTabScreen>
+    with SingleTickerProviderStateMixin {
+  // AI Tasarımları — Koala AI ile üretilen (saved_items type='project').
+  List<Map<String, dynamic>> _aiDesigns = const [];
+  // Paylaştıklarım — kullanıcının yüklediği. Şimdilik ayrı tablo yok.
+  List<Map<String, dynamic>> _sharedDesigns = const [];
+  bool _designsLoading = true;
+  bool _uploadingAvatar = false;
+  late final TabController _designsTab;
 
   @override
   void initState() {
     super.initState();
-    _load();
+    _designsTab = TabController(length: 2, vsync: this);
+    _designsTab.addListener(() {
+      if (mounted) setState(() {});
+    });
+    _loadDesigns();
   }
 
-  Future<void> _load() async {
-    final follows = await FollowService.myFollows();
-    if (!mounted) return;
-    setState(() {
-      _follows = follows;
-      _loading = false;
-    });
+  @override
+  void dispose() {
+    _designsTab.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadDesigns() async {
+    try {
+      final ai = await SavedItemsService.getByType(
+        SavedItemType.project,
+        limit: 40,
+      );
+      if (!mounted) return;
+      setState(() {
+        _aiDesigns = ai;
+        _sharedDesigns = const [];
+        _designsLoading = false;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _designsLoading = false);
+    }
+  }
+
+  Future<void> _refreshAll() async {
     ref.invalidate(userProfileProvider);
+    await _loadDesigns();
   }
 
   @override
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
-    final isPro = ref.watch(proStatusProvider).value?.isPro ?? false;
     final bundle = ref.watch(userProfileProvider).asData?.value;
     final profile = bundle?.profile;
-    final application = bundle?.application ?? ProApplicationStatus.none;
     final stored = profile?.displayName?.trim();
     final displayName = (stored?.isNotEmpty == true
             ? stored
@@ -63,137 +89,153 @@ class _ProfileTabScreenState extends ConsumerState<ProfileTabScreen> {
     final name = displayName.isNotEmpty
         ? displayName
         : (email.isNotEmpty ? email.split('@').first : 'Profil');
-    final photo = user?.photoURL;
+    final photo = (user?.photoURL?.isNotEmpty == true)
+        ? user!.photoURL
+        : profile?.avatarUrl;
     final verified = profile?.verified == true;
+    final about = (profile?.about ?? '').trim();
+    final role = profile?.isPro == true
+        ? (about.isNotEmpty ? 'Profesyonel Tasarımcı' : 'Koala Pro')
+        : 'Ev Sahibi';
 
     return Scaffold(
       backgroundColor: KoalaColors.bg,
-      appBar: AppBar(
-        backgroundColor: KoalaColors.bg,
-        surfaceTintColor: KoalaColors.bg,
-        elevation: 0,
-        title: const Text('Profil', style: KoalaText.h2),
-        automaticallyImplyLeading: false,
-        actions: [
-          IconButton(
-            icon: const Icon(LucideIcons.settings),
-            color: KoalaColors.text,
-            tooltip: 'Ayarlar',
-            onPressed: () => context.push('/profile'),
-          ),
-        ],
-      ),
       body: RefreshIndicator(
-        onRefresh: _load,
+        onRefresh: _refreshAll,
         color: KoalaColors.accent,
-        child: ListView(
-          padding: const EdgeInsets.symmetric(vertical: 12),
-          children: [
-            _header(name, email, photo, isPro, verified),
-            const SizedBox(height: 20),
-            _stats(),
-            const SizedBox(height: 22),
-            _aboutSection(profile),
-            const SizedBox(height: 18),
-            _proSection(application, profile?.isPro == true),
-            const SizedBox(height: 22),
-            _followsSection(),
-            const SizedBox(height: 18),
-            _projectsTeaser(),
-            const SizedBox(height: 40),
+        child: CustomScrollView(
+          physics: const AlwaysScrollableScrollPhysics(
+              parent: BouncingScrollPhysics()),
+          slivers: [
+            SliverToBoxAdapter(
+              child: _hero(name, role, about, photo, verified),
+            ),
+            SliverToBoxAdapter(child: _statsRow()),
+            const SliverToBoxAdapter(child: SizedBox(height: 18)),
+            SliverToBoxAdapter(child: _editButton()),
+            const SliverToBoxAdapter(child: SizedBox(height: 22)),
+            SliverToBoxAdapter(child: _tabBar()),
+            SliverToBoxAdapter(child: _designsTabBody()),
+            const SliverToBoxAdapter(child: SizedBox(height: 28)),
+            SliverToBoxAdapter(child: _settingsRow()),
+            const SliverToBoxAdapter(child: SizedBox(height: 40)),
           ],
         ),
       ),
     );
   }
 
-  Widget _header(
-      String name, String email, String? photo, bool isPro, bool verified) {
+  // ─── Hero — flat, minimal: avatar + isim + rol + bio ───
+  Widget _hero(String name, String role, String about, String? photo,
+      bool verified) {
+    final topPad = MediaQuery.of(context).padding.top;
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: Row(
+      padding: EdgeInsets.fromLTRB(20, topPad + 18, 20, 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          _avatar(photo, isPro, verified),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        name,
-                        style: KoalaText.h2,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    if (isPro) ...[
-                      const SizedBox(width: 8),
-                      _proPill(),
-                    ],
-                  ],
-                ),
-                if (email.isNotEmpty) ...[
-                  const SizedBox(height: 3),
-                  Text(
-                    email,
-                    style: KoalaText.bodySmall,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
-              ],
+          // Avatar — kısa-tap fotoğraf, uzun-bas ayarlar.
+          GestureDetector(
+            onTap: () {
+              HapticFeedback.selectionClick();
+              _openAvatarActions(photo);
+            },
+            onLongPress: () {
+              HapticFeedback.mediumImpact();
+              context.push('/profile');
+            },
+            child: _avatar(photo, verified),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            name,
+            style: KoalaText.h1.copyWith(
+              fontSize: 22,
+              letterSpacing: -0.4,
+              height: 1.1,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 4),
+          Text(
+            role,
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+              color: KoalaColors.textSec,
+              letterSpacing: -0.1,
             ),
           ),
+          if (about.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(
+              about,
+              style: KoalaText.bodySmall,
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+            ),
+          ],
         ],
       ),
     );
   }
 
-  Widget _avatar(String? url, bool isPro, bool verified) {
+  Widget _avatar(String? url, bool verified) {
     final hasUrl = (url ?? '').isNotEmpty;
     return Stack(
       clipBehavior: Clip.none,
       children: [
         Container(
-          width: 84,
-          height: 84,
+          width: 88,
+          height: 88,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            gradient: isPro
-                ? const SweepGradient(
-                    colors: [
-                      KoalaColors.accentDeep,
-                      KoalaColors.brandLight,
-                      Color(0xFFFFC44C),
-                      KoalaColors.accent,
-                      KoalaColors.accentDeep,
-                    ],
-                  )
-                : null,
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.06),
-                blurRadius: 14,
-                offset: const Offset(0, 4),
-              ),
-            ],
+            color: hasUrl ? Colors.white : KoalaColors.accentSoft,
+            border: Border.all(color: KoalaColors.borderSolid, width: 0.6),
           ),
-          padding: EdgeInsets.all(isPro ? 3 : 0),
-          child: ClipOval(
+          clipBehavior: Clip.antiAlias,
+          child: hasUrl
+              ? CachedNetworkImage(imageUrl: url!, fit: BoxFit.cover)
+              : const Icon(LucideIcons.user,
+                  size: 38, color: KoalaColors.accentDeep),
+        ),
+        if (_uploadingAvatar)
+          Positioned.fill(
+            child: ClipOval(
+              child: Container(
+                color: Colors.black.withValues(alpha: 0.35),
+                alignment: Alignment.center,
+                child: const SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: CircularProgressIndicator(
+                      color: Colors.white, strokeWidth: 2.4),
+                ),
+              ),
+            ),
+          )
+        // Kamera ikonu YALNIZCA henüz fotoğraf yokken görünür — kullanıcıya
+        // "buraya dokunup foto ekle" sinyali. Foto eklendikten sonra
+        // affordance kalkar (Instagram pattern).
+        else if (!verified && !hasUrl)
+          Positioned(
+            right: -2,
+            bottom: -2,
             child: Container(
-              color: hasUrl ? Colors.white : KoalaColors.accentSoft,
-              alignment: Alignment.center,
-              child: hasUrl
-                  ? CachedNetworkImage(imageUrl: url!, fit: BoxFit.cover)
-                  : const Icon(LucideIcons.user,
-                      size: 36, color: KoalaColors.accentDeep),
+              width: 26,
+              height: 26,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: KoalaColors.accentDeep,
+                border: Border.all(color: KoalaColors.bg, width: 2),
+              ),
+              child: const Icon(LucideIcons.camera,
+                  size: 13, color: Colors.white),
             ),
           ),
-        ),
         if (verified)
           const Positioned(
             right: -2,
@@ -204,434 +246,601 @@ class _ProfileTabScreenState extends ConsumerState<ProfileTabScreen> {
     );
   }
 
-  Widget _proPill() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFFFFD66B), Color(0xFFEFA01F)],
-        ),
-        borderRadius: BorderRadius.circular(10),
+  // ─── Stats — placeholder dash YOK; sadece veri olan stat'leri göster.
+  // Instagram pattern: "—" yerine hiç gösterme. "Kayıt" backend yokken
+  // gizleniyor, eklenince geri açılır.
+  Widget _statsRow() {
+    final designCount =
+        _designsLoading ? null : (_aiDesigns.length + _sharedDesigns.length);
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Expanded(child: _statTile(designCount?.toString() ?? '0', 'Tasarım')),
+        ],
       ),
-      child: const Text(
-        'PRO',
-        style: TextStyle(
-          fontSize: 10,
-          fontWeight: FontWeight.w900,
-          color: Colors.white,
-          letterSpacing: 0.4,
-          height: 1.1,
+    );
+  }
+
+  Widget _statTile(String value, String label) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          value,
+          style: const TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.w800,
+            color: KoalaColors.text,
+            letterSpacing: -0.3,
+            height: 1.05,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+            color: KoalaColors.textSec,
+            letterSpacing: -0.1,
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ─── Tek nötr "Profili düzenle" butonu — Instagram pattern ───
+  Widget _editButton() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: SizedBox(
+        width: double.infinity,
+        child: Material(
+          color: KoalaColors.surface,
+          borderRadius: BorderRadius.circular(10),
+          child: InkWell(
+            onTap: _openEditor,
+            borderRadius: BorderRadius.circular(10),
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 9),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: KoalaColors.borderSolid, width: 0.8),
+              ),
+              alignment: Alignment.center,
+              child: const Text(
+                'Profili düzenle',
+                style: TextStyle(
+                  fontSize: 13.5,
+                  fontWeight: FontWeight.w600,
+                  color: KoalaColors.text,
+                  letterSpacing: -0.1,
+                ),
+              ),
+            ),
+          ),
         ),
       ),
     );
   }
 
-  Widget _stats() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: Row(
-        children: [
-          _statCard(
-            icon: LucideIcons.folder,
-            label: 'Tasarım',
-            value: '—',
-            onTap: _openProjects,
+  // ─── 2 tab — underline, sade ───
+  Widget _tabBar() {
+    return Container(
+      decoration: const Border(
+        top: BorderSide(color: KoalaColors.borderSolid, width: 0.6),
+        bottom: BorderSide(color: KoalaColors.borderSolid, width: 0.6),
+      ).toBoxDecoration(),
+      child: TabBar(
+        controller: _designsTab,
+        indicatorSize: TabBarIndicatorSize.tab,
+        indicatorWeight: 1.6,
+        indicatorColor: KoalaColors.text,
+        dividerHeight: 0,
+        labelColor: KoalaColors.text,
+        unselectedLabelColor: KoalaColors.textTer,
+        labelStyle: const TextStyle(
+          fontSize: 12.5,
+          fontWeight: FontWeight.w700,
+          letterSpacing: -0.1,
+        ),
+        unselectedLabelStyle: const TextStyle(
+          fontSize: 12.5,
+          fontWeight: FontWeight.w600,
+        ),
+        tabs: const [
+          Tab(
+            height: 42,
+            icon: Icon(LucideIcons.layoutGrid, size: 18),
+            iconMargin: EdgeInsets.zero,
           ),
-          const SizedBox(width: 10),
-          _statCard(
-            icon: LucideIcons.users,
-            label: 'Takip',
-            value: '${_follows.length}',
-            onTap: null,
-          ),
-          const SizedBox(width: 10),
-          _statCard(
-            icon: LucideIcons.heart,
-            label: 'Beğeni',
-            value: '—',
-            onTap: null,
+          Tab(
+            height: 42,
+            icon: Icon(LucideIcons.upload, size: 18),
+            iconMargin: EdgeInsets.zero,
           ),
         ],
       ),
     );
   }
 
-  Widget _statCard({
+  Widget _designsTabBody() {
+    if (_designsLoading) {
+      return const SizedBox(
+        height: 220,
+        child: Center(
+          child: CircularProgressIndicator(
+              color: KoalaColors.accentDeep, strokeWidth: 2),
+        ),
+      );
+    }
+    final isAi = _designsTab.index == 0;
+    final items = isAi ? _aiDesigns : _sharedDesigns;
+    if (items.isEmpty) {
+      return isAi ? _emptyDesigns() : _emptyShared();
+    }
+    return _designsGrid(items, isAi: isAi);
+  }
+
+  // 3 kolon kare grid — Instagram. 2px gutter, chrome yok.
+  Widget _designsGrid(List<Map<String, dynamic>> items, {required bool isAi}) {
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      padding: EdgeInsets.zero,
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 3,
+        mainAxisSpacing: 2,
+        crossAxisSpacing: 2,
+        childAspectRatio: 1.0,
+      ),
+      itemCount: items.length,
+      itemBuilder: (_, i) {
+        final item = items[i];
+        return _DesignGridTile(
+          item: item,
+          type: isAi ? SavedItemType.project : SavedItemType.design,
+          onEdit: () => _openEditDesignSheet(item, isAi: isAi),
+          onDelete: () => _confirmDeleteDesign(item, isAi: isAi),
+        );
+      },
+    );
+  }
+
+  Widget _emptyShared() {
+    return _emptyState(
+      icon: LucideIcons.upload,
+      title: 'Henüz paylaşımın yok',
+      subtitle: 'Kendi mekanının fotoğrafını yükle, Koala farklı tarzlarda tasarlasın.',
+      cta: 'İlk tasarımını paylaş',
+      ctaIcon: LucideIcons.plus,
+      onTap: _openShareUpload,
+    );
+  }
+
+  Widget _emptyDesigns() {
+    return _emptyState(
+      icon: LucideIcons.sparkles,
+      title: 'Henüz tasarım yok',
+      subtitle: 'Bir mekânını çek, Koala farklı tarzları sana göstersin.',
+      cta: 'İlk tasarımını oluştur',
+      ctaIcon: LucideIcons.camera,
+      onTap: () => context.go('/'),
+    );
+  }
+
+  Widget _emptyState({
     required IconData icon,
-    required String label,
-    required String value,
-    VoidCallback? onTap,
+    required String title,
+    required String subtitle,
+    required String cta,
+    required IconData ctaIcon,
+    required VoidCallback onTap,
   }) {
-    return Expanded(
-      child: Material(
-        color: KoalaColors.surface,
-        borderRadius: BorderRadius.circular(14),
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(14),
-          child: Container(
-            padding: const EdgeInsets.symmetric(vertical: 14),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: KoalaColors.borderSolid, width: 0.8),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 32, 20, 8),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 56,
+            height: 56,
+            decoration: const BoxDecoration(
+              shape: BoxShape.circle,
+              color: KoalaColors.accentSoft,
             ),
-            child: Column(
-              children: [
-                Icon(icon, size: 18, color: KoalaColors.accentDeep),
-                const SizedBox(height: 6),
-                Text(
-                  value,
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w700,
-                    color: KoalaColors.text,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(label, style: KoalaText.labelSmall),
-              ],
-            ),
+            child: Icon(icon, color: KoalaColors.accentDeep, size: 24),
           ),
-        ),
-      ),
-    );
-  }
-
-  Widget _followsSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Padding(
-          padding: EdgeInsets.symmetric(horizontal: 20),
-          child: Text('TAKİP ETTİĞİN TASARIMCILAR',
-              style: KoalaText.caption),
-        ),
-        const SizedBox(height: 10),
-        if (_loading)
-          const SizedBox(
-              height: 80, child: Center(child: CircularProgressIndicator()))
-        else if (_follows.isEmpty)
-          _emptyFollows()
-        else
-          SizedBox(
-            height: 104,
-            child: ListView.separated(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              scrollDirection: Axis.horizontal,
-              itemBuilder: (_, i) => _FollowAvatar(
-                designerId: _follows[i]['designer_id'] as String,
-                evlumbaAvatar: _evlumbaAvatar,
+          const SizedBox(height: 12),
+          Text(title, style: KoalaText.h4, textAlign: TextAlign.center),
+          const SizedBox(height: 6),
+          Text(subtitle,
+              style: KoalaText.bodySmall, textAlign: TextAlign.center),
+          const SizedBox(height: 16),
+          // Instagram pattern: empty-state CTA outlined, marketing-y filled
+          // pill DEĞİL. Tıkalanabilir ama dikkat çekmeyen.
+          OutlinedButton.icon(
+            onPressed: onTap,
+            style: OutlinedButton.styleFrom(
+              foregroundColor: KoalaColors.text,
+              side: const BorderSide(color: KoalaColors.border, width: 1),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(100),
               ),
-              separatorBuilder: (_, _) => const SizedBox(width: 12),
-              itemCount: _follows.length,
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+            ),
+            icon: Icon(ctaIcon, size: 16, color: KoalaColors.textSec),
+            label: Text(
+              cta,
+              style:
+                  const TextStyle(fontWeight: FontWeight.w600, fontSize: 13.5),
             ),
           ),
-      ],
-    );
-  }
-
-  Widget _emptyFollows() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: KoalaColors.surface,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: KoalaColors.borderSolid, width: 0.8),
-        ),
-        child: const Row(
-          children: [
-            Icon(LucideIcons.users, color: KoalaColors.accentDeep),
-            SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                'Henüz tasarımcı takip etmiyorsun. Bir tasarımcının profilini açıp "Takip et" diyebilirsin — yeni tasarım paylaştığında bildirim gelir.',
-                style: KoalaText.bodySec,
-              ),
-            ),
-          ],
-        ),
+        ],
       ),
     );
   }
 
-  Widget _projectsTeaser() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: Material(
-        color: KoalaColors.surface,
-        borderRadius: BorderRadius.circular(14),
-        child: InkWell(
-          onTap: _openProjects,
-          borderRadius: BorderRadius.circular(14),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: KoalaColors.borderSolid, width: 0.8),
-            ),
-            child: const Row(
-              children: [
-                Icon(LucideIcons.folder, color: KoalaColors.accentDeep),
-                SizedBox(width: 12),
-                Expanded(
-                    child:
-                        Text('Tüm tasarımlarımı gör', style: KoalaText.label)),
-                Icon(LucideIcons.chevronRight,
-                    size: 18, color: KoalaColors.textTer),
-              ],
-            ),
-          ),
-        ),
+  Future<void> _openShareUpload() async {
+    HapticFeedback.selectionClick();
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      backgroundColor: KoalaColors.bg,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
-    );
-  }
-
-  void _openProjects() {
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const ProjelerScreen()),
-    );
-  }
-
-  // ─── Hakkında bölümü ───
-  Widget _aboutSection(KoalaUserProfile? profile) {
-    final about = (profile?.about ?? '').trim();
-    final contact = profile?.contact ?? const <String, dynamic>{};
-    final ig = (contact['instagram'] ?? '').toString().trim();
-    final web = (contact['website'] ?? '').toString().trim();
-    final hasContact = ig.isNotEmpty || web.isNotEmpty;
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-        decoration: BoxDecoration(
-          color: KoalaColors.surface,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: KoalaColors.borderSolid, width: 0.8),
-        ),
+      builder: (ctx) => SafeArea(
+        top: false,
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Row(
-              children: [
-                const Expanded(
-                  child: Text('HAKKINDA', style: KoalaText.caption),
-                ),
-                InkWell(
-                  onTap: _openEditor,
-                  borderRadius: BorderRadius.circular(8),
-                  child: const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                    child: Text(
-                      'Düzenle',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                        color: KoalaColors.accentDeep,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
+            const SizedBox(height: 8),
+            _dragHandle(),
+            const SizedBox(height: 8),
+            ListTile(
+              leading: const Icon(LucideIcons.camera,
+                  color: KoalaColors.accentDeep),
+              title:
+                  const Text('Fotoğraf çek', style: KoalaText.bodyMedium),
+              onTap: () => Navigator.pop(ctx, ImageSource.camera),
             ),
-            const SizedBox(height: 6),
-            if (about.isEmpty)
-              const Text(
-                'Henüz bir tanıtım yazmadın. Kendinden, tarzından ve evinden kısaca bahset.',
-                style: KoalaText.bodySec,
-              )
-            else
-              Text(about, style: KoalaText.body),
-            if (hasContact) ...[
-              const SizedBox(height: 10),
-              const Divider(height: 1, color: KoalaColors.borderLight),
-              const SizedBox(height: 10),
-              if (ig.isNotEmpty)
-                _contactRow(LucideIcons.instagram, ig),
-              if (web.isNotEmpty) ...[
-                if (ig.isNotEmpty) const SizedBox(height: 6),
-                _contactRow(LucideIcons.globe, web),
-              ],
-            ],
+            ListTile(
+              leading: const Icon(LucideIcons.image,
+                  color: KoalaColors.accentDeep),
+              title:
+                  const Text('Galeriden seç', style: KoalaText.bodyMedium),
+              onTap: () => Navigator.pop(ctx, ImageSource.gallery),
+            ),
+            const SizedBox(height: 8),
           ],
         ),
       ),
     );
+    if (source == null || !mounted) return;
+    try {
+      final picker = ImagePicker();
+      final f = await picker.pickImage(
+        source: source,
+        maxWidth: 1024,
+        imageQuality: 60,
+      );
+      if (f == null || !mounted) return;
+      final bytes = await f.readAsBytes();
+      if (!mounted) return;
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => MekanWizardScreen(photoBytes: bytes),
+        ),
+      );
+    } catch (_) {/* swallow */}
   }
 
-  Widget _contactRow(IconData icon, String value) {
-    return Row(
-      children: [
-        Icon(icon, size: 14, color: KoalaColors.accentDeep),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Text(value,
-              style: KoalaText.bodySmall, maxLines: 1, overflow: TextOverflow.ellipsis),
-        ),
-      ],
+  Future<void> _openEditDesignSheet(
+    Map<String, dynamic> item, {
+    required bool isAi,
+  }) async {
+    final type = isAi ? SavedItemType.project : SavedItemType.design;
+    final changed = await showModalBottomSheet<bool>(
+      context: context,
+      backgroundColor: KoalaColors.bg,
+      isScrollControlled: true,
+      isDismissible: true,
+      enableDrag: true,
+      useSafeArea: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      builder: (_) => _DesignEditSheet(item: item, type: type),
     );
+    if (changed == true && mounted) _loadDesigns();
   }
 
-  // ─── Profesyonel ol kartı ───
-  Widget _proSection(ProApplicationStatus app, bool isPro) {
-    if (isPro || app.isApproved) {
-      return Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20),
-        child: Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: KoalaColors.greenLight,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: KoalaColors.green.withValues(alpha: 0.3),
-              width: 0.8,
-            ),
+  Future<void> _confirmDeleteDesign(
+    Map<String, dynamic> item, {
+    required bool isAi,
+  }) async {
+    final type = isAi ? SavedItemType.project : SavedItemType.design;
+    final itemId = (item['item_id'] ?? '').toString();
+    if (itemId.isEmpty) return;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Tasarımı sil'),
+        content: const Text('Tasarımı silmek istediğine emin misin?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Vazgeç'),
           ),
-          child: Row(
-            children: [
-              const VerifiedBadge(size: 22),
-              const SizedBox(width: 12),
-              const Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Profesyonel hesabın aktif',
-                        style: KoalaText.h4),
-                    SizedBox(height: 2),
-                    Text(
-                      'Tasarımlarını paylaşıp Koala\'da öne çıkabilirsin.',
-                      style: KoalaText.bodySmall,
-                    ),
-                  ],
-                ),
-              ),
-            ],
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: TextButton.styleFrom(foregroundColor: KoalaColors.error),
+            child: const Text('Sil'),
           ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    setState(() {
+      if (isAi) {
+        _aiDesigns = _aiDesigns
+            .where((r) => (r['item_id'] ?? '').toString() != itemId)
+            .toList();
+      } else {
+        _sharedDesigns = _sharedDesigns
+            .where((r) => (r['item_id'] ?? '').toString() != itemId)
+            .toList();
+      }
+    });
+    final success = await SavedItemsService.removeItem(
+      type: type,
+      itemId: itemId,
+    );
+    if (!mounted) return;
+    if (!success) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Silinemedi, tekrar dene.')),
+      );
+      _loadDesigns();
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Tasarım silindi.'),
+          behavior: SnackBarBehavior.floating,
         ),
       );
     }
-    if (app.isPending) {
-      return Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20),
-        child: Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: KoalaColors.surface,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: KoalaColors.accentDeep.withValues(alpha: 0.3),
-              width: 0.8,
-            ),
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 36,
-                height: 36,
-                decoration: const BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: KoalaColors.accentSoft,
-                ),
-                child: const Icon(LucideIcons.clock,
-                    size: 18, color: KoalaColors.accentDeep),
-              ),
-              const SizedBox(width: 12),
-              const Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Başvurun değerlendiriliyor',
-                        style: KoalaText.h4),
-                    SizedBox(height: 2),
-                    Text(
-                      'Evlumba ekibi en kısa sürede dönüş yapacak. Sonucu bildirim olarak alacaksın.',
-                      style: KoalaText.bodySmall,
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-    final rejected = app.isRejected;
+  }
+
+  // ─── Sessiz "Ayarlar" satırı, low-key ───
+  Widget _settingsRow() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
       child: Material(
-        color: KoalaColors.surface,
-        borderRadius: BorderRadius.circular(14),
+        color: Colors.transparent,
         child: InkWell(
-          onTap: _openApplicationSheet,
-          borderRadius: BorderRadius.circular(14),
-          child: Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(
-                color: KoalaColors.accentDeep.withValues(alpha: 0.18),
-                width: 0.9,
-              ),
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  KoalaColors.accentSoft.withValues(alpha: 0.45),
-                  Colors.transparent,
-                ],
-              ),
-            ),
+          onTap: () {
+            HapticFeedback.selectionClick();
+            context.push('/profile');
+          },
+          borderRadius: BorderRadius.circular(10),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 10),
             child: Row(
-              children: [
-                Container(
-                  width: 40,
-                  height: 40,
-                  decoration: const BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [
-                        KoalaColors.accentDeep,
-                        KoalaColors.accent,
-                      ],
-                    ),
-                  ),
-                  child: const Icon(LucideIcons.badgeCheck,
-                      size: 20, color: Colors.white),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Profesyonel olarak Koala\'ya katıl',
-                        style: KoalaText.h4,
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        rejected
-                            ? 'Başvurun şu an için onaylanmadı. Bilgilerini güncelleyip tekrar dene.'
-                            : 'Tasarımlarını yayınla, takipçi topla, yeşil tik kazan.',
-                        style: KoalaText.bodySmall,
-                      ),
-                    ],
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: const [
+                Icon(LucideIcons.settings,
+                    size: 15, color: KoalaColors.textSec),
+                SizedBox(width: 8),
+                Text(
+                  'Ayarlar',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: KoalaColors.textSec,
+                    letterSpacing: -0.1,
                   ),
                 ),
-                const SizedBox(width: 6),
-                const Icon(LucideIcons.chevronRight,
-                    size: 18, color: KoalaColors.textTer),
               ],
             ),
           ),
         ),
       ),
     );
+  }
+
+  // ─── Profil fotoğrafı: tap → kaynak sheet → upload/remove ───
+  Future<void> _openAvatarActions(String? currentUrl) async {
+    if (_uploadingAvatar) return;
+    final hasPhoto = (currentUrl ?? '').isNotEmpty;
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: KoalaColors.bg,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) => SafeArea(
+        top: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 8),
+            _dragHandle(),
+            const SizedBox(height: 8),
+            if (!kIsWeb)
+              ListTile(
+                leading: const Icon(LucideIcons.camera,
+                    color: KoalaColors.accentDeep),
+                title: const Text('Fotoğraf çek',
+                    style: KoalaText.bodyMedium),
+                onTap: () => Navigator.pop(ctx, 'camera'),
+              ),
+            ListTile(
+              leading: const Icon(LucideIcons.image,
+                  color: KoalaColors.accentDeep),
+              title: const Text('Galeriden seç',
+                  style: KoalaText.bodyMedium),
+              onTap: () => Navigator.pop(ctx, 'gallery'),
+            ),
+            if (hasPhoto)
+              ListTile(
+                leading: const Icon(LucideIcons.trash2,
+                    color: KoalaColors.error),
+                title: const Text(
+                  'Mevcut fotoğrafı kaldır',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    color: KoalaColors.error,
+                  ),
+                ),
+                onTap: () => Navigator.pop(ctx, 'remove'),
+              ),
+            ListTile(
+              leading:
+                  const Icon(LucideIcons.x, color: KoalaColors.textSec),
+              title: const Text('İptal', style: KoalaText.bodyMedium),
+              onTap: () => Navigator.pop(ctx),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+    if (action == null || !mounted) return;
+    switch (action) {
+      case 'camera':
+        await _pickAndUploadAvatar(ImageSource.camera);
+        break;
+      case 'gallery':
+        await _pickAndUploadAvatar(ImageSource.gallery);
+        break;
+      case 'remove':
+        await _confirmRemoveAvatar();
+        break;
+    }
+  }
+
+  Future<void> _pickAndUploadAvatar(ImageSource source) async {
+    try {
+      final picker = ImagePicker();
+      final picked = await picker.pickImage(
+        source: source,
+        maxWidth: 720,
+        imageQuality: 80,
+      );
+      if (picked == null || !mounted) return;
+
+      setState(() => _uploadingAvatar = true);
+
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      if (uid == null) throw StateError('not_authenticated');
+
+      final Uint8List bytes = await picked.readAsBytes();
+      final objectPath = '$uid/avatar.webp';
+      final storage = Supabase.instance.client.storage.from('avatars');
+      await storage.uploadBinary(
+        objectPath,
+        bytes,
+        fileOptions: const FileOptions(
+          upsert: true,
+          contentType: 'image/webp',
+        ),
+      );
+      final basePublic = storage.getPublicUrl(objectPath);
+      final v = DateTime.now().millisecondsSinceEpoch;
+      final publicUrl = '$basePublic?v=$v';
+
+      await Future.wait([
+        FirebaseAuth.instance.currentUser!.updatePhotoURL(publicUrl),
+        UserProfileService.setAvatarUrl(publicUrl).then((ok) {
+          if (!ok) debugPrint('[avatar] supabase setAvatarUrl returned false');
+        }),
+      ]);
+
+      if (!mounted) return;
+      ref.invalidate(userProfileProvider);
+      HapticFeedback.lightImpact();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Profil fotoğrafın güncellendi'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } catch (e) {
+      debugPrint('[avatar] upload failed: $e');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Fotoğraf yüklenemedi'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _uploadingAvatar = false);
+    }
+  }
+
+  Future<void> _confirmRemoveAvatar() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Fotoğrafı kaldır'),
+        content:
+            const Text('Profil fotoğrafını kaldırmak istediğine emin misin?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Vazgeç'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: TextButton.styleFrom(foregroundColor: KoalaColors.error),
+            child: const Text('Kaldır'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    setState(() => _uploadingAvatar = true);
+    try {
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      if (uid != null) {
+        try {
+          await Supabase.instance.client.storage
+              .from('avatars')
+              .remove(['$uid/avatar.webp']);
+        } catch (_) {/* swallow */}
+      }
+      await Future.wait([
+        FirebaseAuth.instance.currentUser!.updatePhotoURL(null),
+        UserProfileService.setAvatarUrl(null),
+      ]);
+      if (!mounted) return;
+      ref.invalidate(userProfileProvider);
+      HapticFeedback.lightImpact();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Profil fotoğrafı kaldırıldı.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } catch (e) {
+      debugPrint('[avatar] remove failed: $e');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Fotoğraf kaldırılamadı')),
+      );
+    } finally {
+      if (mounted) setState(() => _uploadingAvatar = false);
+    }
   }
 
   Future<void> _openEditor() async {
+    HapticFeedback.selectionClick();
     final bundle = ref.read(userProfileProvider).asData?.value;
     final profile = bundle?.profile;
     final changed = await showModalBottomSheet<bool>(
@@ -645,19 +854,41 @@ class _ProfileTabScreenState extends ConsumerState<ProfileTabScreen> {
     );
     if (changed == true) ref.invalidate(userProfileProvider);
   }
+}
 
-  Future<void> _openApplicationSheet() async {
-    final submitted = await showModalBottomSheet<bool>(
-      context: context,
-      backgroundColor: KoalaColors.bg,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+Widget _dragHandle() => Container(
+      width: 40,
+      height: 4,
+      decoration: BoxDecoration(
+        color: KoalaColors.border,
+        borderRadius: BorderRadius.circular(100),
       ),
-      builder: (_) => const _ProApplicationSheet(),
     );
-    if (submitted == true) ref.invalidate(userProfileProvider);
-  }
+
+// Border'ı BoxDecoration'a çevirmek için küçük yardımcı.
+extension on Border {
+  BoxDecoration toBoxDecoration() => BoxDecoration(border: this);
+}
+
+/// Profesyonel başvuru sheet'ini açar. Settings ekranı bunu kullanır.
+/// Submit edilirse `true` döner; çağıran `userProfileProvider`'ı
+/// invalidate etmeli.
+Future<bool?> showProApplicationSheet(BuildContext context) {
+  return showModalBottomSheet<bool>(
+    context: context,
+    backgroundColor: KoalaColors.bg,
+    isScrollControlled: true,
+    isDismissible: true,
+    enableDrag: true,
+    useSafeArea: true,
+    constraints: BoxConstraints(
+      maxHeight: MediaQuery.of(context).size.height * 0.88,
+    ),
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+    ),
+    builder: (_) => const ProApplicationSheet(),
+  );
 }
 
 // ─── Profil editor sheet ───
@@ -730,16 +961,7 @@ class _ProfileEditorSheetState extends State<_ProfileEditorSheet> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Center(
-                child: Container(
-                  width: 42,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: KoalaColors.border,
-                    borderRadius: BorderRadius.circular(100),
-                  ),
-                ),
-              ),
+              Center(child: _dragHandle()),
               const SizedBox(height: 14),
               const Text('Profilini düzenle', style: KoalaText.h2),
               const SizedBox(height: 18),
@@ -810,8 +1032,8 @@ class _ProfileEditorSheetState extends State<_ProfileEditorSheet> {
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(
-                  color: KoalaColors.accentDeep, width: 1.2),
+              borderSide:
+                  const BorderSide(color: KoalaColors.accentDeep, width: 1.2),
             ),
             contentPadding:
                 const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -822,14 +1044,14 @@ class _ProfileEditorSheetState extends State<_ProfileEditorSheet> {
   }
 }
 
-// ─── Profesyonel başvuru sheet ───
-class _ProApplicationSheet extends StatefulWidget {
-  const _ProApplicationSheet();
+// ─── Profesyonel başvuru sheet (settings'ten çağrılır) ───
+class ProApplicationSheet extends StatefulWidget {
+  const ProApplicationSheet({super.key});
   @override
-  State<_ProApplicationSheet> createState() => _ProApplicationSheetState();
+  State<ProApplicationSheet> createState() => _ProApplicationSheetState();
 }
 
-class _ProApplicationSheetState extends State<_ProApplicationSheet> {
+class _ProApplicationSheetState extends State<ProApplicationSheet> {
   final _fullName = TextEditingController();
   final _profession = TextEditingController();
   final _city = TextEditingController();
@@ -903,67 +1125,122 @@ class _ProApplicationSheetState extends State<_ProApplicationSheet> {
       child: SafeArea(
         top: false,
         child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+          padding: const EdgeInsets.fromLTRB(20, 10, 20, 24),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Center(
-                child: Container(
-                  width: 42,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: KoalaColors.border,
-                    borderRadius: BorderRadius.circular(100),
+              Center(child: _dragHandle()),
+              const SizedBox(height: 24),
+              Row(
+                children: [
+                  Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: const LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [
+                          KoalaColors.accentDeep,
+                          KoalaColors.accent,
+                        ],
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: KoalaColors.accentDeep
+                              .withValues(alpha: 0.28),
+                          blurRadius: 14,
+                          offset: const Offset(0, 6),
+                        ),
+                      ],
+                    ),
+                    child: const Icon(LucideIcons.badgeCheck,
+                        size: 24, color: Colors.white),
                   ),
-                ),
+                  const SizedBox(width: 14),
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text('Profesyonel başvurusu', style: KoalaText.h2),
+                        SizedBox(height: 2),
+                        Text(
+                          'Onaylanınca yeşil tik + paylaşım yetkisi.',
+                          style: KoalaText.bodySmall,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(height: 14),
-              const Text('Profesyonel başvurusu', style: KoalaText.h2),
-              const SizedBox(height: 6),
+              const SizedBox(height: 24),
               const Text(
-                'Birkaç bilgi yeter. Evlumba ekibi inceleyip kısa sürede dönüş yapar; onaylandığında yeşil tik ve tasarım paylaşma yetkisi gelir.',
+                'Birkaç bilgi yeter — Evlumba ekibi kısa sürede dönüş yapar.',
                 style: KoalaText.bodySec,
               ),
-              const SizedBox(height: 18),
+              const SizedBox(height: 24),
               _field(_fullName, label: 'Ad Soyad', hint: 'Tam adın'),
-              const SizedBox(height: 12),
+              const SizedBox(height: 14),
               _field(_profession,
                   label: 'Meslek / Uzmanlık',
                   hint: 'ör. İç Mimar, Mobilya Tasarımcısı'),
-              const SizedBox(height: 12),
+              const SizedBox(height: 14),
               _field(_city, label: 'Şehir', hint: 'İstanbul, İzmir…'),
-              const SizedBox(height: 12),
+              const SizedBox(height: 14),
               _field(_ig, label: 'Instagram', hint: '@kullaniciadi veya link'),
-              const SizedBox(height: 12),
+              const SizedBox(height: 14),
               _field(_portfolio,
                   label: 'Portföy / Web', hint: 'https://… (varsa)'),
-              const SizedBox(height: 12),
+              const SizedBox(height: 14),
               _field(_reason,
                   label: 'Birkaç cümle (opsiyonel)',
                   hint: 'Tarzın, deneyimin, neden Koala\'da olmak istiyorsun?',
                   maxLines: 3),
               if (_error != null) ...[
-                const SizedBox(height: 10),
+                const SizedBox(height: 12),
                 Text(_error!,
                     style: const TextStyle(
                         color: KoalaColors.error, fontSize: 13)),
               ],
-              const SizedBox(height: 18),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: _submitting ? null : _submit,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: KoalaColors.accentDeep,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14)),
-                    elevation: 0,
+              const SizedBox(height: 24),
+              DecoratedBox(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(16),
+                  gradient: const LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [KoalaColors.accentDeep, KoalaColors.accent],
                   ),
-                  child: Text(_submitting ? 'Gönderiliyor…' : 'Başvuruyu gönder',
-                      style: KoalaText.button),
+                  boxShadow: [
+                    BoxShadow(
+                      color:
+                          KoalaColors.accentDeep.withValues(alpha: 0.32),
+                      blurRadius: 18,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
+                ),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: _submitting ? null : _submit,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.transparent,
+                      shadowColor: Colors.transparent,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16)),
+                      elevation: 0,
+                    ),
+                    child: Text(
+                      _submitting ? 'Gönderiliyor…' : 'Başvuruyu gönder',
+                      style: KoalaText.button,
+                    ),
+                  ),
                 ),
               ),
             ],
@@ -1003,8 +1280,8 @@ class _ProApplicationSheetState extends State<_ProApplicationSheet> {
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(
-                  color: KoalaColors.accentDeep, width: 1.2),
+              borderSide:
+                  const BorderSide(color: KoalaColors.accentDeep, width: 1.2),
             ),
             contentPadding:
                 const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -1015,112 +1292,309 @@ class _ProApplicationSheetState extends State<_ProApplicationSheet> {
   }
 }
 
-class _FollowAvatar extends StatefulWidget {
-  final String designerId;
-  final String evlumbaAvatar;
-  const _FollowAvatar({required this.designerId, required this.evlumbaAvatar});
+// ─────────────────────────────────────────────────────────
+// Tasarım grid tile — Instagram. Tap → DesignDetailScreen. Long-press → menü.
+// Chrome yok: başlık, "…" buton, gradient — hepsi kalktı.
+// ─────────────────────────────────────────────────────────
+class _DesignGridTile extends StatelessWidget {
+  final Map<String, dynamic> item;
+  final SavedItemType type;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
+  const _DesignGridTile({
+    required this.item,
+    required this.type,
+    required this.onEdit,
+    required this.onDelete,
+  });
 
-  @override
-  State<_FollowAvatar> createState() => _FollowAvatarState();
-}
-
-class _FollowAvatarState extends State<_FollowAvatar> {
-  String? _name;
-  String? _avatar;
-  bool _loading = true;
-
-  @override
-  void initState() {
-    super.initState();
-    _load();
-  }
-
-  Future<void> _load() async {
-    if (widget.designerId == 'evlumba-design') {
-      if (mounted) {
-        setState(() {
-          _name = 'Evlumba Design';
-          _avatar = widget.evlumbaAvatar;
-          _loading = false;
-        });
-      }
-      return;
-    }
-    try {
-      final d = await EvlumbaLiveService.getDesigner(widget.designerId);
-      if (!mounted) return;
-      setState(() {
-        _name = (d?['full_name'] ?? d?['business_name'] ?? 'Tasarımcı')
-            .toString();
-        _avatar = (d?['avatar_url'] ?? '').toString();
-        _loading = false;
-      });
-    } catch (_) {
-      if (mounted) setState(() => _loading = false);
-    }
+  void _openMenu(BuildContext context) {
+    HapticFeedback.selectionClick();
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: KoalaColors.bg,
+      isDismissible: true,
+      enableDrag: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) => SafeArea(
+        top: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 8),
+            _dragHandle(),
+            const SizedBox(height: 8),
+            ListTile(
+              leading: const Icon(LucideIcons.pencil,
+                  color: KoalaColors.accentDeep),
+              title: const Text('Düzenle', style: KoalaText.bodyMedium),
+              onTap: () {
+                Navigator.pop(ctx);
+                onEdit();
+              },
+            ),
+            ListTile(
+              leading: const Icon(LucideIcons.trash2,
+                  color: KoalaColors.error),
+              title: const Text(
+                'Sil',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  color: KoalaColors.error,
+                ),
+              ),
+              onTap: () {
+                Navigator.pop(ctx);
+                onDelete();
+              },
+            ),
+            ListTile(
+              leading:
+                  const Icon(LucideIcons.x, color: KoalaColors.textSec),
+              title: const Text('İptal', style: KoalaText.bodyMedium),
+              onTap: () => Navigator.pop(ctx),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final hasUrl = (_avatar ?? '').isNotEmpty;
-    final verified = isVerifiedDesignerId(widget.designerId);
-    return SizedBox(
-      width: 72,
-      child: Column(
-        children: [
-          Stack(
-            clipBehavior: Clip.none,
-            children: [
-              Container(
-                width: 64,
-                height: 64,
-                decoration: const BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: KoalaColors.accentSoft,
-                ),
-                clipBehavior: Clip.antiAlias,
-                child: hasUrl
-                    ? CachedNetworkImage(
-                        imageUrl: _avatar!,
-                        fit: BoxFit.cover,
-                        placeholder: (_, _) =>
-                            Container(color: KoalaColors.accentSoft),
-                        errorWidget: (_, _, _) => const Icon(LucideIcons.user,
-                            color: KoalaColors.accentDeep),
-                      )
-                    : Center(
-                        child: _loading
-                            ? const SizedBox(
-                                width: 18,
-                                height: 18,
-                                child:
-                                    CircularProgressIndicator(strokeWidth: 2))
-                            : const Icon(LucideIcons.user,
-                                color: KoalaColors.accentDeep),
+    final imageUrl = (item['image_url'] as String?) ?? '';
+    final title = (item['title'] as String?) ?? 'Mekan';
+    final id = item['id']?.toString() ?? title;
+
+    return GestureDetector(
+      onTap: () {
+        HapticFeedback.selectionClick();
+        Navigator.of(context).push(
+          PageRouteBuilder(
+            transitionDuration: const Duration(milliseconds: 360),
+            reverseTransitionDuration: const Duration(milliseconds: 280),
+            pageBuilder: (_, _, _) => DesignDetailScreen(item: item),
+            transitionsBuilder: (_, anim, _, child) =>
+                FadeTransition(opacity: anim, child: child),
+          ),
+        );
+      },
+      onLongPress: () => _openMenu(context),
+      child: Hero(
+        tag: 'design-$id',
+        child: Container(
+          color: KoalaColors.surfaceAlt,
+          child: imageUrl.isNotEmpty
+              ? CachedNetworkImage(
+                  imageUrl: imageUrl,
+                  fit: BoxFit.cover,
+                  placeholder: (_, _) =>
+                      Container(color: KoalaColors.surfaceAlt),
+                  errorWidget: (_, _, _) => Container(
+                    color: KoalaColors.surfaceAlt,
+                    child: Center(
+                      child: Semantics(
+                        label: title,
+                        child: const Icon(LucideIcons.imageOff,
+                            color: KoalaColors.textTer, size: 22),
                       ),
-              ),
-              if (verified)
-                const Positioned(
-                  right: -2,
-                  bottom: -2,
-                  child: VerifiedBadge(size: 18),
+                    ),
+                  ),
+                )
+              : Container(color: KoalaColors.surfaceAlt),
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Tasarım düzenle sheet ───
+const List<({String key, String label})> _kRoomOptions = [
+  (key: '', label: 'Belirtme'),
+  (key: 'Oturma Odası', label: 'Oturma Odası'),
+  (key: 'Yatak Odası', label: 'Yatak Odası'),
+  (key: 'Mutfak', label: 'Mutfak'),
+  (key: 'Banyo', label: 'Banyo'),
+  (key: 'Antre', label: 'Antre'),
+];
+
+class _DesignEditSheet extends StatefulWidget {
+  final Map<String, dynamic> item;
+  final SavedItemType type;
+  const _DesignEditSheet({required this.item, required this.type});
+
+  @override
+  State<_DesignEditSheet> createState() => _DesignEditSheetState();
+}
+
+class _DesignEditSheetState extends State<_DesignEditSheet> {
+  late final TextEditingController _title;
+  late final TextEditingController _desc;
+  String _room = '';
+  bool _saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _title = TextEditingController(
+        text: (widget.item['title'] ?? '').toString());
+    _desc = TextEditingController(
+        text: (widget.item['subtitle'] ?? '').toString());
+    final extra = widget.item['extra_data'];
+    if (extra is Map) {
+      _room = (extra['style_tr'] ?? extra['style'] ?? '').toString();
+    }
+  }
+
+  @override
+  void dispose() {
+    _title.dispose();
+    _desc.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    if (_saving) return;
+    setState(() => _saving = true);
+    final itemId = (widget.item['item_id'] ?? '').toString();
+    Map<String, dynamic> extra = {};
+    final cur = widget.item['extra_data'];
+    if (cur is Map) extra = Map<String, dynamic>.from(cur);
+    if (_room.isNotEmpty) {
+      extra['style_tr'] = _room;
+    } else {
+      extra.remove('style_tr');
+    }
+    final ok = await SavedItemsService.updateItem(
+      type: widget.type,
+      itemId: itemId,
+      title: _title.text.trim(),
+      subtitle: _desc.text.trim(),
+      extraData: extra,
+    );
+    if (!mounted) return;
+    if (!ok) {
+      setState(() => _saving = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Kaydedilemedi, tekrar dene.')),
+      );
+      return;
+    }
+    Navigator.pop(context, true);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final insets = MediaQuery.viewInsetsOf(context);
+    return Padding(
+      padding: EdgeInsets.only(bottom: insets.bottom),
+      child: SafeArea(
+        top: false,
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(20, 10, 20, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Center(child: _dragHandle()),
+              const SizedBox(height: 20),
+              const Text('Tasarımı düzenle', style: KoalaText.h2),
+              const SizedBox(height: 18),
+              _label('Başlık'),
+              _textField(_title, hint: 'ör. Salonum'),
+              const SizedBox(height: 14),
+              _label('Açıklama'),
+              _textField(_desc,
+                  hint: 'Birkaç cümle (opsiyonel)', maxLines: 3),
+              const SizedBox(height: 14),
+              _label('Oda tipi'),
+              DropdownButtonFormField<String>(
+                initialValue: _room,
+                decoration: InputDecoration(
+                  filled: true,
+                  fillColor: KoalaColors.surface,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(
+                        color: KoalaColors.borderSolid, width: 0.8),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(
+                        color: KoalaColors.borderSolid, width: 0.8),
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 14, vertical: 4),
                 ),
+                items: _kRoomOptions
+                    .map((o) => DropdownMenuItem(
+                          value: o.key,
+                          child: Text(o.label, style: KoalaText.body),
+                        ))
+                    .toList(),
+                onChanged: (v) => setState(() => _room = v ?? ''),
+              ),
+              const SizedBox(height: 22),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: _saving ? null : _save,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: KoalaColors.accentDeep,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14)),
+                    elevation: 0,
+                  ),
+                  child: Text(_saving ? 'Kaydediliyor…' : 'Kaydet',
+                      style: KoalaText.button),
+                ),
+              ),
             ],
           ),
-          const SizedBox(height: 6),
-          Text(
-            _name ?? '…',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-              color: KoalaColors.text,
-              letterSpacing: -0.1,
-            ),
-          ),
-        ],
+        ),
+      ),
+    );
+  }
+
+  Widget _label(String s) => Padding(
+        padding: const EdgeInsets.only(left: 4, bottom: 6),
+        child: Text(s, style: KoalaText.caption),
+      );
+
+  Widget _textField(TextEditingController c,
+      {String? hint, int maxLines = 1}) {
+    return TextField(
+      controller: c,
+      maxLines: maxLines,
+      style: KoalaText.body,
+      decoration: InputDecoration(
+        hintText: hint,
+        hintStyle: KoalaText.hint,
+        filled: true,
+        fillColor: KoalaColors.surface,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide:
+              const BorderSide(color: KoalaColors.borderSolid, width: 0.8),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide:
+              const BorderSide(color: KoalaColors.borderSolid, width: 0.8),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide:
+              const BorderSide(color: KoalaColors.accentDeep, width: 1.2),
+        ),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       ),
     );
   }
