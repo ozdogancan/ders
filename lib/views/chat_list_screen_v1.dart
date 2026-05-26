@@ -51,6 +51,9 @@ class _ChatListScreenV1State extends ConsumerState<ChatListScreenV1> {
   void initState() {
     super.initState();
     _load();
+    // Evlumba conv id + free-consult durumunu arka planda ısıt.
+    // Tap anında "Sohbet Başlat" sub-300ms gelsin.
+    unawaited(prewarmEvlumbaConversation());
     // Realtime + inbound sync'i post-frame'e ertele ki ilk render bloklanmasın.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
@@ -71,6 +74,25 @@ class _ChatListScreenV1State extends ConsumerState<ChatListScreenV1> {
   void _onGlobalSyncTick() {
     if (!mounted) return;
     _load(silent: true);
+  }
+
+  /// _conversations listesinden toplam unread sayısını hesapla ve MainShell'e
+  /// bildir — bottom nav Mesajlar slotundaki kırmızı nokta buna göre çıkar/kapanır.
+  void _pushUnreadToShell() {
+    final uid = MessagingService.currentUserId;
+    if (uid == null) return;
+    int total = 0;
+    for (final c in _conversations) {
+      if (c['status'] == 'archived') continue;
+      if (c['user_id'] == uid) {
+        total += (c['unread_count_user'] as int?) ?? 0;
+      } else if (c['designer_id'] == uid) {
+        total += (c['unread_count_designer'] as int?) ?? 0;
+      }
+    }
+    try {
+      MainShell.of(context)?.setUnread(total);
+    } catch (_) {/* shell yoksa sessiz */}
   }
 
   @override
@@ -109,6 +131,7 @@ class _ChatListScreenV1State extends ConsumerState<ChatListScreenV1> {
         _aiChats = ais;
         _loading = false;
       });
+      _pushUnreadToShell();
       _loadDesignerAvatars();
 
       // Auth restore henüz tamamlanmamış olabilir → conversations boş gelmiş
@@ -122,6 +145,7 @@ class _ChatListScreenV1State extends ConsumerState<ChatListScreenV1> {
               final retryList = List<Map<String, dynamic>>.from(retry);
               await _injectComputedUnread(retryList);
               setState(() => _conversations = _sortConversations(retryList));
+              _pushUnreadToShell();
               _loadDesignerAvatars();
             }
           } catch (_) {}
@@ -185,6 +209,7 @@ class _ChatListScreenV1State extends ConsumerState<ChatListScreenV1> {
         setState(() {
           _conversations.removeWhere((c) => c['id']?.toString() == convId);
         });
+        _pushUnreadToShell();
         return;
       }
 
@@ -199,6 +224,7 @@ class _ChatListScreenV1State extends ConsumerState<ChatListScreenV1> {
         }
         _conversations = _sortConversations(_conversations);
       });
+      _pushUnreadToShell();
 
       // Designer avatar'ı henüz cache'lenmemişse getir (yeni conv için)
       _loadDesignerAvatars();
@@ -2155,6 +2181,7 @@ class _ChatListScreenV1State extends ConsumerState<ChatListScreenV1> {
               };
             }
           });
+          _pushUnreadToShell();
           // Server'a yaz. Başarısız olursa (RLS vs.) optimistic değeri
           // realtime güncellemesi eventually geri çevirebilir — bunu
           // kullanıcıya göstermek için hata durumunda SnackBar.

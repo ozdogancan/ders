@@ -504,48 +504,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                 child: Column(
                   children: [
             // ─── Top bar ───
-            // AI sekmesinde "AI Araçları" başlığı; ana sayfada brand block
-            // + profil ikonu (mevcut tasarım).
-            if (widget.embedded)
-              _staggered(
-                0,
-                const Padding(
-                  // Mesajlar tab (chat_list_screen_v1) AppBar başlığı ile
-                  // birebir hizalama: titleSpacing 20 + toolbarHeight 64 ≈
-                  // üstten 22px boşluk, sola tam dayalı.
-                  padding: EdgeInsets.fromLTRB(20, 22, 20, 4),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      // Stil = "Mesajlar" başlığı (chat_list_screen_v1) birebir
-                      Text(
-                        'AI Araçları',
-                        textAlign: TextAlign.left,
-                        style: TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.w700,
-                          color: KoalaColors.text,
-                          letterSpacing: -0.5,
-                        ),
-                      ),
-                      SizedBox(height: 4),
-                      // Stil = ana sayfa "Evin için ilham ve hızlı tasarım."
-                      Text(
-                        'Evin için ilham, tek dokunuşla.',
-                        textAlign: TextAlign.left,
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w500,
-                          color: KoalaColors.textTer,
-                          letterSpacing: -0.1,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            if (widget.embedded) const SizedBox(height: 12),
+            // AI sekmesinde başlık kaldırıldı (kullanıcı isteği) — GIF kartı
+            // doğrudan üstte mantıklı bir nefes payıyla yer alır.
+            if (widget.embedded) const SizedBox(height: 16),
             if (!widget.embedded) _staggered(
               0,
               Padding(

@@ -10,6 +10,7 @@ import '../helpers/paywall_router.dart';
 import '../providers/pro_status_provider.dart';
 import '../services/background_gen.dart';
 import '../widgets/coachmark_overlay.dart';
+import '../widgets/free_consult_sheet.dart' show prewarmEvlumbaConversation;
 import '../widgets/koala_bottom_nav.dart';
 import 'chat_list_screen.dart';
 import 'home_screen.dart';
@@ -87,6 +88,9 @@ class MainShellState extends ConsumerState<MainShell> {
     } catch (_) {/* sessiz */}
     if (!mounted) return;
     setState(() => _gate = _GateState.passed);
+    // App içine girer girmez Evlumba conv id ve free-consult bayrağını
+    // arka planda ısıt — kullanıcı Mesajlar/Sor'dan tıkladığında 0ms.
+    unawaited(prewarmEvlumbaConversation());
   }
 
   @override

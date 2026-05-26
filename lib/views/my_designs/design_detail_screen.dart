@@ -2,16 +2,20 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
-import '../../core/theme/koala_tokens.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:url_launcher/url_launcher.dart';
+
+import '../../core/theme/koala_tokens.dart';
+import '../../widgets/ask_and_apply_sheet.dart';
+import '../mekan/wizard/mekan_wizard_screen.dart';
 
 /// Tasarım detay — tam ekran sinematik görüntüleyici.
 ///
 /// Tasarım kararları:
-/// - Arka plan SİYAH. Foto hero transition'dan geliyor, chrome minimal.
-/// - Scroll yok, tek view. Üstte küçük kapat butonu, altta blur'lu info bar.
-/// - İnfo bar: başlık + tarz chip'i + "Pro ile tasarla" CTA. Başka bir şey yok.
-/// - DoubleTap ile paylaş/indir sprint sonrası (şimdi sessiz).
+/// - Arka plan SİYAH. Foto hero transition'dan geliyor.
+/// - Alt info bar: başlık + (varsa) tarz chip + Uygula / Sor / Paylaş trio.
+/// - 3 CTA hep aynı: "Bu tarzı mekânına uygula", "Sor", "WhatsApp'ta paylaş".
 class DesignDetailScreen extends StatelessWidget {
   final Map<String, dynamic> item;
   const DesignDetailScreen({super.key, required this.item});
@@ -21,6 +25,8 @@ class DesignDetailScreen extends StatelessWidget {
     final imageUrl = (item['image_url'] as String?) ?? '';
     final title = (item['title'] as String?) ?? 'Mekan';
     final subtitle = (item['subtitle'] as String?) ?? '';
+    // Hero tag MUST match ProfileDesignTile's tag: 'design-${item['id'] ?? title}'.
+    final id = item['id']?.toString() ?? title;
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.light,
@@ -31,7 +37,7 @@ class DesignDetailScreen extends StatelessWidget {
           children: [
             // Hero foto
             Hero(
-              tag: 'design-${item['id']}',
+              tag: 'design-$id',
               child: Center(
                 child: imageUrl.isEmpty
                     ? _broken()
@@ -43,7 +49,7 @@ class DesignDetailScreen extends StatelessWidget {
                       ),
               ),
             ),
-            // Üst gradient (kapat butonu okunabilirliği)
+            // Üst gradient
             const Positioned(
               top: 0, left: 0, right: 0, height: 140,
               child: DecoratedBox(
@@ -56,9 +62,9 @@ class DesignDetailScreen extends StatelessWidget {
                 ),
               ),
             ),
-            // Alt gradient (info bar)
+            // Alt gradient
             const Positioned(
-              bottom: 0, left: 0, right: 0, height: 260,
+              bottom: 0, left: 0, right: 0, height: 320,
               child: DecoratedBox(
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
@@ -127,41 +133,37 @@ class DesignDetailScreen extends StatelessWidget {
                       ),
                     ],
                     const SizedBox(height: KoalaSpacing.lg),
-                    // Pro CTA — tek iş odağı
-                    FilledButton.icon(
-                      onPressed: () {
-                        // TODO: pro match akışına push — şimdilik snackbar
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text(
-                                'Pro eşleştirme yakında — tarzına uygun iç mimarları hazırlıyoruz.'),
-                            behavior: SnackBarBehavior.floating,
+                    // Action row: Uygula (primary) + Sor + Paylaş.
+                    Row(
+                      children: [
+                        Expanded(
+                          flex: 3,
+                          child: _PrimaryActionBtn(
+                            icon: LucideIcons.wand,
+                            label: 'Uygula',
+                            onTap: () => _onApply(context),
                           ),
-                        );
-                      },
-                      style: FilledButton.styleFrom(
-                        backgroundColor: Colors.white,
-                        foregroundColor: KoalaColors.text,
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(KoalaRadius.pill),
                         ),
-                      ),
-                      icon: const Icon(LucideIcons.sparkles, size: 18),
-                      label: const Text(
-                        'Bu tarzda bir pro ile tasarla',
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
+                        const SizedBox(width: 10),
+                        _IconActionBtn(
+                          icon: LucideIcons.messageCircle,
+                          tooltip: 'Sor',
+                          onTap: () => _onAsk(context),
                         ),
-                      ),
+                        const SizedBox(width: 10),
+                        _IconActionBtn(
+                          icon: LucideIcons.share2,
+                          tooltip: 'Paylaş',
+                          onTap: () => _onShare(),
+                        ),
+                      ],
                     ),
                   ],
-                ).animate().fadeIn(duration: 360.ms, delay: 180.ms).slideY(
+                ).animate().fadeIn(duration: 320.ms, delay: 140.ms).slideY(
                       begin: 0.12,
                       end: 0,
-                      duration: 360.ms,
-                      delay: 180.ms,
+                      duration: 320.ms,
+                      delay: 140.ms,
                       curve: Curves.easeOutCubic,
                     ),
               ),
@@ -170,6 +172,133 @@ class DesignDetailScreen extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  // ─── Actions ─────────────────────────────────────────────────────────
+
+  String? _str(dynamic v) {
+    if (v == null) return null;
+    final s = v.toString();
+    return s.isEmpty ? null : s;
+  }
+
+  Map<String, String?> _designerMeta() {
+    final extra = item['extra_data'];
+    if (extra is! Map) return const {};
+    return {
+      'designer_id': _str(extra['designer_id']),
+      'designer_name': _str(extra['designer_name']),
+      'designer_avatar_url': _str(extra['designer_avatar_url']),
+      'category': _str(extra['category'] ?? extra['style_tr']),
+    };
+  }
+
+  Future<void> _onApply(BuildContext context) async {
+    HapticFeedback.selectionClick();
+    final imageUrl = (item['image_url'] as String?) ?? '';
+    final meta = _designerMeta();
+    // "Uygula" → kullanıcının mekan fotoğrafını seç, sonra wizard'a hedef
+    // tasarım URL'i ile gir. Wizard photoBytes ister.
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      backgroundColor: KoalaColors.bg,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) => SafeArea(
+        top: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 12),
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: KoalaColors.border,
+                borderRadius: BorderRadius.circular(100),
+              ),
+            ),
+            const SizedBox(height: 8),
+            ListTile(
+              leading:
+                  const Icon(LucideIcons.camera, color: KoalaColors.accentDeep),
+              title: const Text('Fotoğraf çek', style: KoalaText.bodyMedium),
+              onTap: () => Navigator.pop(ctx, ImageSource.camera),
+            ),
+            ListTile(
+              leading:
+                  const Icon(LucideIcons.image, color: KoalaColors.accentDeep),
+              title: const Text('Galeriden seç', style: KoalaText.bodyMedium),
+              onTap: () => Navigator.pop(ctx, ImageSource.gallery),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+    if (source == null || !context.mounted) return;
+    try {
+      final picker = ImagePicker();
+      final picked = await picker.pickImage(
+        source: source,
+        maxWidth: 1024,
+        imageQuality: 60,
+      );
+      if (picked == null || !context.mounted) return;
+      final bytes = await picked.readAsBytes();
+      if (!context.mounted) return;
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => MekanWizardScreen(
+            photoBytes: bytes,
+            targetDesignUrl: imageUrl,
+            targetDesignerId: meta['designer_id'],
+          ),
+        ),
+      );
+    } catch (_) {/* swallow */}
+  }
+
+  Future<void> _onAsk(BuildContext context) async {
+    HapticFeedback.selectionClick();
+    final meta = _designerMeta();
+    final id = (item['item_id'] ?? item['id'] ?? '').toString();
+    final title = (item['title'] ?? 'Tasarım').toString();
+    final imageUrl = (item['image_url'] ?? '').toString();
+    final subtitle = (item['subtitle'] ?? '').toString();
+    // Fast — sheet is already a top-level scaffolded modal, opens in <300ms.
+    await showAskAndApplySheet(
+      context,
+      designId: id,
+      title: title,
+      imageUrl: imageUrl,
+      subtitle: subtitle.isNotEmpty ? subtitle : null,
+      designerId: meta['designer_id'],
+      designerName: meta['designer_name'],
+      designerAvatarUrl: meta['designer_avatar_url'],
+      category: meta['category'],
+    );
+  }
+
+  Future<void> _onShare() async {
+    HapticFeedback.selectionClick();
+    final imageUrl = (item['image_url'] as String?) ?? '';
+    final meta = _designerMeta();
+    final dname = meta['designer_name'];
+    final attribution = (dname != null && dname.isNotEmpty)
+        ? '\nTasarım: $dname'
+        : '';
+    final body = imageUrl.isEmpty
+        ? 'Koala\'da bu tasarıma bayıldım!$attribution\nhttps://koalatutor.com'
+        : 'Koala\'da bu tasarıma bayıldım, sana da göstermek istedim:\n'
+            '$imageUrl$attribution\n\nhttps://koalatutor.com';
+    final uri = Uri.parse(
+      'https://api.whatsapp.com/send?text=${Uri.encodeComponent(body)}',
+    );
+    try {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } catch (_) {/* swallow */}
   }
 
   Widget _broken() {
@@ -210,6 +339,64 @@ class _CircleBtn extends StatelessWidget {
         ),
         alignment: Alignment.center,
         child: Icon(icon, color: Colors.white, size: 20),
+      ),
+    );
+  }
+}
+
+class _PrimaryActionBtn extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  const _PrimaryActionBtn(
+      {required this.icon, required this.label, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return FilledButton.icon(
+      onPressed: onTap,
+      style: FilledButton.styleFrom(
+        backgroundColor: Colors.white,
+        foregroundColor: KoalaColors.text,
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(KoalaRadius.pill),
+        ),
+      ),
+      icon: Icon(icon, size: 18),
+      label: Text(
+        label,
+        style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+      ),
+    );
+  }
+}
+
+class _IconActionBtn extends StatelessWidget {
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onTap;
+  const _IconActionBtn(
+      {required this.icon, required this.tooltip, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: Material(
+        color: Colors.white.withValues(alpha: 0.14),
+        shape: const CircleBorder(
+          side: BorderSide(color: Color(0x33FFFFFF), width: 0.5),
+        ),
+        child: InkWell(
+          customBorder: const CircleBorder(),
+          onTap: onTap,
+          child: SizedBox(
+            width: 52,
+            height: 52,
+            child: Icon(icon, color: Colors.white, size: 22),
+          ),
+        ),
       ),
     );
   }

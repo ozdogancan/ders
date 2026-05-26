@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'dart:io' show Platform;
 
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -918,10 +917,15 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     );
   }
 
-  // ─── "Profesyonel ol" CTA — only for non-designers without active app ──
+  // ─── "Profesyonel ol" CTA — compact elegant tile (~88px) ───────────
   // Hides if already an approved professional designer (profile.isPro) or
   // if there is already an approved application. Pending/rejected/none all
-  // surface the CTA (rejected gets a slightly different subtitle).
+  // surface the CTA with state-specific copy.
+  //
+  // NOTE: The previous 180px hero card used `koala-seed/pro-cta/hero-v1.webp`
+  // as full-width background. The image is now displayed inside the
+  // ProApplicationSheet header (in profile_tab_screen.dart) so the
+  // Gemini-generated asset still has a use case.
   Widget _buildBecomeProDesignerCta() {
     final bundle = ref.watch(userProfileProvider).asData?.value;
     final profile = bundle?.profile;
@@ -931,295 +935,130 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
     final pending = app.isPending;
     final rejected = app.isRejected;
-    final title = pending ? 'Başvurun değerlendiriliyor' : 'Profesyonel ol';
-    final subtitle = pending
-        ? 'Evlumba ekibi en kısa sürede dönüş yapacak.'
-        : (rejected
-            ? 'Başvurunu güncelleyip tekrar gönderebilirsin — yeşil tik ve tasarım paylaşma seni bekliyor.'
-            : 'Tasarımlarını sergile, müşterilerle eşleş, kazanmaya başla.');
 
-    // Pending state — keep the compact purple card (signals "wait").
+    // State-driven copy. Wording preserved from previous hero card.
+    final String title;
+    final String subtitle;
+    final IconData icon;
+    final Color accentLine;
     if (pending) {
-      return _buildPendingCta(title, subtitle);
+      title = 'Başvurun değerlendiriliyor';
+      subtitle = 'Evlumba ekibi en kısa sürede dönüş yapacak.';
+      icon = LucideIcons.clock;
+      accentLine = _proPurple1;
+    } else if (rejected) {
+      title = 'Başvurunu güçlendir, sahneye çık';
+      subtitle = 'Yeşil tik ve tasarım paylaşma seni bekliyor.';
+      icon = LucideIcons.refreshCcw;
+      accentLine = const Color(0xFFE5C879);
+    } else {
+      title = 'Tasarımlarını dünyayla buluştur';
+      subtitle = 'Müşterilerle eşleş, projeler al, kazan.';
+      icon = LucideIcons.sparkles;
+      accentLine = const Color(0xFFE5C879);
     }
 
-    // Active recruit state — premium hero card with Gemini-generated bg.
-    const heroUrl =
-        'https://xgefjepaqnghaotqybpi.supabase.co/storage/v1/object/public/koala-seed/pro-cta/hero-v1.webp';
-    final label = rejected ? 'TEKRAR BAŞVUR' : 'PROFESYONEL OL';
-    final heroTitle = rejected
-        ? 'Başvurunu güçlendir, sahneye çık'
-        : 'Tasarımlarını dünyayla buluştur';
-    final heroSubtitle = rejected
-        ? 'Yeşil tik ve tasarım paylaşma seni bekliyor.'
-        : 'Müşterilerle eşleş, projeler al, kazan.';
+    final tapEnabled = !pending;
 
     return Material(
       color: Colors.transparent,
-      borderRadius: BorderRadius.circular(24),
+      borderRadius: BorderRadius.circular(16),
       child: InkWell(
-        borderRadius: BorderRadius.circular(24),
-        onTap: () async {
-          final submitted = await showProApplicationSheet(context);
-          if (submitted == true && mounted) {
-            ref.invalidate(userProfileProvider);
-          }
-        },
+        borderRadius: BorderRadius.circular(16),
+        onTap: tapEnabled
+            ? () async {
+                final submitted = await showProApplicationSheet(context);
+                if (submitted == true && mounted) {
+                  ref.invalidate(userProfileProvider);
+                }
+              }
+            : null,
         child: Container(
-          height: 180,
+          height: 88,
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(24),
-            boxShadow: [
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: const [
               BoxShadow(
-                color: Colors.black.withValues(alpha: 0.08),
-                blurRadius: 24,
-                offset: const Offset(0, 10),
+                color: Color(0x08000000),
+                blurRadius: 10,
+                offset: Offset(0, 3),
               ),
             ],
           ),
           child: ClipRRect(
-            borderRadius: BorderRadius.circular(24),
-            child: Stack(
-              fit: StackFit.expand,
+            borderRadius: BorderRadius.circular(16),
+            child: Row(
               children: [
-                // Hero image — Gemini generated. Falls back to purple gradient
-                // if not yet generated / network fails.
-                CachedNetworkImage(
-                  imageUrl: heroUrl,
-                  fit: BoxFit.cover,
-                  fadeInDuration: const Duration(milliseconds: 300),
-                  placeholder: (_, _) => _proCtaFallbackBg(),
-                  errorWidget: (_, _, _) => _proCtaFallbackBg(),
-                ),
-                // Bottom-up dark scrim for legibility.
-                const DecoratedBox(
+                // 4px gold/purple accent strip on the left edge.
+                Container(width: 4, color: accentLine),
+                const SizedBox(width: 12),
+                // Icon tile
+                Container(
+                  width: 40,
+                  height: 40,
+                  alignment: Alignment.center,
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
                       colors: [
-                        Color(0x00000000),
-                        Color(0x33000000),
-                        Color(0x99000000),
+                        _proPurple1.withValues(alpha: 0.12),
+                        _proPurple2.withValues(alpha: 0.12),
                       ],
-                      stops: [0.0, 0.55, 1.0],
                     ),
+                    borderRadius: BorderRadius.circular(10),
                   ),
+                  child: Icon(icon, size: 20, color: _proPurple1),
                 ),
-                // Static gold accent line — premium touch above the pill.
-                Positioned(
-                  right: 18,
-                  bottom: 54,
-                  child: Container(
-                    width: 36,
-                    height: 2,
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [Color(0x00E5C879), Color(0xFFE5C879)],
-                      ),
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                ),
-                // Bottom content stack.
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(18, 16, 16, 16),
+                const SizedBox(width: 12),
+                Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.end,
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text(
-                                  label,
-                                  style: TextStyle(
-                                    fontFamily: 'Manrope',
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w700,
-                                    color: Colors.white.withValues(alpha: 0.90),
-                                    letterSpacing: 1.5,
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  heroTitle,
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                    fontFamily: 'Manrope',
-                                    fontSize: 22,
-                                    fontWeight: FontWeight.w800,
-                                    color: Colors.white,
-                                    height: 1.15,
-                                    letterSpacing: -0.4,
-                                    shadows: [
-                                      Shadow(
-                                        color: Color(0x66000000),
-                                        blurRadius: 8,
-                                        offset: Offset(0, 2),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                const SizedBox(height: 6),
-                                Text(
-                                  heroSubtitle,
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    fontFamily: 'Manrope',
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w500,
-                                    color: Colors.white.withValues(alpha: 0.80),
-                                    height: 1.35,
-                                    letterSpacing: -0.05,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          // "Başla →" pill button.
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 14, vertical: 9),
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(999),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withValues(alpha: 0.18),
-                                  blurRadius: 10,
-                                  offset: const Offset(0, 4),
-                                ),
-                              ],
-                            ),
-                            child: const Text(
-                              'Başla →',
-                              style: TextStyle(
-                                fontFamily: 'Manrope',
-                                fontSize: 12,
-                                fontWeight: FontWeight.w700,
-                                color: KoalaColors.text,
-                                letterSpacing: -0.1,
-                              ),
-                            ),
-                          ),
-                        ],
+                      Text(
+                        title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontFamily: 'Manrope',
+                          fontSize: 14.5,
+                          fontWeight: FontWeight.w700,
+                          color: KoalaColors.text,
+                          letterSpacing: -0.2,
+                          height: 1.2,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        subtitle,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontFamily: 'Manrope',
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w500,
+                          color: _sectionLabel,
+                          height: 1.3,
+                          letterSpacing: -0.05,
+                        ),
                       ),
                     ],
                   ),
                 ),
+                if (tapEnabled)
+                  const Padding(
+                    padding: EdgeInsets.only(right: 12, left: 6),
+                    child: Icon(LucideIcons.chevronRight,
+                        size: 20, color: Color(0xFFAEAEB2)),
+                  )
+                else
+                  const SizedBox(width: 12),
               ],
             ),
           ),
         ),
-      ),
-    );
-  }
-
-  // Purple gradient fallback shown while the hero image loads OR if the
-  // Gemini-generated image hasn't been seeded yet.
-  Widget _proCtaFallbackBg() {
-    return Container(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [_proPurple1, _proPurple2],
-        ),
-      ),
-      child: Align(
-        alignment: const Alignment(0.85, -0.6),
-        child: Icon(
-          LucideIcons.sparkles,
-          size: 96,
-          color: Colors.white.withValues(alpha: 0.12),
-        ),
-      ),
-    );
-  }
-
-  // Compact card for the "application pending" state — no hero image.
-  Widget _buildPendingCta(String title, String subtitle) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(18, 18, 14, 18),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(20),
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [_proPurple1, _proPurple2],
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: _proPurple1.withValues(alpha: 0.32),
-            blurRadius: 18,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 44,
-            height: 44,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.18),
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(
-                color: Colors.white.withValues(alpha: 0.28),
-                width: 0.8,
-              ),
-            ),
-            child: const Icon(
-              LucideIcons.clock,
-              size: 22,
-              color: Colors.white,
-            ),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontFamily: 'Manrope',
-                    fontSize: 18,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.white,
-                    letterSpacing: -0.2,
-                    height: 1.2,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  subtitle,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontFamily: 'Manrope',
-                    fontSize: 13,
-                    fontWeight: FontWeight.w500,
-                    color: Colors.white.withValues(alpha: 0.92),
-                    height: 1.35,
-                    letterSpacing: -0.05,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
       ),
     );
   }

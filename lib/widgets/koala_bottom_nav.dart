@@ -176,29 +176,19 @@ class _NavItem extends StatelessWidget {
                   ),
                 ],
               ),
+              // Unread dot — sayı YOK, sadece temiz kırmızı nokta.
+              // Kullanıcı isteği: "nokta şeklinde bildirim".
               if (badge > 0)
                 Positioned(
-                  top: 4,
-                  right: 14,
+                  top: 6,
+                  right: 18,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 4, vertical: 1),
+                    width: 9,
+                    height: 9,
                     decoration: BoxDecoration(
                       color: KoalaColors.error,
-                      borderRadius: BorderRadius.circular(99),
-                      border: Border.all(color: Colors.white, width: 1.4),
-                    ),
-                    constraints:
-                        const BoxConstraints(minWidth: 16, minHeight: 16),
-                    child: Text(
-                      badge > 9 ? '9+' : '$badge',
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        fontSize: 9,
-                        fontWeight: FontWeight.w800,
-                        color: Colors.white,
-                        height: 1.2,
-                      ),
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white, width: 1.6),
                     ),
                   ),
                 ),

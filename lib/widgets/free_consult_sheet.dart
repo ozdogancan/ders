@@ -25,26 +25,78 @@ const String _kEvlumbaDesignerId = 'evlumba-design';
 const String _kEvlumbaAvatarUrl =
     'https://xgefjepaqnghaotqybpi.supabase.co/storage/v1/object/public/koala-seed/avatars/evlumba-design.webp';
 
+/// Process-lifetime cache — ilk lookup'tan sonra Evlumba conv id ve
+/// free-consult kullanım durumu cache'lenir. Sonraki tüm "Evlumba'ya
+/// sor" tıklamaları anında (network yok) chat ekranına geçer.
+String? _cachedEvlumbaConvId;
+bool? _cachedFreeConsultUsed; // null = bilinmiyor
+
+/// Chat list açıldığında veya başka uygun bir noktada arka planda
+/// Evlumba conversation'ı ve free-consult durumunu prefetch eder.
+/// Tap anında network beklemesi olmasın diye.
+Future<void> prewarmEvlumbaConversation() async {
+  if (_cachedEvlumbaConvId != null) return;
+  try {
+    final conv = await MessagingService.findOrCreateEvlumbaConversation();
+    final id = conv?['id']?.toString();
+    if (id != null && id.isNotEmpty) {
+      _cachedEvlumbaConvId = id;
+      // Free-consult bayrağını paralel ısıt.
+      MessagingService.hasUsedFreeConsult(id).then((used) {
+        _cachedFreeConsultUsed = used;
+      });
+    }
+  } catch (_) {/* sessiz — tap anında fallback path çalışır */}
+}
+
+/// Cache'i temizle (örn. logout sonrası başka kullanıcı için).
+void resetEvlumbaConversationCache() {
+  _cachedEvlumbaConvId = null;
+  _cachedFreeConsultUsed = null;
+}
+
 /// Evlumba Design konuşmasına giriş için tek noktadan helper.
 /// Tüm "Evlumba'ya sor" / "Sohbet Başlat" entry point'leri bunu çağırır.
 ///
-/// [projectTitle] / [pendingDesign] varsa konuşma ekranına extra olarak
-/// taşınır (kullanıcı bir tasarımı paylaşmak istiyorsa).
+/// HIZ POLİTİKASI:
+///   - Pro kullanıcı + cache hit → ANINDA push (await yok)
+///   - Cache hit + free-consult cached false → ANINDA push
+///   - Cache miss → lookup'ı await et ama UI'da hint bırakma
+///     (sub-300ms hedef)
 Future<void> enterEvlumbaConversation(
   BuildContext context,
   WidgetRef ref, {
   String? projectTitle,
   Map<String, dynamic>? pendingDesign,
 }) async {
-  // Pro durumu — async; gelmediyse free varsayılır (defensive).
   final pro = ref.read(proStatusProvider).value?.isPro ?? false;
 
-  // Conversation lookup/yarat — popup gösterimi ve navigation arası latency
-  // küçük olsun diye burada yapıyoruz; başarısızsa popup açmadan snackbar.
+  // Fast path — cache hit, popup gerekmiyor → hemen push.
+  if (_cachedEvlumbaConvId != null) {
+    final convId = _cachedEvlumbaConvId!;
+    final needsPopup = !pro && (_cachedFreeConsultUsed == false);
+    if (!needsPopup) {
+      _pushToConv(context, convId,
+          projectTitle: projectTitle, pendingDesign: pendingDesign);
+      return;
+    }
+    // Cache var ama popup gerek → popup'ı göster, ardından push.
+    final go = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      barrierColor: Colors.black54,
+      builder: (_) => const FreeConsultSheet(),
+    );
+    if (go != true || !context.mounted) return;
+    _pushToConv(context, convId,
+        projectTitle: projectTitle, pendingDesign: pendingDesign);
+    return;
+  }
+
+  // Cold path — conversation lookup gerekiyor.
   final conv =
-      await MessagingService.findOrCreateEvlumbaConversation(
-    title: projectTitle,
-  );
+      await MessagingService.findOrCreateEvlumbaConversation(title: projectTitle);
   if (conv == null) {
     if (!context.mounted) return;
     final err = MessagingService.lastConvError;
@@ -65,14 +117,22 @@ Future<void> enterEvlumbaConversation(
   }
   final convId = conv['id']?.toString();
   if (convId == null || convId.isEmpty) return;
+  _cachedEvlumbaConvId = convId;
 
-  // Free-consult durumu — Pro değilse hesapla. Pro ise hiç bakma.
-  final showFreeConsult =
-      !pro && !await MessagingService.hasUsedFreeConsult(convId);
+  // Pro ise popup yok — anında push, free-consult check'i bypass.
+  if (pro) {
+    if (!context.mounted) return;
+    _pushToConv(context, convId,
+        projectTitle: projectTitle, pendingDesign: pendingDesign);
+    return;
+  }
 
+  // Free-consult durumu — Pro değilse hesapla.
+  final used = await MessagingService.hasUsedFreeConsult(convId);
+  _cachedFreeConsultUsed = used;
   if (!context.mounted) return;
 
-  if (showFreeConsult) {
+  if (!used) {
     final go = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
@@ -80,11 +140,18 @@ Future<void> enterEvlumbaConversation(
       barrierColor: Colors.black54,
       builder: (_) => const FreeConsultSheet(),
     );
-    if (go != true) return;
-    if (!context.mounted) return;
+    if (go != true || !context.mounted) return;
   }
+  _pushToConv(context, convId,
+      projectTitle: projectTitle, pendingDesign: pendingDesign);
+}
 
-  // Navigate to single-conversation route.
+void _pushToConv(
+  BuildContext context,
+  String convId, {
+  String? projectTitle,
+  Map<String, dynamic>? pendingDesign,
+}) {
   final extra = <String, dynamic>{
     'designerId': _kEvlumbaDesignerId,
     'designerName': 'Evlumba Design',

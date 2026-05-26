@@ -7,7 +7,9 @@ import '../core/theme/koala_tokens.dart';
 import '../core/utils/format_utils.dart';
 import '../services/notifications_feed_service.dart';
 
-/// Instagram tarzı bildirim feed'i — Koala renk + font dilinde.
+/// Premium bildirim feed'i — Koala renk + font dilinde.
+/// Sektörel: Today / Earlier section labels, mark-all-read AppBar icon,
+/// pull-to-refresh, premium card-row tasarım.
 class NotificationsFeedScreen extends ConsumerStatefulWidget {
   const NotificationsFeedScreen({super.key});
 
@@ -27,6 +29,19 @@ class _NotificationsFeedScreenState
     _load();
   }
 
+  @override
+  void dispose() {
+    // Ekran kapanırken bell badge sayısını taze tut.
+    // (notifier zaten periodic refresh yapıyor, ama kullanıcı geri dönerken
+    // anlık doğru sayıyı görsün diye burada da invalidate ediyoruz.)
+    Future.microtask(() {
+      try {
+        ref.invalidate(unreadNotificationsProvider);
+      } catch (_) {/* sessiz */}
+    });
+    super.dispose();
+  }
+
   Future<void> _load() async {
     setState(() => _loading = true);
     final list = await NotificationsFeedService.list(limit: 80);
@@ -44,21 +59,27 @@ class _NotificationsFeedScreenState
     ref.read(unreadNotificationsProvider.notifier).zero();
     if (!mounted) return;
     setState(() {
-      _items = _items
-          .map((n) => KoalaNotification(
-                id: n.id,
-                type: n.type,
-                title: n.title,
-                body: n.body,
-                imageUrl: n.imageUrl,
-                actionType: n.actionType,
-                actionData: n.actionData,
-                read: true,
-                createdAt: n.createdAt,
-              ))
-          .toList();
+      _items = _items.map(_asRead).toList();
     });
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Tüm bildirimler okundu işaretlendi'),
+        duration: Duration(seconds: 2),
+      ),
+    );
   }
+
+  KoalaNotification _asRead(KoalaNotification n) => KoalaNotification(
+        id: n.id,
+        type: n.type,
+        title: n.title,
+        body: n.body,
+        imageUrl: n.imageUrl,
+        actionType: n.actionType,
+        actionData: n.actionData,
+        read: true,
+        createdAt: n.createdAt,
+      );
 
   Future<void> _onTap(KoalaNotification n) async {
     if (!n.read) {
@@ -67,29 +88,35 @@ class _NotificationsFeedScreenState
       if (mounted) {
         setState(() {
           final i = _items.indexWhere((x) => x.id == n.id);
-          if (i >= 0) {
-            _items[i] = KoalaNotification(
-              id: n.id,
-              type: n.type,
-              title: n.title,
-              body: n.body,
-              imageUrl: n.imageUrl,
-              actionType: n.actionType,
-              actionData: n.actionData,
-              read: true,
-              createdAt: n.createdAt,
-            );
-          }
+          if (i >= 0) _items[i] = _asRead(_items[i]);
         });
       }
     }
-    // TODO: actionType'a göre yönlendirme (kart önizleme / tasarımcı profili).
-    // Şimdilik bildirim sadece okundu olarak işaretleniyor.
+    // TODO: actionType bazlı yönlendirme — şimdilik sadece okundu işaretleniyor.
+  }
+
+  /// İki bölüme ayır: Bugün / Daha önce.
+  ({List<KoalaNotification> today, List<KoalaNotification> earlier}) _grouped() {
+    final nowLocal = DateTime.now();
+    final startOfToday = DateTime(nowLocal.year, nowLocal.month, nowLocal.day);
+    final today = <KoalaNotification>[];
+    final earlier = <KoalaNotification>[];
+    for (final n in _items) {
+      final created = n.createdAt.isUtc ? n.createdAt.toLocal() : n.createdAt;
+      if (!created.isBefore(startOfToday)) {
+        today.add(n);
+      } else {
+        earlier.add(n);
+      }
+    }
+    return (today: today, earlier: earlier);
   }
 
   @override
   Widget build(BuildContext context) {
-    final hasUnread = _items.any((n) => !n.read);
+    final unreadCount = _items.where((n) => !n.read).length;
+    final hasUnread = unreadCount > 0;
+
     return Scaffold(
       backgroundColor: KoalaColors.bg,
       appBar: AppBar(
@@ -101,40 +128,94 @@ class _NotificationsFeedScreenState
           color: KoalaColors.text,
           onPressed: () => Navigator.maybePop(context),
         ),
-        title: const Text('Bildirimler', style: KoalaText.h2),
-        actions: [
-          if (hasUnread)
-            TextButton(
-              onPressed: _markAllRead,
-              child: const Text(
-                'Tümünü okundu işaretle',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: KoalaColors.accentDeep,
+        titleSpacing: 0,
+        title: Row(
+          children: [
+            const Text('Bildirimler', style: KoalaText.h2),
+            if (hasUnread) ...[
+              const SizedBox(width: 10),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: KoalaColors.accentSoft,
+                  borderRadius: BorderRadius.circular(99),
+                ),
+                child: Text(
+                  unreadCount > 99 ? '99+' : '$unreadCount',
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: KoalaColors.accentDeep,
+                    height: 1.0,
+                  ),
                 ),
               ),
+            ],
+          ],
+        ),
+        actions: [
+          if (hasUnread)
+            IconButton(
+              tooltip: 'Tümünü okundu işaretle',
+              icon: const Icon(LucideIcons.checkCheck, size: 20),
+              color: KoalaColors.accentDeep,
+              onPressed: _markAllRead,
             ),
+          const SizedBox(width: 4),
         ],
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _items.isEmpty
-              ? _empty()
+              ? RefreshIndicator(
+                  onRefresh: _load,
+                  color: KoalaColors.accent,
+                  child: ListView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    children: [
+                      SizedBox(
+                        height: MediaQuery.of(context).size.height * 0.7,
+                        child: _empty(),
+                      ),
+                    ],
+                  ),
+                )
               : RefreshIndicator(
                   onRefresh: _load,
                   color: KoalaColors.accent,
-                  child: ListView.separated(
-                    padding: const EdgeInsets.symmetric(vertical: 4),
-                    itemBuilder: (_, i) => _NotifTile(
-                      notif: _items[i],
-                      onTap: () => _onTap(_items[i]),
-                    ),
-                    separatorBuilder: (_, _) =>
-                        const Divider(height: 1, color: KoalaColors.borderLight),
-                    itemCount: _items.length,
-                  ),
+                  child: _buildList(),
                 ),
+    );
+  }
+
+  Widget _buildList() {
+    final g = _grouped();
+    final slivers = <Widget>[];
+
+    if (g.today.isNotEmpty) {
+      slivers.add(const _SectionLabel(label: 'Bugün'));
+      for (final n in g.today) {
+        slivers.add(_NotifTile(notif: n, onTap: () => _onTap(n)));
+        slivers.add(const _ItemDivider());
+      }
+    }
+    if (g.earlier.isNotEmpty) {
+      slivers.add(const _SectionLabel(label: 'Daha önce'));
+      for (final n in g.earlier) {
+        slivers.add(_NotifTile(notif: n, onTap: () => _onTap(n)));
+        slivers.add(const _ItemDivider());
+      }
+    }
+    // Son divider'ı kaldır (visual cleanliness).
+    if (slivers.isNotEmpty && slivers.last is _ItemDivider) {
+      slivers.removeLast();
+    }
+    slivers.add(const SizedBox(height: 24));
+
+    return ListView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      padding: EdgeInsets.zero,
+      children: slivers,
     );
   }
 
@@ -146,24 +227,61 @@ class _NotificationsFeedScreenState
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              width: 64,
-              height: 64,
-              decoration: const BoxDecoration(
+              width: 72,
+              height: 72,
+              decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: KoalaColors.accentSoft,
+                boxShadow: [
+                  BoxShadow(
+                    color: KoalaColors.accent.withValues(alpha: 0.10),
+                    blurRadius: 18,
+                    offset: const Offset(0, 6),
+                  ),
+                ],
               ),
               child: const Icon(LucideIcons.bell,
-                  size: 28, color: KoalaColors.accentDeep),
+                  size: 30, color: KoalaColors.accentDeep),
             ),
-            const SizedBox(height: 16),
-            const Text('Henüz bildirimin yok', style: KoalaText.h3),
-            const SizedBox(height: 4),
+            const SizedBox(height: 18),
+            const Text('Henüz bildirim yok', style: KoalaText.h3),
+            const SizedBox(height: 6),
             const Text(
-              'Beğendiğin tasarımcıları takip et — yeni tasarım paylaştıklarında burada bildirim alacaksın.',
+              'Yeni mesajlar ve güncellemeler burada görünür.',
               textAlign: TextAlign.center,
               style: KoalaText.bodySec,
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ItemDivider extends StatelessWidget {
+  const _ItemDivider();
+  @override
+  Widget build(BuildContext context) => const Padding(
+        padding: EdgeInsets.only(left: 72),
+        child: Divider(height: 1, color: KoalaColors.borderLight),
+      );
+}
+
+class _SectionLabel extends StatelessWidget {
+  final String label;
+  const _SectionLabel({required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 18, 16, 8),
+      child: Text(
+        label,
+        style: const TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w700,
+          color: KoalaColors.textSec,
+          letterSpacing: 0.4,
         ),
       ),
     );
@@ -175,123 +293,144 @@ class _NotifTile extends StatelessWidget {
   final VoidCallback onTap;
   const _NotifTile({required this.notif, required this.onTap});
 
+  IconData _iconForType(String type) {
+    switch (type) {
+      case 'new_message':
+        return LucideIcons.messageCircle;
+      case 'designer_match':
+        return LucideIcons.users;
+      case 'product_recommend':
+        return LucideIcons.shoppingBag;
+      case 'style_result':
+        return LucideIcons.palette;
+      case 'budget_ready':
+        return LucideIcons.wallet;
+      case 'collection_update':
+        return LucideIcons.folderHeart;
+      case 'promo':
+        return LucideIcons.tag;
+      default:
+        return LucideIcons.bell;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final unread = !notif.read;
-    return InkWell(
-      onTap: onTap,
-      child: Container(
-        color: unread ? KoalaColors.accentSoft.withValues(alpha: 0.4) : null,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        child: Row(
-          children: [
-            _avatar(),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: Text.rich(
-                          TextSpan(
-                            children: [
-                              TextSpan(
-                                text: notif.title,
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: unread
-                                      ? FontWeight.w700
-                                      : FontWeight.w600,
-                                  color: KoalaColors.text,
-                                  letterSpacing: -0.1,
-                                ),
-                              ),
-                              if ((notif.body ?? '').isNotEmpty)
-                                TextSpan(
-                                  text: ' · ${notif.body}',
-                                  style: const TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w500,
-                                    color: KoalaColors.textMed,
-                                  ),
-                                ),
-                            ],
-                          ),
-                        ),
+    return Material(
+      color: unread
+          ? KoalaColors.accentSoft.withValues(alpha: 0.35)
+          : KoalaColors.bg,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding:
+              const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _leading(),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      notif.title,
+                      style: TextStyle(
+                        fontSize: 14.5,
+                        fontWeight:
+                            unread ? FontWeight.w700 : FontWeight.w600,
+                        color: KoalaColors.text,
+                        letterSpacing: -0.1,
+                        height: 1.25,
                       ),
-                      if (unread) ...[
-                        const SizedBox(width: 8),
-                        Container(
-                          width: 8,
-                          height: 8,
-                          decoration: const BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: KoalaColors.accentDeep,
-                          ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    if ((notif.body ?? '').isNotEmpty) ...[
+                      const SizedBox(height: 3),
+                      Text(
+                        notif.body!,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          color: KoalaColors.textMed,
+                          height: 1.3,
+                          fontWeight: FontWeight.w500,
                         ),
-                      ],
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ],
-                  ),
-                  const SizedBox(height: 2),
-                  Text(timeAgo(notif.createdAt),
-                      style: KoalaText.labelSmall),
-                ],
-              ),
-            ),
-            if ((notif.imageUrl ?? '').isNotEmpty) ...[
-              const SizedBox(width: 10),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: SizedBox(
-                  width: 52,
-                  height: 52,
-                  child: CachedNetworkImage(
-                    imageUrl: notif.imageUrl!,
-                    fit: BoxFit.cover,
-                    memCacheWidth: 200,
-                    placeholder: (_, _) =>
-                        Container(color: KoalaColors.surfaceAlt),
-                    errorWidget: (_, _, _) =>
-                        Container(color: KoalaColors.surfaceAlt),
-                  ),
+                  ],
                 ),
               ),
+              const SizedBox(width: 10),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    timeAgo(notif.createdAt),
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w500,
+                      color: KoalaColors.textTer,
+                    ),
+                  ),
+                  if (unread) ...[
+                    const SizedBox(height: 6),
+                    Container(
+                      width: 8,
+                      height: 8,
+                      decoration: const BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: KoalaColors.accentDeep,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
             ],
-          ],
+          ),
         ),
       ),
     );
   }
 
-  Widget _avatar() {
-    const evlumbaAvatar =
-        'https://xgefjepaqnghaotqybpi.supabase.co/storage/v1/object/public/koala-seed/avatars/evlumba-design.webp';
-    final url = notif.designerId == 'evlumba-design'
-        ? evlumbaAvatar
-        : null;
-    return SizedBox(
+  Widget _leading() {
+    final hasImage = (notif.imageUrl ?? '').isNotEmpty;
+    // Image varsa avatar olarak göster; yoksa type'a göre renkli ikon kapsülü.
+    if (hasImage) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(10),
+        child: SizedBox(
+          width: 44,
+          height: 44,
+          child: CachedNetworkImage(
+            imageUrl: notif.imageUrl!,
+            fit: BoxFit.cover,
+            memCacheWidth: 200,
+            placeholder: (_, _) => Container(color: KoalaColors.accentSoft),
+            errorWidget: (_, _, _) => _iconBox(),
+          ),
+        ),
+      );
+    }
+    return _iconBox();
+  }
+
+  Widget _iconBox() {
+    return Container(
       width: 44,
       height: 44,
-      child: ClipOval(
-        child: url != null
-            ? CachedNetworkImage(
-                imageUrl: url,
-                fit: BoxFit.cover,
-                placeholder: (_, _) => Container(color: KoalaColors.accentSoft),
-                errorWidget: (_, _, _) => Container(
-                  color: KoalaColors.accentSoft,
-                  child: const Icon(LucideIcons.user,
-                      size: 20, color: KoalaColors.accentDeep),
-                ),
-              )
-            : Container(
-                color: KoalaColors.accentSoft,
-                child: const Icon(LucideIcons.bell,
-                    size: 20, color: KoalaColors.accentDeep),
-              ),
+      decoration: BoxDecoration(
+        color: KoalaColors.accentSoft,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Icon(
+        _iconForType(notif.type),
+        size: 20,
+        color: KoalaColors.accentDeep,
       ),
     );
   }

@@ -3,6 +3,7 @@
 // Subsequent swipes are smooth PageView transitions (no Hero re-trigger).
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../my_designs/design_detail_screen.dart';
 
 class ProfileDesignSwipeScreen extends StatefulWidget {
@@ -49,8 +50,12 @@ class _ProfileDesignSwipeScreenState extends State<ProfileDesignSwipeScreen> {
       body: PageView.builder(
         controller: _ctrl,
         itemCount: widget.items.length,
-        physics: const BouncingScrollPhysics(),
-        onPageChanged: (i) => setState(() => _index = i),
+        // PageScrollPhysics gives strong snap; bouncing parent for cinematic feel.
+        physics: const PageScrollPhysics(parent: BouncingScrollPhysics()),
+        onPageChanged: (i) {
+          HapticFeedback.selectionClick();
+          setState(() => _index = i);
+        },
         itemBuilder: (_, i) {
           // DesignDetailScreen does Hero('design-${item['id']}'); we wrap
           // only the active page so PageView swipes don't fight Hero.
