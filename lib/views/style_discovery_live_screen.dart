@@ -38,6 +38,8 @@ import '../services/evlumba_live_service.dart';
 import '../services/messaging_service.dart';
 import '../services/saved_items_service.dart';
 import '../services/analytics_service.dart';
+import '../services/follow_service.dart';
+import '../services/notifications_feed_service.dart';
 import '../services/taste_profile_service.dart';
 import '../services/usage_limit_service.dart';
 
@@ -1244,6 +1246,15 @@ class _StyleDiscoveryLiveScreenState
         toolbarHeight: 88,
         title: const _BrandLockup(),
         actions: [
+          _BellButton(
+            unread: ref.watch(unreadNotificationsProvider).value ?? 0,
+            onTap: () async {
+              HapticFeedback.selectionClick();
+              await context.push('/notifications');
+              if (!mounted) return;
+              ref.invalidate(unreadNotificationsProvider);
+            },
+          ),
           Padding(
             padding: const EdgeInsets.only(right: 12),
             child: _SettingsButton(
@@ -3097,6 +3108,63 @@ class _AskLeading extends StatelessWidget {
   }
 }
 
+/// AppBar bildirim çanı — unread sayısı varsa kırmızı nokta rozeti.
+class _BellButton extends StatelessWidget {
+  final int unread;
+  final VoidCallback onTap;
+  const _BellButton({required this.unread, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final has = unread > 0;
+    return Material(
+      color: Colors.transparent,
+      shape: const CircleBorder(),
+      child: InkWell(
+        onTap: onTap,
+        customBorder: const CircleBorder(),
+        child: SizedBox(
+          width: 44,
+          height: 44,
+          child: Stack(
+            clipBehavior: Clip.none,
+            alignment: Alignment.center,
+            children: [
+              const Icon(LucideIcons.bell, size: 22, color: KoalaColors.text),
+              if (has)
+                Positioned(
+                  top: 8,
+                  right: 8,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 4, vertical: 1),
+                    decoration: BoxDecoration(
+                      color: KoalaColors.error,
+                      borderRadius: BorderRadius.circular(99),
+                      border: Border.all(color: KoalaColors.bg, width: 1.4),
+                    ),
+                    constraints:
+                        const BoxConstraints(minWidth: 16, minHeight: 16),
+                    child: Text(
+                      unread > 9 ? '9+' : '$unread',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        fontSize: 9,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.white,
+                        height: 1.2,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// AppBar sağındaki ayarlar düğmesi.
 /// Pro: sweep-gradient halka + beyaz iç daire + altın "PRO" pill rozeti.
 /// Free: ince bordürlü beyaz daire + ayar ikonu.
@@ -3318,34 +3386,84 @@ class DesignerProfileSheet extends StatefulWidget {
 class _DesignerProfileSheetState extends State<DesignerProfileSheet> {
   List<Map<String, dynamic>> _projects = const [];
   bool _loading = true;
+  FollowState _follow = FollowState.empty;
+  bool _followBusy = false;
+  int _reviewCount = 0;
+  double? _avgRating;
 
   @override
   void initState() {
     super.initState();
-    _loadProjects();
+    _loadAll();
   }
 
-  Future<void> _loadProjects() async {
+  Future<void> _loadAll() async {
+    // Üç sorguyu paralel başlat — sheet hızlı açılsın.
+    final projectsF = _fetchProjects();
+    final followF = FollowService.stateFor(widget.designerId);
+    final statsF = _fetchStats();
+    final results =
+        await Future.wait([projectsF, followF, statsF], eagerError: false);
+    if (!mounted) return;
+    setState(() {
+      _projects = results[0] as List<Map<String, dynamic>>;
+      _follow = results[1] as FollowState;
+      final stats = results[2] as Map<String, dynamic>?;
+      _reviewCount = (stats?['review_count'] as num?)?.toInt() ?? 0;
+      _avgRating = (stats?['avg_rating'] as num?)?.toDouble();
+      _loading = false;
+    });
+  }
+
+  Future<List<Map<String, dynamic>>> _fetchProjects() async {
     try {
-      List<Map<String, dynamic>> list;
       if (widget.designerId == 'evlumba-design') {
-        list = List<Map<String, dynamic>>.from(widget.seedPool ?? const []);
-      } else {
-        list = await EvlumbaLiveService.getProjects(
-          designerId: widget.designerId,
-          limit: 30,
-        );
+        return List<Map<String, dynamic>>.from(widget.seedPool ?? const []);
       }
-      if (mounted) {
-        setState(() {
-          _projects = list;
-          _loading = false;
-        });
-      }
+      return await EvlumbaLiveService.getProjects(
+        designerId: widget.designerId,
+        limit: 30,
+      );
     } catch (e) {
-      debugPrint('profile sheet load failed: $e');
-      if (mounted) setState(() => _loading = false);
+      debugPrint('profile projects load failed: $e');
+      return const [];
     }
+  }
+
+  Future<Map<String, dynamic>?> _fetchStats() async {
+    try {
+      final res = await Supabase.instance.client
+          .from('v_designer_stats')
+          .select('review_count, avg_rating')
+          .eq('designer_id', widget.designerId)
+          .maybeSingle();
+      return res == null ? null : Map<String, dynamic>.from(res);
+    } catch (e) {
+      debugPrint('profile stats load failed: $e');
+      return null;
+    }
+  }
+
+  Future<void> _onFollowTap() async {
+    if (_followBusy) return;
+    setState(() => _followBusy = true);
+    final next = await FollowService.toggle(widget.designerId);
+    if (!mounted) return;
+    setState(() {
+      _follow = next;
+      _followBusy = false;
+    });
+  }
+
+  Future<void> _onMuteTap() async {
+    if (_followBusy || !_follow.following) return;
+    setState(() => _followBusy = true);
+    final next = await FollowService.muteToggle(widget.designerId);
+    if (!mounted) return;
+    setState(() {
+      _follow = next;
+      _followBusy = false;
+    });
   }
 
   String _coverOf(Map<String, dynamic> p) {
@@ -3514,7 +3632,15 @@ class _DesignerProfileSheetState extends State<DesignerProfileSheet> {
         children: [
           _stat(label: 'Tasarım', value: '${_projects.length}'),
           _statDiv(),
-          _stat(label: 'Değerlendirme', value: '—', subtle: true),
+          _stat(
+            label: _reviewCount > 0
+                ? 'Puan ($_reviewCount)'
+                : 'Değerlendirme',
+            value: _avgRating != null
+                ? _avgRating!.toStringAsFixed(1)
+                : '—',
+            subtle: _avgRating == null,
+          ),
           _statDiv(),
           _stat(label: 'Yanıt', value: '24s'),
         ],
@@ -3547,23 +3673,55 @@ class _DesignerProfileSheetState extends State<DesignerProfileSheet> {
       Container(width: 1, height: 26, color: KoalaColors.border);
 
   Widget _actions() {
+    final following = _follow.following;
+    final muted = _follow.muted;
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 0, 20, 18),
-      child: SizedBox(
-        width: double.infinity,
-        child: ElevatedButton.icon(
-          onPressed: widget.onAsk,
-          style: ElevatedButton.styleFrom(
-            backgroundColor: KoalaColors.accentDeep,
-            foregroundColor: Colors.white,
-            padding: const EdgeInsets.symmetric(vertical: 14),
-            shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(14)),
-            elevation: 0,
+      child: Row(
+        children: [
+          Expanded(
+            child: ElevatedButton.icon(
+              onPressed: _followBusy ? null : _onFollowTap,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: following
+                    ? KoalaColors.surface
+                    : KoalaColors.accentDeep,
+                foregroundColor: following
+                    ? KoalaColors.text
+                    : Colors.white,
+                disabledBackgroundColor: KoalaColors.surfaceAlt,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  side: following
+                      ? const BorderSide(
+                          color: KoalaColors.borderSolid, width: 1)
+                      : BorderSide.none,
+                ),
+                elevation: 0,
+              ),
+              icon: Icon(
+                following ? LucideIcons.check : LucideIcons.userPlus,
+                size: 18,
+              ),
+              label: Text(
+                following ? 'Takip ediliyor' : 'Takip et',
+                style: KoalaText.button.copyWith(
+                  color: following ? KoalaColors.text : Colors.white,
+                ),
+              ),
+            ),
           ),
-          icon: const Icon(LucideIcons.messageCircle, size: 18),
-          label: const Text('Sor', style: KoalaText.button),
-        ),
+          if (following) ...[
+            const SizedBox(width: 10),
+            _FollowMenuButton(
+              muted: muted,
+              busy: _followBusy,
+              onMute: _onMuteTap,
+              onUnfollow: _onFollowTap,
+            ),
+          ],
+        ],
       ),
     );
   }
@@ -3732,6 +3890,72 @@ class _DesignerProfileSheetState extends State<DesignerProfileSheet> {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// "Takip ediliyor" yanındaki overflow düğmesi — sessize al / takipten çık.
+class _FollowMenuButton extends StatelessWidget {
+  final bool muted;
+  final bool busy;
+  final VoidCallback onMute;
+  final VoidCallback onUnfollow;
+  const _FollowMenuButton({
+    required this.muted,
+    required this.busy,
+    required this.onMute,
+    required this.onUnfollow,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return PopupMenuButton<String>(
+      enabled: !busy,
+      tooltip: 'Daha fazla',
+      icon: const Icon(LucideIcons.moreHorizontal, color: KoalaColors.text),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      color: KoalaColors.surface,
+      onSelected: (v) {
+        if (v == 'mute') onMute();
+        if (v == 'unfollow') onUnfollow();
+      },
+      itemBuilder: (_) => [
+        PopupMenuItem<String>(
+          value: 'mute',
+          child: Row(
+            children: [
+              Icon(
+                muted ? LucideIcons.bell : LucideIcons.bellOff,
+                size: 18,
+                color: KoalaColors.text,
+              ),
+              const SizedBox(width: 10),
+              Text(
+                muted ? 'Bildirimleri aç' : 'Bildirimleri sessize al',
+                style: KoalaText.label,
+              ),
+            ],
+          ),
+        ),
+        PopupMenuItem<String>(
+          value: 'unfollow',
+          child: Row(
+            children: [
+              const Icon(LucideIcons.userMinus,
+                  size: 18, color: KoalaColors.error),
+              const SizedBox(width: 10),
+              const Text(
+                'Takipten çık',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                  color: KoalaColors.error,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }

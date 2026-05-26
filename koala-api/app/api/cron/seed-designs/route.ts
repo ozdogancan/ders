@@ -195,6 +195,42 @@ export async function GET(req: NextRequest) {
       });
       if (insErr) throw new Error(`insert: ${insErr.message}`);
 
+      // Evlumba Design takipçilerine bildirim fan-out — muted=false olanlar.
+      try {
+        const { data: followers } = await sb
+          .from('koala_follows')
+          .select('user_id, muted')
+          .eq('designer_id', 'evlumba-design');
+        const notifRows = (followers ?? [])
+          .filter((f) => f.muted !== true && typeof f.user_id === 'string')
+          .map((f) => ({
+            user_id: f.user_id as string,
+            type: 'new_design',
+            title: 'Evlumba Design yeni bir tasarım paylaştı',
+            body: `${styleTr} ${roomTr}`,
+            image_url: thumbUrl,
+            is_read: false,
+            action_type: 'open_card',
+            action_data: {
+              designer_id: 'evlumba-design',
+              card_id: id,
+            },
+          }));
+        if (notifRows.length > 0) {
+          const { error: notifErr } = await sb
+            .from('koala_notifications')
+            .insert(notifRows);
+          if (notifErr) {
+            console.warn('[seed-designs] notif fan-out failed:', notifErr.message);
+          }
+        }
+      } catch (e) {
+        console.warn(
+          '[seed-designs] notif fan-out exception:',
+          e instanceof Error ? e.message : String(e),
+        );
+      }
+
       results.push({ room: item.room, style: item.style, ok: true });
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);

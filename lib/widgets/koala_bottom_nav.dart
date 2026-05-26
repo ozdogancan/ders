@@ -85,8 +85,8 @@ class KoalaBottomNav extends StatelessWidget {
                     onTap: () => onSelect(KoalaTab.ai),
                   ),
                   _NavItem(
-                    icon: LucideIcons.folder,
-                    label: 'Projeler',
+                    icon: LucideIcons.user,
+                    label: 'Profil',
                     selected: current == KoalaTab.projeler,
                     onTap: () => onSelect(KoalaTab.projeler),
                   ),

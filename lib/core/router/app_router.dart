@@ -7,6 +7,7 @@ import '../../views/main_shell.dart';
 import '../../views/explore_screen.dart';
 import '../../views/saved/saved_screen_v2.dart';
 import '../../views/chat_list_screen.dart';
+import '../../views/notifications_feed_screen.dart';
 import '../../views/profile_screen.dart';
 import '../../views/chat_detail_screen.dart';
 import '../../services/koala_ai_service.dart';
@@ -80,6 +81,10 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: '/profile',
       builder: (context, state) => const ProfileScreen(),
+    ),
+    GoRoute(
+      path: '/notifications',
+      builder: (context, state) => const NotificationsFeedScreen(),
     ),
     GoRoute(
       path: '/style-profile',

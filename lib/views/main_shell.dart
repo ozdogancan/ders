@@ -11,7 +11,7 @@ import '../widgets/koala_bottom_nav.dart';
 import 'chat_list_screen.dart';
 import 'home_screen.dart';
 import 'mekan/wizard/mekan_wizard_screen.dart';
-import 'projeler_screen.dart';
+import 'profile_tab_screen.dart';
 import 'splash_screen.dart';
 import 'style_discovery_live_screen.dart';
 
@@ -274,7 +274,7 @@ class MainShellState extends ConsumerState<MainShell> {
           StyleDiscoveryLiveScreen(),
           ChatListScreen(),
           HomeScreen(embedded: true),
-          ProjelerScreen(),
+          ProfileTabScreen(),
         ],
       ),
       bottomNavigationBar: _navVisible
