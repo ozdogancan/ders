@@ -84,6 +84,11 @@ class _StyleDiscoveryLiveScreenState
   // 'real' (yalnız tasarımcı projeleri). Filtre ikonundan ayarlanır.
   String _sourceFilter = 'all';
 
+  // Onboarding gesture demo — kullanıcının lifetime'ında bir kez çalışır.
+  late AnimationController _demoCtrl;
+  bool _demoRunning = false;
+  static const String _demoFlagKey = 'koala_swipe_demo_shown_v1';
+
   final List<Map<String, dynamic>> _deck = [];
   final Set<String> _seenIds = <String>{};
   // Tap hint kaldırıldı — direktif gereği hiçbir tutorial gösterilmiyor.
@@ -136,6 +141,21 @@ class _StyleDiscoveryLiveScreenState
       duration: const Duration(milliseconds: 280),
     )..addStatusListener((status) {
         if (status == AnimationStatus.completed) _onExitComplete();
+      });
+    _demoCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2400),
+    )
+      ..addListener(_onDemoTick)
+      ..addStatusListener((status) {
+        if (status == AnimationStatus.completed) {
+          if (!mounted) return;
+          setState(() {
+            _demoRunning = false;
+            _dragDx = 0;
+            _dragDy = 0;
+          });
+        }
       });
     // RAM warm cache: boot-time'da disk'ten yüklenen deck'i veya önceki
     // ekran ziyaretinden kalan listeyi anında göster — ilk frame'de kart.
@@ -308,6 +328,7 @@ class _StyleDiscoveryLiveScreenState
       setState(() => _loading = false);
       _prefetchCurrentDesigner();
       _persistDeckCache();
+      unawaited(_maybeShowDemo());
     } catch (e) {
       debugPrint('StyleDiscoveryLive: bootstrap failed → $e');
       if (mounted) setState(() => _loading = false);
@@ -972,10 +993,81 @@ class _StyleDiscoveryLiveScreenState
     context.push('/profile');
   }
 
+  /// Onboarding gesture demo — lifetime'da bir kez. Önce kart Evlumba Design
+  /// seeded, sağa hafifçe salınır, sola hafifçe salınır, kart commit
+  /// edilmez. Kullanıcı kartların yön semantiğini öğrenir.
+  void _onDemoTick() {
+    if (!mounted) return;
+    final t = _demoCtrl.value;
+    const peak = 90.0;
+    double dx;
+    if (t < 0.25) {
+      // 0 → +peak (sağa kay)
+      dx = peak * Curves.easeOutCubic.transform(t / 0.25);
+    } else if (t < 0.5) {
+      // +peak → 0 (geri dön)
+      dx = peak * (1 - Curves.easeInCubic.transform((t - 0.25) / 0.25));
+    } else if (t < 0.75) {
+      // 0 → -peak (sola kay)
+      dx = -peak * Curves.easeOutCubic.transform((t - 0.5) / 0.25);
+    } else {
+      // -peak → 0 (geri dön)
+      dx = -peak * (1 - Curves.easeInCubic.transform((t - 0.75) / 0.25));
+    }
+    setState(() => _dragDx = dx);
+  }
+
+  Future<void> _maybeShowDemo() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (prefs.getBool(_demoFlagKey) ?? false) return;
+      if (!mounted || _deck.isEmpty) return;
+      // İlk Evlumba Design seeded kartı bul, deck[0]'a taşı / ekle.
+      Map<String, dynamic>? evCard;
+      int existingIdx = -1;
+      for (int i = 0; i < _deck.length; i++) {
+        if ((_deck[i]['designer_id'] ?? '') == 'evlumba-design') {
+          evCard = _deck[i];
+          existingIdx = i;
+          break;
+        }
+      }
+      if (evCard == null) {
+        // Pool'dan seçim — henüz deck'e girmeyen ilk uygun kart.
+        for (final s in _seedPool) {
+          final id = s['id']?.toString() ?? '';
+          if (id.isEmpty || _seenIds.contains(id)) continue;
+          _seenIds.add(id);
+          evCard = s;
+          break;
+        }
+        if (evCard == null) return;
+        if (mounted) setState(() => _deck.insert(0, evCard!));
+      } else if (existingIdx > 0) {
+        if (mounted) {
+          setState(() {
+            _deck.removeAt(existingIdx);
+            _deck.insert(0, evCard!);
+          });
+        }
+      }
+      // Bir frame bekle ki kart ekranda render olsun, sonra animasyonu çalıştır.
+      await Future<void>.delayed(const Duration(milliseconds: 600));
+      if (!mounted) return;
+      setState(() => _demoRunning = true);
+      HapticFeedback.lightImpact();
+      await _demoCtrl.forward(from: 0);
+      await prefs.setBool(_demoFlagKey, true);
+    } catch (e) {
+      debugPrint('demo show failed: $e');
+    }
+  }
+
   @override
   void dispose() {
     MainShell.activeTab.removeListener(_onTabActivate);
     _exitCtrl.dispose();
+    _demoCtrl.dispose();
     super.dispose();
   }
 
@@ -2792,8 +2884,9 @@ class _AskLeading extends StatelessWidget {
   }
 }
 
-/// AppBar sağındaki ayarlar düğmesi. Pro kullanıcılarda gradient daire +
-/// minik yıldız rozeti ile vurgulanır; serbest kullanıcılarda nötr.
+/// AppBar sağındaki ayarlar düğmesi.
+/// Pro: sweep-gradient halka + beyaz iç daire + altın "PRO" pill rozeti.
+/// Free: ince bordürlü beyaz daire + ayar ikonu.
 class _SettingsButton extends StatelessWidget {
   final bool isPro;
   final VoidCallback onTap;
@@ -2804,75 +2897,112 @@ class _SettingsButton extends StatelessWidget {
     return Material(
       color: Colors.transparent,
       shape: const CircleBorder(),
-      clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onTap,
         customBorder: const CircleBorder(),
         child: SizedBox(
-          width: 44,
-          height: 44,
-          child: Stack(
-            clipBehavior: Clip.none,
-            alignment: Alignment.center,
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: isPro
-                      ? const LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          colors: [
-                            KoalaColors.accentDeep,
-                            KoalaColors.accent,
-                          ],
-                        )
-                      : null,
-                  color: isPro ? null : KoalaColors.surface,
-                  border: isPro
-                      ? null
-                      : Border.all(
-                          color: KoalaColors.borderSolid, width: 0.8),
-                  boxShadow: isPro
-                      ? [
-                          BoxShadow(
-                            color:
-                                KoalaColors.accent.withValues(alpha: 0.30),
-                            blurRadius: 10,
-                            offset: const Offset(0, 3),
-                          ),
-                        ]
-                      : null,
-                ),
-                alignment: Alignment.center,
-                child: Icon(
-                  LucideIcons.settings,
-                  size: 19,
-                  color: isPro ? Colors.white : KoalaColors.text,
-                ),
-              ),
-              if (isPro)
-                Positioned(
-                  top: 2,
-                  right: 2,
-                  child: Container(
-                    width: 14,
-                    height: 14,
-                    decoration: BoxDecoration(
-                      color: KoalaColors.star,
-                      shape: BoxShape.circle,
-                      border: Border.all(color: KoalaColors.bg, width: 1.4),
-                    ),
-                    child: const Icon(Icons.star_rounded,
-                        size: 9, color: Colors.white),
-                  ),
-                ),
-            ],
+          width: 50,
+          height: 50,
+          child: Center(
+            child: isPro ? _proInner() : _freeInner(),
           ),
         ),
       ),
+    );
+  }
+
+  Widget _proInner() {
+    return Stack(
+      clipBehavior: Clip.none,
+      alignment: Alignment.center,
+      children: [
+        // Dış sweep-gradient halka.
+        Container(
+          width: 42,
+          height: 42,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            gradient: const SweepGradient(
+              colors: [
+                KoalaColors.accentDeep,
+                KoalaColors.brandLight,
+                Color(0xFFFFC44C),
+                KoalaColors.accent,
+                KoalaColors.accentDeep,
+              ],
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: KoalaColors.accent.withValues(alpha: 0.32),
+                blurRadius: 14,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          padding: const EdgeInsets.all(2.2),
+          child: Container(
+            decoration: const BoxDecoration(
+              shape: BoxShape.circle,
+              color: Colors.white,
+            ),
+            alignment: Alignment.center,
+            child: const Icon(
+              LucideIcons.settings,
+              size: 18,
+              color: KoalaColors.accentDeep,
+            ),
+          ),
+        ),
+        // Sağ alt: altın PRO pill.
+        Positioned(
+          bottom: -4,
+          right: -8,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [Color(0xFFFFD66B), Color(0xFFEFA01F)],
+              ),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: KoalaColors.bg, width: 1.4),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.18),
+                  blurRadius: 4,
+                  offset: const Offset(0, 1),
+                ),
+              ],
+            ),
+            child: const Text(
+              'PRO',
+              style: TextStyle(
+                fontSize: 8.5,
+                fontWeight: FontWeight.w900,
+                color: Colors.white,
+                letterSpacing: 0.4,
+                height: 1,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _freeInner() {
+    return Container(
+      width: 40,
+      height: 40,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: KoalaColors.surface,
+        border: Border.all(color: KoalaColors.borderSolid, width: 0.8),
+      ),
+      alignment: Alignment.center,
+      child: const Icon(LucideIcons.settings,
+          size: 19, color: KoalaColors.text),
     );
   }
 }
