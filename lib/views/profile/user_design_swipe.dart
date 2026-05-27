@@ -153,23 +153,6 @@ class _UserDesignSwipeScreenState extends State<UserDesignSwipeScreen> {
     );
   }
 
-  Future<void> _onApply() async {
-    HapticFeedback.selectionClick();
-    final info = _designerInfo;
-    await showAskAndApplySheet(
-      context,
-      designId: _designId,
-      title: _title,
-      imageUrl: _imageUrl,
-      subtitle: _subtitle.isNotEmpty ? _subtitle : null,
-      designerId: info.designerId,
-      designerName: info.designerName,
-      designerAvatarUrl: info.designerAvatar,
-      category: info.category,
-      isOwnDesign: _isOwner,
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     if (widget.items.isEmpty) {

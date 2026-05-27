@@ -52,10 +52,33 @@ class _FollowListSheetState extends ConsumerState<FollowListSheet> {
   // local toggle cache for following state per uid
   final Map<String, bool> _followingCache = {};
 
+  // Client-side search filter.
+  final TextEditingController _searchCtrl = TextEditingController();
+  String _query = '';
+
   @override
   void initState() {
     super.initState();
+    _searchCtrl.addListener(() {
+      final q = _searchCtrl.text.trim().toLowerCase();
+      if (q == _query) return;
+      setState(() => _query = q);
+    });
     _load();
+  }
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  List<KoalaUserProfile> get _filtered {
+    if (_query.isEmpty) return _users;
+    return _users.where((u) {
+      final n = (u.displayName ?? '').toLowerCase();
+      return n.contains(_query);
+    }).toList();
   }
 
   Future<void> _load() async {
@@ -122,6 +145,41 @@ class _FollowListSheetState extends ConsumerState<FollowListSheet> {
             Text(title, style: KoalaText.h3),
             const SizedBox(height: 8),
             const Divider(height: 1, color: KoalaColors.borderSolid),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
+              child: TextField(
+                controller: _searchCtrl,
+                style: KoalaText.body,
+                decoration: InputDecoration(
+                  hintText: 'Ara...',
+                  hintStyle: KoalaText.hint,
+                  prefixIcon: const Icon(LucideIcons.search,
+                      size: 16, color: KoalaColors.textTer),
+                  prefixIconConstraints:
+                      const BoxConstraints(minWidth: 36, minHeight: 36),
+                  isDense: true,
+                  filled: true,
+                  fillColor: KoalaColors.surface,
+                  contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 4, vertical: 12),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(
+                        color: KoalaColors.borderSolid, width: 0.6),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(
+                        color: KoalaColors.borderSolid, width: 0.6),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(
+                        color: KoalaColors.accentDeep, width: 1.2),
+                  ),
+                ),
+              ),
+            ),
             Expanded(
               child: _loading
                   ? const Center(
@@ -130,14 +188,16 @@ class _FollowListSheetState extends ConsumerState<FollowListSheet> {
                         strokeWidth: 2,
                       ),
                     )
-                  : _users.isEmpty
+                  : _filtered.isEmpty
                       ? Center(
                           child: Padding(
                             padding: const EdgeInsets.all(32),
                             child: Text(
-                              widget.mode == FollowListMode.followers
-                                  ? 'Henüz takipçi yok.'
-                                  : 'Henüz kimseyi takip etmiyor.',
+                              _query.isNotEmpty
+                                  ? 'Eşleşen kullanıcı yok.'
+                                  : (widget.mode == FollowListMode.followers
+                                      ? 'Henüz takipçi yok.'
+                                      : 'Henüz kimseyi takip etmiyor.'),
                               style: KoalaText.bodySmall,
                               textAlign: TextAlign.center,
                             ),
@@ -145,9 +205,9 @@ class _FollowListSheetState extends ConsumerState<FollowListSheet> {
                         )
                       : ListView.builder(
                           controller: scrollController,
-                          itemCount: _users.length,
+                          itemCount: _filtered.length,
                           itemBuilder: (_, i) {
-                            final u = _users[i];
+                            final u = _filtered[i];
                             final isSelf = u.uid == myUid;
                             final isFollowing =
                                 _followingCache[u.uid] ?? false;

@@ -11,12 +11,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:image_picker/image_picker.dart';
-import 'package:lucide_icons/lucide_icons.dart';
-
 import '../core/theme/koala_tokens.dart';
 import '../services/evlumba_live_service.dart';
-import '../views/mekan/wizard/mekan_wizard_screen.dart';
 import 'free_consult_sheet.dart';
 
 const String _evlumbaDesignAvatarUrl =
@@ -125,36 +121,6 @@ class _AskAndApplySheetState extends ConsumerState<_AskAndApplySheet> {
         'imageUrl': widget.imageUrl,
         'designerId': forDesignerId,
       };
-
-  Future<void> _onApply() async {
-    Navigator.of(context).pop();
-    final messenger = ScaffoldMessenger.of(context);
-    final navigator = Navigator.of(context);
-    try {
-      final picker = ImagePicker();
-      final f = await picker.pickImage(
-        source: ImageSource.gallery,
-        maxWidth: 1024,
-        imageQuality: 60,
-      );
-      if (f == null) return;
-      final bytes = await f.readAsBytes();
-      navigator.push(
-        MaterialPageRoute(
-          builder: (_) => MekanWizardScreen(
-            photoBytes: bytes,
-            targetDesignUrl:
-                widget.imageUrl.isNotEmpty ? widget.imageUrl : null,
-            targetDesignerId: widget.designerId,
-          ),
-        ),
-      );
-    } catch (_) {
-      messenger.showSnackBar(
-        const SnackBar(content: Text('Fotoğraf seçilemedi.')),
-      );
-    }
-  }
 
   @override
   Widget build(BuildContext context) {

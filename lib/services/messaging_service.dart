@@ -380,6 +380,77 @@ class MessagingService {
     }
   }
 
+  // ─── PART C — koala_chat_list_bundle (N+1 killer) ───────────────────
+  /// Per-session cache: uid → bundle list. Prewarm doldurur, chat sekmesi
+  /// açıldığında render anlık.
+  static List<Map<String, dynamic>>? _chatBundleCache;
+  static String? _chatBundleCacheUid;
+
+  static void invalidateChatBundleCache() {
+    _chatBundleCache = null;
+    _chatBundleCacheUid = null;
+  }
+
+  /// `koala_chat_list_bundle(uid, limit)` RPC — conversations + counterparty
+  /// profile + unread counts tek round-trip'te. Mevcut N+1 (avatar fetch
+  /// per-conv) yerini alır. RPC fail → null döner, caller `getConversations()`'a
+  /// fallback yapar.
+  ///
+  /// Bundle row shape:
+  /// {
+  ///   id, user_id, designer_id, title, last_message, last_message_at,
+  ///   unread_count, status,
+  ///   counterparty: { uid, display_name, avatar_url, ... } | null
+  /// }
+  ///
+  /// Bu metot mevcut `getConversations` shape'ine uyumlu — `unread_count` ek
+  /// alanı caller'da kullanılır, eksik alanlar (örn. archived filter) Dart'ta
+  /// uygulanır.
+  static Future<List<Map<String, dynamic>>?> loadChatListBundle(
+    String uid, {
+    int limit = 30,
+    bool forceRefresh = false,
+  }) async {
+    if (uid.isEmpty) return null;
+    if (!forceRefresh &&
+        _chatBundleCache != null &&
+        _chatBundleCacheUid == uid) {
+      return _chatBundleCache;
+    }
+    try {
+      final data = await _db.rpc(
+        'koala_chat_list_bundle',
+        params: {'p_uid': uid, 'p_limit': limit},
+      );
+      if (data == null) return null;
+      final list = (data as List)
+          .whereType<Map>()
+          .map((m) => Map<String, dynamic>.from(m))
+          .toList();
+      // Mevcut getConversations filtreleri: archived dışlanır, last_message_at
+      // olanlar listelenir. Aynı semantik burada da uygulanır.
+      // Ayrıca UI `unread_count_user`/`unread_count_designer` kolonlarını
+      // bekliyor — bundle tek `unread_count` döndürdüğü için side-aware
+      // ikiye yayıyoruz (caller'a tam uyum).
+      final filtered = list
+          .where((c) =>
+              c['status'] != 'archived' && c['last_message_at'] != null)
+          .map((c) {
+        final isUserSide = c['user_id']?.toString() == uid;
+        final n = (c['unread_count'] as num?)?.toInt() ?? 0;
+        c['unread_count_user'] = isUserSide ? n : 0;
+        c['unread_count_designer'] = isUserSide ? 0 : n;
+        return c;
+      }).toList();
+      _chatBundleCache = filtered;
+      _chatBundleCacheUid = uid;
+      return filtered;
+    } catch (e) {
+      debugPrint('MessagingService.loadChatListBundle failed → $e');
+      return null;
+    }
+  }
+
   /// Tek conversation detay
   static Future<Map<String, dynamic>?> getConversation(String id) async {
     lastConvError = null;

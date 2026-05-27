@@ -29,6 +29,7 @@ import '../../services/designer_reviews_service.dart';
 import '../../services/follow_service.dart';
 import '../../services/shared_design_service.dart';
 import '../../services/user_profile_service.dart';
+import '../../widgets/lazy_grid_view.dart';
 import 'profile_photo_view.dart';
 import 'user_design_swipe.dart';
 
@@ -70,6 +71,10 @@ class _MiniProfileSheetState extends ConsumerState<MiniProfileSheet>
 
   DesignerReviewsResult _reviews = DesignerReviewsResult.empty;
   bool _reviewsLoading = false;
+
+  /// DraggableScrollableSheet'in scroll controller'ı — LazyGridView'lar
+  /// pagination tetiklemesi için bu controller'a listener bağlar.
+  ScrollController? _sheetScrollCtrl;
 
   late final TabController _tabCtrl;
 
@@ -345,6 +350,7 @@ class _MiniProfileSheetState extends ConsumerState<MiniProfileSheet>
       minChildSize: 0.45,
       maxChildSize: 0.96,
       builder: (_, scrollController) {
+        _sheetScrollCtrl = scrollController;
         return Column(
           children: [
             Padding(
@@ -763,6 +769,10 @@ class _MiniProfileSheetState extends ConsumerState<MiniProfileSheet>
     );
   }
 
+  /// Tab başına yüklenen items — onTap navigation için referans.
+  final List<Map<String, dynamic>> _allLoaded = <Map<String, dynamic>>[];
+  final List<Map<String, dynamic>> _aiLoaded = <Map<String, dynamic>>[];
+
   Widget _tabBody() {
     if (_loading) {
       return const SizedBox(
@@ -774,55 +784,161 @@ class _MiniProfileSheetState extends ConsumerState<MiniProfileSheet>
       );
     }
     final isAll = _tabCtrl.index == 0;
-    final items = isAll ? _allDesigns : _aiDesigns;
-    if (items.isEmpty) {
-      return _emptyTab(isAll);
-    }
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      padding: EdgeInsets.zero,
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+    // Her tab için ayrı LazyGridView — key ile tab değişiminde yeniden mount.
+    return SizedBox(
+      // Bottom-sheet'te grid yüksekliği sınırlı tutulur — kullanıcı içeride
+      // scroll ederek tüm gridi gezer (parent SingleChildScrollView aktif).
+      child: LazyGridView<Map<String, dynamic>>(
+        key: ValueKey('mini-tab-${isAll ? 'all' : 'ai'}-${widget.user.uid}'),
+        shrinkWrap: true,
+        parentScrollController: _sheetScrollCtrl,
         crossAxisCount: 3,
-        mainAxisSpacing: 2,
-        crossAxisSpacing: 2,
-        childAspectRatio: 1,
-      ),
-      itemCount: items.length,
-      itemBuilder: (_, i) {
-        final it = items[i];
-        final url = (it['image_url'] ?? it['thumb_url'] ?? '').toString();
-        final isAi = it['is_ai'] == true;
-        return GestureDetector(
-          onTap: () => _openSwipe(items, i),
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              Container(
-                color: KoalaColors.surfaceAlt,
-                child: url.isEmpty
-                    ? Container(color: KoalaColors.surfaceAlt)
-                    : CachedNetworkImage(
-                        imageUrl: url,
-                        fit: BoxFit.cover,
-                        errorWidget: (_, _, _) => Container(
-                          color: KoalaColors.surfaceAlt,
-                          child: const Icon(LucideIcons.imageOff,
-                              color: KoalaColors.textTer, size: 22),
+        aspectRatio: 1.0,
+        spacing: 2,
+        bottomThreshold: 280,
+        idOf: (m) =>
+            (m['id'] ?? m['item_id'] ?? m['image_url'] ?? '').toString(),
+        emptyState: _emptyTab(isAll),
+        fetch: (cursor) async {
+          final page = isAll
+              ? await _fetchAllPage(cursor)
+              : await _fetchAiPage(cursor);
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) return;
+            final target = isAll ? _allLoaded : _aiLoaded;
+            final seen = <String>{
+              for (final m in target)
+                (m['id'] ?? m['item_id'] ?? m['image_url'] ?? '').toString()
+            };
+            for (final m in page.items) {
+              final id =
+                  (m['id'] ?? m['item_id'] ?? m['image_url'] ?? '').toString();
+              if (id.isEmpty || seen.contains(id)) continue;
+              seen.add(id);
+              target.add(m);
+            }
+          });
+          return page;
+        },
+        itemBuilder: (_, it, i) {
+          final url = (it['image_url'] ?? it['thumb_url'] ?? '').toString();
+          final isAi = it['is_ai'] == true;
+          return GestureDetector(
+            onTap: () => _openSwipe(isAll ? _allLoaded : _aiLoaded, i),
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                Container(
+                  color: KoalaColors.surfaceAlt,
+                  child: url.isEmpty
+                      ? Container(color: KoalaColors.surfaceAlt)
+                      : CachedNetworkImage(
+                          imageUrl: url,
+                          fit: BoxFit.cover,
+                          errorWidget: (_, _, _) => Container(
+                            color: KoalaColors.surfaceAlt,
+                            child: const Icon(LucideIcons.imageOff,
+                                color: KoalaColors.textTer, size: 22),
+                          ),
                         ),
-                      ),
-              ),
-              if (isAi)
-                const Positioned(
-                  top: 4,
-                  right: 4,
-                  child: _MiniAiPill(),
                 ),
-            ],
-          ),
-        );
-      },
+                if (isAi)
+                  const Positioned(
+                    top: 4,
+                    right: 4,
+                    child: _MiniAiPill(),
+                  ),
+              ],
+            ),
+          );
+        },
+      ),
     );
+  }
+
+  /// "Paylaşımlar" sekmesi — shared paylaşımlar + AI birleşimi.
+  /// İki kaynak: önce shared paged akışı, hasMore biterse AI paged akışı.
+  /// Cursor: { 'phase': 'shared'|'ai', 'cursor': String? }
+  Future<({List<Map<String, dynamic>> items, bool hasMore, dynamic cursor})>
+      _fetchAllPage(dynamic cursor) async {
+    final state = (cursor is Map)
+        ? Map<String, dynamic>.from(cursor)
+        : <String, dynamic>{'phase': 'shared', 'cursor': null};
+    final phase = (state['phase'] ?? 'shared').toString();
+    final c = state['cursor'] as String?;
+    if (phase == 'shared') {
+      final page = await SharedDesignService.publicByUidPaged(
+        widget.user.uid,
+        limit: 18,
+        beforeCreatedAt: c,
+      );
+      final items = page.items
+          .map((s) => {...s.toMapForProfileTab(), 'is_ai': false})
+          .toList();
+      return (
+        items: items,
+        hasMore: page.hasMore || true, // AI havuzu olabilir; phase geçecek.
+        cursor: page.hasMore
+            ? {'phase': 'shared', 'cursor': page.cursor}
+            : {'phase': 'ai', 'cursor': null},
+      );
+    }
+    final aiPage = await _fetchPublicAiPaged(widget.user.uid, beforeCreatedAt: c);
+    return (
+      items: aiPage.items,
+      hasMore: aiPage.hasMore,
+      cursor: {'phase': 'ai', 'cursor': aiPage.cursor},
+    );
+  }
+
+  /// "AI" sekmesi — sadece koala_saved_items.project rowları.
+  Future<({List<Map<String, dynamic>> items, bool hasMore, dynamic cursor})>
+      _fetchAiPage(dynamic cursor) async {
+    return _fetchPublicAiPaged(widget.user.uid,
+        beforeCreatedAt: cursor as String?);
+  }
+
+  /// Başkasının public AI üretimleri — koala_saved_items üzerinden,
+  /// `_loadPublicAi`'nin paged sürümü. Defansif: tablo/RLS engellerse boş döner.
+  Future<({List<Map<String, dynamic>> items, bool hasMore, dynamic cursor})>
+      _fetchPublicAiPaged(String uid, {String? beforeCreatedAt}) async {
+    try {
+      var q = Supabase.instance.client
+          .from('koala_saved_items')
+          .select(
+              'item_id, image_url, title, subtitle, extra_data, created_at, item_type')
+          .eq('user_id', uid)
+          .eq('item_type', 'project');
+      if (beforeCreatedAt != null && beforeCreatedAt.isNotEmpty) {
+        q = q.lt('created_at', beforeCreatedAt);
+      }
+      final data = await q
+          .order('created_at', ascending: false)
+          .limit(18);
+      final rows = List<Map<String, dynamic>>.from(data);
+      final items = rows
+          .map((r) => {
+                'id': (r['item_id'] ?? '').toString(),
+                'item_id': (r['item_id'] ?? '').toString(),
+                'image_url': (r['image_url'] ?? '').toString(),
+                'title': (r['title'] ?? '').toString(),
+                'subtitle': (r['subtitle'] ?? '').toString(),
+                'extra_data': r['extra_data'],
+                'created_at': r['created_at'],
+                'is_ai': true,
+              })
+          .where((r) => (r['image_url'] as String).isNotEmpty)
+          .toList();
+      final nextCursor =
+          rows.isNotEmpty ? rows.last['created_at']?.toString() : null;
+      return (
+        items: items,
+        hasMore: rows.length >= 18,
+        cursor: nextCursor,
+      );
+    } catch (_) {
+      return (items: <Map<String, dynamic>>[], hasMore: false, cursor: null);
+    }
   }
 
   Widget _emptyTab(bool isAll) {

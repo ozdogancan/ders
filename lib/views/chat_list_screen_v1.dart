@@ -116,7 +116,21 @@ class _ChatListScreenV1State extends ConsumerState<ChatListScreenV1> {
       });
     }
     try {
-      final convFuture = MessagingService.getConversations();
+      // PART C — koala_chat_list_bundle ile counterparty + unread tek RPC'de.
+      // Bundle başarısızsa orijinal getConversations'a düşer.
+      final uidForBundle = MessagingService.currentUserId ?? '';
+      Future<List<Map<String, dynamic>>> resolveConvs() async {
+        if (uidForBundle.isEmpty) {
+          return MessagingService.getConversations();
+        }
+        try {
+          final bundle =
+              await MessagingService.loadChatListBundle(uidForBundle);
+          if (bundle != null) return bundle;
+        } catch (_) {/* fallback */}
+        return MessagingService.getConversations();
+      }
+      final convFuture = resolveConvs();
       final aiFuture = ChatPersistence.loadConversations();
       final results = await Future.wait([convFuture, aiFuture]);
       if (!mounted) return;

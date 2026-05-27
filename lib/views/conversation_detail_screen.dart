@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -14,6 +15,8 @@ import '../services/usage_limit_service.dart';
 import '../core/utils/format_utils.dart';
 import '../services/evlumba_live_service.dart';
 import '../services/global_message_listener.dart';
+import '../services/koala_seed_service.dart';
+import '../widgets/lazy_grid_view.dart';
 import '../services/messaging_service.dart';
 import '../services/saved_items_service.dart';
 import '../services/share_service.dart';
@@ -1065,6 +1068,194 @@ class _ConversationDetailScreenState extends ConsumerState<ConversationDetailScr
     );
   }
 
+  /// Portfolio "Tümünü gör" — tüm tasarımları paginated grid ile bottom sheet.
+  /// Evlumba seed sentetik tasarımcısı için KoalaSeedService.evlumbaCardsPaged,
+  /// gerçek tasarımcılar için EvlumbaLiveService.getDesignerProjectsPaged.
+  void _openAllDesignsSheet() {
+    final designerId = widget.designerId ?? '';
+    if (designerId.isEmpty) return;
+    final loaded = <Map<String, dynamic>>[];
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: KoalaColors.bg,
+      useSafeArea: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (sheetCtx) {
+        return DraggableScrollableSheet(
+          expand: false,
+          initialChildSize: 0.92,
+          minChildSize: 0.55,
+          maxChildSize: 0.96,
+          builder: (_, scrollController) {
+            return Column(
+              children: [
+                const SizedBox(height: 10),
+                Container(
+                  width: 42,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: KoalaColors.border,
+                    borderRadius: BorderRadius.circular(100),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: Row(
+                    children: [
+                      const Icon(LucideIcons.layers,
+                          size: 16, color: KoalaColors.textSec),
+                      const SizedBox(width: 8),
+                      const Text(
+                        'Tüm Tasarımlar',
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w800,
+                          color: KoalaColors.text,
+                          letterSpacing: -0.2,
+                        ),
+                      ),
+                      const Spacer(),
+                      IconButton(
+                        icon: const Icon(LucideIcons.x, size: 20),
+                        color: KoalaColors.textSec,
+                        onPressed: () => Navigator.pop(sheetCtx),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: LazyGridView<Map<String, dynamic>>(
+                      crossAxisCount: 2,
+                      aspectRatio: 0.85,
+                      spacing: 8,
+                      bottomThreshold: 320,
+                      idOf: (p) =>
+                          (p['id'] ??
+                                  p['cover_image_url'] ??
+                                  p['image_url'] ??
+                                  '')
+                              .toString(),
+                      fetch: (cursor) async {
+                        final page = _isEvlumba
+                            ? await KoalaSeedService.evlumbaCardsPaged(
+                                limit: 18,
+                                beforeCreatedAt: cursor as String?,
+                              )
+                            : await EvlumbaLiveService
+                                .getDesignerProjectsPaged(
+                                designerId,
+                                limit: 18,
+                                beforeCreatedAt: cursor as String?,
+                              );
+                        // tap navigasyonu için loaded biriktir
+                        for (final m in page.items) {
+                          final id = (m['id'] ??
+                                  m['cover_image_url'] ??
+                                  m['image_url'] ??
+                                  '')
+                              .toString();
+                          if (id.isEmpty) continue;
+                          if (loaded.any((x) =>
+                              (x['id'] ??
+                                      x['cover_image_url'] ??
+                                      x['image_url'] ??
+                                      '')
+                                  .toString() ==
+                              id)) {
+                            continue;
+                          }
+                          loaded.add(m);
+                        }
+                        return page;
+                      },
+                      itemBuilder: (_, p, i) {
+                        final cover = (p['cover_image_url'] ??
+                                p['cover_url'] ??
+                                p['image_url'] ??
+                                '')
+                            .toString();
+                        final title = (p['title'] ?? '').toString();
+                        return GestureDetector(
+                          onTap: () {
+                            Navigator.pop(sheetCtx);
+                            // Loaded içindeki gerçek index'i bul.
+                            final idx = loaded.indexWhere((x) =>
+                                ((x['id'] ?? '').toString() ==
+                                    (p['id'] ?? '').toString()));
+                            _openProjectViewer(p, idx < 0 ? 0 : idx);
+                          },
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(12),
+                            child: Stack(
+                              fit: StackFit.expand,
+                              children: [
+                                if (cover.isNotEmpty)
+                                  CachedNetworkImage(
+                                    imageUrl: cover,
+                                    fit: BoxFit.cover,
+                                    memCacheWidth: 400,
+                                    placeholder: (_, _) => Container(
+                                        color: KoalaColors.surfaceAlt),
+                                    errorWidget: (_, _, _) => Container(
+                                        color: KoalaColors.surfaceAlt),
+                                  )
+                                else
+                                  Container(color: KoalaColors.surfaceAlt),
+                                Positioned.fill(
+                                  child: DecoratedBox(
+                                    decoration: BoxDecoration(
+                                      gradient: LinearGradient(
+                                        begin: Alignment.topCenter,
+                                        end: Alignment.bottomCenter,
+                                        colors: [
+                                          Colors.transparent,
+                                          Colors.black.withValues(alpha: 0.55),
+                                        ],
+                                        stops: const [0.55, 1.0],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                if (title.isNotEmpty)
+                                  Positioned(
+                                    left: 10,
+                                    right: 10,
+                                    bottom: 10,
+                                    child: Text(
+                                      title,
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w700,
+                                        letterSpacing: -0.1,
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
   /// Portfolio görseline tıklanınca proje detay overlay aç
   void _openProjectViewer(Map<String, dynamic> project, int startIndex) {
     showModalBottomSheet<void>(
@@ -1774,6 +1965,28 @@ class _ConversationDetailScreenState extends ConsumerState<ConversationDetailScr
                 if (!_portfolioExpanded)
                   SizedBox(width: (previewCount * 18.0) + 6),
                 const Spacer(),
+                // "Tümünü gör (N)" — bottom sheet ile tüm tasarımları paginated
+                // göster. Header chevron'u koruyoruz (kart açma/kapama).
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () {
+                    HapticFeedback.selectionClick();
+                    _openAllDesignsSheet();
+                  },
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    child: Text(
+                      'Tümünü gör ($count)',
+                      style: const TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w700,
+                        color: KoalaColors.accentDeep,
+                        letterSpacing: -0.1,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 6),
                 Icon(
                   _portfolioExpanded
                       ? LucideIcons.chevronUp

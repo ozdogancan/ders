@@ -310,6 +310,45 @@ class SavedItemsService {
     }
   }
 
+  // ─── TİPE GÖRE PAGINATED (cursor: created_at ISO) ───
+  /// Defansif cursor-based pagination. `beforeCreatedAt` null ise top sayfa.
+  /// Aynı `getByType` ile aynı sıralama (created_at DESC).
+  /// Return shape `LazyGridView` ile uyumlu.
+  static Future<({List<Map<String, dynamic>> items, bool hasMore, dynamic cursor})>
+      getByTypePaged(
+    SavedItemType type, {
+    int limit = 18,
+    String? beforeCreatedAt,
+  }) async {
+    if (_uid == null || !Env.hasSupabaseConfig) {
+      return (items: <Map<String, dynamic>>[], hasMore: false, cursor: null);
+    }
+    try {
+      var q = _db
+          .from('saved_items')
+          .select('id, item_id, item_type, title, image_url, subtitle, extra_data, created_at')
+          .eq('user_id', _uid!)
+          .eq('item_type', _serverItemType(type));
+      if (beforeCreatedAt != null && beforeCreatedAt.isNotEmpty) {
+        q = q.lt('created_at', beforeCreatedAt);
+      }
+      final res = await q
+          .order('created_at', ascending: false)
+          .limit(limit);
+      final rows = List<Map<String, dynamic>>.from(res);
+      final nextCursor =
+          rows.isNotEmpty ? rows.last['created_at']?.toString() : null;
+      return (
+        items: rows,
+        hasMore: rows.length >= limit,
+        cursor: nextCursor,
+      );
+    } catch (e) {
+      debugPrint('SavedItemsService.getByTypePaged error: $e');
+      return (items: <Map<String, dynamic>>[], hasMore: false, cursor: null);
+    }
+  }
+
   // ─── TÜM KAYDEDİLENLER ──────────────────────────────
   static Future<List<Map<String, dynamic>>> getAll({
     int limit = 50,

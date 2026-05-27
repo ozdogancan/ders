@@ -91,7 +91,7 @@ class EvlumbaLiveService {
           final data = await sb
               .from('koala_cards')
               .select('id, title, description, room_type, style, cdn_url, '
-                  'original_url, created_at')
+                  'original_url, aspect, created_at')
               .eq('source', 'gemini-seed')
               .eq('is_published', true)
               .limit(300);
@@ -639,6 +639,49 @@ class EvlumbaLiveService {
         .order('created_at', ascending: false)
         .limit(limit);
     return List<Map<String, dynamic>>.from(data);
+  }
+
+  /// Tasarımcının projeleri — paginated (cursor: created_at ISO string).
+  /// Defansif: bağlantı yoksa boş döner. LazyGridView ile uyumlu shape.
+  static Future<({List<Map<String, dynamic>> items, bool hasMore, dynamic cursor})>
+      getDesignerProjectsPaged(
+    String designerId, {
+    int limit = 18,
+    String? beforeCreatedAt,
+  }) async {
+    if (designerId.isEmpty) {
+      return (items: <Map<String, dynamic>>[], hasMore: false, cursor: null);
+    }
+    try {
+      if (!isReady) {
+        await waitForReady(timeout: const Duration(seconds: 4));
+      }
+      if (!isReady) {
+        return (items: <Map<String, dynamic>>[], hasMore: false, cursor: null);
+      }
+      var q = client
+          .from('designer_projects')
+          .select('*, designer_project_images(image_url, sort_order)')
+          .eq('designer_id', designerId)
+          .eq('is_published', true);
+      if (beforeCreatedAt != null && beforeCreatedAt.isNotEmpty) {
+        q = q.lt('created_at', beforeCreatedAt);
+      }
+      final data = await q
+          .order('created_at', ascending: false)
+          .limit(limit);
+      final rows = List<Map<String, dynamic>>.from(data);
+      final nextCursor =
+          rows.isNotEmpty ? rows.last['created_at']?.toString() : null;
+      return (
+        items: rows,
+        hasMore: rows.length >= limit,
+        cursor: nextCursor,
+      );
+    } catch (e) {
+      debugPrint('EvlumbaLive.getDesignerProjectsPaged($designerId) failed: $e');
+      return (items: <Map<String, dynamic>>[], hasMore: false, cursor: null);
+    }
   }
 
   // ═══════════════════════════════════════

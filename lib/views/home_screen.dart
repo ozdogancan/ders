@@ -29,7 +29,7 @@ import 'mekan/mekan_flow_screen.dart';
 import 'mekan/wizard/mekan_wizard_screen.dart';
 import 'product_entry_screen.dart';
 import 'saved/saved_screen_v2.dart';
-// import 'main_shell.dart'; // 2026-05-26 kullanım kalmadı
+import 'main_shell.dart';
 // import 'home/widgets/ai_tools_section.dart'; // 2026-05-26 AI tab basitleştirildi
 
 import '../widgets/koala_bottom_nav.dart';
@@ -64,6 +64,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   int _unreadMsgCount = 0;
 
   late final AnimationController _staggerCtrl;
+
+  // Hero before/after wipe widget'ı ana sayfaya her sekme dönüldüğünde
+  // baştan oynatılsın diye Key'i counter ile değiştiriyoruz. AI tab tap →
+  // counter artar → widget remount → animasyon başa sarar.
+  int _gifKey = 0;
 
   // Hero kart showcase URL'leri — evlumba designer_projects'ten 6 random
   // thumbnail. Card 1'in arkaplanında 3.5s'de bir crossfade ile döngü.
@@ -103,6 +108,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     // GlobalMessageListener her sync tick'inde notify eder —
     // realtime event'e güvenmek yerine explicit refresh.
     GlobalMessageListener.syncTick.addListener(_onGlobalSyncTick);
+    MainShell.activeTab.addListener(_onActiveTabChanged);
+  }
+
+  void _onActiveTabChanged() {
+    if (!mounted) return;
+    // AI sekmesine her dönüldüğünde hero before/after wipe'ı baştan oynat.
+    if (MainShell.activeTab.value == KoalaTab.ai) {
+      setState(() => _gifKey++);
+    }
   }
 
   // ── Hero asset pre-cache ──────────────────────────────────────────────
@@ -323,6 +337,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     WidgetsBinding.instance.removeObserver(this);
     _authSub?.cancel();
     GlobalMessageListener.syncTick.removeListener(_onGlobalSyncTick);
+    MainShell.activeTab.removeListener(_onActiveTabChanged);
     try {
       MessagingService.unsubscribeFromConversations(listener: _convListener);
     } catch (_) {}
@@ -659,6 +674,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                   _staggered(
                     2,
                     _HeroCaptureCard(
+                      key: ValueKey('gif_$_gifKey'),
                       onTap: _showPicker,
                       showcaseUrls: null,
                     ),
@@ -907,7 +923,7 @@ class _ImageCyclerState extends State<_ImageCycler> {
 }
 
 class _HeroCaptureCard extends StatelessWidget {
-  const _HeroCaptureCard({required this.onTap, this.showcaseUrls});
+  const _HeroCaptureCard({super.key, required this.onTap, this.showcaseUrls});
   final VoidCallback onTap;
   final List<String>? showcaseUrls;
 

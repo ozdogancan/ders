@@ -102,6 +102,7 @@ class SwipeFeedService {
     _designerCooldown.clear();
     _designerRecentSkips.clear();
     _recentStyleWindow.clear();
+    _hasEmbeddingCache.clear();
   }
 
   // ── Seen ring buffer ──────────────────────────────────────────────────────
@@ -193,10 +194,13 @@ class SwipeFeedService {
     try {
       final uid = FirebaseAuth.instance.currentUser?.uid;
       if (uid == null || uid.isEmpty) return;
+      // ingest_swipe RPC SADECE 'right'|'left'|'up'|'down' kabul eder.
+      // 'like'/'pass' RAISE EXCEPTION fırlatır → user_taste vektör güncellenmez.
+      // (2026-05-27 fix — Part D).
       await Supabase.instance.client.rpc('ingest_swipe_v2', params: {
         'p_user_id': uid,
         'p_card_id': cardId,
-        'p_direction': liked ? 'like' : 'pass',
+        'p_direction': liked ? 'right' : 'left',
         'p_context': 'style_discovery_live',
         'p_swipe_velocity': 0,
         'p_dwell_time_ms': dwellMs ?? 0,
@@ -220,6 +224,37 @@ class SwipeFeedService {
   }
 
   // ── Server-side ranker (Faz 2) ────────────────────────────────────────────
+  /// Per-session cache — `userHasEmbedding(uid)` cache'i. uid → bool.
+  /// Aynı session içinde tekrar tekrar `select exists` atmayı önler.
+  /// Cache invalidation: [invalidateProfileCache] çağrısı sıfırlar.
+  static final Map<String, bool> _hasEmbeddingCache = <String, bool>{};
+
+  /// `koala_user_taste.embedding` non-null mı?
+  /// Server-side ranker'ı default açmadan önce caller check eder.
+  /// Cold-start (embedding yok) veya çok az swipe → false döner → client fallback.
+  ///
+  /// Cheap `select exists` — hata durumunda false döner, deck'i bozmaz.
+  static Future<bool> userHasEmbedding(String uid) async {
+    if (uid.isEmpty) return false;
+    final cached = _hasEmbeddingCache[uid];
+    if (cached != null) return cached;
+    try {
+      final res = await Supabase.instance.client
+          .from('koala_user_taste')
+          .select('user_id')
+          .eq('user_id', uid)
+          .not('embedding', 'is', null)
+          .limit(1)
+          .maybeSingle();
+      final has = res != null;
+      _hasEmbeddingCache[uid] = has;
+      return has;
+    } catch (e) {
+      if (kDebugMode) debugPrint('SwipeFeed: userHasEmbedding failed → $e');
+      return false;
+    }
+  }
+
   /// `koala_rank_feed` RPC'sini çağırır. Cosine similarity üzerinden
   /// embedding-based sıralama döner. Hata / boş sonuç → null (caller
   /// client-side ranker'a fallback yapar).

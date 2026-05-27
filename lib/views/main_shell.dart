@@ -1,3 +1,4 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -9,6 +10,8 @@ import '../core/theme/koala_tokens.dart';
 import '../helpers/paywall_router.dart';
 import '../providers/pro_status_provider.dart';
 import '../services/background_gen.dart';
+import '../services/messaging_service.dart';
+import '../services/user_profile_service.dart';
 import '../widgets/coachmark_overlay.dart';
 import '../widgets/free_consult_sheet.dart' show prewarmEvlumbaConversation;
 import '../widgets/koala_bottom_nav.dart';
@@ -91,6 +94,16 @@ class MainShellState extends ConsumerState<MainShell> {
     // App içine girer girmez Evlumba conv id ve free-consult bayrağını
     // arka planda ısıt — kullanıcı Mesajlar/Sor'dan tıkladığında 0ms.
     unawaited(prewarmEvlumbaConversation());
+
+    // PART F — bundle prewarm (gate geçildi, uid hazır olmalı).
+    // Hem profil hem chat sekmesi tek-render olsun.
+    try {
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      if (uid != null && uid.isNotEmpty) {
+        unawaited(UserProfileService.loadBundle(uid));
+        unawaited(MessagingService.loadChatListBundle(uid));
+      }
+    } catch (_) {/* prewarm best-effort */}
   }
 
   @override

@@ -77,8 +77,43 @@ class _ProfileTabScreenState extends ConsumerState<ProfileTabScreen>
     });
     _restoreRole();
     _loadDesigns();
-    _loadCounts();
-    _loadReviews();
+    _loadAggregate();
+  }
+
+  /// PART B — `koala_profile_bundle` ile single-RPC aggregate.
+  /// counts + reviews tek round-trip'te. RPC fail → parallel fallback.
+  Future<void> _loadAggregate() async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null || uid.isEmpty) return;
+    final bundle = await UserProfileService.loadBundle(uid);
+    if (bundle != null) {
+      if (!mounted) return;
+      setState(() {
+        _followers = bundle.followers;
+        _following = bundle.following;
+        if (bundle.reviewsCount > 0) {
+          _reviews = DesignerReviewsResult(
+            reviews: bundle.reviewsLatest
+                .map((m) => DesignerReview(
+                      id: (m['id'] ?? '').toString(),
+                      designerId: uid,
+                      reviewerId: (m['user_id'] ?? '').toString(),
+                      rating: (m['rating'] as num?)?.toInt() ?? 0,
+                      comment: m['comment']?.toString(),
+                      createdAt: DateTime.tryParse(
+                              (m['created_at'] ?? '').toString()) ??
+                          DateTime.now(),
+                    ))
+                .toList(),
+            avg: bundle.reviewsAvgRating ?? 0.0,
+            count: bundle.reviewsCount,
+          );
+        }
+      });
+      return;
+    }
+    // Fallback — bundle başarısızsa eski parallel path.
+    await Future.wait([_loadCounts(), _loadReviews()]);
   }
 
   @override
@@ -154,7 +189,9 @@ class _ProfileTabScreenState extends ConsumerState<ProfileTabScreen>
 
   Future<void> _refreshAll() async {
     ref.invalidate(userProfileProvider);
-    await Future.wait([_loadDesigns(), _loadCounts(), _loadReviews()]);
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid != null) UserProfileService.invalidateBundleCache(uid);
+    await Future.wait([_loadDesigns(), _loadAggregate()]);
   }
 
   @override

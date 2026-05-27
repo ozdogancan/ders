@@ -16,7 +16,6 @@
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:lucide_icons/lucide_icons.dart';
@@ -26,11 +25,13 @@ import '../../core/theme/koala_tokens.dart';
 import '../../services/designer_reviews_service.dart';
 import '../../services/evlumba_live_service.dart';
 import '../../services/follow_service.dart';
+import '../../services/koala_seed_service.dart';
 import '../../services/saved_items_service.dart';
 import '../../services/shared_design_service.dart';
 import '../../services/user_profile_service.dart';
+import '../../widgets/lazy_grid_view.dart';
 import '../../widgets/verified_badge.dart';
-import '../projeler_screen.dart';
+import 'follow_list_sheet.dart';
 import 'profile_design_tile.dart';
 
 class UnifiedProfileView extends StatefulWidget {
@@ -79,7 +80,12 @@ class UnifiedProfileView extends StatefulWidget {
 class _UnifiedProfileViewState extends State<UnifiedProfileView> {
   KoalaUserProfile? _profile;
   Map<String, dynamic>? _designerRow; // From profiles table (designers)
-  List<Map<String, dynamic>> _designs = const [];
+  /// Header stat'i için ilk sayfada gözlenen design sayısı. Pagination olduğu
+  /// için "kesin toplam" değil — hasMore ise "N+" gösterilir.
+  int _designCountSeen = 0;
+  bool _designHasMore = true;
+  /// AI tasarımları (owner-only) — ayrı sekmede yüklenir.
+  bool _hasAnyAi = false;
   bool _loading = true;
 
   FollowState _follow = FollowState.empty;
@@ -99,9 +105,50 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
   bool get _isSelf => _currentUid != null && _currentUid == widget.profileId;
 
   Future<void> _loadAll() async {
+    // PART B — `koala_profile_bundle` ile counts + reviews tek RPC'de.
+    // Follow state + profile + ai-presence hâlâ ayrı. RPC fail → fallback.
+    try {
+      final bundle = await UserProfileService.loadBundle(widget.profileId);
+      if (bundle != null) {
+        final results = await Future.wait([
+          _loadProfile(),
+          _preloadAiPresence(),
+          FollowService.stateFor(widget.profileId),
+        ], eagerError: false);
+        if (!mounted) return;
+        setState(() {
+          _counts =
+              (followers: bundle.followers, following: bundle.following);
+          _follow = results[2] as FollowState;
+          _reviews = bundle.reviewsCount > 0
+              ? DesignerReviewsResult(
+                  reviews: bundle.reviewsLatest
+                      .map((m) => DesignerReview(
+                            id: (m['id'] ?? '').toString(),
+                            designerId: widget.profileId,
+                            reviewerId: (m['user_id'] ?? '').toString(),
+                            rating: (m['rating'] as num?)?.toInt() ?? 0,
+                            comment: m['comment']?.toString(),
+                            createdAt: DateTime.tryParse(
+                                    (m['created_at'] ?? '').toString()) ??
+                                DateTime.now(),
+                          ))
+                      .toList(),
+                  avg: bundle.reviewsAvgRating ?? 0.0,
+                  count: bundle.reviewsCount,
+                )
+              : DesignerReviewsResult.empty;
+          _loading = false;
+        });
+        return;
+      }
+    } catch (e) {
+      debugPrint('[unified_profile] bundle fallback: $e');
+    }
+    // ─── Fallback: orijinal 5-parallel path ───
     final results = await Future.wait([
       _loadProfile(),
-      _loadDesigns(),
+      _preloadAiPresence(),
       FollowService.counts(widget.profileId),
       FollowService.stateFor(widget.profileId),
       DesignerReviewsService.getForDesigner(widget.profileId),
@@ -113,6 +160,20 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
       _reviews = results[4] as DesignerReviewsResult;
       _loading = false;
     });
+  }
+
+  /// Sadece owner için: AI Stüdyom pill'ini göstermek için bir tane olsun yeter.
+  Future<void> _preloadAiPresence() async {
+    if (!(widget.ownerEditable && _isSelf)) return;
+    try {
+      final page = await SavedItemsService.getByTypePaged(
+        SavedItemType.project,
+        limit: 1,
+      );
+      _hasAnyAi = page.items.isNotEmpty;
+    } catch (_) {
+      _hasAnyAi = false;
+    }
   }
 
   Future<void> _loadProfile() async {
@@ -138,41 +199,121 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
       if (row != null) _designerRow = Map<String, dynamic>.from(row);
     } catch (_) {/* swallow */}
 
+    // Evlumba fallback — `profiles` Koala DB'de yoksa Evlumba marketplace
+    // DB'sinden bilgileri çek. evlumba-design + diğer Evlumba designer'ları
+    // için bio/about + avatar tarafından hidrasyon.
+    if (_designerRow == null ||
+        widget.profileId == 'evlumba-design' ||
+        ((_designerRow?['bio'] ?? '').toString().trim().isEmpty &&
+            (_designerRow?['about'] ?? '').toString().trim().isEmpty)) {
+      try {
+        final ev = await EvlumbaLiveService.getDesigner(widget.profileId);
+        if (ev != null) {
+          final merged = <String, dynamic>{
+            ...(ev),
+            if (_designerRow != null) ..._designerRow!,
+          };
+          // Eğer Koala row bio boşsa Evlumba bio'yu üstüne yaz.
+          if (((merged['bio'] ?? '').toString().trim().isEmpty) &&
+              ((ev['bio'] ?? '').toString().trim().isNotEmpty)) {
+            merged['bio'] = ev['bio'];
+          }
+          if (((merged['about'] ?? '').toString().trim().isEmpty) &&
+              ((ev['about'] ?? '').toString().trim().isNotEmpty)) {
+            merged['about'] = ev['about'];
+          }
+          _designerRow = merged;
+        }
+      } catch (e) {
+        debugPrint('[unified_profile] evlumba fallback failed: $e');
+      }
+    }
+
     // Override with seed if provided.
     if (widget.seedProfile != null) {
       _designerRow ??= Map<String, dynamic>.from(widget.seedProfile!);
     }
   }
 
-  Future<void> _loadDesigns() async {
+  /// Tasarım gridini besleyen tek fetch fonksiyonu. Owner için
+  /// (paylaşımlar+AI birleştirilmiş) sırayla shared sayfası, sonra AI sayfası
+  /// yüklenir. Other-user / designer için sadece designer_projects (ya da
+  /// evlumba seed) yüklenir.
+  ///
+  /// Cursor şekli: Map { 'phase': 'shared'|'ai'|'designer', 'cursor': String? }
+  /// — owner two-source paginate edilebilmesi için. Diğer durumda phase yok,
+  /// cursor düz String?.
+  Future<({List<Map<String, dynamic>> items, bool hasMore, dynamic cursor})>
+      _fetchDesignsPage(dynamic cursor) async {
     try {
       if (widget.ownerEditable && _isSelf) {
-        // Owner: AI designs (saved_items.project) + shared designs.
-        final results = await Future.wait([
-          SavedItemsService.getByType(SavedItemType.project, limit: 40),
-          SharedDesignService.myShared(limit: 40),
-        ]);
-        final ai = (results[0] as List<Map<String, dynamic>>)
-            .map((m) => {...m, 'is_ai': true})
-            .toList();
-        final shared = (results[1] as List<SharedDesign>)
-            .map((s) => {...s.toMapForProfileTab(), 'is_ai': false})
-            .toList();
-        _designs = [...shared, ...ai];
-      } else {
-        // Other user / designer: try EvlumbaLiveService projects.
-        if (widget.profileId == 'evlumba-design' && widget.seedPool != null) {
-          _designs = List<Map<String, dynamic>>.from(widget.seedPool!);
+        // Owner two-phase: önce shared, bittiğinde AI.
+        final state = (cursor is Map)
+            ? Map<String, dynamic>.from(cursor)
+            : <String, dynamic>{'phase': 'shared', 'cursor': null};
+        final phase = (state['phase'] ?? 'shared').toString();
+        final c = state['cursor'] as String?;
+
+        if (phase == 'shared') {
+          final page = await SharedDesignService.mySharedPaged(
+            limit: 18,
+            beforeCreatedAt: c,
+          );
+          final items = page.items
+              .map((s) => {...s.toMapForProfileTab(), 'is_ai': false})
+              .toList();
+          // Shared bittiğinde phase'i 'ai'ye geçir, cursor'u null'la sıfırla.
+          final nextCursor = page.hasMore
+              ? {'phase': 'shared', 'cursor': page.cursor}
+              : {'phase': 'ai', 'cursor': null};
+          // hasMore: shared'da daha varsa true; yoksa AI varlığına bak.
+          final hasMore = page.hasMore || _hasAnyAi;
+          return (items: items, hasMore: hasMore, cursor: nextCursor);
         } else {
-          _designs = await EvlumbaLiveService.getProjects(
-            designerId: widget.profileId,
-            limit: 30,
+          // AI phase
+          final page = await SavedItemsService.getByTypePaged(
+            SavedItemType.project,
+            limit: 18,
+            beforeCreatedAt: c,
+          );
+          final items = page.items
+              .map((m) => {...m, 'is_ai': true})
+              .toList();
+          return (
+            items: items,
+            hasMore: page.hasMore,
+            cursor: {'phase': 'ai', 'cursor': page.cursor},
           );
         }
       }
+
+      // Other user — Evlumba synthetic
+      if (widget.profileId == KoalaSeedService.evlumbaDesignerId) {
+        final page = await KoalaSeedService.evlumbaCardsPaged(
+          limit: 18,
+          beforeCreatedAt: cursor as String?,
+        );
+        return (
+          items: page.items,
+          hasMore: page.hasMore,
+          cursor: page.cursor,
+        );
+      }
+
+      // Other designer
+      final page = await EvlumbaLiveService.getDesignerProjectsPaged(
+        widget.profileId,
+        limit: 18,
+        beforeCreatedAt: cursor as String?,
+      );
+      return (
+        items: page.items,
+        hasMore: page.hasMore,
+        cursor: page.cursor,
+      );
     } catch (e) {
-      debugPrint('[unified_profile] designs load failed: $e');
-      _designs = const [];
+      debugPrint('[unified_profile] designs page fetch failed: $e');
+      return (items: <Map<String, dynamic>>[], hasMore: false, cursor: null);
     }
   }
 
@@ -242,6 +383,14 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
   }
 
   String get _avatarUrl {
+    // Own profile: FirebaseAuth.photoURL en taze kaynak — settings'ten avatar
+    // upload edildikten sonra koala_user_profiles row'u henüz invalidate
+    // edilmemiş olabilir, ama auth photoURL anında güncellenir.
+    if (_isSelf) {
+      final authPhoto =
+          (FirebaseAuth.instance.currentUser?.photoURL ?? '').trim();
+      if (authPhoto.isNotEmpty) return authPhoto;
+    }
     final fromProfile = (_profile?.avatarUrl ?? '').trim();
     if (fromProfile.isNotEmpty) return fromProfile;
     return ((_designerRow?['avatar_url'] ?? '') as String).trim();
@@ -260,7 +409,7 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
         ((d?['profession'] ?? d?['specialty'] ?? '') as String).trim();
     if (prof.isNotEmpty) return prof;
     if (_profile?.isPro == true) return 'Profesyonel Tasarımcı';
-    return 'Koala üyesi';
+    return 'Ev Sahibi';
   }
 
   String get _city => ((_designerRow?['city'] ?? '') as String).trim();
@@ -268,8 +417,7 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
   bool get _isDesignerOrPro =>
       _designerRow != null || (_profile?.isPro == true);
 
-  bool get _hasAiDesigns =>
-      _designs.any((d) => d['is_ai'] == true);
+  bool get _hasAiDesigns => _hasAnyAi;
 
   @override
   Widget build(BuildContext context) {
@@ -420,32 +568,76 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
       padding: const EdgeInsets.fromLTRB(20, 4, 20, 16),
       child: Row(
         children: [
-          _stat(label: 'Tasarım', value: '${_designs.length}'),
+          _stat(
+            label: 'Tasarım',
+            value: _designHasMore
+                ? '$_designCountSeen+'
+                : '$_designCountSeen',
+          ),
           _statDiv(),
-          _stat(label: 'Takipçi', value: '${_counts.followers}'),
+          _stat(
+            label: 'Takipçi',
+            value: '${_counts.followers}',
+            onTap: () => _openFollowList(FollowListMode.followers),
+          ),
           _statDiv(),
-          _stat(label: 'Takip', value: '${_counts.following}'),
+          _stat(
+            label: 'Takip',
+            value: '${_counts.following}',
+            onTap: () => _openFollowList(FollowListMode.following),
+          ),
         ],
       ),
     );
   }
 
-  Widget _stat({required String label, required String value}) {
-    return Expanded(
-      child: Column(
-        children: [
-          Text(
-            value,
-            style: const TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w700,
-              color: KoalaColors.text,
-              letterSpacing: -0.3,
-            ),
+  Future<void> _openFollowList(FollowListMode mode) async {
+    HapticFeedback.selectionClick();
+    await FollowListSheet.open(
+      context,
+      ownerUid: widget.profileId,
+      mode: mode,
+    );
+    if (!mounted) return;
+    // Refresh counts after the list closes (user may have followed/unfollowed).
+    try {
+      final c = await FollowService.counts(widget.profileId);
+      if (!mounted) return;
+      setState(() => _counts = c);
+    } catch (_) {/* swallow */}
+  }
+
+  Widget _stat({
+    required String label,
+    required String value,
+    VoidCallback? onTap,
+  }) {
+    final body = Column(
+      children: [
+        Text(
+          value,
+          style: const TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.w700,
+            color: KoalaColors.text,
+            letterSpacing: -0.3,
           ),
-          const SizedBox(height: 2),
-          Text(label, style: KoalaText.labelSmall),
-        ],
+        ),
+        const SizedBox(height: 2),
+        Text(label, style: KoalaText.labelSmall),
+      ],
+    );
+    if (onTap == null) {
+      return Expanded(child: body);
+    }
+    return Expanded(
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: body,
+        ),
       ),
     );
   }
@@ -484,13 +676,14 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
         ),
       );
     }
-    // Other-user view → follow CTA
+    // Other-user view → follow CTA + (designer/pro) "Değerlendir" outlined.
     final following = _follow.following;
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 0, 20, 18),
-      child: Row(
+      child: Column(
         children: [
-          Expanded(
+          SizedBox(
+            width: double.infinity,
             child: ElevatedButton.icon(
               onPressed: _followBusy ? null : _onFollowTap,
               style: ElevatedButton.styleFrom(
@@ -521,8 +714,86 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
               ),
             ),
           ),
+          if (_isDesignerOrPro) ...[
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: _openRateSheet,
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: KoalaColors.accentDeep,
+                  side: BorderSide(
+                    color: KoalaColors.accentDeep.withValues(alpha: 0.4),
+                    width: 1,
+                  ),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                ),
+                icon: const Icon(LucideIcons.star, size: 16),
+                label: const Text(
+                  'Değerlendir',
+                  style: TextStyle(
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ),
+          ],
         ],
       ),
+    );
+  }
+
+  Future<void> _openRateSheet() async {
+    HapticFeedback.selectionClick();
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: KoalaColors.bg,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) {
+        final insets = MediaQuery.viewInsetsOf(ctx);
+        return Padding(
+          padding: EdgeInsets.only(bottom: insets.bottom),
+          child: SafeArea(
+            top: false,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(0, 12, 0, 12),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: KoalaColors.border,
+                      borderRadius: BorderRadius.circular(100),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 20),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text('Değerlendir', style: KoalaText.h2),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  _RateAndCommentBar(onSubmit: (r, c) async {
+                    await _onReviewSubmit(r, c);
+                    if (ctx.mounted) Navigator.of(ctx).pop();
+                  }),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -669,66 +940,85 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
         children: [
           const Text('TASARIMLARI', style: KoalaText.caption),
           const Spacer(),
-          if (_designs.isNotEmpty)
-            Text('${_designs.length} adet', style: KoalaText.labelSmall),
+          if (_designCountSeen > 0)
+            Text(
+              _designHasMore
+                  ? '$_designCountSeen+ adet'
+                  : '$_designCountSeen adet',
+              style: KoalaText.labelSmall,
+            ),
         ],
       ),
     );
   }
 
+  /// Tüm yüklenen tasarımlar — onTapDesign tıklama callback'i ve viewedDesign
+  /// overlay'i için referans tutulur. LazyGridView itemBuilder'ından beslenir.
+  final List<Map<String, dynamic>> _loadedDesigns = <Map<String, dynamic>>[];
+
   Widget _projectsGrid() {
-    if (_designs.isEmpty) {
-      return Padding(
-        padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 24),
-        child: Center(
-          child: Text(
-            'Henüz yayınlanmış tasarım yok.',
-            style: KoalaText.bodySec,
-            textAlign: TextAlign.center,
-          ),
-        ),
-      );
-    }
-
-    // If viewedDesignId is non-null, reorder so the viewed design is first.
-    List<Map<String, dynamic>> ordered = _designs;
-    int viewedIndex = -1;
-    if (widget.viewedDesignId != null && widget.viewedDesignId!.isNotEmpty) {
-      final idx = _designs.indexWhere((p) {
-        final id = (p['id'] ?? p['item_id'] ?? '').toString();
-        return id == widget.viewedDesignId;
-      });
-      if (idx > 0) {
-        ordered = List<Map<String, dynamic>>.from(_designs);
-        final viewed = ordered.removeAt(idx);
-        ordered.insert(0, viewed);
-        viewedIndex = 0;
-      } else if (idx == 0) {
-        viewedIndex = 0;
-      }
-    }
-
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: GridView.builder(
+      child: LazyGridView<Map<String, dynamic>>(
         shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 2,
-          crossAxisSpacing: 10,
-          mainAxisSpacing: 10,
-          childAspectRatio: 0.78,
+        crossAxisCount: 2,
+        aspectRatio: 0.78,
+        spacing: 10,
+        bottomThreshold: 320,
+        idOf: (p) =>
+            (p['id'] ?? p['item_id'] ?? p['cover_image_url'] ?? '').toString(),
+        fetch: (cursor) async {
+          final page = await _fetchDesignsPage(cursor);
+          // Header counter güncelleme — setState kullanmıyoruz (LazyGridView
+          // zaten setState'e tetikleniyor; bir microtask ertelemesiyle parent
+          // rebuild'i postFrame'e bırak).
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) return;
+            // LazyGridView ile aynı dedupe — kullanıcı tap'inde
+            // _loadedDesigns sıralaması grid ile bire bir.
+            final seen = <String>{
+              for (final m in _loadedDesigns)
+                (m['id'] ?? m['item_id'] ?? m['cover_image_url'] ?? '')
+                    .toString()
+            };
+            final fresh = <Map<String, dynamic>>[];
+            for (final m in page.items) {
+              final id =
+                  (m['id'] ?? m['item_id'] ?? m['cover_image_url'] ?? '')
+                      .toString();
+              if (id.isEmpty || seen.contains(id)) continue;
+              seen.add(id);
+              fresh.add(m);
+            }
+            setState(() {
+              _loadedDesigns.addAll(fresh);
+              _designCountSeen = _loadedDesigns.length;
+              _designHasMore = page.hasMore;
+            });
+          });
+          return page;
+        },
+        emptyState: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 24),
+          child: Center(
+            child: Text(
+              'Henüz yayınlanmış tasarım yok.',
+              style: KoalaText.bodySec,
+              textAlign: TextAlign.center,
+            ),
+          ),
         ),
-        itemCount: ordered.length,
-        itemBuilder: (_, i) {
-          final p = ordered[i];
+        itemBuilder: (_, p, i) {
           final cover = _coverOf(p);
           final title = (p['title'] ?? '').toString();
-          final isViewed = i == viewedIndex;
+          final id = (p['id'] ?? p['item_id'] ?? '').toString();
+          final isViewed = widget.viewedDesignId != null &&
+              widget.viewedDesignId!.isNotEmpty &&
+              widget.viewedDesignId == id;
           return GestureDetector(
             onTap: () {
               HapticFeedback.selectionClick();
-              widget.onTapDesign?.call(ordered, i);
+              widget.onTapDesign?.call(_loadedDesigns, i);
             },
             behavior: HitTestBehavior.opaque,
             child: ClipRRect(

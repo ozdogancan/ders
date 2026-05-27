@@ -242,6 +242,61 @@ class SharedDesignService {
     }
   }
 
+  // ─── PAGINATED variants (cursor: published_at ISO string) ───
+  /// Başka kullanıcının paylaşımları — paginated.
+  static Future<({List<SharedDesign> items, bool hasMore, dynamic cursor})>
+      publicByUidPaged(
+    String uid, {
+    int limit = 18,
+    String? beforeCreatedAt,
+  }) async {
+    if (uid.isEmpty) {
+      return (items: <SharedDesign>[], hasMore: false, cursor: null);
+    }
+    try {
+      var q = Supabase.instance.client
+          .from(_table)
+          .select()
+          .eq('user_id', uid)
+          .eq('status', 'published');
+      if (beforeCreatedAt != null && beforeCreatedAt.isNotEmpty) {
+        q = q.lt('published_at', beforeCreatedAt);
+      }
+      final data = await q
+          .order('published_at', ascending: false)
+          .limit(limit);
+      final rows = List<Map<String, dynamic>>.from(data);
+      final items = rows.map(SharedDesign.fromRow).toList();
+      final nextCursor =
+          rows.isNotEmpty ? rows.last['published_at']?.toString() : null;
+      return (
+        items: items,
+        hasMore: rows.length >= limit,
+        cursor: nextCursor,
+      );
+    } catch (e) {
+      debugPrint('[SharedDesignService] publicByUidPaged failed: $e');
+      return (items: <SharedDesign>[], hasMore: false, cursor: null);
+    }
+  }
+
+  /// Kullanıcının kendi paylaşımları — paginated.
+  static Future<({List<SharedDesign> items, bool hasMore, dynamic cursor})>
+      mySharedPaged({
+    int limit = 18,
+    String? beforeCreatedAt,
+  }) async {
+    final uid = _uid;
+    if (uid == null) {
+      return (items: <SharedDesign>[], hasMore: false, cursor: null);
+    }
+    return publicByUidPaged(
+      uid,
+      limit: limit,
+      beforeCreatedAt: beforeCreatedAt,
+    );
+  }
+
   static Future<bool> delete(String id) async {
     final uid = _uid;
     if (uid == null) return false;

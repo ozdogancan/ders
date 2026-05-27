@@ -2,13 +2,11 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/theme/koala_tokens.dart';
 import '../../widgets/ask_and_apply_sheet.dart';
-import '../mekan/wizard/mekan_wizard_screen.dart';
 
 /// Tasarım detay — tam ekran sinematik görüntüleyici.
 ///
@@ -186,73 +184,6 @@ class DesignDetailScreen extends StatelessWidget {
       'designer_avatar_url': _str(extra['designer_avatar_url']),
       'category': _str(extra['category'] ?? extra['style_tr']),
     };
-  }
-
-  Future<void> _onApply(BuildContext context) async {
-    HapticFeedback.selectionClick();
-    final imageUrl = (item['image_url'] as String?) ?? '';
-    final meta = _designerMeta();
-    // "Uygula" → kullanıcının mekan fotoğrafını seç, sonra wizard'a hedef
-    // tasarım URL'i ile gir. Wizard photoBytes ister.
-    final source = await showModalBottomSheet<ImageSource>(
-      context: context,
-      backgroundColor: KoalaColors.bg,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (ctx) => SafeArea(
-        top: false,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SizedBox(height: 12),
-            Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: KoalaColors.border,
-                borderRadius: BorderRadius.circular(100),
-              ),
-            ),
-            const SizedBox(height: 8),
-            ListTile(
-              leading:
-                  const Icon(LucideIcons.camera, color: KoalaColors.accentDeep),
-              title: const Text('Fotoğraf çek', style: KoalaText.bodyMedium),
-              onTap: () => Navigator.pop(ctx, ImageSource.camera),
-            ),
-            ListTile(
-              leading:
-                  const Icon(LucideIcons.image, color: KoalaColors.accentDeep),
-              title: const Text('Galeriden seç', style: KoalaText.bodyMedium),
-              onTap: () => Navigator.pop(ctx, ImageSource.gallery),
-            ),
-            const SizedBox(height: 8),
-          ],
-        ),
-      ),
-    );
-    if (source == null || !context.mounted) return;
-    try {
-      final picker = ImagePicker();
-      final picked = await picker.pickImage(
-        source: source,
-        maxWidth: 1024,
-        imageQuality: 60,
-      );
-      if (picked == null || !context.mounted) return;
-      final bytes = await picked.readAsBytes();
-      if (!context.mounted) return;
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) => MekanWizardScreen(
-            photoBytes: bytes,
-            targetDesignUrl: imageUrl,
-            targetDesignerId: meta['designer_id'],
-          ),
-        ),
-      );
-    } catch (_) {/* swallow */}
   }
 
   Future<void> _onAsk(BuildContext context) async {

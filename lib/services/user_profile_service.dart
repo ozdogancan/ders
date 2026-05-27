@@ -289,6 +289,136 @@ class UserProfileService {
       return false;
     }
   }
+
+  // ─── PART B — koala_profile_bundle RPC consumer ─────────────────────
+  /// Per-session bundle cache. uid → result. `main_shell` prewarm bunu
+  /// doldurur, profil sekmesi açıldığında 0ms render.
+  static final Map<String, ProfileBundleResult> _bundleCache = {};
+
+  /// Cache invalidation — logout, hesap değişikliği vb. sonrası.
+  static void invalidateBundleCache([String? uid]) {
+    if (uid == null) {
+      _bundleCache.clear();
+    } else {
+      _bundleCache.remove(uid);
+    }
+  }
+
+  /// `koala_profile_bundle(uid)` RPC — profile + saved counts + reviews +
+  /// follows + cards_published TEK round trip. Mevcut 4 paralel sorguyu
+  /// değiştirir. Hata → null döner, caller fallback'e geçer.
+  ///
+  /// [forceRefresh] true ise cache atlanır.
+  static Future<ProfileBundleResult?> loadBundle(
+    String uid, {
+    bool forceRefresh = false,
+  }) async {
+    if (uid.isEmpty) return null;
+    if (!forceRefresh) {
+      final cached = _bundleCache[uid];
+      if (cached != null) return cached;
+    }
+    try {
+      final data = await Supabase.instance.client
+          .rpc('koala_profile_bundle', params: {'p_uid': uid});
+      if (data == null) return null;
+      final json = data is Map ? Map<String, dynamic>.from(data) : null;
+      if (json == null) return null;
+      final result = ProfileBundleResult.fromJson(uid, json);
+      _bundleCache[uid] = result;
+      return result;
+    } catch (e) {
+      debugPrint('[user_profile] loadBundle failed → $e');
+      return null;
+    }
+  }
+}
+
+/// `koala_profile_bundle` RPC response — typed model.
+class ProfileBundleResult {
+  final String uid;
+  final KoalaUserProfile? profile;
+  final int savedCount;
+  final Map<String, int> savedByType;
+  final int reviewsCount;
+  final double? reviewsAvgRating;
+  final List<Map<String, dynamic>> reviewsLatest;
+  final int followers;
+  final int following;
+  final int cardsPublished;
+  final DateTime generatedAt;
+
+  const ProfileBundleResult({
+    required this.uid,
+    required this.profile,
+    required this.savedCount,
+    required this.savedByType,
+    required this.reviewsCount,
+    required this.reviewsAvgRating,
+    required this.reviewsLatest,
+    required this.followers,
+    required this.following,
+    required this.cardsPublished,
+    required this.generatedAt,
+  });
+
+  factory ProfileBundleResult.fromJson(String uid, Map<String, dynamic> j) {
+    KoalaUserProfile? profile;
+    final pRaw = j['profile'];
+    if (pRaw is Map) {
+      profile = KoalaUserProfile.fromRow(Map<String, dynamic>.from(pRaw));
+    }
+    final sbt = <String, int>{};
+    final sbtRaw = j['saved_by_type'];
+    if (sbtRaw is Map) {
+      sbtRaw.forEach((k, v) {
+        if (v is num) sbt[k.toString()] = v.toInt();
+      });
+    }
+    final reviewsRaw = j['reviews_received'];
+    int reviewsCount = 0;
+    double? reviewsAvg;
+    List<Map<String, dynamic>> latest = const [];
+    if (reviewsRaw is Map) {
+      reviewsCount = (reviewsRaw['count'] as num?)?.toInt() ?? 0;
+      final avg = reviewsRaw['avg_rating'];
+      if (avg is num) reviewsAvg = avg.toDouble();
+      final l = reviewsRaw['latest'];
+      if (l is List) {
+        latest = l
+            .whereType<Map>()
+            .map((m) => Map<String, dynamic>.from(m))
+            .toList();
+      }
+    }
+    final follows = j['follows'];
+    int followers = 0;
+    int following = 0;
+    if (follows is Map) {
+      followers = (follows['followers'] as num?)?.toInt() ?? 0;
+      following = (follows['following'] as num?)?.toInt() ?? 0;
+    }
+    DateTime ga = DateTime.now();
+    final gaRaw = j['generated_at'];
+    if (gaRaw is String) {
+      try {
+        ga = DateTime.parse(gaRaw);
+      } catch (_) {}
+    }
+    return ProfileBundleResult(
+      uid: uid,
+      profile: profile,
+      savedCount: (j['saved_count'] as num?)?.toInt() ?? 0,
+      savedByType: sbt,
+      reviewsCount: reviewsCount,
+      reviewsAvgRating: reviewsAvg,
+      reviewsLatest: latest,
+      followers: followers,
+      following: following,
+      cardsPublished: (j['cards_published'] as num?)?.toInt() ?? 0,
+      generatedAt: ga,
+    );
+  }
 }
 
 /// Riverpod provider — profil + son başvuru durumu birlikte.

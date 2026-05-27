@@ -24,6 +24,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show Supabase;
+import 'package:firebase_auth/firebase_auth.dart';
 
 import '../core/theme/koala_tokens.dart';
 import '../helpers/paywall_router.dart';
@@ -39,6 +40,8 @@ import 'mekan/wizard/mekan_wizard_screen.dart';
 import 'chat_list_screen.dart';
 import 'projeler_screen.dart';
 import '../services/evlumba_live_service.dart';
+import '../services/koala_seed_service.dart';
+import '../widgets/lazy_grid_view.dart';
 import '../services/messaging_service.dart';
 import '../services/saved_items_service.dart';
 import '../services/analytics_service.dart';
@@ -463,10 +466,78 @@ class _StyleDiscoveryLiveScreenState
     }
   }
 
+  // ── PART A — server-side ranker eligibility ───────────────────────────
+  // Gate: (1) Firebase uid var, (2) embedding non-null (taste vector mature),
+  // (3) >=10 swipe (anti cold-start). Tüm koşullar tutarsa server'ı dener;
+  // RPC null/exception → otomatik client-side fallback.
+  static const int _serverRankerMinSwipes = 10;
+  bool _serverRankerEligibilityChecked = false;
+  bool _serverRankerEligible = false;
+
+  Future<bool> _checkServerRankerEligibility() async {
+    if (_serverRankerEligibilityChecked) return _serverRankerEligible;
+    _serverRankerEligibilityChecked = true;
+    try {
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      if (uid == null || uid.isEmpty) return false;
+      final hasEmb = await SwipeFeedService.userHasEmbedding(uid);
+      if (!hasEmb) return false;
+      try {
+        final row = await Supabase.instance.client
+            .from('koala_user_taste')
+            .select('total_swipes')
+            .eq('user_id', uid)
+            .maybeSingle();
+        final total = (row?['total_swipes'] as num?)?.toInt() ?? 0;
+        if (total < _serverRankerMinSwipes) return false;
+      } catch (_) {
+        return false;
+      }
+      _serverRankerEligible = true;
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   Future<void> _fetchBatch() async {
     if (_fetchingMore) return;
     _fetchingMore = true;
     try {
+      // ─── Server-side ranker (DEFAULT — Part A) ───────────────────────
+      // Eligible kullanıcılarda önce embedding-based ranker'ı dene; hata /
+      // boş sonuç → client-side path'e düş, deck'i ASLA bozma.
+      try {
+        final useServer = await _checkServerRankerEligibility();
+        if (useServer && _sourceFilter != 'evlumba') {
+          final serverRanked = await SwipeFeedService.rankFromServer(
+            limit: _batchSize * 2,
+            offset: _offset,
+          );
+          if (serverRanked != null && serverRanked.isNotEmpty) {
+            final filtered = <Map<String, dynamic>>[];
+            for (final p in serverRanked) {
+              final id = p['id']?.toString() ?? '';
+              if (id.isEmpty || _seenIds.contains(id)) continue;
+              if (_coverOf(p).isEmpty) continue;
+              _seenIds.add(id);
+              filtered.add(p);
+            }
+            if (filtered.isNotEmpty) {
+              _offset += serverRanked.length;
+              if (!mounted) return;
+              setState(() => _deck.addAll(filtered));
+              _precacheNext();
+              debugPrint(
+                  'StyleDiscoveryLive[server]: ranked=${serverRanked.length} filtered=${filtered.length} deck=${_deck.length}');
+              return;
+            }
+          }
+        }
+      } catch (e) {
+        debugPrint('StyleDiscoveryLive: server-rank fallback → $e');
+      }
+
       // Kaynak filtresi 'evlumba' iken Evlumba projelerini hiç çekme —
       // sadece seeded havuzdan harmanla.
       final List<Map<String, dynamic>> batch;
@@ -544,6 +615,8 @@ class _StyleDiscoveryLiveScreenState
       'project_type': _seedRoomTr[rt] ?? rt,
       'cover_image_url': (r['cdn_url'] ?? r['original_url'] ?? '').toString(),
       'created_at': r['created_at'],
+      // '9_16' | '1_1' | '16_9' — _Card AspectRatio'yu buna göre kurar.
+      'aspect': (r['aspect'] ?? '').toString(),
       'tags': const <String>[],
       'color_palette': const <String>[],
       '_seed': true,
@@ -570,7 +643,7 @@ class _StyleDiscoveryLiveScreenState
       final data = await Supabase.instance.client
           .from('koala_cards')
           .select('id, title, description, room_type, style, cdn_url, '
-              'original_url, created_at')
+              'original_url, aspect, created_at')
           .eq('source', 'gemini-seed')
           .eq('is_published', true)
           .limit(300);
@@ -1955,12 +2028,31 @@ class _Card extends StatelessWidget {
     return t;
   }
 
+  /// Sunucudan gelen `aspect` alanına göre kart oranı:
+  /// '9_16' → 9/16 (portrait, telefon swipe deck'te en iyi),
+  /// '1_1'  → 1.0  (kare),
+  /// '16_9' → 16/9 (landscape).
+  /// Eksik/bilinmeyen değer → 4/5 (mevcut varsayılan).
+  double _aspectRatio() {
+    final raw = (project['aspect'] ?? '').toString().trim();
+    switch (raw) {
+      case '9_16':
+        return 9 / 16;
+      case '1_1':
+        return 1.0;
+      case '16_9':
+        return 16 / 9;
+      default:
+        return 4 / 5;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final url = coverOf(project);
     final palette = _paletteColors();
 
-    return Container(
+    final card = Container(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(24),
         color: KoalaColors.surfaceAlt,
@@ -2042,6 +2134,16 @@ class _Card extends StatelessWidget {
           else
             const SizedBox.shrink(),
         ],
+      ),
+    );
+
+    // Karta `aspect` alanına göre oran uygula — deck alanı içinde merkezle.
+    // BoxFit.cover zaten görseli dolduruyor; AspectRatio kart kutusunun
+    // yüksekliğini/genişliğini orana göre kısıtlar.
+    return Center(
+      child: AspectRatio(
+        aspectRatio: _aspectRatio(),
+        child: card,
       ),
     );
   }
@@ -2405,16 +2507,29 @@ class _ActionBtn extends StatelessWidget {
 
     switch (variant) {
       case _ActionVariant.outlined:
-        bg = Colors.white;
-        fg = KoalaColors.textMed;
-        border = KoalaColors.border;
-        shadow = [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ];
+        if (label == 'Sor') {
+          bg = KoalaColors.accentDeep.withValues(alpha: 0.08);
+          fg = KoalaColors.accentDeep;
+          border = KoalaColors.accentDeep.withValues(alpha: 0.3);
+          shadow = [
+            BoxShadow(
+              color: KoalaColors.accentDeep.withValues(alpha: 0.10),
+              blurRadius: 10,
+              offset: const Offset(0, 3),
+            ),
+          ];
+        } else {
+          bg = Colors.white;
+          fg = KoalaColors.textMed;
+          border = KoalaColors.border;
+          shadow = [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.05),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ];
+        }
         break;
       case _ActionVariant.soft:
         // "Sor" aksiyonu — primary kadar öne çıkmasın ama sönük de durmasın.
@@ -3386,27 +3501,7 @@ class _BrandLockup extends StatelessWidget {
       mainAxisAlignment: MainAxisAlignment.center,
       mainAxisSize: MainAxisSize.min,
       children: [
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.baseline,
-          textBaseline: TextBaseline.alphabetic,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text('koala', style: _wordmark()),
-            const SizedBox(width: 6),
-            const Padding(
-              padding: EdgeInsets.only(bottom: 3),
-              child: Text(
-                'by evlumba',
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                  color: KoalaColors.accentDeep,
-                  letterSpacing: 0.2,
-                ),
-              ),
-            ),
-          ],
-        ),
+        Text('koala', style: _wordmark()),
         const SizedBox(height: 2),
         const Text(
           'Evin için ilham.',
@@ -3539,7 +3634,6 @@ class _BellButton extends StatelessWidget {
 /// AppBar sağındaki ayarlar düğmesi — minimal outlined daire, ayar ikonu.
 /// Pro durumu artık ayrı `_ProPill` widget'ına taşındı.
 class _SettingsButton extends StatelessWidget {
-  // ignore: unused_element_parameter
   final bool isPro;
   final VoidCallback onTap;
   const _SettingsButton({required this.isPro, required this.onTap});
@@ -3552,18 +3646,53 @@ class _SettingsButton extends StatelessWidget {
       child: InkWell(
         onTap: onTap,
         customBorder: const CircleBorder(),
-        child: Container(
-          width: 40,
-          height: 40,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: KoalaColors.surface,
-            border:
-                Border.all(color: KoalaColors.borderSolid, width: 0.8),
+        child: SizedBox(
+          width: 44,
+          height: 44,
+          child: Stack(
+            clipBehavior: Clip.none,
+            alignment: Alignment.center,
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: KoalaColors.surface,
+                  border:
+                      Border.all(color: KoalaColors.borderSolid, width: 0.8),
+                ),
+                alignment: Alignment.center,
+                child: const Icon(LucideIcons.settings,
+                    size: 19, color: KoalaColors.text),
+              ),
+              if (isPro)
+                Positioned(
+                  top: 2,
+                  right: 2,
+                  child: Container(
+                    width: 10,
+                    height: 10,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: const LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [Color(0xFFE5C879), Color(0xFFD4A853)],
+                      ),
+                      border: Border.all(color: Colors.white, width: 1.5),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFFD4A853).withValues(alpha: 0.45),
+                          blurRadius: 4,
+                          offset: const Offset(0, 1),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+            ],
           ),
-          alignment: Alignment.center,
-          child: const Icon(LucideIcons.settings,
-              size: 19, color: KoalaColors.text),
         ),
       ),
     );
@@ -3824,6 +3953,10 @@ class _DesignerProfileSheetState extends State<DesignerProfileSheet> {
   bool _followBusy = false;
   int _reviewCount = 0;
   double? _avgRating;
+  /// LazyGridView parent scroll için sheet controller'ı.
+  ScrollController? _sheetCtrl;
+  /// LazyGridView'dan biriken projeler — _openProjectSwipe(i) için.
+  final List<Map<String, dynamic>> _loadedProjects = <Map<String, dynamic>>[];
 
   @override
   void initState() {
@@ -3832,23 +3965,24 @@ class _DesignerProfileSheetState extends State<DesignerProfileSheet> {
   }
 
   Future<void> _loadAll() async {
-    // Üç sorguyu paralel başlat — sheet hızlı açılsın.
-    final projectsF = _fetchProjects();
+    // Projeler artık LazyGridView üzerinden paginated fetch — burada
+    // sadece follow + stats. _projects başlangıçta boş, grid kendi
+    // doldurur.
     final followF = FollowService.stateFor(widget.designerId);
     final statsF = _fetchStats();
     final results =
-        await Future.wait([projectsF, followF, statsF], eagerError: false);
+        await Future.wait([followF, statsF], eagerError: false);
     if (!mounted) return;
     setState(() {
-      _projects = results[0] as List<Map<String, dynamic>>;
-      _follow = results[1] as FollowState;
-      final stats = results[2] as Map<String, dynamic>?;
+      _follow = results[0] as FollowState;
+      final stats = results[1] as Map<String, dynamic>?;
       _reviewCount = (stats?['review_count'] as num?)?.toInt() ?? 0;
       _avgRating = (stats?['avg_rating'] as num?)?.toDouble();
       _loading = false;
     });
   }
 
+  // ignore: unused_element
   Future<List<Map<String, dynamic>>> _fetchProjects() async {
     try {
       if (widget.designerId == 'evlumba-design') {
@@ -3934,6 +4068,7 @@ class _DesignerProfileSheetState extends State<DesignerProfileSheet> {
       maxChildSize: 0.96,
       expand: false,
       builder: (context, scrollController) {
+        _sheetCtrl = scrollController;
         return Column(
           children: [
             const SizedBox(height: 10),
@@ -4201,38 +4336,62 @@ class _DesignerProfileSheetState extends State<DesignerProfileSheet> {
   }
 
   Widget _projectsGrid() {
-    if (_loading) {
-      return const Padding(
-        padding: EdgeInsets.symmetric(vertical: 32),
-        child: Center(child: CircularProgressIndicator()),
-      );
-    }
-    if (_projects.isEmpty) {
-      return Padding(
-        padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 24),
-        child: Center(
-          child: Text(
-            'Henüz yayınlanmış tasarım yok.',
-            style: KoalaText.bodySec,
-            textAlign: TextAlign.center,
-          ),
-        ),
-      );
-    }
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: GridView.builder(
+      child: LazyGridView<Map<String, dynamic>>(
         shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 2,
-          crossAxisSpacing: 10,
-          mainAxisSpacing: 10,
-          childAspectRatio: 0.78,
+        parentScrollController: _sheetCtrl,
+        crossAxisCount: 2,
+        aspectRatio: 0.78,
+        spacing: 10,
+        bottomThreshold: 320,
+        idOf: (p) =>
+            (p['id'] ?? p['cover_image_url'] ?? p['image_url'] ?? '')
+                .toString(),
+        fetch: (cursor) async {
+          final page = widget.designerId == KoalaSeedService.evlumbaDesignerId
+              ? await KoalaSeedService.evlumbaCardsPaged(
+                  limit: 18, beforeCreatedAt: cursor as String?)
+              : await EvlumbaLiveService.getDesignerProjectsPaged(
+                  widget.designerId,
+                  limit: 18,
+                  beforeCreatedAt: cursor as String?,
+                );
+          // _loadedProjects biriktir — tap navigation için.
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) return;
+            final seen = <String>{
+              for (final m in _loadedProjects)
+                (m['id'] ?? m['cover_image_url'] ?? m['image_url'] ?? '')
+                    .toString()
+            };
+            final fresh = <Map<String, dynamic>>[];
+            for (final m in page.items) {
+              final id =
+                  (m['id'] ?? m['cover_image_url'] ?? m['image_url'] ?? '')
+                      .toString();
+              if (id.isEmpty || seen.contains(id)) continue;
+              seen.add(id);
+              fresh.add(m);
+            }
+            setState(() {
+              _loadedProjects.addAll(fresh);
+              _projects = _loadedProjects; // header/stats için
+            });
+          });
+          return page;
+        },
+        emptyState: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 24),
+          child: Center(
+            child: Text(
+              'Henüz yayınlanmış tasarım yok.',
+              style: KoalaText.bodySec,
+              textAlign: TextAlign.center,
+            ),
+          ),
         ),
-        itemCount: _projects.length,
-        itemBuilder: (_, i) {
-          final p = _projects[i];
+        itemBuilder: (_, p, i) {
           final cover = _coverOf(p);
           final title = (p['title'] ?? '').toString();
           return GestureDetector(
