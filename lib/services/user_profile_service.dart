@@ -64,20 +64,99 @@ class UserProfileService {
 
   /// Birden çok kullanıcının profil satırını tek seferde çek.
   /// Tek "in" sorgu — follow list bottom-sheet için gerekli.
+  ///
+  /// Eksik (koala_user_profiles satırı olmayan) uid'ler için `profiles`
+  /// (tasarımcı) tablosundan `full_name` / `avatar_url` ile doldurma yapar.
+  /// Böylece takip listesinde "Koala kullanıcısı" placeholder'ı düşer.
   static Future<List<KoalaUserProfile>> getMany(List<String> uids) async {
     if (uids.isEmpty) return const [];
+    final unique = uids.toSet().toList();
+    final byUid = <String, KoalaUserProfile>{};
+
+    // 1) koala_user_profiles
     try {
-      final unique = uids.toSet().toList();
       final data = await Supabase.instance.client
           .from('koala_user_profiles')
           .select()
           .inFilter('uid', unique);
-      return List<Map<String, dynamic>>.from(data)
-          .map((r) => KoalaUserProfile.fromRow(r))
-          .toList();
+      for (final r in List<Map<String, dynamic>>.from(data)) {
+        final p = KoalaUserProfile.fromRow(r);
+        if (p.uid.isNotEmpty) byUid[p.uid] = p;
+      }
     } catch (e) {
-      debugPrint('[user_profile] getMany failed: $e');
-      return const [];
+      debugPrint('[user_profile] getMany koala_user_profiles failed: $e');
+    }
+
+    // 2) Eksik isim/avatar için profiles (designer) tablosunu tara.
+    final needsFill = unique.where((id) {
+      final p = byUid[id];
+      if (p == null) return true;
+      final nameEmpty = (p.displayName ?? '').trim().isEmpty;
+      final avatarEmpty = (p.avatarUrl ?? '').isEmpty;
+      return nameEmpty || avatarEmpty;
+    }).toList();
+
+    if (needsFill.isNotEmpty) {
+      try {
+        final data = await Supabase.instance.client
+            .from('profiles')
+            .select('id, full_name, avatar_url, bio')
+            .inFilter('id', needsFill);
+        for (final r in List<Map<String, dynamic>>.from(data)) {
+          final id = r['id']?.toString() ?? '';
+          if (id.isEmpty) continue;
+          final fullName = r['full_name']?.toString();
+          final avatarUrl = r['avatar_url']?.toString();
+          final bio = r['bio']?.toString();
+          final existing = byUid[id];
+          if (existing == null) {
+            byUid[id] = KoalaUserProfile(
+              uid: id,
+              displayName: fullName,
+              avatarUrl: avatarUrl,
+              about: bio,
+              mode: 'pro',
+            );
+          } else {
+            byUid[id] = KoalaUserProfile(
+              uid: existing.uid,
+              displayName: (existing.displayName ?? '').trim().isNotEmpty
+                  ? existing.displayName
+                  : fullName,
+              about: (existing.about ?? '').trim().isNotEmpty
+                  ? existing.about
+                  : bio,
+              contact: existing.contact,
+              mode: existing.mode,
+              verified: existing.verified,
+              avatarUrl: (existing.avatarUrl ?? '').isNotEmpty
+                  ? existing.avatarUrl
+                  : avatarUrl,
+            );
+          }
+        }
+      } catch (e) {
+        debugPrint('[user_profile] getMany profiles fallback failed: $e');
+      }
+    }
+
+    return byUid.values.toList();
+  }
+
+  /// Tek bir uid için designer olup olmadığını döndürür.
+  /// `profiles` tablosunda satırı varsa designer kabul edilir.
+  static Future<bool> isDesigner(String uid) async {
+    if (uid.isEmpty) return false;
+    try {
+      final row = await Supabase.instance.client
+          .from('profiles')
+          .select('id')
+          .eq('id', uid)
+          .maybeSingle();
+      return row != null;
+    } catch (e) {
+      debugPrint('[user_profile] isDesigner failed: $e');
+      return false;
     }
   }
 

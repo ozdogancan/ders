@@ -28,6 +28,7 @@ import 'profile/follow_list_sheet.dart';
 import 'profile/profile_design_swipe.dart';
 import 'profile/profile_design_tile.dart';
 import 'profile/profile_photo_view.dart';
+import 'projeler_screen.dart' show ProjectItem, ProjectDetailScreen;
 
 // Persisted role choice key.
 const _kRoleSwitchPrefKey = 'profile_role_view'; // 'homeowner' | 'pro'
@@ -369,16 +370,24 @@ class _ProfileTabScreenState extends ConsumerState<ProfileTabScreen>
           fontSize: 12.5,
           fontWeight: FontWeight.w600,
         ),
-        tabs: const [
+        tabs: [
           Tab(
             height: 42,
-            icon: Icon(LucideIcons.layoutGrid, size: 18),
             iconMargin: EdgeInsets.zero,
+            icon: Semantics(
+              label: 'AI Tasarımlarım',
+              button: true,
+              child: const Icon(LucideIcons.layoutGrid, size: 18),
+            ),
           ),
           Tab(
             height: 42,
-            icon: Icon(LucideIcons.upload, size: 18),
             iconMargin: EdgeInsets.zero,
+            icon: Semantics(
+              label: 'Paylaştıklarım',
+              button: true,
+              child: const Icon(LucideIcons.upload, size: 18),
+            ),
           ),
         ],
       ),
@@ -419,7 +428,10 @@ class _ProfileTabScreenState extends ConsumerState<ProfileTabScreen>
         final item = items[i];
         return ProfileDesignTile(
           item: item,
-          onTap: () => _openSwipeDetail(items, i),
+          isAi: isAi,
+          onTap: () => isAi
+              ? _openProjectDetail(item)
+              : _openSwipeDetail(items, i),
           onApply: () => _applyDesign(item),
           onAsk: () => _askAboutDesign(item),
           onEdit: () => _openEditDesignSheet(item, isAi: isAi),
@@ -439,6 +451,31 @@ class _ProfileTabScreenState extends ConsumerState<ProfileTabScreen>
             ProfileDesignSwipeScreen(items: items, initialIndex: index),
         transitionsBuilder: (_, anim, _, child) =>
             FadeTransition(opacity: anim, child: child),
+      ),
+    );
+  }
+
+  /// AI tasarımı tile → before/after detayı (projeler_screen'in birebir aynısı).
+  /// Bu, kaybolan "tasarıma basınca before/after aç" davranışını geri getirir.
+  /// Eski kayıtlarda before yoksa ProjectDetailScreen fallback ile after-only
+  /// gösterir + bilgilendirir.
+  void _openProjectDetail(Map<String, dynamic> rawItem) {
+    HapticFeedback.selectionClick();
+    final hasImage = (rawItem['image_url']?.toString() ?? '').isNotEmpty;
+    final extra = rawItem['extra_data'];
+    final hasBefore = extra is Map &&
+        (extra['before_url']?.toString() ?? '').isNotEmpty;
+    if (!hasImage && !hasBefore) {
+      ScaffoldMessenger.of(context)
+        ..clearSnackBars()
+        ..showSnackBar(
+          const SnackBar(content: Text('Bu proje için önizleme mevcut değil')),
+        );
+      return;
+    }
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ProjectDetailScreen(item: ProjectItem.parse(rawItem)),
       ),
     );
   }
@@ -1569,6 +1606,10 @@ class _ProApplicationSheetState extends ConsumerState<ProApplicationSheet> {
   final _ig = TextEditingController();
   final _portfolio = TextEditingController();
   final _reason = TextEditingController();
+  // 2026-05-27: Evlumba taxonomy dropdown'ı revert edildi (yükleniyor stuck).
+  // Önceki sade free-text input'a döndük — kullanıcı yazar, hızlı çalışır.
+  final _professionCtrl = TextEditingController();
+  final _specialtyCtrl = TextEditingController();
 
   String? _profession;
   final Set<String> _specialties = <String>{};
@@ -1590,13 +1631,24 @@ class _ProApplicationSheetState extends ConsumerState<ProApplicationSheet> {
     _ig.dispose();
     _portfolio.dispose();
     _reason.dispose();
+    _professionCtrl.dispose();
+    _specialtyCtrl.dispose();
     super.dispose();
   }
 
   Future<void> _submit() async {
     if (_submitting) return;
     final name = _fullName.text.trim();
-    final prof = (_profession ?? '').trim();
+    // Free-text input'tan oku — eski dropdown yerine.
+    final prof = _professionCtrl.text.trim();
+    // Specialty: virgülle / noktalı virgülle ayrılmış serbest metin.
+    _specialties
+      ..clear()
+      ..addAll(_specialtyCtrl.text
+          .split(RegExp(r'[,;/]'))
+          .map((s) => s.trim())
+          .where((s) => s.isNotEmpty)
+          .take(5));
     if (name.isEmpty || prof.isEmpty) {
       setState(() => _error = 'Ad ve meslek alanı zorunlu.');
       return;
@@ -1653,7 +1705,6 @@ class _ProApplicationSheetState extends ConsumerState<ProApplicationSheet> {
   @override
   Widget build(BuildContext context) {
     final insets = MediaQuery.viewInsetsOf(context);
-    final taxonomyAsync = ref.watch(proTaxonomyProvider);
 
     return Padding(
       padding: EdgeInsets.only(bottom: insets.bottom),
@@ -1681,17 +1732,18 @@ class _ProApplicationSheetState extends ConsumerState<ProApplicationSheet> {
 
                   _sectionLabel('Mesleğin'),
                   const SizedBox(height: 10),
-                  _professionPicker(taxonomyAsync),
+                  _field(_professionCtrl,
+                      label: 'Meslek',
+                      hint: 'ör. İç Mimar, Mobilya Tasarımcısı'),
                   const SizedBox(height: 22),
                   _divider(),
                   const SizedBox(height: 18),
 
-                  _sectionLabel(
-                    'Uzmanlıkların',
-                    trailing: '${_specialties.length} / $_maxSpecialties',
-                  ),
+                  _sectionLabel('Uzmanlıkların (opsiyonel)'),
                   const SizedBox(height: 10),
-                  _specialtyPicker(taxonomyAsync),
+                  _field(_specialtyCtrl,
+                      label: 'Uzmanlık alanların',
+                      hint: 'Salon, Mutfak, Bebek odası (virgülle ayır)'),
                   const SizedBox(height: 22),
                   _divider(),
                   const SizedBox(height: 18),

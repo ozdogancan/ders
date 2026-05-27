@@ -266,6 +266,16 @@ class _BootstrapAppState extends State<_BootstrapApp> {
         debugPrint('Evlumba init skipped: $error');
       }
     }
+
+    // Anasayfa swipe deck'i için proaktif prefetch — splash görünürken
+    // designer_projects ilk batch, koala_cards seed havuzu ve ilk 3 cover
+    // bitmap'i paralel olarak ısıtılır. NOT awaited: splash'ı blokle*MEZ*,
+    // başarısız olsa bile boot etkilenmez. StyleDiscoveryLiveScreen mount
+    // olduğunda EvlumbaLiveService.prefetchedDeck zaten dolu → ilk kart
+    // anında çıkar.
+    if (_supabaseReady) {
+      unawaited(EvlumbaLiveService.prefetchForHome());
+    }
   }
 
   @override

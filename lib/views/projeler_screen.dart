@@ -38,7 +38,7 @@ class _ProjelerScreenState extends State<ProjelerScreen>
   bool _loading = true;
   bool _firstLoadCompleted = false;
   String? _err;
-  List<_ProjectItem> _items = const [];
+  List<ProjectItem> _items = const [];
 
   bool _selectMode = false;
   final Set<String> _selected = {};
@@ -62,7 +62,7 @@ class _ProjelerScreenState extends State<ProjelerScreen>
     final warm = SavedItemsService.prefetchedProjects;
     if (warm != null && warm.isNotEmpty) {
       _items = warm
-          .map(_ProjectItem.parse)
+          .map(ProjectItem.parse)
           .toList(growable: false);
       _firstLoadCompleted = true;
       _loading = false;
@@ -93,7 +93,7 @@ class _ProjelerScreenState extends State<ProjelerScreen>
     final warm = SavedItemsService.prefetchedProjects;
     if (warm == null) return;
     final newItems = warm
-        .map(_ProjectItem.parse)
+        .map(ProjectItem.parse)
         .toList(growable: false);
     setState(() {
       _items = newItems;
@@ -107,7 +107,7 @@ class _ProjelerScreenState extends State<ProjelerScreen>
     if (_tabs.index != 0 && mounted) _tabs.animateTo(0);
   }
 
-  List<_ProjectItem> get _visibleItems => _items;
+  List<ProjectItem> get _visibleItems => _items;
 
   /// Sadece anlamlı geçişlerde (pending appear/disappear, completed flip)
   /// setState çağrılır — her progress tick'te grid rebuild olmaz, kartlar
@@ -161,7 +161,7 @@ class _ProjelerScreenState extends State<ProjelerScreen>
             .limit(60);
         final rawRows = (res as List).cast<Map<String, dynamic>>();
         final list = rawRows
-            .map(_ProjectItem.parse)
+            .map(ProjectItem.parse)
             .toList();
         // Yeni item geldi mi?
         final newIds = list.map((e) => e.itemId).toSet();
@@ -258,7 +258,7 @@ class _ProjelerScreenState extends State<ProjelerScreen>
       // before the blob URL was ready. Show the row (with placeholder) instead
       // of silently dropping the project.
       final list = rawRows
-          .map(_ProjectItem.parse)
+          .map(ProjectItem.parse)
           .toList();
       // Disk cache'i güncelle — bir sonraki refresh için warm path.
       unawaited(SavedItemsService.persistProjectsCache(rawRows));
@@ -1354,7 +1354,7 @@ class _PendingCard extends StatelessWidget {
   }
 }
 
-class _ProjectItem {
+class ProjectItem {
   final String id;
   final String itemId;
   final String title;
@@ -1363,7 +1363,7 @@ class _ProjectItem {
   final Map<String, dynamic> extra;
   final DateTime createdAt;
 
-  const _ProjectItem({
+  const ProjectItem({
     required this.id,
     required this.itemId,
     required this.title,
@@ -1385,8 +1385,8 @@ class _ProjectItem {
   String? get designerName =>
       (extra['designer_name'] ?? extra['designer']) as String?;
 
-  static _ProjectItem parse(Map<String, dynamic> j) {
-    return _ProjectItem(
+  static ProjectItem parse(Map<String, dynamic> j) {
+    return ProjectItem(
       id: (j['id'] ?? '').toString(),
       itemId: (j['item_id'] ?? '').toString(),
       title: (j['title'] ?? '').toString(),
@@ -1409,7 +1409,7 @@ class _ProjectCard extends StatelessWidget {
     required this.onTap,
     required this.onLongPress,
   });
-  final _ProjectItem item;
+  final ProjectItem item;
   final bool selectMode;
   final bool selected;
   final VoidCallback onTap;
@@ -1575,7 +1575,7 @@ class _ProjectCard extends StatelessWidget {
 /// dönüştür" CTA. Saklanmış before bytes ile kart açılır açılmaz before
 /// görünür, after ile karşılaştırma çalışır.
 class ProjectDetailScreen extends StatefulWidget {
-  final _ProjectItem item;
+  final ProjectItem item;
   const ProjectDetailScreen({super.key, required this.item});
 
   @override

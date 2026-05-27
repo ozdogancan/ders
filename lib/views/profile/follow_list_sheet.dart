@@ -60,26 +60,34 @@ class _FollowListSheetState extends ConsumerState<FollowListSheet> {
   }
 
   Future<void> _load() async {
-    final ids = widget.mode == FollowListMode.followers
-        ? await FollowService.followerIds(widget.ownerUid)
-        : await FollowService.followingIds(widget.ownerUid);
-    final users = await UserProfileService.getMany(ids);
-    // Preserve original ids order
-    final byUid = {for (final u in users) u.uid: u};
-    final ordered = <KoalaUserProfile>[];
-    for (final id in ids) {
-      final u = byUid[id];
-      if (u != null) {
-        ordered.add(u);
-      } else {
-        ordered.add(KoalaUserProfile(uid: id));
+    try {
+      final ids = widget.mode == FollowListMode.followers
+          ? await FollowService.followerIds(widget.ownerUid)
+          : await FollowService.followingIds(widget.ownerUid);
+      final users = await UserProfileService.getMany(ids);
+      // Preserve original ids order
+      final byUid = {for (final u in users) u.uid: u};
+      final ordered = <KoalaUserProfile>[];
+      for (final id in ids) {
+        final u = byUid[id];
+        if (u != null) {
+          ordered.add(u);
+        } else {
+          ordered.add(KoalaUserProfile(uid: id));
+        }
       }
+      if (!mounted) return;
+      setState(() {
+        _users = ordered;
+        _loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _loading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Liste yüklenemedi')),
+      );
     }
-    if (!mounted) return;
-    setState(() {
-      _users = ordered;
-      _loading = false;
-    });
   }
 
   Future<void> _toggleFollow(String designerId) async {

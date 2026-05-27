@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -19,6 +20,146 @@ class EvlumbaLiveService {
   /// da kullanılır — screen unmount olsa bile RAM'de kalır.
   static List<Map<String, dynamic>>? prefetchedDeck;
   static const String _prefsDeckCacheKey = 'style_discovery_deck_cache_v1';
+
+  /// Koala DB (Supabase) `koala_cards` seed havuzu — splash boyunca proaktif
+  /// olarak çekilir, böylece StyleDiscoveryLiveScreen mount olduğunda
+  /// _loadSeedPool tekrar ağ sorgusu yapmak yerine bu listeyi kullanabilir.
+  /// null = henüz prefetch çalışmadı; [] = çalıştı ama boş döndü.
+  static List<Map<String, dynamic>>? prefetchedSeedPool;
+  static bool _prefetchInFlight = false;
+  static bool _prefetchDone = false;
+
+  /// Tek-shot proaktif prefetch — main.dart Supabase init'inden hemen sonra
+  /// (NOT awaited) çağrılır. Splash sırasında paralel olarak:
+  ///   1) EvlumbaLiveService.waitForReady (zaten initialize çağrıldıysa hızlı)
+  ///   2) İlk 10 designer_projects (cover + designer_project_images join'i)
+  ///   3) koala_cards seed havuzu (gemini-seed, limit 300)
+  ///   4) İlk 3 cover URL'ini CachedNetworkImage cache'ine (bitmap download)
+  /// Her adım kendi try/catch'inde — bir hata diğerlerini blokle*MEZ*.
+  ///
+  /// StyleDiscoveryLiveScreen mount olduğunda `prefetchedDeck` ve
+  /// `prefetchedSeedPool` zaten dolu → ramWarm path'i tetiklenir, ilk kart
+  /// anında çıkar.
+  static Future<void> prefetchForHome() async {
+    if (_prefetchDone || _prefetchInFlight) return;
+    _prefetchInFlight = true;
+    try {
+      // 1) Evlumba ready bekle — initialize çağrılmadan çağrılırsa kısa devre.
+      bool evlumbaReady = false;
+      try {
+        evlumbaReady = await waitForReady(
+          timeout: const Duration(seconds: 6),
+        );
+      } catch (e) {
+        debugPrint('EvlumbaLive.prefetch: waitForReady error → $e');
+      }
+
+      // 2) + 3) paralel: designer_projects ilk batch + koala_cards seed pool.
+      final futures = <Future<void>>[];
+
+      if (evlumbaReady && prefetchedDeck == null) {
+        futures.add(() async {
+          try {
+            final projects = await getProjects(limit: 10);
+            // Cover'ı olmayanları ele
+            final filtered = projects.where((p) {
+              for (final k in ['cover_image_url', 'cover_url', 'image_url']) {
+                final v = (p[k] ?? '').toString().trim();
+                if (v.isNotEmpty && !v.startsWith('data:')) return true;
+              }
+              final imgs = p['designer_project_images'] as List?;
+              return imgs != null && imgs.isNotEmpty;
+            }).toList();
+            if (filtered.isNotEmpty) {
+              prefetchedDeck = filtered;
+              debugPrint(
+                  'EvlumbaLive.prefetch: deck primed (${filtered.length})');
+              // 4) İlk 3 cover'ı bitmap-cache'e ısıt — context'siz, sadece
+              // download tetikle.
+              _precacheFirstCovers(filtered);
+            }
+          } catch (e) {
+            debugPrint('EvlumbaLive.prefetch: getProjects failed → $e');
+          }
+        }());
+      }
+
+      // koala_cards seed pool — Koala'nın ana Supabase client'ı kullanılıyor.
+      futures.add(() async {
+        try {
+          final sb = Supabase.instance.client;
+          final data = await sb
+              .from('koala_cards')
+              .select('id, title, description, room_type, style, cdn_url, '
+                  'original_url, created_at')
+              .eq('source', 'gemini-seed')
+              .eq('is_published', true)
+              .limit(300);
+          prefetchedSeedPool = List<Map<String, dynamic>>.from(data);
+          debugPrint(
+              'EvlumbaLive.prefetch: seed pool primed (${prefetchedSeedPool!.length})');
+        } catch (e) {
+          debugPrint('EvlumbaLive.prefetch: seed pool failed → $e');
+        }
+      }());
+
+      await Future.wait(futures);
+    } catch (e) {
+      debugPrint('EvlumbaLive.prefetch: unexpected → $e');
+    } finally {
+      _prefetchInFlight = false;
+      _prefetchDone = true;
+    }
+  }
+
+  /// İlk birkaç cover URL'ini CachedNetworkImage disk+RAM cache'ine indir.
+  /// context yok — resolve(ImageConfiguration.empty) network çağrısını
+  /// tetikler; sonuç ImageProvider'ın paylaşımlı cache'inde kalır.
+  static void _precacheFirstCovers(List<Map<String, dynamic>> projects) {
+    try {
+      var primed = 0;
+      for (final p in projects) {
+        if (primed >= 3) break;
+        String url = '';
+        for (final k in ['cover_image_url', 'cover_url', 'image_url']) {
+          final v = (p[k] ?? '').toString().trim();
+          if (v.isNotEmpty && !v.startsWith('data:')) {
+            url = v;
+            break;
+          }
+        }
+        if (url.isEmpty) {
+          final imgs = p['designer_project_images'] as List?;
+          if (imgs != null && imgs.isNotEmpty) {
+            final first = imgs.first;
+            if (first is Map) {
+              url = (first['image_url'] ?? '').toString();
+            }
+          }
+        }
+        if (url.isEmpty) continue;
+        try {
+          // resolve() çağrısı, ImageProvider'ın load akışını başlatır →
+          // CachedNetworkImage HTTP fetch yapıp diske yazar.
+          CachedNetworkImageProvider(url)
+              .resolve(const ImageConfiguration())
+              .addListener(ImageStreamListener(
+            (_, _) {},
+            onError: (e, _) {
+              debugPrint(
+                  'EvlumbaLive.prefetch: cover bitmap failed ($url) → $e');
+            },
+          ));
+          primed++;
+        } catch (e) {
+          debugPrint('EvlumbaLive.prefetch: cover resolve failed → $e');
+        }
+      }
+      if (primed > 0) {
+        debugPrint('EvlumbaLive.prefetch: $primed cover bitmaps warming');
+      }
+    } catch (_) {}
+  }
 
   /// main.dart boot sırasında, paralel `Future.wait` içinden çağrılır.
   /// Disk'ten deck cache'ini RAM'e alır. ~5-15ms, JSON decode dahil.

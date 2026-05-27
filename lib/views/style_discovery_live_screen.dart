@@ -31,6 +31,7 @@ import '../widgets/free_consult_sheet.dart';
 import '../widgets/koala_bottom_nav.dart';
 import '../widgets/taste_summary_sheet.dart';
 import 'main_shell.dart';
+import 'designer/designer_design_swipe.dart';
 import 'mekan/mekan_flow_screen.dart';
 import 'mekan/wizard/mekan_wizard_screen.dart';
 import 'chat_list_screen.dart';
@@ -542,9 +543,21 @@ class _StyleDiscoveryLiveScreenState
   }
 
   /// Seeded tasarım havuzunu Koala DB'den bir kez yükler.
+  /// Boot-time prefetch (main.dart → EvlumbaLiveService.prefetchForHome)
+  /// `prefetchedSeedPool`'u doldurduysa ağ sorgusu atlanır, anında dolar.
   Future<void> _loadSeedPool() async {
     if (_seedLoaded) return;
     _seedLoaded = true;
+    // 1) Boot prefetch tamamlandıysa direkt RAM'den al — ~0ms.
+    final warm = EvlumbaLiveService.prefetchedSeedPool;
+    if (warm != null && warm.isNotEmpty) {
+      _seedPool
+        ..clear()
+        ..addAll(warm.map(_mapSeedCard));
+      debugPrint(
+          'StyleDiscoveryLive: seed pool (warm) ${_seedPool.length}');
+      return;
+    }
     try {
       final data = await Supabase.instance.client
           .from('koala_cards')
@@ -556,6 +569,9 @@ class _StyleDiscoveryLiveScreenState
       _seedPool
         ..clear()
         ..addAll(List<Map<String, dynamic>>.from(data).map(_mapSeedCard));
+      // RAM warm cache'i de güncelle — sonraki re-mount'larda anında.
+      EvlumbaLiveService.prefetchedSeedPool =
+          List<Map<String, dynamic>>.from(data);
       debugPrint('StyleDiscoveryLive: seed pool ${_seedPool.length}');
     } catch (e) {
       debugPrint('StyleDiscoveryLive: seed pool load failed → $e');
@@ -3891,7 +3907,7 @@ class _DesignerProfileSheetState extends State<DesignerProfileSheet> {
           final cover = _coverOf(p);
           final title = (p['title'] ?? '').toString();
           return GestureDetector(
-            onTap: () => _showProjectPreview(cover, title),
+            onTap: () => _openProjectSwipe(i),
             behavior: HitTestBehavior.opaque,
             child: ClipRRect(
               borderRadius: BorderRadius.circular(14),
@@ -3951,6 +3967,31 @@ class _DesignerProfileSheetState extends State<DesignerProfileSheet> {
     );
   }
 
+  /// Tasarımcının tasarımlarından birine tıklanınca açılır — tam ekran
+  /// PageView ile diğer tasarımlara yatay swipe ederek geçiş. Her sayfada
+  /// persistent Sor butonu var (showAskAndApplySheet'i açar). Ekstra fetch
+  /// yok — _projects zaten yüklü.
+  void _openProjectSwipe(int initialIndex) {
+    final d = widget.designer;
+    final designerName =
+        ((d?['full_name'] ?? d?['business_name'] ?? '') as String).trim();
+    final designerAvatar = ((d?['avatar_url'] ?? '') as String).trim();
+    HapticFeedback.selectionClick();
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (_) => DesignerDesignSwipeScreen(
+          projects: List<Map<String, dynamic>>.from(_projects),
+          initialIndex: initialIndex,
+          designerId: widget.designerId,
+          designerName: designerName.isNotEmpty ? designerName : null,
+          designerAvatarUrl: designerAvatar.isNotEmpty ? designerAvatar : null,
+        ),
+      ),
+    );
+  }
+
+  // ignore: unused_element
   void _showProjectPreview(String cover, String title) {
     if (cover.isEmpty) return;
     showDialog<void>(
