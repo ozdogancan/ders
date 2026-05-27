@@ -1,14 +1,14 @@
-// POST /api/admin/seed-pro-cta — generate the Pro CTA hero image (Gemini Flash Image).
+// POST /api/admin/seed-share-hero — generate the Paylaş upload hero image.
 //
 // One-off admin endpoint. Generates a single 16:9 hero image with
 // gemini-3.1-flash-image-preview, optimizes to WebP via sharp, and uploads
 // to the existing public `koala-seed` Storage bucket at:
-//   pro-cta/hero-v1.webp
+//   share/hero-v1.webp
 //
 // Auth: `?token=<ADMIN_TOKEN>` query param (matches env var).
 //
 // curl example:
-//   curl -X POST 'https://koala-api-olive.vercel.app/api/admin/seed-pro-cta?token=$ADMIN_TOKEN'
+//   curl -X POST 'https://koala-api-olive.vercel.app/api/admin/seed-share-hero?token=$ADMIN_TOKEN'
 //
 // Response: { ok: true, url: '<public webp url>' } | { error }
 
@@ -26,16 +26,16 @@ const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 
 const IMAGE_MODEL = 'gemini-3.1-flash-image-preview';
 const BUCKET = 'koala-seed';
-const OBJECT_PATH = 'pro-cta/hero-v1.webp';
+const OBJECT_PATH = 'share/hero-v1.webp';
 
 const PROMPT =
-  'A confident female interior designer reviewing a luxurious modern living ' +
-  'room project on her tablet, in her sun-lit elegant studio surrounded by ' +
-  'fabric samples and mood boards. Editorial fashion photography style, ' +
-  'warm cinematic lighting, premium creative profession aesthetic, no face ' +
-  'clearly visible (focused on tablet from over-the-shoulder), warm color ' +
-  "palette (cream + sage green + soft gold), depth of field. Brand: " +
-  "'Profesyonel ol' aspirational hero, magazine cover quality.";
+  'Cinematic editorial shot of a person in a beautifully designed modern ' +
+  'apartment, hand holding a smartphone, the phone screen is glowing softly ' +
+  'showing a design preview, warm golden lighting through large windows, ' +
+  'sense of inspiration and creativity, premium magazine quality, soft ' +
+  'depth of field, no faces clearly visible (stylized from side/back), ' +
+  "color palette: cream and soft purple accents, intimate and aspirational " +
+  "mood — 'sharing inspiration with the world'.";
 
 async function generateImage(prompt: string): Promise<Buffer> {
   const url =
@@ -99,7 +99,7 @@ async function handle(req: NextRequest) {
     return NextResponse.json({ ok: true, url, prompt: PROMPT });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    console.error('[admin/seed-pro-cta] error', msg);
+    console.error('[admin/seed-share-hero] error', msg);
     return NextResponse.json(
       { error: 'generate_failed', detail: msg },
       { status: 500 },

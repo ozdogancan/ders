@@ -5,6 +5,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/theme/koala_tokens.dart';
 import '../../services/saved_items_service.dart';
+import '../../widgets/koala_back_button.dart';
 import '../my_designs/my_designs_screen.dart';
 import '../my_designs/design_detail_screen.dart';
 import 'package:lucide_icons/lucide_icons.dart';
@@ -211,7 +212,8 @@ class _SavedScreenV2State extends State<SavedScreenV2> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          GestureDetector(
+          KoalaBackButton(
+            padding: EdgeInsets.zero,
             onTap: () {
               if (GoRouter.of(context).canPop()) {
                 GoRouter.of(context).pop();
@@ -219,17 +221,6 @@ class _SavedScreenV2State extends State<SavedScreenV2> {
                 context.go('/');
               }
             },
-            child: Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: KoalaColors.surface,
-                shape: BoxShape.circle,
-                border: Border.all(color: KoalaColors.border, width: 0.5),
-              ),
-              alignment: Alignment.center,
-              child: const Icon(LucideIcons.arrowLeft, size: 20),
-            ),
           ),
           const SizedBox(height: KoalaSpacing.lg),
           Row(

@@ -36,6 +36,7 @@ Future<void> showAskAndApplySheet(
   String? designerName,
   String? designerAvatarUrl,
   String? category,
+  bool isOwnDesign = false,
 }) async {
   HapticFeedback.selectionClick();
   await showModalBottomSheet<void>(
@@ -55,6 +56,7 @@ Future<void> showAskAndApplySheet(
       designerName: designerName,
       designerAvatarUrl: designerAvatarUrl,
       category: category,
+      isOwnDesign: isOwnDesign,
     ),
   );
 }
@@ -68,6 +70,7 @@ class _AskAndApplySheet extends ConsumerStatefulWidget {
   final String? designerName;
   final String? designerAvatarUrl;
   final String? category;
+  final bool isOwnDesign;
 
   const _AskAndApplySheet({
     required this.designId,
@@ -78,6 +81,7 @@ class _AskAndApplySheet extends ConsumerStatefulWidget {
     this.designerName,
     this.designerAvatarUrl,
     this.category,
+    this.isOwnDesign = false,
   });
 
   @override
@@ -155,8 +159,11 @@ class _AskAndApplySheetState extends ConsumerState<_AskAndApplySheet> {
   @override
   Widget build(BuildContext context) {
     final designerId = (widget.designerId ?? '').trim();
-    final showDesignerOption =
-        designerId.isNotEmpty && designerId != 'evlumba-design';
+    // Kullanıcının kendi tasarımı için "Tasarımcısına sor" gizlenir —
+    // yalnız Koala AI + Evlumba Design seçenekleri kalır.
+    final showDesignerOption = !widget.isOwnDesign &&
+        designerId.isNotEmpty &&
+        designerId != 'evlumba-design';
     final ctx = context;
 
     return SafeArea(

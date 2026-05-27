@@ -24,6 +24,7 @@ import '../services/billing_service.dart';
 import '../services/evlumba_live_service.dart';
 import '../services/saved_items_service.dart';
 import '../services/user_profile_service.dart';
+import '../widgets/koala_back_button.dart';
 import 'admin/admin_shell.dart';
 import 'auth_common.dart';
 import 'auth_entry_screen.dart';
@@ -731,14 +732,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  GestureDetector(
+                  KoalaBackButton(
                     onTap: _goBack,
-                    behavior: HitTestBehavior.opaque,
-                    child: const Padding(
-                      padding: EdgeInsets.fromLTRB(0, 6, 10, 6),
-                      child: Icon(LucideIcons.chevronLeft,
-                          size: 24, color: KoalaColors.text),
-                    ),
+                    padding: const EdgeInsets.only(right: 10),
                   ),
                   GestureDetector(
                     onTap: _onAdminTap,

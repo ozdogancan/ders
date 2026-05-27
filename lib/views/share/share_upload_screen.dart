@@ -8,13 +8,14 @@
 // Mekan re-design wizard'ından FARKLI: bu sadece bir post; AI ile yeniden
 // tasarlama yapmıyor. Pro gate yok — paylaşım herkese ücretsiz.
 //
-// Web: kamera image_picker'da güvenilmez (browser MediaDevices izin/codec
-// sorunları → "bu cihazda desteklenmiyor"). kIsWeb true ise kamera tile'ı
-// tamamen gizlenir; yalnızca galeri gösterilir.
+// Web: image_picker camera unreliable — on web we still SHOW the camera
+// tile but route taps to gallery picker with an info snackbar, so the
+// affordance isn't hidden and discovery feels consistent across platforms.
 
 import 'dart:typed_data';
 import 'dart:ui';
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
@@ -24,6 +25,7 @@ import 'package:lucide_icons/lucide_icons.dart';
 
 import '../../core/theme/koala_tokens.dart';
 import '../../services/shared_design_service.dart';
+import '../../widgets/koala_back_button.dart';
 
 class ShareUploadScreen extends StatefulWidget {
   const ShareUploadScreen({super.key});
@@ -89,14 +91,16 @@ class _ShareUploadScreenState extends State<ShareUploadScreen>
 
   // ─── Step 1: foto seç ───
   Future<void> _pick(ImageSource source) async {
-    // Defansif: kamera web'de UI'da gizli ama yine de guard.
+    // Web kamera image_picker'da güvenilmez → galeri'ye düş, kullanıcıya
+    // kibar bir snackbar ile bildir. Mobile'da kamera normal akışa devam.
+    ImageSource effective = source;
     if (kIsWeb && source == ImageSource.camera) {
-      _snack('Kamera bu cihazda desteklenmiyor');
-      return;
+      _snack('Tarayıcıda kamera desteklenmiyor — galeriden seç');
+      effective = ImageSource.gallery;
     }
     try {
       final f = await _picker.pickImage(
-        source: source,
+        source: effective,
         maxWidth: 1280,
         imageQuality: 75,
       );
@@ -108,7 +112,9 @@ class _ShareUploadScreenState extends State<ShareUploadScreen>
         _step = 1;
       });
     } catch (e) {
-      _snack('Fotoğraf seçilemedi');
+      // Don't block UI — surface actual error so user knows what went wrong
+      // (e.g. permission denied vs. cancelled).
+      _snack('Fotoğraf seçilemedi: $e');
     }
   }
 
@@ -259,11 +265,9 @@ class _ShareUploadScreenState extends State<ShareUploadScreen>
                 _step == 1 ? 'Yeni gönderi' : 'Yayınlanıyor',
                 style: KoalaText.h2,
               ),
-              leading: IconButton(
-                icon: const Icon(LucideIcons.chevronLeft,
-                    color: KoalaColors.text),
-                onPressed: _busy
-                    ? null
+              leading: KoalaBackButton(
+                onTap: _busy
+                    ? () {}
                     : () {
                         if (_step == 1) {
                           setState(() => _step = 0);
@@ -272,6 +276,7 @@ class _ShareUploadScreenState extends State<ShareUploadScreen>
                         }
                       },
               ),
+              leadingWidth: 64,
               actions: [
                 if (_step == 1)
                   Padding(
@@ -409,16 +414,16 @@ class _ShareUploadScreenState extends State<ShareUploadScreen>
                               gradient: true,
                               onTap: () => _pick(ImageSource.gallery),
                             ),
-                            if (!kIsWeb) ...[
-                              const SizedBox(height: KoalaSpacing.md),
-                              _pickTile(
-                                icon: LucideIcons.camera,
-                                label: 'Kamera ile çek',
-                                sub: 'Anlık bir fotoğraf çek',
-                                gradient: false,
-                                onTap: () => _pick(ImageSource.camera),
-                              ),
-                            ],
+                            const SizedBox(height: KoalaSpacing.md),
+                            _pickTile(
+                              icon: LucideIcons.camera,
+                              label: 'Kamera ile çek',
+                              sub: kIsWeb
+                                  ? 'Tarayıcıda galeri açılır'
+                                  : 'Anlık bir fotoğraf çek',
+                              gradient: false,
+                              onTap: () => _pick(ImageSource.camera),
+                            ),
                             const SizedBox(height: KoalaSpacing.lg),
                             const Text(
                               'AI içerik kontrolünden geçer; uygunsuz veya oda olmayan görseller reddedilir.',
@@ -443,17 +448,36 @@ class _ShareUploadScreenState extends State<ShareUploadScreen>
     );
   }
 
+  // Gemini-generated hero (16:9). Falls back to onboarding asset, then to
+  // brand gradient if neither loads — so screen never breaks.
+  static const String _heroUrl =
+      'https://xgefjepaqnghaotqybpi.supabase.co/storage/v1/object/public/koala-seed/share/hero-v1.webp';
+
   Widget _heroIllustration() {
     return Stack(
       fit: StackFit.expand,
       children: [
-        // Background image with fallback.
-        Image.asset(
-          'assets/onboarding/step2.png',
+        // Background image with cascading fallback: remote → asset → gradient.
+        CachedNetworkImage(
+          imageUrl: _heroUrl,
           fit: BoxFit.cover,
-          errorBuilder: (_, __, ___) => Container(
-            decoration: const BoxDecoration(
-              gradient: KoalaColors.accentGradientV,
+          fadeInDuration: const Duration(milliseconds: 260),
+          placeholder: (_, __) => Image.asset(
+            'assets/onboarding/step2.png',
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) => Container(
+              decoration: const BoxDecoration(
+                gradient: KoalaColors.accentGradientV,
+              ),
+            ),
+          ),
+          errorWidget: (_, __, ___) => Image.asset(
+            'assets/onboarding/step2.png',
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) => Container(
+              decoration: const BoxDecoration(
+                gradient: KoalaColors.accentGradientV,
+              ),
             ),
           ),
         ),

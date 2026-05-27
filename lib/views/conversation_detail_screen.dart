@@ -17,6 +17,7 @@ import '../services/global_message_listener.dart';
 import '../services/messaging_service.dart';
 import '../services/saved_items_service.dart';
 import '../services/share_service.dart';
+import '../widgets/koala_back_button.dart';
 import '../widgets/koala_widgets.dart';
 import '../widgets/media_upload_helper.dart';
 import 'chat/widgets/quote_card.dart';
@@ -34,6 +35,14 @@ const String _kEvlumbaAvatarUrl =
 // otomatik kullanılacak (pubspec.yaml `assets/chat/` ekli). Dosya yoksa
 // errorBuilder fallback ile soft brand gradient gösterilir.
 const String _kEvlumbaBgAsset = 'assets/chat/evlumba_bg.webp';
+
+/// MiniProfileSheet feature flag — Profile agent paralel olarak
+/// `lib/views/profile/mini_profile_sheet.dart` dosyasını üretiyor. Dosya
+/// landing'e merge edildiğinde bu flag'i true yapın ve
+/// `_openDesignerProfileFromHeader` içindeki kısa import + showModalBottomSheet
+/// satırını aktive edin. False iken eski DesignerProfileScreen push akışı
+/// korunur — defansif fallback.
+const bool _kHasMiniProfile = false;
 
 /// Tasarımcı ile mesaj detay ekranı — gerçek zamanlı
 class ConversationDetailScreen extends ConsumerStatefulWidget {
@@ -148,6 +157,12 @@ class _ConversationDetailScreenState extends ConsumerState<ConversationDetailScr
   List<Map<String, dynamic>> _designerProjects = [];
   Map<String, dynamic>? _contextProject; // projectTitle'a eşleşen proje (varsa)
 
+  /// Tasarımcının DB'deki TOPLAM yayımlanmış proje sayısı (limit'siz). Portfolio
+  /// barında "Tüm Tasarımlar (N)" etiketi bu değeri gösterir; bar içinde
+  /// gösterilen thumbnail'lar dedup + cap'li (8) olduğundan list.length ile
+  /// gerçek sayı uyuşmuyordu. _loadDesignerDetail içinde bir kez populate edilir.
+  int? _designerTotalCount;
+
   @override
   void initState() {
     super.initState();
@@ -260,6 +275,21 @@ class _ConversationDetailScreenState extends ConsumerState<ConversationDetailScr
     // tasarımcılarda eski akış (Evlumba marketplace DB) çalışmaya devam eder.
     if (_isEvlumba) {
       try {
+        // Gerçek toplam — limit'siz exact count. Portfolio başlığındaki
+        // "Tüm Tasarımlar (N)" etiketi bu değeri gösterir.
+        int? totalCount;
+        try {
+          final countRes = await Supabase.instance.client
+              .from('koala_cards')
+              .select('id')
+              .eq('source', 'gemini-seed')
+              .eq('is_published', true)
+              .count(CountOption.exact);
+          totalCount = countRes.count;
+        } catch (e) {
+          debugPrint('ConversationDetail: Evlumba count fetch error: $e');
+        }
+
         final res = await Supabase.instance.client
             .from('koala_cards')
             .select('id, title, description, room_type, style, cdn_url, '
@@ -287,6 +317,7 @@ class _ConversationDetailScreenState extends ConsumerState<ConversationDetailScr
         if (mounted) {
           setState(() {
             _designerProjects = deduped.take(8).toList();
+            _designerTotalCount = totalCount;
           });
         }
       } catch (e) {
@@ -306,6 +337,21 @@ class _ConversationDetailScreenState extends ConsumerState<ConversationDetailScr
         widget.designerId!,
         limit: 30,
       );
+
+      // Gerçek toplam published proje sayısı (limit'siz exact count). Portfolio
+      // başlığındaki etiket bu değeri gösterir; getDesignerProjects 30 ile cap'li.
+      int? totalCount;
+      try {
+        final countRes = await EvlumbaLiveService.client
+            .from('designer_projects')
+            .select('id')
+            .eq('designer_id', widget.designerId!)
+            .eq('is_published', true)
+            .count(CountOption.exact);
+        totalCount = countRes.count;
+      } catch (e) {
+        debugPrint('ConversationDetail: designer project count error: $e');
+      }
 
       // projectTitle verildiyse eşleşen projeyi bul — mesaj alanında kart olarak göstereceğiz
       Map<String, dynamic>? matched;
@@ -330,6 +376,7 @@ class _ConversationDetailScreenState extends ConsumerState<ConversationDetailScr
           _designerDetail = detail;
           _designerProjects = deduped;
           _contextProject = matched;
+          _designerTotalCount = totalCount;
         });
       }
     } catch (_) {}
@@ -617,18 +664,34 @@ class _ConversationDetailScreenState extends ConsumerState<ConversationDetailScr
     try {
       if (designUrl != null && photo == null) {
         // Proje viewer'dan gelen hazır görsel: upload yok, direkt attach.
+        // İmage + text birlikteyse İKİ AYRI mesaj olarak gönder (image
+        // önce caption'sız, sonra text). Tek bubble'da karışık caption yerine
+        // chat akışında iki bağımsız bubble — kullanıcı tercihi.
         sentMsg = await MessagingService.sendMessage(
           conversationId: cid,
-          content: text, // caption (boş olabilir)
+          content: '',
           type: MessageType.image,
           attachmentUrl: designUrl,
         );
         if (sentMsg == null) {
           errorMsg = 'Mesaj kaydedilemedi: '
               '${MessagingService.lastSendError ?? "bilinmeyen hata"}';
+        } else if (text.isNotEmpty) {
+          // İkinci mesaj — text. Hatalıysa errorMsg set et (kullanıcı text'i
+          // input'a geri getirebilsin diye sentMsg'yi de null yap).
+          final textMsg = await MessagingService.sendMessage(
+            conversationId: cid,
+            content: text,
+          );
+          if (textMsg == null) {
+            errorMsg = 'Metin gönderilemedi: '
+                '${MessagingService.lastSendError ?? "bilinmeyen hata"}';
+            sentMsg = null;
+          }
         }
       } else if (photo != null) {
-        // Foto var → upload + image message (caption = text)
+        // Foto var → upload + image message. Text varsa SONRA ikinci ayrı
+        // mesaj olarak gönderilir (split flow).
         // MIME magic-byte'tan belirlenir; uzantı MIME ile senkron olmazsa
         // CDN/resize proxy broken image verebiliyor.
         final mime = MediaUploadHelper.detectMime(photo);
@@ -649,13 +712,23 @@ class _ConversationDetailScreenState extends ConsumerState<ConversationDetailScr
 
           sentMsg = await MessagingService.sendMessage(
             conversationId: cid,
-            content: text, // caption (boş olabilir)
+            content: '',
             type: MessageType.image,
             attachmentUrl: imageUrl,
           );
           if (sentMsg == null) {
             errorMsg = 'Mesaj kaydedilemedi: '
                 '${MessagingService.lastSendError ?? "bilinmeyen hata"}';
+          } else if (text.isNotEmpty) {
+            final textMsg = await MessagingService.sendMessage(
+              conversationId: cid,
+              content: text,
+            );
+            if (textMsg == null) {
+              errorMsg = 'Metin gönderilemedi: '
+                  '${MessagingService.lastSendError ?? "bilinmeyen hata"}';
+              sentMsg = null;
+            }
           }
         } catch (e) {
           debugPrint('[DM upload] error: $e');
@@ -878,6 +951,19 @@ class _ConversationDetailScreenState extends ConsumerState<ConversationDetailScr
       _showEvlumbaStudioSheet();
       return;
     }
+    if (_kHasMiniProfile) {
+      // TODO(profile-agent): mini_profile_sheet.dart merge edildiğinde
+      // aşağıdaki blok aktive edilecek. Import ekleyin:
+      //   import 'profile/mini_profile_sheet.dart';
+      // ve şu çağrıyı yapın:
+      //   showModalBottomSheet<void>(
+      //     context: context,
+      //     isScrollControlled: true,
+      //     backgroundColor: Colors.transparent,
+      //     builder: (_) => MiniProfileSheet(designerId: did),
+      //   );
+      // Şimdilik defansif fallback — sayfa aç.
+    }
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => DesignerProfileScreen(
@@ -1048,7 +1134,20 @@ class _ConversationDetailScreenState extends ConsumerState<ConversationDetailScr
                   ? const LoadingState()
                   : _messages.isEmpty
                       ? _buildEmptyStateWithPresets()
-                      : ListView.builder(
+                      : RefreshIndicator(
+                          color: KoalaColors.accent,
+                          // Pull-to-refresh: realtime kaçırırsa kullanıcı kendi
+                          // tetikleyebilsin. Mesajları yeniden çek + Evlumba
+                          // pull-inbound'u da tetikle (Telegram cevapları
+                          // 20s polling'i beklemeden yansısın).
+                          onRefresh: () async {
+                            if (_activeConvId == null) return;
+                            await Future.wait([
+                              _loadMessages(),
+                              MessagingService.pullInbound(),
+                            ]);
+                          },
+                          child: ListView.builder(
                           controller: _scrollController,
                           reverse: true,
                           // Lazy render hedef unread bubble'ı tree dışında
@@ -1076,6 +1175,17 @@ class _ConversationDetailScreenState extends ConsumerState<ConversationDetailScr
                             final m = _messages[index];
                             final isMe = m['sender_id'] == _uid;
                             final msgId = m['id']?.toString();
+                            // reverse:true → bu mesajın KRONOLOJİK olarak
+                            // önceki mesajı liste'de index+1'de. Sender değişti
+                            // mi diye bakarak "contiguous run'ın ilk mesajı"
+                            // olduğunu tespit ediyoruz; Evlumba bubble'ı bu ilk
+                            // mesajda sender adı + avatar başlığı gösterir,
+                            // sonrakiler tekrarlamaz.
+                            final prevSameSender = (index + 1 < _messages.length)
+                                ? _messages[index + 1]['sender_id'] ==
+                                    m['sender_id']
+                                : false;
+                            final showSenderHeader = !prevSameSender;
                             // Divider: bu mesaj ilk unread ise üstüne (reverse
                             // list'te "üst" = daha sonra gelen index) yerleştir.
                             // reverse:true → görsel sıra: eski alta, yeni üste
@@ -1102,6 +1212,8 @@ class _ConversationDetailScreenState extends ConsumerState<ConversationDetailScr
                                     message: m,
                                     isMe: isMe,
                                     isEvlumba: _isEvlumba,
+                                    showSenderHeader: showSenderHeader,
+                                    evlumbaAvatarUrl: _kEvlumbaAvatarUrl,
                                     conversationId: _activeConvId,
                                     acceptedQuoteId: _acceptedQuoteId,
                                     onQuoteAccepted: (id) => setState(
@@ -1114,12 +1226,15 @@ class _ConversationDetailScreenState extends ConsumerState<ConversationDetailScr
                               message: m,
                               isMe: isMe,
                               isEvlumba: _isEvlumba,
+                              showSenderHeader: showSenderHeader,
+                              evlumbaAvatarUrl: _kEvlumbaAvatarUrl,
                               conversationId: _activeConvId,
                               acceptedQuoteId: _acceptedQuoteId,
                               onQuoteAccepted: (id) =>
                                   setState(() => _acceptedQuoteId = id),
                             );
                           },
+                        ),
                         ),
             ),
 
@@ -1450,11 +1565,7 @@ class _ConversationDetailScreenState extends ConsumerState<ConversationDetailScr
             padding: const EdgeInsets.fromLTRB(4, 4, 16, 8),
             child: Row(
               children: [
-                IconButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  icon: const Icon(LucideIcons.arrowLeft,
-                      color: KoalaColors.text, size: 22),
-                ),
+                const KoalaBackButton(padding: EdgeInsets.only(right: 4)),
                 // Avatar + name → tap = designer profile (real designer) veya
                 // Evlumba stüdyo info sheet. InkWell ile cömert tap target,
                 // hafif ripple + haptic.
@@ -1593,8 +1704,12 @@ class _ConversationDetailScreenState extends ConsumerState<ConversationDetailScr
   /// Kapalıyken: tek satır başlık + ilk 4 mini thumbnail + genişlet ikonu.
   /// Açıkken: mevcut 124px ListView görünümü.
   Widget _buildPortfolioSection() {
-    final count = _designerProjects.length;
-    final previewCount = count < 4 ? count : 4;
+    // Etiketteki sayı = DB'deki toplam (exact count); bardaki thumbnail'lar
+    // dedup + cap'li olduğundan list.length değil _designerTotalCount kullan.
+    // Henüz count fetch tamamlanmadıysa fallback: bardaki dedupe'li liste uzunluğu.
+    final count = _designerTotalCount ?? _designerProjects.length;
+    final previewCount =
+        _designerProjects.length < 4 ? _designerProjects.length : 4;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -2404,6 +2519,8 @@ class _MessageBubble extends StatelessWidget {
     required this.message,
     required this.isMe,
     this.isEvlumba = false,
+    this.showSenderHeader = false,
+    this.evlumbaAvatarUrl,
     this.conversationId,
     this.acceptedQuoteId,
     this.onQuoteAccepted,
@@ -2414,6 +2531,15 @@ class _MessageBubble extends StatelessWidget {
   /// Evlumba Design kanalı mı? true ise INCOMING bubble cream/champagne tint +
   /// gold-ish border alır (premium feel). Kullanıcının bubble'ı brand mor.
   final bool isEvlumba;
+
+  /// Contiguous run'ın ilk INCOMING mesajı mı? true ise Evlumba kanallı
+  /// bubble'ın üstünde "Evlumba Design" sender adı görünür; ardışıklarda gizli.
+  final bool showSenderHeader;
+
+  /// Evlumba avatar URL — Row'da bubble'ın solunda 28x28 daire olarak basılır.
+  /// Real-designer akışında bu değer null kalır ve avatar tile çıkmaz (bubble
+  /// görünümü değişmez).
+  final String? evlumbaAvatarUrl;
 
   /// Sprint 4 — QuoteCard accept flow için. Null ise kart salt-gösterim.
   final String? conversationId;
@@ -2453,6 +2579,18 @@ class _MessageBubble extends StatelessWidget {
       );
     }
 
+    // Evlumba INCOMING bubble — özel premium tasarım (avatar + sender header +
+    // gold accent stripe + off-white base + timestamp içerde sağ-alt).
+    if (!isMe && isEvlumba) {
+      return _buildEvlumbaIncoming(
+        context: context,
+        content: content,
+        type: type,
+        timeStr: timeStr,
+      );
+    }
+
+    // Standart bubble — kullanıcı outgoing ya da gerçek tasarımcı incoming.
     return Align(
       alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
@@ -2465,11 +2603,7 @@ class _MessageBubble extends StatelessWidget {
           vertical: KoalaSpacing.md,
         ),
         decoration: BoxDecoration(
-          color: isMe
-              ? KoalaColors.accent
-              : (isEvlumba
-                  ? const Color(0xFFFBF7EE) // cream/champagne
-                  : KoalaColors.surface),
+          color: isMe ? KoalaColors.accent : KoalaColors.surface,
           borderRadius: BorderRadius.only(
             topLeft: const Radius.circular(KoalaRadius.lg),
             topRight: const Radius.circular(KoalaRadius.lg),
@@ -2478,12 +2612,7 @@ class _MessageBubble extends StatelessWidget {
           ),
           border: isMe
               ? null
-              : Border.all(
-                  color: isEvlumba
-                      ? const Color(0xFFE8D7A8) // gold-ish
-                      : KoalaColors.border,
-                  width: isEvlumba ? 1.0 : 0.5,
-                ),
+              : Border.all(color: KoalaColors.border, width: 0.5),
         ),
         child: Column(
           crossAxisAlignment:
@@ -2503,11 +2632,7 @@ class _MessageBubble extends StatelessWidget {
                 content,
                 style: TextStyle(
                   fontSize: 14,
-                  color: isMe
-                      ? Colors.white
-                      : (isEvlumba
-                          ? const Color(0xFF3D2E12) // koyu kahve — premium
-                          : KoalaColors.text),
+                  color: isMe ? Colors.white : KoalaColors.text,
                   height: 1.4,
                 ),
               ),
@@ -2523,6 +2648,188 @@ class _MessageBubble extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  /// Evlumba Design incoming bubble — premium look:
+  ///   • Sol tarafta 28x28 yuvarlak avatar (verified rozet overlay)
+  ///   • Sender header ("Evlumba Design", 11px, w600, gold) yalnızca
+  ///     contiguous run'ın ilk mesajında
+  ///   • Off-white #FBFAF7 base
+  ///   • Sol-üst köşede 4px genişliğinde gold accent stripe (notification
+  ///     corner accent)
+  ///   • Text rengi koyu warm brown #2D2014
+  ///   • Timestamp bubble içinde sağ-alt, 10px, textTer
+  ///   • 16/2 radius — top-left tight (quote/document corner)
+  Widget _buildEvlumbaIncoming({
+    required BuildContext context,
+    required String content,
+    required String type,
+    required String timeStr,
+  }) {
+    const goldAccent = Color(0xFFB8874A);
+    const goldSoft = Color(0xFFE8D7A8);
+    const bubbleBase = Color(0xFFFBFAF7);
+    const textBrown = Color(0xFF2D2014);
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: KoalaSpacing.sm),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Sol avatar — header gösteren ilk mesajda görünür, ardışıklarda
+          // boşluk olarak yer tutar (mesajlar dikey olarak hizalı kalsın).
+          SizedBox(
+            width: 28,
+            child: showSenderHeader
+                ? Padding(
+                    padding: const EdgeInsets.only(top: 18),
+                    child: Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        Container(
+                          width: 28,
+                          height: 28,
+                          decoration: const BoxDecoration(
+                            shape: BoxShape.circle,
+                            gradient: LinearGradient(
+                              colors: [Color(0xFFD4A853), Color(0xFFB8874A)],
+                            ),
+                          ),
+                          child: evlumbaAvatarUrl != null
+                              ? ClipOval(
+                                  child: Image.network(
+                                    evlumbaAvatarUrl!,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (_, __, ___) =>
+                                        const SizedBox(),
+                                  ),
+                                )
+                              : const SizedBox(),
+                        ),
+                        const Positioned(
+                          right: -2,
+                          bottom: -2,
+                          child: Icon(
+                            LucideIcons.badgeCheck,
+                            size: 12,
+                            color: Color(0xFF1DA1F2),
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                : const SizedBox.shrink(),
+          ),
+          const SizedBox(width: 8),
+          // Bubble + opsiyonel sender adı
+          Flexible(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (showSenderHeader)
+                  const Padding(
+                    padding: EdgeInsets.only(left: 2, bottom: 4),
+                    child: Text(
+                      'Evlumba Design',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: goldAccent,
+                        letterSpacing: 0.2,
+                      ),
+                    ),
+                  ),
+                ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxWidth: MediaQuery.of(context).size.width * 0.72,
+                  ),
+                  child: Stack(
+                    children: [
+                      // Asıl bubble
+                      Container(
+                        padding: const EdgeInsets.fromLTRB(14, 10, 14, 8),
+                        decoration: BoxDecoration(
+                          color: bubbleBase,
+                          borderRadius: const BorderRadius.only(
+                            topLeft: Radius.circular(2),
+                            topRight: Radius.circular(16),
+                            bottomLeft: Radius.circular(16),
+                            bottomRight: Radius.circular(16),
+                          ),
+                          border: Border.all(
+                            color: goldSoft.withValues(alpha: 0.55),
+                            width: 0.8,
+                          ),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (type == 'image' &&
+                                message['attachment_url'] != null)
+                              _BubbleImage(
+                                url: message['attachment_url'] as String,
+                                heroTag:
+                                    'msg-img-${message['id'] ?? message['attachment_url']}',
+                                caption: content,
+                              ),
+                            if (content.isNotEmpty)
+                              Padding(
+                                padding: EdgeInsets.only(
+                                    top: type == 'image' ? 6 : 0),
+                                child: Text(
+                                  content,
+                                  style: const TextStyle(
+                                    fontSize: 14,
+                                    color: textBrown,
+                                    height: 1.4,
+                                  ),
+                                ),
+                              ),
+                            const SizedBox(height: 2),
+                            // Bubble içi sağ-alt timestamp.
+                            Align(
+                              alignment: Alignment.bottomRight,
+                              child: Text(
+                                timeStr,
+                                style: const TextStyle(
+                                  fontSize: 10,
+                                  color: KoalaColors.textTer,
+                                  height: 1.0,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      // Sol-üst köşede 1.5px gold accent stripe (4px geniş,
+                      // ~28px uzun) — decorative notification-corner accent.
+                      Positioned(
+                        top: 0,
+                        left: 0,
+                        child: Container(
+                          width: 4,
+                          height: 28,
+                          decoration: const BoxDecoration(
+                            color: goldAccent,
+                            borderRadius: BorderRadius.only(
+                              topLeft: Radius.circular(2),
+                              bottomRight: Radius.circular(2),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

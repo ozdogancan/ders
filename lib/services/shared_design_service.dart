@@ -198,6 +198,28 @@ class SharedDesignService {
     }
   }
 
+  // ─── Başka bir kullanıcının public paylaşımları ───
+  /// Mini-profile sheet için. Yalnız published kayıtlar döner.
+  static Future<List<SharedDesign>> publicByUid(String uid,
+      {int limit = 40}) async {
+    if (uid.isEmpty) return const [];
+    try {
+      final data = await Supabase.instance.client
+          .from(_table)
+          .select()
+          .eq('user_id', uid)
+          .eq('status', 'published')
+          .order('published_at', ascending: false)
+          .limit(limit);
+      return List<Map<String, dynamic>>.from(data)
+          .map(SharedDesign.fromRow)
+          .toList();
+    } catch (e) {
+      debugPrint('[SharedDesignService] publicByUid failed: $e');
+      return const [];
+    }
+  }
+
   // ─── Kullanıcının paylaşımları ───
   /// "Paylaştıklarım" sekmesi için. Sadece kendi published kayıtlarını döner.
   static Future<List<SharedDesign>> myShared({int limit = 40}) async {

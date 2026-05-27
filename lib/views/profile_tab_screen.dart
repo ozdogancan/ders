@@ -17,18 +17,19 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show Supabase, FileOptions;
 
 import '../core/theme/koala_tokens.dart';
+import '../services/designer_reviews_service.dart';
 import '../services/evlumba_live_service.dart';
 import '../services/follow_service.dart';
 import '../services/saved_items_service.dart';
+import '../services/shared_design_service.dart';
 import '../services/user_profile_service.dart';
 import '../widgets/ask_and_apply_sheet.dart';
 import '../widgets/verified_badge.dart';
 import 'mekan/wizard/mekan_wizard_screen.dart';
 import 'profile/follow_list_sheet.dart';
-import 'profile/profile_design_swipe.dart';
 import 'profile/profile_design_tile.dart';
 import 'profile/profile_photo_view.dart';
-import 'projeler_screen.dart' show ProjectItem, ProjectDetailScreen;
+import 'profile/user_design_swipe.dart';
 
 // Persisted role choice key.
 const _kRoleSwitchPrefKey = 'profile_role_view'; // 'homeowner' | 'pro'
@@ -58,6 +59,9 @@ class _ProfileTabScreenState extends ConsumerState<ProfileTabScreen>
 
   late final TabController _designsTab;
 
+  // Reviews (yalnız pro/designer için doldurulur).
+  DesignerReviewsResult _reviews = DesignerReviewsResult.empty;
+
   @override
   void initState() {
     super.initState();
@@ -68,6 +72,7 @@ class _ProfileTabScreenState extends ConsumerState<ProfileTabScreen>
     _restoreRole();
     _loadDesigns();
     _loadCounts();
+    _loadReviews();
   }
 
   @override
@@ -95,20 +100,40 @@ class _ProfileTabScreenState extends ConsumerState<ProfileTabScreen>
 
   Future<void> _loadDesigns() async {
     try {
-      final ai = await SavedItemsService.getByType(
-        SavedItemType.project,
-        limit: 40,
-      );
+      final results = await Future.wait([
+        SavedItemsService.getByType(SavedItemType.project, limit: 40),
+        SharedDesignService.myShared(limit: 40),
+      ]);
       if (!mounted) return;
+      final ai = (results[0] as List<Map<String, dynamic>>)
+          .map((m) => {...m, 'is_ai': true})
+          .toList();
+      final shared = (results[1] as List<SharedDesign>)
+          .map((s) => {
+                ...s.toMapForProfileTab(),
+                'is_ai': false,
+              })
+          .toList();
       setState(() {
         _aiDesigns = ai;
-        _sharedDesigns = const [];
+        _sharedDesigns = shared;
         _designsLoading = false;
       });
     } catch (_) {
       if (mounted) setState(() => _designsLoading = false);
     }
   }
+
+  Future<void> _loadReviews() async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+    final r = await DesignerReviewsService.getForDesigner(uid);
+    if (!mounted) return;
+    setState(() => _reviews = r);
+  }
+
+  /// Birleşik tasarımlar (AI + paylaşımlar) — fullscreen swipe için.
+  List<Map<String, dynamic>> get _allDesigns => [..._aiDesigns, ..._sharedDesigns];
 
   Future<void> _loadCounts() async {
     final uid = FirebaseAuth.instance.currentUser?.uid;
@@ -123,7 +148,7 @@ class _ProfileTabScreenState extends ConsumerState<ProfileTabScreen>
 
   Future<void> _refreshAll() async {
     ref.invalidate(userProfileProvider);
-    await Future.wait([_loadDesigns(), _loadCounts()]);
+    await Future.wait([_loadDesigns(), _loadCounts(), _loadReviews()]);
   }
 
   @override
@@ -155,6 +180,8 @@ class _ProfileTabScreenState extends ConsumerState<ProfileTabScreen>
             : 'Ev Sahibi')
         : 'Ev Sahibi';
 
+    final memberSince = user?.metadata.creationTime;
+
     return Scaffold(
       backgroundColor: KoalaColors.bg,
       body: RefreshIndicator(
@@ -172,11 +199,14 @@ class _ProfileTabScreenState extends ConsumerState<ProfileTabScreen>
                 photo: photo,
                 verified: verified,
                 isPro: isPro,
+                memberSince: memberSince,
+                about: about,
                 uploading: _uploadingAvatar,
                 onAvatarTap: () => _openAvatarActions(photo),
                 onAvatarLongPress: () => context.push('/profile'),
               ),
             ),
+            const SliverToBoxAdapter(child: SizedBox(height: 14)),
             SliverToBoxAdapter(
               child: _StatsRow(
                 designs: _designsLoading
@@ -188,8 +218,10 @@ class _ProfileTabScreenState extends ConsumerState<ProfileTabScreen>
                 onFollowing: () => _openFollowList(FollowListMode.following),
               ),
             ),
+            const SliverToBoxAdapter(child: SizedBox(height: 14)),
+            SliverToBoxAdapter(child: _editAndShareRow()),
             if (canSwitch) ...[
-              const SliverToBoxAdapter(child: SizedBox(height: 16)),
+              const SliverToBoxAdapter(child: SizedBox(height: 14)),
               SliverToBoxAdapter(
                 child: _RoleSwitch(
                   selected: effectiveRole,
@@ -201,19 +233,17 @@ class _ProfileTabScreenState extends ConsumerState<ProfileTabScreen>
                 ),
               ),
             ],
-            if (about.isNotEmpty) ...[
-              const SliverToBoxAdapter(child: SizedBox(height: 16)),
-              SliverToBoxAdapter(child: _AboutSection(about: about)),
-            ],
-            const SliverToBoxAdapter(child: SizedBox(height: 18)),
-            SliverToBoxAdapter(child: _editButton()),
             if (!isPro &&
                 application?.isPending != true &&
                 application?.isApproved != true) ...[
               const SliverToBoxAdapter(child: SizedBox(height: 14)),
-              SliverToBoxAdapter(child: _proCta()),
+              SliverToBoxAdapter(child: _proCtaCompact()),
             ],
-            const SliverToBoxAdapter(child: SizedBox(height: 22)),
+            if (isPro && _reviews.count > 0) ...[
+              const SliverToBoxAdapter(child: SizedBox(height: 18)),
+              SliverToBoxAdapter(child: _reviewsBlock()),
+            ],
+            const SliverToBoxAdapter(child: SizedBox(height: 18)),
             SliverToBoxAdapter(child: _tabBar()),
             SliverToBoxAdapter(child: _designsTabBody()),
             // Bottom safe area for nav bar/FAB — generous whitespace.
@@ -228,115 +258,257 @@ class _ProfileTabScreenState extends ConsumerState<ProfileTabScreen>
     );
   }
 
-  // ─── Edit button ───
-  Widget _editButton() {
+  // ─── Edit + Share row (50/50) — primary purple edit, outlined share ───
+  Widget _editAndShareRow() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: SizedBox(
-        width: double.infinity,
-        child: Material(
-          color: KoalaColors.surface,
-          borderRadius: BorderRadius.circular(10),
-          child: InkWell(
-            onTap: _openEditor,
-            borderRadius: BorderRadius.circular(10),
-            child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 9),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: KoalaColors.borderSolid, width: 0.8),
-              ),
-              alignment: Alignment.center,
-              child: const Text(
-                'Profili düzenle',
-                style: TextStyle(
-                  fontSize: 13.5,
-                  fontWeight: FontWeight.w600,
-                  color: KoalaColors.text,
-                  letterSpacing: -0.1,
+      child: Row(
+        children: [
+          Expanded(
+            child: SizedBox(
+              height: 44,
+              child: ElevatedButton(
+                onPressed: _openEditor,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: KoalaColors.accentDeep,
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                ),
+                child: const Text(
+                  'Profili Düzenle',
+                  style:
+                      TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700),
                 ),
               ),
             ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: SizedBox(
+              height: 44,
+              child: OutlinedButton(
+                onPressed: _shareOwnProfile,
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: KoalaColors.text,
+                  side: const BorderSide(
+                      color: KoalaColors.borderSolid, width: 1),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                ),
+                child: const Text(
+                  'Paylaş',
+                  style:
+                      TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _shareOwnProfile() async {
+    HapticFeedback.selectionClick();
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+    final url = 'https://koalatutor.com/u/$uid';
+    await Clipboard.setData(ClipboardData(text: url));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Profil bağlantın kopyalandı'),
+        behavior: SnackBarBehavior.floating,
+        duration: Duration(seconds: 2),
+      ),
+    );
+  }
+
+  // ─── Reviews block ("Yorumlar (avg/5)" + up to 3 cards + "Tümünü gör") ───
+  Widget _reviewsBlock() {
+    final avg = _reviews.avg.toStringAsFixed(1);
+    final shown = _reviews.reviews.take(3).toList();
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(LucideIcons.star,
+                  size: 16, color: Color(0xFFEFA01F)),
+              const SizedBox(width: 6),
+              Text(
+                'Yorumlar ($avg/5 · ${_reviews.count})',
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w800,
+                  color: KoalaColors.text,
+                  letterSpacing: -0.2,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          ...shown.map(_reviewCard),
+          if (_reviews.count > 3)
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                onPressed: _openAllReviews,
+                child: const Text('Tümünü gör'),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _reviewCard(DesignerReview r) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: KoalaColors.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: KoalaColors.borderSolid, width: 0.6),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: List.generate(
+              5,
+              (i) => Icon(
+                i < r.rating
+                    ? Icons.star_rounded
+                    : Icons.star_outline_rounded,
+                size: 14,
+                color: const Color(0xFFEFA01F),
+              ),
+            ),
+          ),
+          if ((r.comment ?? '').isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Text(
+              r.comment!,
+              style: const TextStyle(
+                fontSize: 13,
+                height: 1.35,
+                color: KoalaColors.text,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  void _openAllReviews() {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: KoalaColors.bg,
+      isScrollControlled: true,
+      useSafeArea: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (_) => SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 14, 20, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(child: _dragHandle()),
+              const SizedBox(height: 14),
+              const Text('Tüm Yorumlar', style: KoalaText.h2),
+              const SizedBox(height: 14),
+              Flexible(
+                child: SingleChildScrollView(
+                  child: Column(
+                    children: _reviews.reviews.map(_reviewCard).toList(),
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
       ),
     );
   }
 
-  // ─── "Profesyonel ol" gradient CTA (only when not pro & no pending app) ───
-  Widget _proCta() {
+  // ─── Compact "Profesyonel profilini aç" CTA (soft purple-tinted, 60h) ──
+  Widget _proCtaCompact() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
       child: Material(
-        color: Colors.transparent,
+        color: KoalaColors.accentSoft,
+        borderRadius: BorderRadius.circular(14),
         child: InkWell(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(14),
           onTap: () async {
             HapticFeedback.selectionClick();
             final submitted = await showProApplicationSheet(context);
             if (submitted == true) ref.invalidate(userProfileProvider);
           },
-          child: Ink(
+          child: Container(
+            height: 60,
+            padding: const EdgeInsets.fromLTRB(14, 0, 12, 0),
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(16),
-              gradient: const LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [KoalaColors.accentDeep, KoalaColors.accent],
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: KoalaColors.accentDeep.withValues(alpha: 0.18),
+                width: 0.8,
               ),
-              boxShadow: [
-                BoxShadow(
-                  color: KoalaColors.accentDeep.withValues(alpha: 0.22),
-                  blurRadius: 16,
-                  offset: const Offset(0, 6),
-                ),
-              ],
             ),
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 14, 14, 14),
-              child: Row(
-                children: [
-                  Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: Colors.white.withValues(alpha: 0.18),
-                    ),
-                    child: const Icon(LucideIcons.badgeCheck,
-                        color: Colors.white, size: 22),
+            child: Row(
+              children: [
+                Container(
+                  width: 34,
+                  height: 34,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: KoalaColors.accentDeep.withValues(alpha: 0.14),
                   ),
-                  const SizedBox(width: 12),
-                  const Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          'Profesyonel ol',
-                          style: TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w800,
-                            color: Colors.white,
-                            letterSpacing: -0.2,
-                          ),
+                  alignment: Alignment.center,
+                  child: const Icon(LucideIcons.star,
+                      color: KoalaColors.accentDeep, size: 16),
+                ),
+                const SizedBox(width: 12),
+                const Expanded(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Profesyonel profilini aç',
+                        style: TextStyle(
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.w800,
+                          color: KoalaColors.accentDeep,
+                          letterSpacing: -0.1,
                         ),
-                        SizedBox(height: 2),
-                        Text(
-                          'Tasarımlarını paylaş, müşterilerle eşleş.',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.white,
-                            height: 1.25,
-                          ),
+                      ),
+                      SizedBox(height: 1),
+                      Text(
+                        'Tasarımlarını paylaş, müşterilerle eşleş',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 11.5,
+                          color: KoalaColors.textSec,
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
-                  const Icon(LucideIcons.chevronRight,
-                      color: Colors.white, size: 20),
-                ],
-              ),
+                ),
+                const Icon(LucideIcons.chevronRight,
+                    color: KoalaColors.accentDeep, size: 18),
+              ],
             ),
           ),
         ),
@@ -375,7 +547,7 @@ class _ProfileTabScreenState extends ConsumerState<ProfileTabScreen>
             height: 42,
             iconMargin: EdgeInsets.zero,
             icon: Semantics(
-              label: 'AI Tasarımlarım',
+              label: 'Paylaşımlar',
               button: true,
               child: const Icon(LucideIcons.layoutGrid, size: 18),
             ),
@@ -384,9 +556,9 @@ class _ProfileTabScreenState extends ConsumerState<ProfileTabScreen>
             height: 42,
             iconMargin: EdgeInsets.zero,
             icon: Semantics(
-              label: 'Paylaştıklarım',
+              label: 'AI Tasarımları',
               button: true,
-              child: const Icon(LucideIcons.upload, size: 18),
+              child: const Icon(LucideIcons.sparkles, size: 18),
             ),
           ),
         ],
@@ -404,15 +576,15 @@ class _ProfileTabScreenState extends ConsumerState<ProfileTabScreen>
         ),
       );
     }
-    final isAi = _designsTab.index == 0;
-    final items = isAi ? _aiDesigns : _sharedDesigns;
+    final isAllTab = _designsTab.index == 0;
+    final items = isAllTab ? _allDesigns : _aiDesigns;
     if (items.isEmpty) {
-      return isAi ? _emptyDesigns() : _emptyShared();
+      return isAllTab ? _emptyAll() : _emptyAi();
     }
-    return _designsGrid(items, isAi: isAi);
+    return _designsGrid(items);
   }
 
-  Widget _designsGrid(List<Map<String, dynamic>> items, {required bool isAi}) {
+  Widget _designsGrid(List<Map<String, dynamic>> items) {
     return GridView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
@@ -426,12 +598,11 @@ class _ProfileTabScreenState extends ConsumerState<ProfileTabScreen>
       itemCount: items.length,
       itemBuilder: (_, i) {
         final item = items[i];
+        final isAi = item['is_ai'] == true;
         return ProfileDesignTile(
           item: item,
           isAi: isAi,
-          onTap: () => isAi
-              ? _openProjectDetail(item)
-              : _openSwipeDetail(items, i),
+          onTap: () => _openSwipeDetail(items, i),
           onApply: () => _applyDesign(item),
           onAsk: () => _askAboutDesign(item),
           onEdit: () => _openEditDesignSheet(item, isAi: isAi),
@@ -443,40 +614,12 @@ class _ProfileTabScreenState extends ConsumerState<ProfileTabScreen>
 
   void _openSwipeDetail(List<Map<String, dynamic>> items, int index) {
     HapticFeedback.selectionClick();
-    Navigator.of(context).push(
-      PageRouteBuilder(
-        transitionDuration: const Duration(milliseconds: 360),
-        reverseTransitionDuration: const Duration(milliseconds: 280),
-        pageBuilder: (_, _, _) =>
-            ProfileDesignSwipeScreen(items: items, initialIndex: index),
-        transitionsBuilder: (_, anim, _, child) =>
-            FadeTransition(opacity: anim, child: child),
-      ),
-    );
-  }
-
-  /// AI tasarımı tile → before/after detayı (projeler_screen'in birebir aynısı).
-  /// Bu, kaybolan "tasarıma basınca before/after aç" davranışını geri getirir.
-  /// Eski kayıtlarda before yoksa ProjectDetailScreen fallback ile after-only
-  /// gösterir + bilgilendirir.
-  void _openProjectDetail(Map<String, dynamic> rawItem) {
-    HapticFeedback.selectionClick();
-    final hasImage = (rawItem['image_url']?.toString() ?? '').isNotEmpty;
-    final extra = rawItem['extra_data'];
-    final hasBefore = extra is Map &&
-        (extra['before_url']?.toString() ?? '').isNotEmpty;
-    if (!hasImage && !hasBefore) {
-      ScaffoldMessenger.of(context)
-        ..clearSnackBars()
-        ..showSnackBar(
-          const SnackBar(content: Text('Bu proje için önizleme mevcut değil')),
-        );
-      return;
-    }
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => ProjectDetailScreen(item: ProjectItem.parse(rawItem)),
-      ),
+    final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
+    UserDesignSwipeScreen.open(
+      context,
+      items: items,
+      ownerUid: uid,
+      initialIndex: index,
     );
   }
 
@@ -522,6 +665,7 @@ class _ProfileTabScreenState extends ConsumerState<ProfileTabScreen>
       designerName: designerName,
       designerAvatarUrl: designerAvatarUrl,
       category: category,
+      isOwnDesign: true,
     );
   }
 
@@ -534,22 +678,22 @@ class _ProfileTabScreenState extends ConsumerState<ProfileTabScreen>
     _loadCounts();
   }
 
-  Widget _emptyShared() {
+  Widget _emptyAll() {
     return _emptyState(
-      icon: LucideIcons.upload,
+      icon: LucideIcons.layoutGrid,
       title: 'Henüz paylaşımın yok',
       subtitle:
-          'Kendi mekanının fotoğrafını yükle, Koala farklı tarzlarda tasarlasın.',
+          'Bir mekânının fotoğrafını çek veya yükle — AI üretimlerin ve paylaşımların burada görünür.',
       cta: 'İlk tasarımını paylaş',
       ctaIcon: LucideIcons.plus,
       onTap: _openShareUpload,
     );
   }
 
-  Widget _emptyDesigns() {
+  Widget _emptyAi() {
     return _emptyState(
       icon: LucideIcons.sparkles,
-      title: 'Henüz tasarım yok',
+      title: 'Henüz AI tasarımı yok',
       subtitle: 'Bir mekânını çek, Koala farklı tarzları sana göstersin.',
       cta: 'İlk tasarımını oluştur',
       ctaIcon: LucideIcons.camera,
@@ -959,7 +1103,8 @@ class _ProfileTabScreenState extends ConsumerState<ProfileTabScreen>
   }
 }
 
-// ─── Hero widget — avatar + name + role + bio + photo-view affordance ───
+// ─── Hero widget — SS3 layout: white card with avatar LEFT + name/role/
+// member-date stacked RIGHT. About paragraph sits inside the same card.
 class _Hero extends StatelessWidget {
   final String uid;
   final String name;
@@ -967,6 +1112,8 @@ class _Hero extends StatelessWidget {
   final String? photo;
   final bool verified;
   final bool isPro;
+  final DateTime? memberSince;
+  final String about;
   final bool uploading;
   final VoidCallback onAvatarTap;
   final VoidCallback onAvatarLongPress;
@@ -977,10 +1124,23 @@ class _Hero extends StatelessWidget {
     required this.photo,
     required this.verified,
     required this.isPro,
+    required this.memberSince,
+    required this.about,
     required this.uploading,
     required this.onAvatarTap,
     required this.onAvatarLongPress,
   });
+
+  static const List<String> _trMonths = [
+    'Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran',
+    'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'
+  ];
+
+  String? _formatMember() {
+    if (memberSince == null) return null;
+    final m = _trMonths[(memberSince!.month - 1).clamp(0, 11)];
+    return "$m ${memberSince!.year}'ten beri üye";
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -988,127 +1148,198 @@ class _Hero extends StatelessWidget {
     final hasUrl = (photo ?? '').isNotEmpty;
     final tag = profilePhotoHeroTag(uid.isEmpty ? 'me' : uid);
     final showBrandRing = verified || isPro;
+    final memberLine = _formatMember();
+
     return Padding(
-      padding: EdgeInsets.fromLTRB(20, topPad + 18, 20, 14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          GestureDetector(
-            onTap: () {
-              HapticFeedback.selectionClick();
-              onAvatarTap();
-            },
-            onLongPress: () {
-              HapticFeedback.mediumImpact();
-              onAvatarLongPress();
-            },
-            child: Stack(
-              clipBehavior: Clip.none,
-              alignment: Alignment.center,
+      padding: EdgeInsets.fromLTRB(20, topPad + 14, 20, 0),
+      child: Container(
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(
+          color: KoalaColors.surface,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.04),
+              blurRadius: 16,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                // Subtle radial halo — premium, IG/LinkedIn-grade polish.
-                IgnorePointer(
-                  child: Container(
-                    width: 148,
-                    height: 148,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      gradient: RadialGradient(
-                        radius: 0.5,
-                        colors: [
-                          KoalaColors.accentDeep.withValues(alpha: 0.06),
-                          KoalaColors.accentDeep.withValues(alpha: 0.0),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-                Hero(
-                  tag: tag,
-                  child: Container(
-                    width: 92,
-                    height: 92,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: hasUrl ? Colors.white : KoalaColors.accentSoft,
-                      border: Border.all(
-                        color: showBrandRing
-                            ? KoalaColors.accentDeep
-                            : KoalaColors.borderSolid,
-                        width: showBrandRing ? 1.5 : 0.6,
-                      ),
-                    ),
-                    clipBehavior: Clip.antiAlias,
-                    child: hasUrl
-                        ? CachedNetworkImage(
-                            imageUrl: photo!, fit: BoxFit.cover)
-                        : const Icon(LucideIcons.user,
-                            size: 40, color: KoalaColors.accentDeep),
-                  ),
-                ),
-                if (uploading)
-                  Positioned.fill(
-                    child: ClipOval(
-                      child: Container(
-                        color: Colors.black.withValues(alpha: 0.35),
-                        alignment: Alignment.center,
-                        child: const SizedBox(
-                          width: 24,
-                          height: 24,
-                          child: CircularProgressIndicator(
-                              color: Colors.white, strokeWidth: 2.4),
+                GestureDetector(
+                  onTap: () {
+                    HapticFeedback.selectionClick();
+                    onAvatarTap();
+                  },
+                  onLongPress: () {
+                    HapticFeedback.mediumImpact();
+                    onAvatarLongPress();
+                  },
+                  child: Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      Hero(
+                        tag: tag,
+                        child: Container(
+                          width: 96,
+                          height: 96,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: hasUrl
+                                ? Colors.white
+                                : KoalaColors.accentSoft,
+                            border: Border.all(
+                              color: showBrandRing
+                                  ? KoalaColors.accentDeep
+                                  : KoalaColors.borderSolid,
+                              width: showBrandRing ? 1.5 : 0.6,
+                            ),
+                          ),
+                          clipBehavior: Clip.antiAlias,
+                          child: hasUrl
+                              ? CachedNetworkImage(
+                                  imageUrl: photo!, fit: BoxFit.cover)
+                              : const Icon(LucideIcons.user,
+                                  size: 42, color: KoalaColors.accentDeep),
                         ),
                       ),
-                    ),
-                  )
-                else if (!verified && !hasUrl)
-                  Positioned(
-                    right: -2,
-                    bottom: -2,
-                    child: Container(
-                      width: 26,
-                      height: 26,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: KoalaColors.accentDeep,
-                        border: Border.all(color: KoalaColors.bg, width: 2),
+                      if (uploading)
+                        Positioned.fill(
+                          child: ClipOval(
+                            child: Container(
+                              color: Colors.black.withValues(alpha: 0.35),
+                              alignment: Alignment.center,
+                              child: const SizedBox(
+                                width: 24,
+                                height: 24,
+                                child: CircularProgressIndicator(
+                                    color: Colors.white, strokeWidth: 2.4),
+                              ),
+                            ),
+                          ),
+                        )
+                      else if (!verified && !hasUrl)
+                        Positioned(
+                          right: -2,
+                          bottom: -2,
+                          child: Container(
+                            width: 26,
+                            height: 26,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: KoalaColors.accentDeep,
+                              border: Border.all(
+                                  color: KoalaColors.surface, width: 2),
+                            ),
+                            child: const Icon(LucideIcons.camera,
+                                size: 13, color: Colors.white),
+                          ),
+                        ),
+                      if (verified)
+                        const Positioned(
+                          right: -2,
+                          bottom: -2,
+                          child: VerifiedBadge(size: 22),
+                        ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Row(
+                        children: [
+                          Flexible(
+                            child: Text(
+                              name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: KoalaText.h2.copyWith(
+                                fontSize: 20,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: -0.4,
+                                height: 1.1,
+                              ),
+                            ),
+                          ),
+                          if (verified) ...[
+                            const SizedBox(width: 6),
+                            const Icon(LucideIcons.badgeCheck,
+                                size: 16, color: KoalaColors.accentDeep),
+                          ],
+                        ],
                       ),
-                      child: const Icon(LucideIcons.camera,
-                          size: 13, color: Colors.white),
-                    ),
+                      const SizedBox(height: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: isPro
+                              ? KoalaColors.accentSoft
+                              : KoalaColors.surfaceAlt,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          role,
+                          style: TextStyle(
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w700,
+                            color: isPro
+                                ? KoalaColors.accentDeep
+                                : KoalaColors.textSec,
+                            letterSpacing: 0.1,
+                          ),
+                        ),
+                      ),
+                      if (memberLine != null) ...[
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            const Icon(LucideIcons.calendar,
+                                size: 12, color: KoalaColors.textTer),
+                            const SizedBox(width: 5),
+                            Flexible(
+                              child: Text(
+                                memberLine,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontSize: 11.5,
+                                  color: KoalaColors.textTer,
+                                  letterSpacing: -0.05,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ],
                   ),
-                if (verified)
-                  const Positioned(
-                    right: -2,
-                    bottom: -2,
-                    child: VerifiedBadge(size: 22),
-                  ),
+                ),
               ],
             ),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            name,
-            style: KoalaText.h1.copyWith(
-              fontSize: 22,
-              letterSpacing: -0.4,
-              height: 1.1,
-            ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 4),
-          Text(
-            role,
-            style: const TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w500,
-              color: KoalaColors.textSec,
-              letterSpacing: -0.1,
-            ),
-          ),
-        ],
+            if (about.isNotEmpty) ...[
+              const SizedBox(height: 14),
+              Text(
+                about,
+                style: const TextStyle(
+                  fontSize: 13.5,
+                  height: 1.4,
+                  color: KoalaColors.text,
+                  letterSpacing: -0.1,
+                ),
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }
@@ -1257,89 +1488,6 @@ class _RoleSwitch extends StatelessWidget {
               letterSpacing: -0.1,
             ),
           ),
-        ),
-      ),
-    );
-  }
-}
-
-// ─── About section — bio + "Daha fazla" expand (LinkedIn-style) ───
-class _AboutSection extends StatefulWidget {
-  final String about;
-  const _AboutSection({required this.about});
-
-  @override
-  State<_AboutSection> createState() => _AboutSectionState();
-}
-
-class _AboutSectionState extends State<_AboutSection> {
-  bool _expanded = false;
-  static const _kCollapsedMax = 3;
-  static const _kLongLength = 140;
-
-  @override
-  Widget build(BuildContext context) {
-    final long = widget.about.length > _kLongLength;
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-        decoration: BoxDecoration(
-          color: KoalaColors.surface,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: KoalaColors.borderSolid, width: 0.6),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Hakkımda',
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w800,
-                color: KoalaColors.textSec,
-                letterSpacing: 0.6,
-              ),
-            ),
-            const SizedBox(height: 6),
-            AnimatedSize(
-              duration: const Duration(milliseconds: 180),
-              curve: Curves.easeOut,
-              alignment: Alignment.topCenter,
-              child: Text(
-                widget.about,
-                style: const TextStyle(
-                  fontSize: 14,
-                  height: 1.4,
-                  color: KoalaColors.text,
-                  letterSpacing: -0.1,
-                ),
-                maxLines: _expanded ? null : _kCollapsedMax,
-                overflow: _expanded
-                    ? TextOverflow.visible
-                    : TextOverflow.ellipsis,
-              ),
-            ),
-            if (long) ...[
-              const SizedBox(height: 4),
-              InkWell(
-                onTap: () => setState(() => _expanded = !_expanded),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 4),
-                  child: Text(
-                    _expanded ? 'Daha az' : 'Daha fazla',
-                    style: const TextStyle(
-                      fontSize: 12.5,
-                      fontWeight: FontWeight.w700,
-                      color: KoalaColors.accentDeep,
-                      letterSpacing: -0.1,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ],
         ),
       ),
     );
@@ -1721,42 +1869,37 @@ class _ProApplicationSheetState extends ConsumerState<ProApplicationSheet> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  _sectionLabel('Hakkında'),
+                  _sectionLabel('Hakkında', trailing: '1 / 4'),
                   const SizedBox(height: 10),
                   _field(_fullName, label: 'Ad Soyad', hint: 'Tam adın'),
                   const SizedBox(height: 12),
                   _field(_city, label: 'Şehir', hint: 'İstanbul, İzmir…'),
-                  const SizedBox(height: 22),
+                  const SizedBox(height: 20),
                   _divider(),
                   const SizedBox(height: 18),
 
-                  _sectionLabel('Mesleğin'),
+                  _sectionLabel('Mesleğin', trailing: '2 / 4'),
                   const SizedBox(height: 10),
                   _field(_professionCtrl,
                       label: 'Meslek',
                       hint: 'ör. İç Mimar, Mobilya Tasarımcısı'),
-                  const SizedBox(height: 22),
-                  _divider(),
-                  const SizedBox(height: 18),
-
-                  _sectionLabel('Uzmanlıkların (opsiyonel)'),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 12),
                   _field(_specialtyCtrl,
-                      label: 'Uzmanlık alanların',
+                      label: 'Uzmanlık alanların (opsiyonel)',
                       hint: 'Salon, Mutfak, Bebek odası (virgülle ayır)'),
-                  const SizedBox(height: 22),
+                  const SizedBox(height: 20),
                   _divider(),
                   const SizedBox(height: 18),
 
-                  _sectionLabel('Sosyal & İletişim'),
+                  _sectionLabel('Sosyal & İletişim', trailing: '3 / 4'),
                   const SizedBox(height: 10),
                   _field(_ig,
                       label: 'Instagram', hint: '@kullaniciadi veya link'),
-                  const SizedBox(height: 22),
+                  const SizedBox(height: 20),
                   _divider(),
                   const SizedBox(height: 18),
 
-                  _sectionLabel('Portfolyo (opsiyonel)'),
+                  _sectionLabel('Portfolyo (opsiyonel)', trailing: '4 / 4'),
                   const SizedBox(height: 10),
                   _field(_portfolio,
                       label: 'Portföy / Web', hint: 'https://… (varsa)'),
@@ -1775,7 +1918,7 @@ class _ProApplicationSheetState extends ConsumerState<ProApplicationSheet> {
                   ],
                   const SizedBox(height: 20),
 
-                  // ─── Bottom CTA (56h, gradient) ──────────────────
+                  // ─── Bottom CTA (56h, gradient + subtle glow) ────
                   DecoratedBox(
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(16),
@@ -1790,9 +1933,16 @@ class _ProApplicationSheetState extends ConsumerState<ProApplicationSheet> {
                       boxShadow: [
                         BoxShadow(
                           color:
-                              KoalaColors.accentDeep.withValues(alpha: 0.32),
-                          blurRadius: 18,
-                          offset: const Offset(0, 8),
+                              KoalaColors.accentDeep.withValues(alpha: 0.38),
+                          blurRadius: 24,
+                          offset: const Offset(0, 10),
+                        ),
+                        BoxShadow(
+                          color:
+                              KoalaColors.accent.withValues(alpha: 0.22),
+                          blurRadius: 36,
+                          spreadRadius: -4,
+                          offset: const Offset(0, 4),
                         ),
                       ],
                     ),
@@ -2065,7 +2215,7 @@ class _ProSheetHero extends StatelessWidget {
     return ClipRRect(
       borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
       child: SizedBox(
-        height: 140,
+        height: 160,
         width: double.infinity,
         child: Stack(
           fit: StackFit.expand,

@@ -1,6 +1,5 @@
 // Instagram-pattern followers/following bottom sheet.
-// - Tap row → user quick popup (UserQuickPopup) for a peek.
-// - "Profili gör" in popup pushes to DesignerProfileScreen.
+// - Tap row → MiniProfileSheet for a peek.
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -12,7 +11,7 @@ import 'package:lucide_icons/lucide_icons.dart';
 import '../../core/theme/koala_tokens.dart';
 import '../../services/follow_service.dart';
 import '../../services/user_profile_service.dart';
-import 'user_quick_popup.dart';
+import 'mini_profile_sheet.dart';
 
 enum FollowListMode { followers, following }
 
@@ -159,7 +158,7 @@ class _FollowListSheetState extends ConsumerState<FollowListSheet> {
                                   _followingCache.containsKey(u.uid),
                               isFollowing: isFollowing,
                               onToggle: () => _toggleFollow(u.uid),
-                              onTap: () => UserQuickPopup.open(
+                              onTap: () => MiniProfileSheet.open(
                                 context,
                                 user: u,
                               ),

@@ -16,6 +16,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
@@ -1355,11 +1356,28 @@ class _StyleDiscoveryLiveScreenState
               ref.invalidate(unreadNotificationsProvider);
             },
           ),
+          const SizedBox(width: 6),
+          _SettingsButton(
+            isPro: ref.watch(proStatusProvider).value?.isPro ?? false,
+            onTap: _openSettings,
+          ),
+          const SizedBox(width: 6),
           Padding(
-            padding: const EdgeInsets.only(right: 12),
-            child: _SettingsButton(
+            padding: const EdgeInsets.only(right: 14),
+            child: _ProPill(
               isPro: ref.watch(proStatusProvider).value?.isPro ?? false,
-              onTap: _openSettings,
+              onTap: () {
+                HapticFeedback.selectionClick();
+                final isPro =
+                    ref.read(proStatusProvider).value?.isPro ?? false;
+                if (isPro) {
+                  // Pro kullanıcı — Pro perks ekranına git (varsa) ya da
+                  // sessizce ayarlara. Burada paywall açmıyoruz.
+                  context.push('/profile');
+                } else {
+                  showPaywall(context, trigger: 'top_pill');
+                }
+              },
             ),
           ),
         ],
@@ -1498,12 +1516,12 @@ class _StyleDiscoveryLiveScreenState
   /// Kullanıcı AppBar süzgeç ikonunu gözden kaçırırsa bile buradan seçebilir.
   Widget _buildCategoryBar() {
     return SizedBox(
-      height: 56,
+      height: 64,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.fromLTRB(20, 8, 20, 4),
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
         itemCount: _categoryOptions.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        separatorBuilder: (_, __) => const SizedBox(width: 10),
         itemBuilder: (_, i) {
           final e = _categoryOptions[i];
           final active = (_selectedCategory ?? '') == e.key;
@@ -1679,6 +1697,7 @@ class _StyleDiscoveryLiveScreenState
                             prettyCategory: _prettyCategory,
                             designer: _designerCache[
                                 (next['designer_id'] ?? '').toString()],
+                            onSeeProfile: null,
                           ),
                         ),
                       ),
@@ -1709,6 +1728,8 @@ class _StyleDiscoveryLiveScreenState
                                 prettyCategory: _prettyCategory,
                                 designer: _designerCache[
                                     (current['designer_id'] ?? '').toString()],
+                                onSeeProfile: () =>
+                                    _openDesignerSheet(current),
                               ),
                               // Tap hint kalıcı olarak kaldırıldı — kullanıcı
                               // direktifi: hiçbir tutorial/hint gösterilmesin.
@@ -1789,16 +1810,15 @@ class _StyleDiscoveryLiveScreenState
         _askingInFlight;
     final undoDisabled = _history.isEmpty || _animatingExit;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 4, 24, 8),
+      padding: const EdgeInsets.fromLTRB(18, 8, 18, 10),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           _ActionBtn(
             icon: LucideIcons.undo2,
             label: 'Geri al',
             onTap: undoDisabled ? null : _undo,
             variant: _ActionVariant.outlined,
-            small: true,
           ),
           _ActionBtn(
             icon: LucideIcons.x,
@@ -1828,7 +1848,7 @@ class _StyleDiscoveryLiveScreenState
             icon: LucideIcons.messageCircle,
             label: 'Sor',
             onTap: askDisabled ? null : _onAskDesigner,
-            variant: _ActionVariant.soft,
+            variant: _ActionVariant.outlined,
           ),
         ],
       ),
@@ -1843,12 +1863,15 @@ class _Card extends StatelessWidget {
     required this.coverOf,
     required this.prettyCategory,
     this.designer,
+    this.onSeeProfile,
   });
   final Map<String, dynamic> project;
   final String Function(Map<String, dynamic>) coverOf;
   // ignore: unused_element_parameter
   final String Function(String) prettyCategory;
   final Map<String, dynamic>? designer;
+  // ignore: unused_element_parameter
+  final VoidCallback? onSeeProfile;
 
   // ignore: unused_element
   IconData _roomIcon(String raw) {
@@ -1970,40 +1993,258 @@ class _Card extends StatelessWidget {
             ),
           ),
 
-          // Kart üstü: oda pill + başlık + tagline kaldırıldı (Sor'a basınca
-          // chat preview'da info olarak gösteriliyor). Sadece tasarımcı chip'i
-          // ve palet alt tarafta kalıyor — kim yapmış görsel olarak anlaşılsın.
-          if (designer != null || palette.isNotEmpty)
+          // Alt overlay: tasarımcı bilgisi (sol-alt) + "Profili Gör →" pill
+          // (sağ-alt). Üstteki başlık/tagline kaldırıldı.
+          if (designer != null)
             Positioned(
               bottom: 0,
               left: 0,
               right: 0,
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
+                padding: const EdgeInsets.fromLTRB(16, 0, 14, 18),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    if (designer != null) _DesignerChip(designer: designer!),
-                    if (palette.isNotEmpty) ...[
-                      const SizedBox(height: 12),
-                      Row(
-                        children: [
-                          for (int i = 0;
-                              i < palette.length && i < 4;
-                              i++) ...[
-                            if (i > 0) const SizedBox(width: 6),
-                            _ColorDot(color: palette[i]),
-                          ],
-                        ],
-                      ),
+                    Expanded(
+                      child: _DesignerBlock(designer: designer!),
+                    ),
+                    if (onSeeProfile != null) ...[
+                      const SizedBox(width: 8),
+                      _SeeProfilePill(onTap: onSeeProfile!),
                     ],
                   ],
                 ),
               ),
             ),
+          // 3 sayfa noktası — kartın alt-merkezinde, görsel ritim.
+          const Positioned(
+            left: 0,
+            right: 0,
+            bottom: 6,
+            child: _CardDots(count: 3, active: 0),
+          ),
+          // palette dots şu an UI'da gösterilmiyor — _paletteColors helper'ı
+          // ileride geri getirilebilir. Kullanılmadığı için referansını
+          // önbellekte tutuyoruz.
+          if (palette.isEmpty)
+            const SizedBox.shrink()
+          else
+            const SizedBox.shrink(),
         ],
       ),
+    );
+  }
+}
+
+/// Kartın sol-altında: yuvarlak avatar + tasarımcı adı + verified check
+/// + altında "İç Mimar · N proje" satırı.
+class _DesignerBlock extends StatelessWidget {
+  const _DesignerBlock({required this.designer});
+  final Map<String, dynamic> designer;
+
+  @override
+  Widget build(BuildContext context) {
+    final name = (designer['full_name'] ??
+            designer['business_name'] ??
+            '')
+        .toString()
+        .trim();
+    final avatar = (designer['avatar_url'] ?? '').toString().trim();
+    final profession =
+        (designer['profession'] ?? designer['specialty'] ?? 'İç Mimar')
+            .toString()
+            .trim();
+    final projectCount = (designer['project_count'] as num?)?.toInt();
+    final designerId =
+        (designer['id'] ?? designer['designer_id'] ?? '').toString();
+    final initials = _initials(name);
+    final isVerified = isVerifiedDesignerId(designerId);
+
+    final subtitle = projectCount != null && projectCount > 0
+        ? '$profession · $projectCount proje'
+        : profession;
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 44,
+          height: 44,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: KoalaColors.accentDeep,
+            border: Border.all(
+              color: Colors.white.withValues(alpha: 0.5),
+              width: 1.5,
+            ),
+            image: avatar.isEmpty
+                ? null
+                : DecorationImage(
+                    image: CachedNetworkImageProvider(avatar),
+                    fit: BoxFit.cover,
+                  ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.25),
+                blurRadius: 8,
+                offset: const Offset(0, 3),
+              ),
+            ],
+          ),
+          alignment: Alignment.center,
+          child: avatar.isEmpty
+              ? Text(
+                  initials,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                    color: Colors.white,
+                  ),
+                )
+              : null,
+        ),
+        const SizedBox(width: 10),
+        Flexible(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Flexible(
+                    child: Text(
+                      name.isEmpty ? 'Tasarımcı' : name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.white,
+                        letterSpacing: -0.1,
+                        height: 1.15,
+                      ),
+                    ),
+                  ),
+                  if (isVerified) ...[
+                    const SizedBox(width: 5),
+                    const VerifiedBadge(size: 13),
+                  ],
+                ],
+              ),
+              const SizedBox(height: 2),
+              Text(
+                subtitle,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w500,
+                  color: Colors.white.withValues(alpha: 0.82),
+                  letterSpacing: 0.1,
+                  height: 1.2,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  static String _initials(String name) {
+    final parts = name.trim().split(RegExp(r'\s+'));
+    if (parts.isEmpty || parts.first.isEmpty) return '·';
+    if (parts.length == 1) return parts.first.characters.first.toUpperCase();
+    return (parts.first.characters.first + parts.last.characters.first)
+        .toUpperCase();
+  }
+}
+
+/// Kartın sağ-alt köşesindeki küçük "Profili Gör →" pill — beyaz translucent,
+/// kapsül form. Tap → tasarımcı profil sheet'ini açar.
+class _SeeProfilePill extends StatelessWidget {
+  const _SeeProfilePill({required this.onTap});
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(100),
+      child: InkWell(
+        onTap: () {
+          HapticFeedback.selectionClick();
+          onTap();
+        },
+        borderRadius: BorderRadius.circular(100),
+        child: Container(
+          padding:
+              const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.92),
+            borderRadius: BorderRadius.circular(100),
+            border: Border.all(
+              color: Colors.white.withValues(alpha: 0.5),
+              width: 0.8,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.18),
+                blurRadius: 10,
+                offset: const Offset(0, 3),
+              ),
+            ],
+          ),
+          child: const Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Profili Gör',
+                style: TextStyle(
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w700,
+                  color: KoalaColors.text,
+                  letterSpacing: -0.1,
+                  height: 1.0,
+                ),
+              ),
+              SizedBox(width: 4),
+              Icon(Icons.arrow_forward_rounded,
+                  size: 13, color: KoalaColors.text),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Kart alt-merkezinde 3 sayfa noktası — görsel ritim, hangi kartta
+/// olduğumuzu hissettirmek için statik.
+class _CardDots extends StatelessWidget {
+  const _CardDots({required this.count, required this.active});
+  final int count;
+  final int active;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: List.generate(count, (i) {
+        final on = i == active;
+        return Container(
+          width: on ? 18 : 6,
+          height: 6,
+          margin: const EdgeInsets.symmetric(horizontal: 3),
+          decoration: BoxDecoration(
+            color: on
+                ? Colors.white
+                : Colors.white.withValues(alpha: 0.45),
+            borderRadius: BorderRadius.circular(99),
+          ),
+        );
+      }),
     );
   }
 }
@@ -2143,8 +2384,8 @@ class _ActionBtn extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final disabled = onTap == null;
-    final size = large ? 68.0 : (small ? 44.0 : 56.0);
-    final iconSize = large ? 28.0 : (small ? 18.0 : 22.0);
+    final size = large ? 64.0 : (small ? 44.0 : 52.0);
+    final iconSize = large ? 32.0 : (small ? 18.0 : 22.0);
 
     Color bg;
     Color fg;
@@ -2231,14 +2472,15 @@ class _ActionBtn extends StatelessWidget {
               ),
               child: Icon(icon, color: fg, size: iconSize),
             ),
-            const SizedBox(height: 6),
+            const SizedBox(height: 7),
             Text(
               label,
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
+              style: const TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w500,
                 color: KoalaColors.textSec,
                 letterSpacing: 0.1,
+                height: 1.0,
               ),
             ),
           ],
@@ -2357,16 +2599,17 @@ class _CategoryChip extends StatelessWidget {
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 180),
         curve: Curves.easeOut,
-        height: 42,
-        padding: const EdgeInsets.symmetric(horizontal: 16),
+        padding: const EdgeInsets.symmetric(
+            horizontal: 18, vertical: 14),
         alignment: Alignment.center,
         decoration: BoxDecoration(
           color: active ? KoalaColors.accentDeep : KoalaColors.surface,
           borderRadius: BorderRadius.circular(100),
           border: Border.all(
-            color:
-                active ? KoalaColors.accentDeep : KoalaColors.border,
-            width: 0.8,
+            color: active
+                ? KoalaColors.accentDeep
+                : KoalaColors.borderSolid,
+            width: 0.9,
           ),
         ),
         child: Row(
@@ -2375,7 +2618,7 @@ class _CategoryChip extends StatelessWidget {
             Icon(
               icon,
               size: 16,
-              color: active ? Colors.white : KoalaColors.textSec,
+              color: active ? Colors.white : KoalaColors.text,
             ),
             const SizedBox(width: 8),
             Text(
@@ -2385,6 +2628,7 @@ class _CategoryChip extends StatelessWidget {
                 fontWeight: FontWeight.w700,
                 color: active ? Colors.white : KoalaColors.text,
                 letterSpacing: -0.1,
+                height: 1.0,
               ),
             ),
           ],
@@ -3103,50 +3347,61 @@ const String _evlumbaDesignAvatarUrl =
 /// AppBar başlığı: "koala by evlumba" wordmark + slogan. Inter (theme).
 class _BrandLockup extends StatelessWidget {
   const _BrandLockup();
+
+  /// "koala" wordmark — DM Serif Display (Google Fonts).
+  /// Runtime fetch açık olduğu için fontu indirilene kadar serif fallback
+  /// kullanılır; bundle'a TTF eklemek zorunda değiliz.
+  TextStyle _wordmark() {
+    const fallback = TextStyle(
+      fontSize: 30,
+      fontWeight: FontWeight.w700,
+      color: KoalaColors.ink,
+      letterSpacing: -0.6,
+      height: 1.0,
+      fontFamily: 'serif',
+    );
+    try {
+      return GoogleFonts.dmSerifDisplay(textStyle: fallback);
+    } catch (_) {
+      return fallback;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisAlignment: MainAxisAlignment.center,
       mainAxisSize: MainAxisSize.min,
-      children: const [
+      children: [
         Row(
           crossAxisAlignment: CrossAxisAlignment.baseline,
           textBaseline: TextBaseline.alphabetic,
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(
-              'koala',
-              style: TextStyle(
-                fontSize: 28,
-                fontWeight: FontWeight.w800,
-                color: KoalaColors.ink,
-                letterSpacing: -1.2,
-                height: 1.0,
-              ),
-            ),
-            SizedBox(width: 5),
-            Padding(
-              padding: EdgeInsets.only(bottom: 2),
+            Text('koala', style: _wordmark()),
+            const SizedBox(width: 6),
+            const Padding(
+              padding: EdgeInsets.only(bottom: 3),
               child: Text(
                 'by evlumba',
                 style: TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.w700,
                   color: KoalaColors.accentDeep,
-                  letterSpacing: 0.1,
+                  letterSpacing: 0.2,
                 ),
               ),
             ),
           ],
         ),
-        SizedBox(height: 3),
-        Text(
+        const SizedBox(height: 2),
+        const Text(
           'Evin için ilham ve hızlı tasarım.',
           style: TextStyle(
-            fontSize: 12,
+            fontSize: 13,
             fontWeight: FontWeight.w500,
-            color: KoalaColors.textTer,
+            color: KoalaColors.textSec,
             letterSpacing: -0.1,
           ),
         ),
@@ -3228,37 +3483,33 @@ class _BellButton extends StatelessWidget {
       child: InkWell(
         onTap: onTap,
         customBorder: const CircleBorder(),
-        child: SizedBox(
-          width: 44,
-          height: 44,
+        child: Container(
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: KoalaColors.surface,
+            border:
+                Border.all(color: KoalaColors.borderSolid, width: 0.8),
+          ),
           child: Stack(
             clipBehavior: Clip.none,
             alignment: Alignment.center,
             children: [
-              const Icon(LucideIcons.bell, size: 22, color: KoalaColors.text),
+              const Icon(LucideIcons.bell,
+                  size: 19, color: KoalaColors.text),
               if (has)
                 Positioned(
-                  top: 8,
-                  right: 8,
+                  top: 6,
+                  right: 6,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 4, vertical: 1),
+                    width: 9,
+                    height: 9,
                     decoration: BoxDecoration(
-                      color: KoalaColors.error,
-                      borderRadius: BorderRadius.circular(99),
-                      border: Border.all(color: KoalaColors.bg, width: 1.4),
-                    ),
-                    constraints:
-                        const BoxConstraints(minWidth: 16, minHeight: 16),
-                    child: Text(
-                      unread > 9 ? '9+' : '$unread',
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        fontSize: 9,
-                        fontWeight: FontWeight.w800,
-                        color: Colors.white,
-                        height: 1.2,
-                      ),
+                      color: KoalaColors.accentDeep,
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                          color: KoalaColors.bg, width: 1.4),
                     ),
                   ),
                 ),
@@ -3270,10 +3521,10 @@ class _BellButton extends StatelessWidget {
   }
 }
 
-/// AppBar sağındaki ayarlar düğmesi.
-/// Pro: sweep-gradient halka + beyaz iç daire + altın "PRO" pill rozeti.
-/// Free: ince bordürlü beyaz daire + ayar ikonu.
+/// AppBar sağındaki ayarlar düğmesi — minimal outlined daire, ayar ikonu.
+/// Pro durumu artık ayrı `_ProPill` widget'ına taşındı.
 class _SettingsButton extends StatelessWidget {
+  // ignore: unused_element_parameter
   final bool isPro;
   final VoidCallback onTap;
   const _SettingsButton({required this.isPro, required this.onTap});
@@ -3286,17 +3537,24 @@ class _SettingsButton extends StatelessWidget {
       child: InkWell(
         onTap: onTap,
         customBorder: const CircleBorder(),
-        child: SizedBox(
-          width: 50,
-          height: 50,
-          child: Center(
-            child: isPro ? _proInner() : _freeInner(),
+        child: Container(
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: KoalaColors.surface,
+            border:
+                Border.all(color: KoalaColors.borderSolid, width: 0.8),
           ),
+          alignment: Alignment.center,
+          child: const Icon(LucideIcons.settings,
+              size: 19, color: KoalaColors.text),
         ),
       ),
     );
   }
 
+  // ignore: unused_element
   Widget _proInner() {
     return Stack(
       clipBehavior: Clip.none,
@@ -3389,6 +3647,62 @@ class _SettingsButton extends StatelessWidget {
       alignment: Alignment.center,
       child: const Icon(LucideIcons.settings,
           size: 19, color: KoalaColors.text),
+    );
+  }
+}
+
+/// AppBar sağındaki "Pro" pill — taç ikonu + "PRO" metni. Pro user'da
+/// check rozeti, free user'da tap → paywall (`trigger: 'top_pill'`).
+class _ProPill extends StatelessWidget {
+  final bool isPro;
+  final VoidCallback onTap;
+  const _ProPill({required this.isPro, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(100),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(100),
+        child: Container(
+          height: 32,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: const Color(0xFFFFF8E8),
+            borderRadius: BorderRadius.circular(100),
+            border: Border.all(
+              color: const Color(0xFFE6C679),
+              width: 0.9,
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(LucideIcons.crown,
+                  size: 13, color: Color(0xFFB8862F)),
+              const SizedBox(width: 5),
+              Text(
+                'PRO',
+                style: const TextStyle(
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xFFB8862F),
+                  letterSpacing: 0.6,
+                  height: 1.0,
+                ),
+              ),
+              if (isPro) ...[
+                const SizedBox(width: 5),
+                const Icon(LucideIcons.check,
+                    size: 12, color: Color(0xFFB8862F)),
+              ],
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

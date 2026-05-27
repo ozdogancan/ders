@@ -7,6 +7,7 @@ import '../providers/pro_status_provider.dart';
 import '../services/evlumba_live_service.dart';
 import '../services/saved_items_service.dart';
 import '../widgets/chat/designer_chat_popup.dart';
+import '../widgets/koala_back_button.dart';
 import '../widgets/koala_widgets.dart';
 import '../widgets/like_button.dart';
 import '../widgets/save_button.dart';
@@ -122,10 +123,8 @@ class _DesignerProfileScreenState extends ConsumerState<DesignerProfileScreen> {
         surfaceTintColor: KoalaColors.surface,
         elevation: 0,
         title: Text(name, style: KoalaText.h3),
-        leading: IconButton(
-          icon: const Icon(LucideIcons.arrowLeft),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
+        leading: const KoalaBackButton(),
+        leadingWidth: 64,
       ),
       body: _loading
           ? const Center(
