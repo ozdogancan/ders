@@ -6,21 +6,30 @@
 // değiştirmiyor; sadece zaten elde olan batch üzerinde ranking + variety
 // constraint + discovery slot + addiction-loop yerleştirmeleri uyguluyor.
 //
+// Faz 1.5 (2026-05-27): dwell-time decay penalty, designer cooldown,
+// style novelty boost (anti-monotony), epsilon-greedy exploration (15%).
+// Faz 2 (opsiyonel): server-side `koala_rank_feed` RPC — cosine sim üzerinden
+// embedding-based ranking; pgvector kullanır. `rankFromServer` ile çağırılır.
+// Evlumba-must-be-first kuralı KALDIRILDI — seeded kartlar normal ranking
+// üzerinden akar.
+//
 // Performans:
 //  - Pure in-memory, O(n log n) sort + tek geçişli yerleştirme.
 //  - Taste profile cache: 10 like delta'da bir re-derive. RAM-only.
 //  - 500'lük SharedPreferences ring buffer: son görülen kart id'leri.
 //  - Tüm signature'lar sync (taste profile dışında); UI thread'i bloklamaz.
 //
-// Algoritma:
-//  - Score(card) = taste_match*4 + room_freshness*2 + novelty*3
-//                  + quality*1 + designer_exposure_bonus*2 - room_streak_penalty
+// Algoritma (client-side):
+//  - Score(card) = quality*1 + taste_match*4 - skip_decay_penalty*3
+//                  + room_match*1 + designer_exposure*2 + recency*1
+//                  - designer_cooldown_penalty*2 + novelty_boost*2 + jitter
 //  - Discovery slot: her N (default 5) kartta bir "exploration" — taste
 //    eşleşmesinden bağımsız, seeded / under-exposed öne çıkar.
+//  - Addiction slot: kullanıcı 20+ like topladıysa, her 3. slotta
+//    high-confidence taste match enjekte edilir (Pavlovian pacing).
+//  - Epsilon-greedy: %15 slotta wider pool'dan rastgele kart (Reels surprise).
 //  - Variety: 10 kartlık pencerede max 3 same-designer, max 4 same-room.
 //  - 200 kart içinde duplicate yok (recently-seen ring buffer).
-//  - Addiction hit: kullanıcı 20+ like topladıysa, her 3. slotta high-confidence
-//    taste match enjekte edilir (Pavlovian pacing).
 // ═══════════════════════════════════════════════════════════════════════════
 
 import 'dart:async';
@@ -29,6 +38,8 @@ import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' show Supabase;
+import 'package:firebase_auth/firebase_auth.dart';
 
 import 'taste_profile_service.dart';
 
@@ -44,6 +55,9 @@ class SwipeFeedService {
   static const int _maxSameRoomInWindow = 4;
   static const int _seenRingCap = 500;
   static const int _noRepeatWithin = 200;
+  static const double _epsilonExploration = 0.15; // %15 random surprise slot
+  static const int _designerCooldownWindow = 20; // skipped → 20 kart soğusun
+  static const int _recencyDays = 14;
   static const String _prefsSeenKey = 'swipe_feed_seen_v1';
 
   // ── Taste profile memoization ─────────────────────────────────────────────
@@ -51,6 +65,19 @@ class SwipeFeedService {
   static int _profileLikeSnapshot = -1;
   // Re-derive eşiği: 10 yeni like geldikten sonra.
   static const int _profileRefreshDelta = 10;
+
+  // ── Dwell / skip-decay signal state ───────────────────────────────────────
+  // Style key (lowercase) → skip count (session). Her style için `1-exp(-n/3)`
+  // penalty hesaplanır — sık skip edilen style harder cezalanır.
+  static final Map<String, int> _styleSkipCount = {};
+  // designer_id → kalan cooldown slot sayısı. _designerCooldownWindow'dan
+  // başlar, her placement'ta -1. >0 ise o tasarımcının kartına penalty.
+  static final Map<String, int> _designerCooldown = {};
+  // designer_id → ardışık skip sayısı (cooldown trigger için, >=2 → cooldown).
+  static final Map<String, int> _designerRecentSkips = {};
+  // Son N rendered card'ın baskın style'ı — novelty boost için.
+  static final List<String> _recentStyleWindow = [];
+  static const int _noveltyWindow = 5;
 
   /// Mevcut taste profile snapshot'ını döndürür; gerekirse re-derive eder.
   /// Caller `currentLikeCount` parametresinden son like sayısını verirse
@@ -71,6 +98,10 @@ class SwipeFeedService {
   static void invalidateProfileCache() {
     _cachedProfile = null;
     _profileLikeSnapshot = -1;
+    _styleSkipCount.clear();
+    _designerCooldown.clear();
+    _designerRecentSkips.clear();
+    _recentStyleWindow.clear();
   }
 
   // ── Seen ring buffer ──────────────────────────────────────────────────────
@@ -94,9 +125,18 @@ class SwipeFeedService {
     }
   }
 
-  /// Bir kartı "şu an gösterildi" olarak işaretle — ring buffer'a ekle.
-  /// SharedPreferences yazımı arka planda yapılır; çağıran await etmemeli.
-  static Future<void> markShown(String cardId) async {
+  /// Bir kartı "şu an görüldü/swipe edildi" olarak işaretle —
+  /// ring buffer'a ekle, in-memory skip/cooldown sinyallerini güncelle,
+  /// Supabase `ingest_swipe_v2` RPC'sini fire-and-forget tetikle.
+  ///
+  /// [dwellMs] kullanıcının karta baktığı süre (ms). [liked] like ise true,
+  /// pass ise false. Hem caller hem servis defensive — exception yutulur.
+  static Future<void> markShown(
+    String cardId, {
+    int? dwellMs,
+    bool liked = false,
+    Map<String, dynamic>? card,
+  }) async {
     if (cardId.isEmpty) return;
     final ring = await _loadSeen();
     ring.add(cardId);
@@ -107,6 +147,64 @@ class SwipeFeedService {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(_prefsSeenKey, jsonEncode(ring));
     } catch (_) {}
+
+    // In-memory signal update — sadece kart payload'ı verilmişse.
+    if (card != null) {
+      final designerId = (card['designer_id'] ?? '').toString();
+      final styles = TasteProfileService.stylesOf(card);
+      if (liked) {
+        // Like geldiyse cooldown sayaçlarını sıfırla — bu tasarımcı affedildi.
+        _designerRecentSkips.remove(designerId);
+        if (styles.isNotEmpty) _recentStyleWindow.add(styles.first);
+      } else {
+        // Skip → style skip count++ (her style için ayrı).
+        for (final s in styles) {
+          _styleSkipCount[s] = (_styleSkipCount[s] ?? 0) + 1;
+        }
+        if (designerId.isNotEmpty) {
+          final n = (_designerRecentSkips[designerId] ?? 0) + 1;
+          _designerRecentSkips[designerId] = n;
+          if (n >= 2) {
+            // İki ardışık skip → cooldown başlat.
+            _designerCooldown[designerId] = _designerCooldownWindow;
+            _designerRecentSkips[designerId] = 0;
+          }
+        }
+        if (styles.isNotEmpty) _recentStyleWindow.add(styles.first);
+      }
+      while (_recentStyleWindow.length > _noveltyWindow) {
+        _recentStyleWindow.removeAt(0);
+      }
+    }
+
+    // Supabase ML pipeline — fire-and-forget.
+    unawaited(_persistSwipeSignal(
+      cardId: cardId,
+      dwellMs: dwellMs,
+      liked: liked,
+    ));
+  }
+
+  static Future<void> _persistSwipeSignal({
+    required String cardId,
+    required int? dwellMs,
+    required bool liked,
+  }) async {
+    try {
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      if (uid == null || uid.isEmpty) return;
+      await Supabase.instance.client.rpc('ingest_swipe_v2', params: {
+        'p_user_id': uid,
+        'p_card_id': cardId,
+        'p_direction': liked ? 'like' : 'pass',
+        'p_context': 'style_discovery_live',
+        'p_swipe_velocity': 0,
+        'p_dwell_time_ms': dwellMs ?? 0,
+        'p_idempotency_key': '${uid}_${cardId}_${DateTime.now().millisecondsSinceEpoch}',
+      });
+    } catch (_) {
+      // RPC bulunmayabilir veya kart koala_cards'ta olmayabilir — sessizce geç.
+    }
   }
 
   /// Son [_noRepeatWithin] içinde gösterilen mi?
@@ -119,6 +217,29 @@ class SwipeFeedService {
       if (ring[i] == cardId) return true;
     }
     return false;
+  }
+
+  // ── Server-side ranker (Faz 2) ────────────────────────────────────────────
+  /// `koala_rank_feed` RPC'sini çağırır. Cosine similarity üzerinden
+  /// embedding-based sıralama döner. Hata / boş sonuç → null (caller
+  /// client-side ranker'a fallback yapar).
+  static Future<List<Map<String, dynamic>>?> rankFromServer({
+    int limit = 20,
+    int offset = 0,
+  }) async {
+    try {
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      if (uid == null || uid.isEmpty) return null;
+      final data = await Supabase.instance.client.rpc('koala_rank_feed',
+          params: {'p_user_id': uid, 'p_limit': limit, 'p_offset': offset});
+      if (data == null) return null;
+      final list = List<Map<String, dynamic>>.from(
+          (data as List).map((e) => Map<String, dynamic>.from(e as Map)));
+      return list;
+    } catch (e) {
+      if (kDebugMode) debugPrint('SwipeFeed: rankFromServer fallback → $e');
+      return null;
+    }
   }
 
   // ── Public API: bir batch'i puanla ve sırala ──────────────────────────────
@@ -176,6 +297,9 @@ class SwipeFeedService {
       final vb = (b.card['view_count'] as num?)?.toDouble() ?? 0;
       return va.compareTo(vb);
     });
+    // Epsilon-greedy "surprise" pool — entire scored set, shuffled.
+    final surprisePool = List<_Scored>.from(scored)..shuffle(_rng);
+    int surpIdx = 0;
 
     // 5) Variety + slot pacing ile final yerleştirme.
     final result = <Map<String, dynamic>>[];
@@ -193,6 +317,7 @@ class SwipeFeedService {
     final useAddiction = totalLikesAllTime >= _addictionMinLikes;
 
     // Yerleştirme: her slot için
+    // - %15 epsilon → surprise pool (random kart, variety constraint zorunlu)
     // - addiction slot mu? high-confidence taste match al
     // - discovery slot mu? explore pool'dan al
     // - değilse yüksek skordan al
@@ -204,9 +329,27 @@ class SwipeFeedService {
           globalSlot > 0 &&
           globalSlot % _addictionSlotEvery == 0;
       final isDiscovery = globalSlot > 0 && globalSlot % _discoverySlotEvery == 0;
+      // Epsilon-greedy: addiction/discovery slot DEĞİLSE %15 ihtimalle random.
+      final isSurprise = !isAddiction &&
+          !isDiscovery &&
+          _rng.nextDouble() < _epsilonExploration;
 
       _Scored? pick;
-      if (isAddiction) {
+      if (isSurprise) {
+        pick = _pickFromPool(
+          surprisePool, surpIdx,
+          designerWindow, roomWindow,
+        );
+        if (pick != null) {
+          surpIdx = surprisePool.indexOf(pick) + 1;
+          // High/explore pool index'lerini de senkronize tut — duplicate önle.
+          final hi = highPool.indexOf(pick);
+          if (hi >= hiIdx) hiIdx = hi + 1;
+          final ex = explorePool.indexOf(pick);
+          if (ex >= exIdx) exIdx = ex + 1;
+        }
+      }
+      if (pick == null && isAddiction) {
         pick = _pickFromPool(
           highPool, hiIdx,
           designerWindow, roomWindow,
@@ -249,6 +392,10 @@ class SwipeFeedService {
       if (pick == null) break;
 
       result.add(pick.card);
+      // Designer cooldown'unu placement başına decrement et.
+      _designerCooldown.forEach((k, v) {
+        if (v > 0) _designerCooldown[k] = v - 1;
+      });
       designerWindow.add((pick.card['designer_id'] ?? '').toString());
       roomWindow.add(_roomKey(pick.card));
       if (designerWindow.length > _windowSize) designerWindow.removeAt(0);
@@ -269,13 +416,15 @@ class SwipeFeedService {
   static double _score(Map<String, dynamic> card, TasteProfile profile) {
     var s = 0.0;
     // (1) Quality baseline — koala_cards.quality_score; designer_projects'te
-    // yoksa default 0.5.
+    // yoksa default 0.5. Ağırlık 1.5 (önceden 1.0) — yüksek kaliteli kartları
+    // daha agresif promote et.
     final q = (card['quality_score'] as num?)?.toDouble() ?? 0.5;
-    s += q * 1.0;
+    s += q * 1.5;
+
+    final styles = TasteProfileService.stylesOf(card);
 
     // (2) Taste match — kart stilleri profil top-styles ile kesişiyor mu?
     if (profile.isActive && profile.topStyles.isNotEmpty) {
-      final styles = TasteProfileService.stylesOf(card);
       var match = 0.0;
       for (final ts in profile.topStyles) {
         if (styles.contains(ts.style)) {
@@ -287,6 +436,16 @@ class SwipeFeedService {
         if (styles.contains(b)) match -= 3.0;
       }
       s += match;
+    }
+
+    // (2b) Skip-decay penalty — bu stilde ne kadar çok skip'lendiyse o kadar
+    //      sert düş. weight = 1 - exp(-skip_count/3). 3 skip = ~0.63, 6 = ~0.86.
+    for (final st in styles) {
+      final n = _styleSkipCount[st] ?? 0;
+      if (n > 0) {
+        final w = 1.0 - math.exp(-n / 3.0);
+        s -= w * 3.0;
+      }
     }
 
     // (3) Room match — top room'larda yer alıyorsa hafif bonus.
@@ -302,12 +461,29 @@ class SwipeFeedService {
       s += 2.0 * (1.0 - (views / 50.0));
     }
 
-    // (5) Recency boost — created_at son 30 gün ise +.
+    // (4b) Designer cooldown — son 2 kartı skip edilenler bir süre düşük.
+    final did = (card['designer_id'] ?? '').toString();
+    if (did.isNotEmpty && (_designerCooldown[did] ?? 0) > 0) {
+      s -= 2.0;
+    }
+
+    // (5) Recency boost — created_at son 14 gün ise +. Bias toward fresh.
     final createdMs = _parseTime(card['created_at']);
     if (createdMs > 0) {
       final ageDays =
           (DateTime.now().millisecondsSinceEpoch - createdMs) / 86400000.0;
-      if (ageDays < 30) s += (1.0 - ageDays / 30.0) * 1.0;
+      if (ageDays < _recencyDays) {
+        s += (1.0 - ageDays / _recencyDays) * 1.0;
+      }
+    }
+
+    // (5b) Novelty boost — son 5 kart aynı style ise farklı style'a +2.
+    if (_recentStyleWindow.length >= _noveltyWindow) {
+      final dominant = _recentStyleWindow.first;
+      final allSame = _recentStyleWindow.every((x) => x == dominant);
+      if (allSame && styles.isNotEmpty && !styles.contains(dominant)) {
+        s += 2.0;
+      }
     }
 
     // (6) Küçük jitter — aynı skorlular için rotasyon, deterministic boredom

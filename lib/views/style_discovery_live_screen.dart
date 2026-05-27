@@ -145,6 +145,11 @@ class _StyleDiscoveryLiveScreenState
   double _dragDy = 0;
   bool _animatingExit = false;
 
+  // Dwell-time signal — kullanıcı bu karta ne kadar süre baktı.
+  // _index yeni karta atlar atlamaz reset edilir; _swipe başında
+  // (now - _currentCardShownAt) hesaplanıp markShown'a iletilir.
+  DateTime? _currentCardShownAt;
+
   // Pro upsell card cadence: free user her 6 swipe'tan sonra (yani 7., 13.,
   // 19. slotta) Pro upgrade kartı görür. Pro user'da hiç gösterilmez.
   int _swipeCount = 0;
@@ -381,8 +386,8 @@ class _StyleDiscoveryLiveScreenState
       }
       await _fetchBatch();
       if (!mounted) return;
-      _ensureEvlumbaFirst();
       setState(() => _loading = false);
+      _currentCardShownAt = DateTime.now();
       _prefetchCurrentDesigner();
       _persistDeckCache();
       _scheduleDemoIdleTimer();
@@ -423,6 +428,7 @@ class _StyleDiscoveryLiveScreenState
         _deck.addAll(filtered);
         _loading = false;
       });
+      _currentCardShownAt ??= DateTime.now();
       _precacheNext();
     } catch (_) {}
   }
@@ -854,7 +860,21 @@ class _StyleDiscoveryLiveScreenState
     final justShown = _index < _deck.length ? _deck[_index] : null;
     if (justShown != null) {
       final id = (justShown['id'] ?? '').toString();
-      if (id.isNotEmpty) unawaited(SwipeFeedService.markShown(id));
+      if (id.isNotEmpty) {
+        final lastLiked = _history.isNotEmpty &&
+            _history.last['liked'] == true &&
+            (_history.last['id'] ?? '').toString() == id;
+        final shownAt = _currentCardShownAt;
+        final dwellMs = shownAt == null
+            ? null
+            : DateTime.now().difference(shownAt).inMilliseconds;
+        unawaited(SwipeFeedService.markShown(
+          id,
+          dwellMs: dwellMs,
+          liked: lastLiked,
+          card: justShown,
+        ));
+      }
     }
     setState(() {
       _index++;
@@ -862,6 +882,8 @@ class _StyleDiscoveryLiveScreenState
       _dragDy = 0;
       _animatingExit = false;
     });
+    // Yeni kartın "shown at" damgası — sonraki swipe'ta dwell hesaplanacak.
+    _currentCardShownAt = DateTime.now();
     _exitCtrl.reset();
     _precacheNext();
     _prefetchCurrentDesigner();
@@ -1122,38 +1144,6 @@ class _StyleDiscoveryLiveScreenState
       await showPaywall(context, trigger: trigger);
     } catch (_) {/* render hatası — sessiz */} finally {
       _paywallOpen = false;
-    }
-  }
-
-  /// Deck'in ilk kartının Evlumba Design seeded kart olduğunu garantile —
-  /// kullanıcı home'a girdiği an başka tasarımcı kartı parlamasın.
-  void _ensureEvlumbaFirst() {
-    if (_deck.isEmpty) return;
-    if ((_deck[0]['designer_id'] ?? '') == 'evlumba-design') return;
-    if (_sourceFilter == 'real') return;
-    final cat = _selectedCategory?.trim().toLowerCase();
-    bool matchesCat(Map<String, dynamic> c) {
-      if (cat == null || cat.isEmpty) return true;
-      return (c['project_type'] ?? '').toString().trim().toLowerCase() == cat;
-    }
-    // Deck içinde kategoriye uyan Evlumba kartı varsa öne taşı.
-    for (int i = 1; i < _deck.length; i++) {
-      final c = _deck[i];
-      if ((c['designer_id'] ?? '') == 'evlumba-design' && matchesCat(c)) {
-        final card = _deck.removeAt(i);
-        _deck.insert(0, card);
-        return;
-      }
-    }
-    // Yoksa havuzdan SADECE kategoriye uyan ilkini ekle. Uygun yoksa hiç
-    // ekleme — kullanıcının seçtiği kategoride yanlış oda görüntülenmesin.
-    for (final s in _seedPool) {
-      final id = s['id']?.toString() ?? '';
-      if (id.isEmpty || _seenIds.contains(id)) continue;
-      if (!matchesCat(s)) continue;
-      _seenIds.add(id);
-      _deck.insert(0, s);
-      return;
     }
   }
 
