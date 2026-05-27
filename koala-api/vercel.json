@@ -3,6 +3,10 @@
     {
       "path": "/api/admin/backfill-embeddings",
       "schedule": "0 3 * * *"
+    },
+    {
+      "path": "/api/cron/comeback-push",
+      "schedule": "0 10 * * *"
     }
   ]
 }

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { corsHeaders, isOriginAllowed, checkRateLimit } from '@/lib/security';
 import { verifyAuthHeader, logAuthOutcome } from '@/lib/auth-verify';
+import { getAdminAuth } from '@/lib/firebase-admin';
 
 // Wipes a user's saved_items, collections, ai_chat_sessions and ai_chat_messages.
 // Account itself (Firebase auth) is NOT touched here — caller deletes the auth
@@ -28,6 +29,7 @@ export async function OPTIONS(req: NextRequest) {
 
 interface Body {
   userId: string;
+  hardDelete?: boolean;
 }
 
 export async function POST(req: NextRequest) {
@@ -50,7 +52,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400, headers });
   }
 
-  const { userId } = body;
+  const { userId, hardDelete } = body;
   if (!userId) {
     return NextResponse.json(
       { error: 'userId required' },
@@ -102,12 +104,70 @@ export async function POST(req: NextRequest) {
   await wipe('saved_items');
   await wipe('collections');
 
+  // ─── HARD DELETE: account-level removal (Play Console public deletion flow)
+  // For the in-app "verilerimi sil" path, hardDelete is omitted/false and the
+  // account itself stays so the user can keep using the app. For the public
+  // /account/delete/confirm page, hardDelete=true removes the Firebase auth
+  // user + user_profiles row + sets email_state opt-out flags so we never
+  // mail them again.
+  if (hardDelete) {
+    // user_profiles row
+    try {
+      const { error, count } = await sb
+        .from('user_profiles')
+        .delete({ count: 'exact' })
+        .eq('id', userId);
+      if (error) throw error;
+      results['user_profiles'] = count ?? 0;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      results['user_profiles'] = `error:${msg}`;
+      console.error('[account-wipe] user_profiles failed', { userId, msg });
+    }
+
+    // Email opt-out (defensive — table may be missing, that's fine)
+    try {
+      await sb.from('koala_user_email_state').upsert(
+        {
+          user_id: userId,
+          unsubscribed: true,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'user_id' },
+      );
+      results['koala_user_email_state'] = 'opted-out';
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      results['koala_user_email_state'] = `error:${msg}`;
+    }
+
+    // Firebase auth user
+    try {
+      const adminAuth = getAdminAuth();
+      if (!adminAuth) {
+        results['firebase_auth'] = 'error:admin-not-configured';
+      } else {
+        await adminAuth.deleteUser(userId);
+        results['firebase_auth'] = 'deleted';
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      // user-not-found is acceptable (already deleted) — treat as success.
+      if (msg.includes('user-not-found') || msg.includes('USER_NOT_FOUND')) {
+        results['firebase_auth'] = 'already-deleted';
+      } else {
+        results['firebase_auth'] = `error:${msg}`;
+        console.error('[account-wipe] firebase deleteUser failed', { userId, msg });
+      }
+    }
+  }
+
   const anyError = Object.values(results).some(
     (v) => typeof v === 'string' && v.startsWith('error:'),
   );
 
   return NextResponse.json(
-    { ok: !anyError, results },
+    { ok: !anyError, results, hardDelete: !!hardDelete },
     { status: anyError ? 500 : 200, headers },
   );
 }

@@ -2223,36 +2223,59 @@ class _ChatListScreenV1State extends ConsumerState<ChatListScreenV1> {
       },
       child: Container(
         margin: const EdgeInsets.only(top: KoalaSpacing.sm),
-        padding: const EdgeInsets.all(KoalaSpacing.lg),
-        // Evlumba Design satırı — champagne tint + altın border. Zarif, push'lu
-        // değil. Diğer tasarımcı satırları standart KoalaDeco.card.
+        // Evlumba Design satırı — soft off-white bg + 4px sol altın accent
+        // stripe (border yerine). Diğer tasarımcı satırları KoalaDeco.card.
         decoration: isEvlumba
             ? BoxDecoration(
-                color: const Color(0xFFFBF7EE),
+                color: const Color(0xFFFBFAF7),
                 borderRadius: BorderRadius.circular(KoalaRadius.lg),
-                border: Border.all(
-                  color: const Color(0xFFE8D7A8),
-                  width: 0.8,
+                border: const Border(
+                  left: BorderSide(
+                    color: Color(0xFFD4A853),
+                    width: 4,
+                  ),
                 ),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Color(0x0F000000),
+                    blurRadius: 8,
+                    offset: Offset(0, 2),
+                  ),
+                ],
               )
             : KoalaDeco.card,
+        padding: const EdgeInsets.all(KoalaSpacing.lg),
         child: Row(
           children: [
-            // Avatar — profil fotosu varsa göster
+            // Avatar — Evlumba için 52px + champagne→gold gradient ring 2px,
+            // diğerleri 48px standart accent gradient.
             Container(
-              width: 48,
-              height: 48,
+              width: isEvlumba ? 52 : 48,
+              height: isEvlumba ? 52 : 48,
+              padding: isEvlumba ? const EdgeInsets.all(2) : EdgeInsets.zero,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 gradient: isEvlumba
                     ? const LinearGradient(
-                        colors: [Color(0xFFD4A853), Color(0xFFB8874A)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [Color(0xFFEBD79E), Color(0xFFD4A853)],
                       )
                     : const LinearGradient(
                         colors: [KoalaColors.accent, KoalaColors.accentMuted],
                       ),
               ),
-              child: avatarUrl != null && avatarUrl.isNotEmpty
+              child: Container(
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: isEvlumba
+                      ? null
+                      : const LinearGradient(
+                          colors: [KoalaColors.accent, KoalaColors.accentMuted],
+                        ),
+                  color: isEvlumba ? Colors.white : null,
+                ),
+                child: avatarUrl != null && avatarUrl.isNotEmpty
                   ? ClipOval(
                       child: Image.network(
                         avatarUrl,
@@ -2265,6 +2288,7 @@ class _ChatListScreenV1State extends ConsumerState<ChatListScreenV1> {
                   : Center(
                       child: Text(initials, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.white)),
                     ),
+              ),
             ),
             const SizedBox(width: KoalaSpacing.md),
 
@@ -2282,7 +2306,14 @@ class _ChatListScreenV1State extends ConsumerState<ChatListScreenV1> {
                       Flexible(
                         child: Text(
                           designerName,
-                          style: KoalaText.h4,
+                          style: isEvlumba
+                              ? const TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w800,
+                                  color: KoalaColors.text,
+                                  letterSpacing: 0.1,
+                                )
+                              : KoalaText.h4,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -2328,24 +2359,32 @@ class _ChatListScreenV1State extends ConsumerState<ChatListScreenV1> {
                   if (lastMessage.isNotEmpty) ...[
                     const SizedBox(height: 4),
                     if (isEvlumba)
-                      // Evlumba mesaj preview'ı — ince çerçeveli kapsül.
-                      // Push'lu durmasın diye background çok soft; sadece
-                      // diğer tasarımcılardan AYRIŞSIN (kullanıcı isteği).
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFFFFDF6),
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(
-                            color: const Color(0xFFE8D7A8),
-                            width: 0.6,
+                      // Evlumba mesaj preview'ı — pill kaldırıldı. Sade bir
+                      // okun ardından preview text; 13.5px/w500/textSec.
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          const Icon(
+                            LucideIcons.cornerDownRight,
+                            size: 12,
+                            color: KoalaColors.textSec,
                           ),
-                        ),
-                        child: _LastMessagePreview(
-                          raw: lastMessage,
-                          unread: unread > 0,
-                        ),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              lastMessage,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 13.5,
+                                fontWeight: FontWeight.w500,
+                                color: unread > 0
+                                    ? KoalaColors.text
+                                    : KoalaColors.textSec,
+                              ),
+                            ),
+                          ),
+                        ],
                       )
                     else
                       _LastMessagePreview(

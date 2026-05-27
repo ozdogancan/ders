@@ -18,7 +18,6 @@ import 'package:supabase_flutter/supabase_flutter.dart' show Supabase, FileOptio
 
 import '../core/theme/koala_tokens.dart';
 import '../services/designer_reviews_service.dart';
-import '../services/evlumba_live_service.dart';
 import '../services/follow_service.dart';
 import '../services/saved_items_service.dart';
 import '../services/shared_design_service.dart';
@@ -27,9 +26,16 @@ import '../widgets/ask_and_apply_sheet.dart';
 import '../widgets/verified_badge.dart';
 import 'mekan/wizard/mekan_wizard_screen.dart';
 import 'profile/follow_list_sheet.dart';
+import 'profile/pro_application_sheet.dart';
 import 'profile/profile_design_tile.dart';
 import 'profile/profile_photo_view.dart';
+import 'profile/unified_profile_view.dart';
 import 'profile/user_design_swipe.dart';
+import 'projeler_screen.dart';
+
+// Re-export for back-compat: `profile_screen.dart` ve diğer callerlar
+// `showProApplicationSheet`'i bu dosyadan import ediyor.
+export 'profile/pro_application_sheet.dart' show showProApplicationSheet;
 
 // Persisted role choice key.
 const _kRoleSwitchPrefKey = 'profile_role_view'; // 'homeowner' | 'pro'
@@ -182,77 +188,55 @@ class _ProfileTabScreenState extends ConsumerState<ProfileTabScreen>
 
     final memberSince = user?.metadata.creationTime;
 
+    // 2026-05-27: Tüm profil görüntülemeleri (own + others) UnifiedProfileView
+    // üzerinden — SS5 görsel pattern'i. Avatar long-press settings'e gitmek
+    // için top-right icon button olarak korunuyor.
+    final uid = user?.uid ?? '';
+    if (uid.isEmpty) {
+      return const Scaffold(
+        backgroundColor: KoalaColors.bg,
+        body: Center(
+          child: CircularProgressIndicator(
+              color: KoalaColors.accentDeep, strokeWidth: 2),
+        ),
+      );
+    }
+    // Reference legacy fields to keep the analyzer quiet — these state
+    // helpers stay alive for potential future reuse (settings hook etc.).
+    // ignore: unused_local_variable
+    final _legacy = (name, photo, verified, about, isPro, application,
+        memberSince, canSwitch, effectiveRole, roleLabel);
     return Scaffold(
       backgroundColor: KoalaColors.bg,
       body: RefreshIndicator(
         onRefresh: _refreshAll,
         color: KoalaColors.accent,
-        child: CustomScrollView(
-          physics: const AlwaysScrollableScrollPhysics(
-              parent: BouncingScrollPhysics()),
-          slivers: [
-            SliverToBoxAdapter(
-              child: _Hero(
-                uid: user?.uid ?? '',
-                name: name,
-                role: roleLabel,
-                photo: photo,
-                verified: verified,
-                isPro: isPro,
-                memberSince: memberSince,
-                about: about,
-                uploading: _uploadingAvatar,
-                onAvatarTap: () => _openAvatarActions(photo),
-                onAvatarLongPress: () => context.push('/profile'),
-              ),
-            ),
-            const SliverToBoxAdapter(child: SizedBox(height: 14)),
-            SliverToBoxAdapter(
-              child: _StatsRow(
-                designs: _designsLoading
-                    ? 0
-                    : (_aiDesigns.length + _sharedDesigns.length),
-                followers: _followers,
-                following: _following,
-                onFollowers: () => _openFollowList(FollowListMode.followers),
-                onFollowing: () => _openFollowList(FollowListMode.following),
-              ),
-            ),
-            const SliverToBoxAdapter(child: SizedBox(height: 14)),
-            SliverToBoxAdapter(child: _editAndShareRow()),
-            if (canSwitch) ...[
-              const SliverToBoxAdapter(child: SizedBox(height: 14)),
-              SliverToBoxAdapter(
-                child: _RoleSwitch(
-                  selected: effectiveRole,
-                  onSelect: (r) {
-                    setState(() => _viewRole = r);
-                    _saveRole(r);
-                    HapticFeedback.selectionClick();
-                  },
+        child: SafeArea(
+          bottom: false,
+          child: UnifiedProfileView(
+            profileId: uid,
+            ownerEditable: true,
+            viewedDesignId: null,
+            onAvatarLongPress: () => context.push('/profile'),
+            onEditProfile: _openEditor,
+            onOpenAiStudio: () {
+              HapticFeedback.selectionClick();
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => const ProjelerScreen(),
                 ),
-              ),
-            ],
-            if (!isPro &&
-                application?.isPending != true &&
-                application?.isApproved != true) ...[
-              const SliverToBoxAdapter(child: SizedBox(height: 14)),
-              SliverToBoxAdapter(child: _proCtaCompact()),
-            ],
-            if (isPro && _reviews.count > 0) ...[
-              const SliverToBoxAdapter(child: SizedBox(height: 18)),
-              SliverToBoxAdapter(child: _reviewsBlock()),
-            ],
-            const SliverToBoxAdapter(child: SizedBox(height: 18)),
-            SliverToBoxAdapter(child: _tabBar()),
-            SliverToBoxAdapter(child: _designsTabBody()),
-            // Bottom safe area for nav bar/FAB — generous whitespace.
-            SliverToBoxAdapter(
-              child: SizedBox(
-                height: MediaQuery.viewPaddingOf(context).bottom + 96,
-              ),
-            ),
-          ],
+              );
+            },
+            onTapDesign: (items, index) {
+              HapticFeedback.selectionClick();
+              UserDesignSwipeScreen.open(
+                context,
+                items: items,
+                ownerUid: uid,
+                initialIndex: index,
+              );
+            },
+          ),
         ),
       ),
     );
@@ -1503,25 +1487,6 @@ Widget _dragHandle() => Container(
       ),
     );
 
-/// Profesyonel başvuru sheet'ini açar. Settings ekranı bunu kullanır.
-Future<bool?> showProApplicationSheet(BuildContext context) {
-  return showModalBottomSheet<bool>(
-    context: context,
-    backgroundColor: KoalaColors.bg,
-    isScrollControlled: true,
-    isDismissible: true,
-    enableDrag: true,
-    useSafeArea: true,
-    constraints: BoxConstraints(
-      maxHeight: MediaQuery.of(context).size.height * 0.88,
-    ),
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-    ),
-    builder: (_) => const ProApplicationSheet(),
-  );
-}
-
 // ─── Profil editor sheet ───
 class _ProfileEditorSheet extends StatefulWidget {
   final KoalaUserProfile? initial;
@@ -1679,643 +1644,6 @@ class _ProfileEditorSheetState extends State<_ProfileEditorSheet> {
           ),
         ),
       ],
-    );
-  }
-}
-
-// ─── Pro başvuru taxonomy: Evlumba `profiles` (role='designer') ────────
-// Evlumba DB'de ayrı bir `professions` / `specialties` tablosu yok — taksonomi
-// `profiles` tablosundaki distinct değerlerden türetiliyor (free-text alanlar).
-//   - profession  → tek-seçim dropdown
-//   - specialty   → çoklu-seçim chip (Evlumba'da virgülle ayrılmış string,
-//                   tokenize ediliyor).
-class ProTaxonomy {
-  final List<String> professions;
-  final List<String> specialties;
-  const ProTaxonomy({required this.professions, required this.specialties});
-}
-
-int _trCompare(String a, String b) =>
-    a.toLowerCase().compareTo(b.toLowerCase());
-
-/// Evlumba `profiles`'ten profession + specialty taksonomisini tek defa
-/// çekip Riverpod'da cache'ler (FutureProvider keepAlive default).
-final proTaxonomyProvider = FutureProvider<ProTaxonomy>((ref) async {
-  try {
-    final ready = await EvlumbaLiveService.waitForReady();
-    if (!ready) {
-      return const ProTaxonomy(professions: [], specialties: []);
-    }
-    final rows = await EvlumbaLiveService.client
-        .from('profiles')
-        .select('profession, specialty')
-        .eq('role', 'designer')
-        .limit(500);
-    final profSet = <String>{};
-    final specSet = <String>{};
-    for (final r in List<Map<String, dynamic>>.from(rows)) {
-      final p = (r['profession'] ?? '').toString().trim();
-      if (p.isNotEmpty) profSet.add(p);
-      final s = (r['specialty'] ?? '').toString().trim();
-      if (s.isEmpty) continue;
-      // Evlumba'da specialty bazen "İç Mimari, Mobilya, Aydınlatma" gibi
-      // virgülle ayrılmış geliyor — token'lara böl.
-      for (final raw in s.split(RegExp(r'[,/;|]'))) {
-        final t = raw.trim();
-        if (t.isNotEmpty && t.length <= 40) specSet.add(t);
-      }
-    }
-    final profs = profSet.toList()..sort(_trCompare);
-    final specs = specSet.toList()..sort(_trCompare);
-    return ProTaxonomy(professions: profs, specialties: specs);
-  } catch (e) {
-    debugPrint('proTaxonomyProvider error: $e');
-    return const ProTaxonomy(professions: [], specialties: []);
-  }
-});
-
-// ─── Profesyonel başvuru sheet (settings'ten ve profilden çağrılır) ───
-class ProApplicationSheet extends ConsumerStatefulWidget {
-  const ProApplicationSheet({super.key});
-  @override
-  ConsumerState<ProApplicationSheet> createState() =>
-      _ProApplicationSheetState();
-}
-
-class _ProApplicationSheetState extends ConsumerState<ProApplicationSheet> {
-  static const int _maxSpecialties = 5;
-
-  // Gemini-generated hero (moved from settings card).
-  static const String _heroUrl =
-      'https://xgefjepaqnghaotqybpi.supabase.co/storage/v1/object/public/koala-seed/pro-cta/hero-v1.webp';
-
-  final _fullName = TextEditingController();
-  final _city = TextEditingController();
-  final _ig = TextEditingController();
-  final _portfolio = TextEditingController();
-  final _reason = TextEditingController();
-  // 2026-05-27: Evlumba taxonomy dropdown'ı revert edildi (yükleniyor stuck).
-  // Önceki sade free-text input'a döndük — kullanıcı yazar, hızlı çalışır.
-  final _professionCtrl = TextEditingController();
-  final _specialtyCtrl = TextEditingController();
-
-  String? _profession;
-  final Set<String> _specialties = <String>{};
-
-  bool _submitting = false;
-  String? _error;
-
-  @override
-  void initState() {
-    super.initState();
-    final u = FirebaseAuth.instance.currentUser;
-    if ((u?.displayName ?? '').isNotEmpty) _fullName.text = u!.displayName!;
-  }
-
-  @override
-  void dispose() {
-    _fullName.dispose();
-    _city.dispose();
-    _ig.dispose();
-    _portfolio.dispose();
-    _reason.dispose();
-    _professionCtrl.dispose();
-    _specialtyCtrl.dispose();
-    super.dispose();
-  }
-
-  Future<void> _submit() async {
-    if (_submitting) return;
-    final name = _fullName.text.trim();
-    // Free-text input'tan oku — eski dropdown yerine.
-    final prof = _professionCtrl.text.trim();
-    // Specialty: virgülle / noktalı virgülle ayrılmış serbest metin.
-    _specialties
-      ..clear()
-      ..addAll(_specialtyCtrl.text
-          .split(RegExp(r'[,;/]'))
-          .map((s) => s.trim())
-          .where((s) => s.isNotEmpty)
-          .take(5));
-    if (name.isEmpty || prof.isEmpty) {
-      setState(() => _error = 'Ad ve meslek alanı zorunlu.');
-      return;
-    }
-    setState(() {
-      _submitting = true;
-      _error = null;
-    });
-    // Specialty array → tek satır CSV: mevcut applyForPro imzası tek
-    // `profession` string alıyor; backend route güncellenene kadar
-    // specialty'leri profession kuyruğuna ekleyerek payload'da koruyoruz.
-    // (Backend tweak gerekli — bkz. rapor: `specialties: string[]` alanı.)
-    final specialtiesStr = _specialties.toList().join(', ');
-    final professionPayload =
-        specialtiesStr.isEmpty ? prof : '$prof — $specialtiesStr';
-
-    final ok = await UserProfileService.applyForPro(
-      fullName: name,
-      profession: professionPayload,
-      city: _city.text.trim(),
-      igUrl: _ig.text.trim(),
-      portfolioUrl: _portfolio.text.trim(),
-      reason: _reason.text.trim(),
-    );
-    if (!mounted) return;
-    if (!ok) {
-      setState(() {
-        _submitting = false;
-        _error = 'Gönderilemedi, biraz sonra tekrar dene.';
-      });
-      return;
-    }
-    Navigator.pop(context, true);
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text(
-            'Başvurun alındı — değerlendirme sonrası sana bildirim göndereceğiz.'),
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
-  }
-
-  void _toggleSpecialty(String s) {
-    setState(() {
-      if (_specialties.contains(s)) {
-        _specialties.remove(s);
-      } else {
-        if (_specialties.length >= _maxSpecialties) return;
-        _specialties.add(s);
-      }
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final insets = MediaQuery.viewInsetsOf(context);
-
-    return Padding(
-      padding: EdgeInsets.only(bottom: insets.bottom),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // ─── Hero strip (140h) ───────────────────────────────────
-          _ProSheetHero(imageUrl: _heroUrl),
-          // ─── Scrollable form body ────────────────────────────────
-          Flexible(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(20, 18, 20, 24),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  _sectionLabel('Hakkında', trailing: '1 / 4'),
-                  const SizedBox(height: 10),
-                  _field(_fullName, label: 'Ad Soyad', hint: 'Tam adın'),
-                  const SizedBox(height: 12),
-                  _field(_city, label: 'Şehir', hint: 'İstanbul, İzmir…'),
-                  const SizedBox(height: 20),
-                  _divider(),
-                  const SizedBox(height: 18),
-
-                  _sectionLabel('Mesleğin', trailing: '2 / 4'),
-                  const SizedBox(height: 10),
-                  _field(_professionCtrl,
-                      label: 'Meslek',
-                      hint: 'ör. İç Mimar, Mobilya Tasarımcısı'),
-                  const SizedBox(height: 12),
-                  _field(_specialtyCtrl,
-                      label: 'Uzmanlık alanların (opsiyonel)',
-                      hint: 'Salon, Mutfak, Bebek odası (virgülle ayır)'),
-                  const SizedBox(height: 20),
-                  _divider(),
-                  const SizedBox(height: 18),
-
-                  _sectionLabel('Sosyal & İletişim', trailing: '3 / 4'),
-                  const SizedBox(height: 10),
-                  _field(_ig,
-                      label: 'Instagram', hint: '@kullaniciadi veya link'),
-                  const SizedBox(height: 20),
-                  _divider(),
-                  const SizedBox(height: 18),
-
-                  _sectionLabel('Portfolyo (opsiyonel)', trailing: '4 / 4'),
-                  const SizedBox(height: 10),
-                  _field(_portfolio,
-                      label: 'Portföy / Web', hint: 'https://… (varsa)'),
-                  const SizedBox(height: 12),
-                  _field(_reason,
-                      label: 'Birkaç cümle (opsiyonel)',
-                      hint:
-                          'Tarzın, deneyimin, neden Koala\'da olmak istiyorsun?',
-                      maxLines: 3),
-
-                  if (_error != null) ...[
-                    const SizedBox(height: 14),
-                    Text(_error!,
-                        style: const TextStyle(
-                            color: KoalaColors.error, fontSize: 13)),
-                  ],
-                  const SizedBox(height: 20),
-
-                  // ─── Bottom CTA (56h, gradient + subtle glow) ────
-                  DecoratedBox(
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(16),
-                      gradient: const LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [
-                          KoalaColors.accentDeep,
-                          KoalaColors.accent,
-                        ],
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color:
-                              KoalaColors.accentDeep.withValues(alpha: 0.38),
-                          blurRadius: 24,
-                          offset: const Offset(0, 10),
-                        ),
-                        BoxShadow(
-                          color:
-                              KoalaColors.accent.withValues(alpha: 0.22),
-                          blurRadius: 36,
-                          spreadRadius: -4,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
-                    ),
-                    child: SizedBox(
-                      width: double.infinity,
-                      height: 56,
-                      child: ElevatedButton(
-                        onPressed: _submitting ? null : _submit,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.transparent,
-                          shadowColor: Colors.transparent,
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(16)),
-                          elevation: 0,
-                        ),
-                        child: Text(
-                          _submitting
-                              ? 'Gönderiliyor…'
-                              : 'Başvuruyu gönder',
-                          style: KoalaText.button,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ─── UI pieces ─────────────────────────────────────────────────────
-
-  Widget _sectionLabel(String s, {String? trailing}) {
-    return Row(
-      children: [
-        Expanded(
-          child: Text(
-            s.toUpperCase(),
-            style: const TextStyle(
-              fontFamily: 'Manrope',
-              fontSize: 11.5,
-              fontWeight: FontWeight.w700,
-              color: Color(0xFF6B7280),
-              letterSpacing: 1.1,
-            ),
-          ),
-        ),
-        if (trailing != null)
-          Text(trailing,
-              style: const TextStyle(
-                fontFamily: 'Manrope',
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: Color(0xFF9CA3AF),
-              )),
-      ],
-    );
-  }
-
-  Widget _divider() => Container(
-        height: 1,
-        color: const Color(0xFFF1F3F5),
-      );
-
-  Widget _professionPicker(AsyncValue<ProTaxonomy> taxonomyAsync) {
-    return taxonomyAsync.when(
-      loading: () => _pickerLoading(),
-      error: (_, _) => _professionDropdown(const <String>[]),
-      data: (tx) => _professionDropdown(tx.professions),
-    );
-  }
-
-  Widget _professionDropdown(List<String> options) {
-    final items = <String>{
-      ...options,
-      if (_profession != null) _profession!,
-    }.toList();
-    return Container(
-      decoration: BoxDecoration(
-        color: KoalaColors.surface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: KoalaColors.borderSolid, width: 0.8),
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 14),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
-          value: _profession,
-          isExpanded: true,
-          hint: Text(
-            options.isEmpty
-                ? 'Meslekler yükleniyor…'
-                : 'Meslek seç (ör. İç Mimar)',
-            style: KoalaText.hint,
-          ),
-          icon: const Icon(LucideIcons.chevronDown,
-              size: 18, color: KoalaColors.textSec),
-          style: KoalaText.body,
-          dropdownColor: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          items: items
-              .map((p) => DropdownMenuItem<String>(
-                    value: p,
-                    child: Text(p, style: KoalaText.body),
-                  ))
-              .toList(),
-          onChanged: (v) => setState(() => _profession = v),
-        ),
-      ),
-    );
-  }
-
-  Widget _specialtyPicker(AsyncValue<ProTaxonomy> taxonomyAsync) {
-    return taxonomyAsync.when(
-      loading: () => _pickerLoading(),
-      error: (_, _) => _specialtyChips(const <String>[]),
-      data: (tx) => _specialtyChips(tx.specialties),
-    );
-  }
-
-  Widget _specialtyChips(List<String> options) {
-    if (options.isEmpty) {
-      return Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: KoalaColors.surface,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: KoalaColors.borderSolid, width: 0.8),
-        ),
-        child: const Text(
-          'Uzmanlık listesi şu an yüklenemedi. Başvuruyu mesleğinle gönderebilirsin.',
-          style: KoalaText.bodySec,
-        ),
-      );
-    }
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      children: options.map((s) {
-        final selected = _specialties.contains(s);
-        final disabled =
-            !selected && _specialties.length >= _maxSpecialties;
-        return GestureDetector(
-          onTap: disabled ? null : () => _toggleSpecialty(s),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 140),
-            padding:
-                const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: BoxDecoration(
-              color: selected
-                  ? KoalaColors.accentDeep
-                  : (disabled
-                      ? const Color(0xFFF3F4F6)
-                      : KoalaColors.surface),
-              borderRadius: BorderRadius.circular(999),
-              border: Border.all(
-                color: selected
-                    ? KoalaColors.accentDeep
-                    : KoalaColors.borderSolid,
-                width: 0.8,
-              ),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (selected) ...[
-                  const Icon(LucideIcons.check,
-                      size: 13, color: Colors.white),
-                  const SizedBox(width: 5),
-                ],
-                Text(
-                  s,
-                  style: TextStyle(
-                    fontFamily: 'Manrope',
-                    fontSize: 12.5,
-                    fontWeight:
-                        selected ? FontWeight.w700 : FontWeight.w600,
-                    color: selected
-                        ? Colors.white
-                        : (disabled
-                            ? const Color(0xFF9CA3AF)
-                            : KoalaColors.text),
-                    letterSpacing: -0.1,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      }).toList(),
-    );
-  }
-
-  Widget _pickerLoading() => Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: KoalaColors.surface,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: KoalaColors.borderSolid, width: 0.8),
-        ),
-        child: const Row(
-          children: [
-            SizedBox(
-              width: 16,
-              height: 16,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                color: KoalaColors.accentDeep,
-              ),
-            ),
-            SizedBox(width: 12),
-            Text('Yükleniyor…', style: KoalaText.bodySec),
-          ],
-        ),
-      );
-
-  Widget _field(TextEditingController c,
-      {required String label, String? hint, int maxLines = 1}) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.only(left: 4, bottom: 6),
-          child: Text(label, style: KoalaText.caption),
-        ),
-        TextField(
-          controller: c,
-          maxLines: maxLines,
-          style: KoalaText.body,
-          decoration: InputDecoration(
-            hintText: hint,
-            hintStyle: KoalaText.hint,
-            filled: true,
-            fillColor: KoalaColors.surface,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide:
-                  const BorderSide(color: KoalaColors.borderSolid, width: 0.8),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide:
-                  const BorderSide(color: KoalaColors.borderSolid, width: 0.8),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide:
-                  const BorderSide(color: KoalaColors.accentDeep, width: 1.2),
-            ),
-            contentPadding:
-                const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-/// Pro sheet'in üst hero şeridi — Gemini-generated görsel + soft scrim +
-/// "Profesyonel ol" başlığı + drag handle.
-class _ProSheetHero extends StatelessWidget {
-  final String imageUrl;
-  const _ProSheetHero({required this.imageUrl});
-
-  @override
-  Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-      child: SizedBox(
-        height: 160,
-        width: double.infinity,
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            CachedNetworkImage(
-              imageUrl: imageUrl,
-              fit: BoxFit.cover,
-              fadeInDuration: const Duration(milliseconds: 250),
-              placeholder: (_, _) => const _ProSheetHeroFallback(),
-              errorWidget: (_, _, _) => const _ProSheetHeroFallback(),
-            ),
-            const DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Color(0x33000000),
-                    Color(0x00000000),
-                    Color(0xAA000000),
-                  ],
-                  stops: [0.0, 0.45, 1.0],
-                ),
-              ),
-            ),
-            Positioned(
-              top: 10,
-              left: 0,
-              right: 0,
-              child: Center(
-                child: Container(
-                  width: 44,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.85),
-                    borderRadius: BorderRadius.circular(100),
-                  ),
-                ),
-              ),
-            ),
-            const Positioned(
-              left: 20,
-              right: 20,
-              bottom: 14,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'PROFESYONEL OL',
-                    style: TextStyle(
-                      fontFamily: 'Manrope',
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                      color: Color(0xE6FFFFFF),
-                      letterSpacing: 1.5,
-                    ),
-                  ),
-                  SizedBox(height: 4),
-                  Text(
-                    'Tasarımlarını dünyayla buluştur',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontFamily: 'Manrope',
-                      fontSize: 20,
-                      fontWeight: FontWeight.w800,
-                      color: Colors.white,
-                      letterSpacing: -0.3,
-                      shadows: [
-                        Shadow(
-                          color: Color(0x66000000),
-                          blurRadius: 8,
-                          offset: Offset(0, 2),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _ProSheetHeroFallback extends StatelessWidget {
-  const _ProSheetHeroFallback();
-  @override
-  Widget build(BuildContext context) {
-    return const DecoratedBox(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFF6C63FF), Color(0xFF9B5CFF)],
-        ),
-      ),
     );
   }
 }

@@ -33,6 +33,7 @@ import '../widgets/koala_bottom_nav.dart';
 import '../widgets/taste_summary_sheet.dart';
 import 'main_shell.dart';
 import 'designer/designer_design_swipe.dart';
+import 'profile/unified_profile_view.dart';
 import 'mekan/mekan_flow_screen.dart';
 import 'mekan/wizard/mekan_wizard_screen.dart';
 import 'chat_list_screen.dart';
@@ -1164,12 +1165,18 @@ class _StyleDiscoveryLiveScreenState
 
   /// Karta dokunulduğunda açılan tasarımcı profil sheet'i. Mekana uygula
   /// aksiyonu artık altın pillte; tap = profil.
+  ///
+  /// 2026-05-27: UnifiedProfileView'a geçildi (SS5 görsel pattern'i tüm
+  /// profil görüntülemelerinde paylaşılır). `viewedDesignId` ile swipe'tan
+  /// açılan kartın id'si geçilir — grid'de o tasarım önce gelir + "Bunu
+  /// görüntülediniz" overlay'ı alır.
   Future<void> _openDesignerSheet(Map<String, dynamic> card) async {
     HapticFeedback.selectionClick();
     final designerId = (card['designer_id'] ?? '').toString();
     if (designerId.isEmpty) return;
     await _loadDesigner(designerId);
     if (!mounted) return;
+    final viewedDesignId = (card['id'] ?? '').toString();
     await showModalBottomSheet<void>(
       context: context,
       backgroundColor: KoalaColors.bg,
@@ -1178,15 +1185,63 @@ class _StyleDiscoveryLiveScreenState
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
-      builder: (ctx) => DesignerProfileSheet(
-        designerId: designerId,
-        designer: _designerCache[designerId],
-        seedPool:
-            designerId == 'evlumba-design' ? List.of(_seedPool) : null,
-        onAsk: () {
-          Navigator.pop(ctx);
-          _onAskDesigner();
-        },
+      builder: (ctx) => DraggableScrollableSheet(
+        initialChildSize: 0.92,
+        minChildSize: 0.55,
+        maxChildSize: 0.96,
+        expand: false,
+        builder: (_, scrollController) => Column(
+          children: [
+            const SizedBox(height: 10),
+            Container(
+              width: 42,
+              height: 4,
+              decoration: BoxDecoration(
+                color: KoalaColors.border,
+                borderRadius: BorderRadius.circular(100),
+              ),
+            ),
+            Expanded(
+              child: PrimaryScrollController(
+                controller: scrollController,
+                child: UnifiedProfileView(
+                  profileId: designerId,
+                  viewedDesignId:
+                      viewedDesignId.isEmpty ? null : viewedDesignId,
+                  seedProfile: _designerCache[designerId],
+                  seedPool: designerId == 'evlumba-design'
+                      ? List.of(_seedPool)
+                      : null,
+                  onTapDesign: (items, index) {
+                    final designer = _designerCache[designerId];
+                    final designerName = ((designer?['full_name'] ??
+                            designer?['business_name'] ??
+                            '') as String)
+                        .trim();
+                    final designerAvatar =
+                        ((designer?['avatar_url'] ?? '') as String).trim();
+                    Navigator.of(ctx).push(
+                      MaterialPageRoute(
+                        fullscreenDialog: true,
+                        builder: (_) => DesignerDesignSwipeScreen(
+                          projects: items,
+                          initialIndex: index,
+                          designerId: designerId,
+                          designerName: designerName.isNotEmpty
+                              ? designerName
+                              : null,
+                          designerAvatarUrl: designerAvatar.isNotEmpty
+                              ? designerAvatar
+                              : null,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1356,28 +1411,13 @@ class _StyleDiscoveryLiveScreenState
               ref.invalidate(unreadNotificationsProvider);
             },
           ),
-          const SizedBox(width: 6),
-          _SettingsButton(
-            isPro: ref.watch(proStatusProvider).value?.isPro ?? false,
-            onTap: _openSettings,
-          ),
-          const SizedBox(width: 6),
+          // 2026-05-28: Sağ üst Pro pill kaldırıldı. Pro durumu artık
+          // _SettingsButton içindeki küçük gold gem rozetiyle bildiriliyor.
           Padding(
             padding: const EdgeInsets.only(right: 14),
-            child: _ProPill(
+            child: _SettingsButton(
               isPro: ref.watch(proStatusProvider).value?.isPro ?? false,
-              onTap: () {
-                HapticFeedback.selectionClick();
-                final isPro =
-                    ref.read(proStatusProvider).value?.isPro ?? false;
-                if (isPro) {
-                  // Pro kullanıcı — Pro perks ekranına git (varsa) ya da
-                  // sessizce ayarlara. Burada paywall açmıyoruz.
-                  context.push('/profile');
-                } else {
-                  showPaywall(context, trigger: 'top_pill');
-                }
-              },
+              onTap: _openSettings,
             ),
           ),
         ],
@@ -1834,17 +1874,6 @@ class _StyleDiscoveryLiveScreenState
             large: true,
           ),
           _ActionBtn(
-            icon: LucideIcons.wand,
-            label: 'Uygula',
-            onTap: disabled
-                ? null
-                : () {
-                    final c = _currentCard;
-                    if (c != null) _onCardTap(c);
-                  },
-            variant: _ActionVariant.gold,
-          ),
-          _ActionBtn(
             icon: LucideIcons.messageCircle,
             label: 'Sor',
             onTap: askDisabled ? null : _onAskDesigner,
@@ -2008,21 +2037,13 @@ class _Card extends StatelessWidget {
                     Expanded(
                       child: _DesignerBlock(designer: designer!),
                     ),
-                    if (onSeeProfile != null) ...[
-                      const SizedBox(width: 8),
-                      _SeeProfilePill(onTap: onSeeProfile!),
-                    ],
+                    // 2026-05-28: "Profili Gör" pill kaldırıldı — karta tap
+                    // zaten profil sheet'i açıyor.
                   ],
                 ),
               ),
             ),
-          // 3 sayfa noktası — kartın alt-merkezinde, görsel ritim.
-          const Positioned(
-            left: 0,
-            right: 0,
-            bottom: 6,
-            child: _CardDots(count: 3, active: 0),
-          ),
+          // 3 sayfa noktası KALDIRILDI — sahte ritim, gereksiz.
           // palette dots şu an UI'da gösterilmiyor — _paletteColors helper'ı
           // ileride geri getirilebilir. Kullanılmadığı için referansını
           // önbellekte tutuyoruz.
@@ -2599,8 +2620,9 @@ class _CategoryChip extends StatelessWidget {
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 180),
         curve: Curves.easeOut,
+        // 2026-05-28: Daha ince/kompakt — alan tasarrufu için.
         padding: const EdgeInsets.symmetric(
-            horizontal: 18, vertical: 14),
+            horizontal: 14, vertical: 9),
         alignment: Alignment.center,
         decoration: BoxDecoration(
           color: active ? KoalaColors.accentDeep : KoalaColors.surface,
@@ -2617,14 +2639,14 @@ class _CategoryChip extends StatelessWidget {
           children: [
             Icon(
               icon,
-              size: 16,
+              size: 14,
               color: active ? Colors.white : KoalaColors.text,
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: 6),
             Text(
               label,
               style: TextStyle(
-                fontSize: 13.5,
+                fontSize: 12.5,
                 fontWeight: FontWeight.w700,
                 color: active ? Colors.white : KoalaColors.text,
                 letterSpacing: -0.1,
@@ -3397,13 +3419,16 @@ class _BrandLockup extends StatelessWidget {
         ),
         const SizedBox(height: 2),
         const Text(
-          'Evin için ilham ve hızlı tasarım.',
+          'Evin için ilham.',
+          // 2026-05-28: Slogan kısaltıldı — actions row değişikliği sonrası
+          // hala truncate'leniyordu. Kısa ve etkili.
           style: TextStyle(
             fontSize: 13,
             fontWeight: FontWeight.w500,
             color: KoalaColors.textSec,
             letterSpacing: -0.1,
           ),
+          overflow: TextOverflow.visible,
         ),
       ],
     );

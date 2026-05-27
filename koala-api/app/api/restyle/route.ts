@@ -82,7 +82,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  let body: { image?: string; room?: string; theme?: string; customPrompt?: string; userId?: string };
+  let body: { image?: string; room?: string; theme?: string; customPrompt?: string };
   try {
     body = await req.json();
   } catch {
@@ -92,12 +92,17 @@ export async function POST(req: NextRequest) {
   let { image } = body;
   const { room, theme, customPrompt } = body;
 
-  // Quota gate — skip if no userId (legacy clients) so we don't break old apps.
-  // Strict-mode rollout will reject anonymous calls in a future release.
+  // Auth + quota gate. Authorization is MANDATORY — no body.userId fallback.
+  // Legacy clients without an Authorization header are still admitted (auth.ok
+  // === true && auth.legacy === true) for the rollout window, but quota is
+  // skipped for them deliberately (they have no verified identity to charge).
+  // Once Vercel logs show AUTH_LEGACY at zero this branch goes away.
   const auth = await verifyAuthHeader(req);
-  const userId = auth.uid ?? body.userId;
-  if (userId && !auth.legacy) {
-    const q = await checkAndIncrementQuota({ userId, feature: 'restyle' });
+  if (!auth.ok) {
+    return NextResponse.json({ error: 'auth_required', reason: auth.reason }, { status: 401, headers });
+  }
+  if (auth.uid && !auth.legacy) {
+    const q = await checkAndIncrementQuota({ userId: auth.uid, feature: 'restyle' });
     if (!q.allowed) {
       return NextResponse.json(
         {
@@ -109,6 +114,23 @@ export async function POST(req: NextRequest) {
         },
         { status: 402, headers },
       );
+    }
+    // P1.4 — Loss-leader analytics: if this was the user's FIRST successful
+    // restyle (q.used flipped 0→1 for this period AND the user is not Pro),
+    // log it to analytics_events so we can track the "free first" funnel.
+    if (!q.isPro && q.used === 1) {
+      try {
+        const { koalaAdmin } = await import('@/lib/supabase/koala');
+        await koalaAdmin().from('analytics_events').insert({
+          user_id: auth.uid,
+          event_name: 'restyle_free_used',
+          event_data: { room, theme, source: 'wizard_finish' },
+          platform: 'server',
+        });
+      } catch (e) {
+        // analytics best-effort — never fail the restyle on logging error
+        console.warn('[restyle] analytics_events insert failed', e instanceof Error ? e.message : e);
+      }
     }
   }
 

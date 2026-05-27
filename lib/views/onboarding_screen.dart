@@ -1,10 +1,13 @@
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:lucide_icons/lucide_icons.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/router/app_router.dart';
 import '../core/theme/koala_tokens.dart';
+import '../services/analytics_service.dart';
 
 // ════════════════════════════════════════════════════════════════════════════
 // OnboardingScreen — premium 3-page intro (2026-05 redesign).
@@ -45,19 +48,19 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   static const List<_OnboardingPage> _pages = [
     _OnboardingPage(
-      image: 'assets/onboarding/step1.png',
+      image: 'assets/onboarding/step1.webp',
       title: 'Tarzını keşfet',
       subtitle:
           'Yüzlerce tasarımı kaydır, neyi beğendiğini koala öğrensin.',
     ),
     _OnboardingPage(
-      image: 'assets/onboarding/step2.png',
+      image: 'assets/onboarding/step2.webp',
       title: 'Mekânını dönüştür',
       subtitle:
           'Bir fotoğraf yükle, AI senin için yeniden tasarlasın.',
     ),
     _OnboardingPage(
-      image: 'assets/onboarding/step3.png',
+      image: 'assets/onboarding/step3.webp',
       title: 'Tasarımcılarla buluş',
       subtitle:
           'Soru sor, fiyat al, projeyi başlat.',
@@ -89,7 +92,47 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     await prefs.setBool('onboarding_done', true);
     onboardingComplete = true;
     if (!mounted) return;
+    // Last page → show push permission nudge before /auth.
+    // Skip on intermediate "Atla" too? We still show — opportunity is the same.
+    await _maybeAskPushPermission();
+    if (!mounted) return;
     context.go('/auth');
+  }
+
+  /// Shows a soft pre-permission sheet asking the user to enable push.
+  /// On "İzin ver" we call FirebaseMessaging.requestPermission which surfaces
+  /// the system dialog on iOS and Android 13+. On "Şimdi değil" we skip.
+  /// Either way, we then continue to /auth (caller handles routing).
+  Future<void> _maybeAskPushPermission() async {
+    if (!mounted) return;
+    final ctx = context;
+    await Analytics.log('onboarding_push_prompt_shown');
+    if (!mounted) return;
+    final allow = await showModalBottomSheet<bool>(
+      // ignore: use_build_context_synchronously
+      context: ctx,
+      isDismissible: true,
+      isScrollControlled: false,
+      backgroundColor: KoalaColors.bg,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      builder: (ctx) => _PushPermissionSheet(),
+    );
+    if (allow == true) {
+      await Analytics.log('onboarding_push_allow');
+      try {
+        await FirebaseMessaging.instance.requestPermission(
+          alert: true,
+          badge: true,
+          sound: true,
+        );
+      } catch (_) {
+        // Silently swallow — user is heading to /auth regardless.
+      }
+    } else {
+      await Analytics.log('onboarding_push_deny');
+    }
   }
 
   @override
@@ -168,7 +211,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               child: SizedBox(
                 width: double.infinity,
                 height: 56,
-                child: ElevatedButton(
+                child: Semantics(
+                  button: true,
+                  enabled: !_busy,
+                  label: _idx == _pages.length - 1 ? 'Başla' : 'Devam et',
+                  child: ElevatedButton(
                   onPressed: _busy ? null : _next,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: KoalaColors.text,
@@ -198,6 +245,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                             letterSpacing: 0.2,
                           ),
                         ),
+                ),
                 ),
               ),
             ),
@@ -293,7 +341,9 @@ class _PageBodyState extends State<_PageBody>
                       ),
                     ),
                     // Subtle dark gradient overlay at the bottom for depth.
-                    IgnorePointer(
+                    // Decorative — hide from screen readers.
+                    ExcludeSemantics(
+                      child: IgnorePointer(
                       child: DecoratedBox(
                         decoration: BoxDecoration(
                           gradient: LinearGradient(
@@ -306,6 +356,7 @@ class _PageBodyState extends State<_PageBody>
                             stops: const [0.6, 1.0],
                           ),
                         ),
+                      ),
                       ),
                     ),
                   ],
@@ -369,4 +420,105 @@ class _OnboardingPage {
   final String image;
   final String title;
   final String subtitle;
+}
+
+// ─── Pre-permission sheet: warm ask before the OS push dialog ────────────────
+// Returns true if user tapped "İzin ver", false / null if "Şimdi değil" or
+// dismiss. Caller decides whether to actually call requestPermission().
+class _PushPermissionSheet extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(24, 20, 24, 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Bell icon in soft accent circle.
+            Container(
+              width: 64,
+              height: 64,
+              decoration: const BoxDecoration(
+                color: KoalaColors.accentSoft,
+                shape: BoxShape.circle,
+              ),
+              alignment: Alignment.center,
+              child: const Icon(
+                LucideIcons.bell,
+                size: 32,
+                color: KoalaColors.accentDeep,
+              ),
+            ),
+            const SizedBox(height: 18),
+            Text(
+              'Önemli güncellemelerden haberdar ol',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.inter(
+                fontSize: 19,
+                fontWeight: FontWeight.w800,
+                color: KoalaColors.text,
+                height: 1.25,
+                letterSpacing: -0.3,
+              ),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              'Tasarımcı yanıtları ve sana özel önerileri kaçırma. '
+              'Bildirimler için izin verir misin?',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.inter(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                color: KoalaColors.textMed,
+                height: 1.5,
+              ),
+            ),
+            const SizedBox(height: 22),
+            SizedBox(
+              width: double.infinity,
+              height: 52,
+              child: ElevatedButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: KoalaColors.text,
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(KoalaRadius.lg),
+                  ),
+                ),
+                child: Text(
+                  'İzin ver',
+                  style: GoogleFonts.inter(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.2,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              height: 48,
+              child: TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                style: TextButton.styleFrom(
+                  foregroundColor: KoalaColors.textMed,
+                ),
+                child: Text(
+                  'Şimdi değil',
+                  style: GoogleFonts.inter(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: KoalaColors.textMed,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }

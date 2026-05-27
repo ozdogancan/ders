@@ -309,24 +309,16 @@ class _UserDesignSwipeScreenState extends State<UserDesignSwipeScreen> {
                       const SizedBox(height: 14),
                       Row(
                         children: [
+                          // 2026-05-28: "Uygula" geçici olarak kaldırıldı.
                           Expanded(
                             child: _bottomCta(
                               icon: LucideIcons.messageCircle,
                               label: 'Sor',
+                              primary: true,
                               onTap: _onAsk,
                             ),
                           ),
                           const SizedBox(width: 10),
-                          Expanded(
-                            child: _bottomCta(
-                              icon: LucideIcons.wand,
-                              label: 'Uygula',
-                              primary: true,
-                              onTap: _onApply,
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          // Paylaş — yuvarlak pill, sağda.
                           _circleBtn(
                             icon: LucideIcons.share2,
                             onTap: _onShare,

@@ -328,10 +328,13 @@ class MainShellState extends ConsumerState<MainShell> {
         // İki frame bekle ki nav widget'ları layout edilmiş olsun.
         await Future<void>.delayed(const Duration(milliseconds: 80));
         if (!mounted) return;
+        const coachmarkBase =
+            'https://xgefjepaqnghaotqybpi.supabase.co/storage/v1/object/public/koala-seed/coachmark/';
         final steps = <CoachmarkStep>[
           CoachmarkStep(
             anchorKey: _kHome,
             icon: LucideIcons.home,
+            imageUrl: '${coachmarkBase}home-v1.webp',
             title: 'Ana Sayfa',
             body:
                 'Bu koalanın keşif evi. Sağa-sola kaydırarak tarzına uygun mekânları seç, beğen veya geç.',
@@ -339,6 +342,7 @@ class MainShellState extends ConsumerState<MainShell> {
           CoachmarkStep(
             anchorKey: _kChat,
             icon: LucideIcons.messageCircle,
+            imageUrl: '${coachmarkBase}chat-v1.webp',
             title: 'Mesajlar',
             body:
                 'Tasarımcılarla ve Evlumba Design ile sohbet ettiğin yer burası.',
@@ -346,6 +350,7 @@ class MainShellState extends ConsumerState<MainShell> {
           CoachmarkStep(
             anchorKey: _kPaylas,
             icon: LucideIcons.plus,
+            imageUrl: '${coachmarkBase}paylas-v1.webp',
             title: 'Paylaş',
             body:
                 'Kendi odanın fotoğrafını yükle, koala senin için yeniden tasarlasın ✨',
@@ -355,12 +360,14 @@ class MainShellState extends ConsumerState<MainShell> {
           CoachmarkStep(
             anchorKey: _kAi,
             icon: LucideIcons.sparkles,
+            imageUrl: '${coachmarkBase}ai-v1.webp',
             title: 'AI araçların',
             body: 'AI araçların burada — boya, restyle, mood board, stil keşfi.',
           ),
           CoachmarkStep(
             anchorKey: _kProfile,
             icon: LucideIcons.user,
+            imageUrl: '${coachmarkBase}profile-v1.webp',
             title: 'Profil',
             body:
                 'Tasarımların, koleksiyonların ve hesabın. Avatarın burada görünür.',
@@ -372,6 +379,7 @@ class MainShellState extends ConsumerState<MainShell> {
           steps.add(CoachmarkStep(
             anchorKey: bellKey,
             icon: LucideIcons.bell,
+            imageUrl: '${coachmarkBase}bell-v1.webp',
             title: 'Bildirimler',
             body: 'Önemli güncellemeler bu zilden düşer.',
             padding: 8,

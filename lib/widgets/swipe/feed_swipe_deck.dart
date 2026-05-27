@@ -1122,7 +1122,10 @@ class _PeekChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
+    return Semantics(
+      button: true,
+      label: label,
+      child: Material(
       color: Colors.white,
       elevation: 8,
       borderRadius: BorderRadius.circular(26),
@@ -1134,7 +1137,7 @@ class _PeekChip extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(icon, color: color, size: 20),
+              ExcludeSemantics(child: Icon(icon, color: color, size: 20)),
               const SizedBox(width: 8),
               Text(
                 label,
@@ -1146,6 +1149,7 @@ class _PeekChip extends StatelessWidget {
             ],
           ),
         ),
+      ),
       ),
     );
   }
@@ -1176,6 +1180,7 @@ class _ActionBar extends StatelessWidget {
           icon: LucideIcons.x,
           color: const Color(0xFFEF4444),
           size: 56,
+          semanticLabel: 'Geç',
         ),
         const SizedBox(width: 14),
         _ActionButton(
@@ -1183,6 +1188,7 @@ class _ActionBar extends StatelessWidget {
           icon: LucideIcons.undo2,
           color: const Color(0xFFF59E0B),
           size: 42,
+          semanticLabel: 'Geri al',
         ),
         const SizedBox(width: 14),
         _ActionButton(
@@ -1190,6 +1196,7 @@ class _ActionBar extends StatelessWidget {
           icon: LucideIcons.bookmarkPlus,
           color: const Color(0xFF2563EB),
           size: 48,
+          semanticLabel: 'Kaydet',
         ),
         const SizedBox(width: 14),
         _ActionButton(
@@ -1197,6 +1204,7 @@ class _ActionBar extends StatelessWidget {
           icon: LucideIcons.heart,
           color: const Color(0xFF22C55E),
           size: 56,
+          semanticLabel: 'Beğen',
         ),
       ],
     );
@@ -1209,29 +1217,38 @@ class _ActionButton extends StatelessWidget {
     required this.icon,
     required this.color,
     required this.size,
+    this.semanticLabel,
   });
   final VoidCallback? onPressed;
   final IconData icon;
   final Color color;
   final double size;
+  final String? semanticLabel;
 
   @override
   Widget build(BuildContext context) {
     final enabled = onPressed != null;
-    return Material(
-      color: Colors.white,
-      elevation: enabled ? 6 : 0,
-      shape: const CircleBorder(),
-      child: InkWell(
-        customBorder: const CircleBorder(),
-        onTap: onPressed,
-        child: SizedBox(
-          width: size,
-          height: size,
-          child: Icon(
-            icon,
-            color: enabled ? color : Colors.black26,
-            size: size * 0.5,
+    return Semantics(
+      button: true,
+      enabled: enabled,
+      label: semanticLabel,
+      child: Material(
+        color: Colors.white,
+        elevation: enabled ? 6 : 0,
+        shape: const CircleBorder(),
+        child: InkWell(
+          customBorder: const CircleBorder(),
+          onTap: onPressed,
+          child: SizedBox(
+            width: size,
+            height: size,
+            child: ExcludeSemantics(
+              child: Icon(
+                icon,
+                color: enabled ? color : Colors.black26,
+                size: size * 0.5,
+              ),
+            ),
           ),
         ),
       ),

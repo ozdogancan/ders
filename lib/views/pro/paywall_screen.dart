@@ -4,14 +4,19 @@
 //   • Top bar (close X + Geri Yükle pill)
 //   • Auto-rotating 3-slide value-prop carousel hero (~180dp)
 //   • Title + tiny subtitle
-//   • Compact 2x2 feature bullet grid
+//   • Compact value-prop bullet list
 //   • Optional trial toggle (hidden if trial already used)
-//   • Plan A (Haftalık) + Plan B (Yıllık, savings badge) cards
+//   • Plan tiles (Haftalık / [Aylık] / Yıllık) — Aylık only if RC has it
 //   • Purple CTA "Devam et"
 //   • Cancel-anytime line + footer links
 //
-// Billing path identical to prior version: BillingService.getOfferings() →
-// substring match ('week'/'month'/'year') → BillingService.purchase().
+// Pricing path (P0.4 + P0.5 audit fix):
+//   • On mount, fetch RevenueCat Offerings → resolve weekly/monthly/yearly
+//     Packages via explicit Package.identifier map (NO substring matching).
+//   • Render Package.storeProduct.priceString (already localized) everywhere.
+//   • Savings % computed from real numeric prices, not hardcoded.
+//   • On CTA tap, look up the resolved Package by selected plan — if missing,
+//     show snackbar and DO NOT fall back to a different plan.
 
 import 'dart:async';
 
@@ -21,13 +26,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:purchases_flutter/purchases_flutter.dart';
 
 import '../../core/theme/koala_tokens.dart';
+import '../../helpers/paywall_router.dart';
 import '../legal_sheet.dart';
 import '../../providers/pro_status_provider.dart';
 import '../../services/analytics_service.dart';
 import '../../services/billing_service.dart';
 import '../../services/usage_limit_service.dart';
 
-enum _PlanKind { weekly, yearly }
+enum _PlanKind { weekly, monthly, yearly }
 
 // Koala brand purple palette.
 const _kPurple = Color(0xFF6C63FF);
@@ -36,16 +42,21 @@ const _kPurpleSoft = Color(0xFFF3F0FF);
 const _kBorder = Color(0xFFE0DAFF);
 
 // Carousel hero slides — bundled assets for instant first paint.
-// TODO: Upload animated variants to Supabase Storage and swap to Image.network
-// with these URLs as drop-in replacements (no other code change needed):
-//   - pro-assets/paywall-slide-1.webp
-//   - pro-assets/paywall-slide-2.webp
-//   - pro-assets/paywall-slide-3.webp
 const _kSlideAssets = <String>[
-  'assets/pro/hero_1.png',
-  'assets/pro/hero_2.png',
-  'assets/pro/hero_3.png',
+  'assets/pro/hero_1.webp',
+  'assets/pro/hero_2.webp',
+  'assets/pro/hero_3.webp',
 ];
+
+// Explicit Package.identifier candidates per plan kind. The first entry of each
+// list is RevenueCat's built-in "Standard" package identifier; the rest are
+// custom identifiers we may have used historically. Match against
+// `Package.identifier` (RC package id) — NOT `storeProduct.identifier`.
+const _kPackageIds = <_PlanKind, List<String>>{
+  _PlanKind.weekly: [r'$rc_weekly', 'koala_pro_weekly', 'pro_weekly', 'weekly'],
+  _PlanKind.monthly: [r'$rc_monthly', 'koala_pro_monthly', 'pro_monthly', 'monthly'],
+  _PlanKind.yearly: [r'$rc_annual', 'koala_pro_yearly', 'pro_yearly', 'yearly', 'annual'],
+};
 
 class PaywallScreen extends ConsumerStatefulWidget {
   final String trigger;
@@ -67,11 +78,13 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
   Timer? _heroTimer;
   bool _precached = false;
 
-  // TR pricing fallback (used until offerings load).
-  static const _weeklyPrice = '₺79,99';
-  static const _yearlyPrice = '₺999,99';
-  // ₺999,99 / 52 ≈ ₺19,23
-  static const _yearlyPerWeek = '₺19,23';
+  // Resolved RevenueCat packages (null until offerings load, or if RC does not
+  // expose that plan kind). The UI shows a small shimmer placeholder while
+  // these are null, and gracefully hides plan tiles that never resolve.
+  Package? _weeklyPkg;
+  Package? _monthlyPkg;
+  Package? _yearlyPkg;
+  bool _offeringsLoaded = false;
 
   @override
   void initState() {
@@ -82,13 +95,15 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
       final asyncPs = ref.read(proStatusProvider);
       final ps = asyncPs.value;
       if (ps != null) {
-        // Dynamic access so this compiles whether or not trialUsed exists.
         final dynamic dps = ps;
         final used = dps.trialUsed;
         if (used is bool) _trialUsed = used;
       }
     } catch (_) {/* field absent → leave _trialUsed=false */}
     _trialEnabled = !_trialUsed;
+
+    // Kick off RC offering fetch (non-blocking).
+    _loadOfferings();
 
     // Auto-advance the hero carousel every 3500ms (no user swipe).
     _heroTimer = Timer.periodic(const Duration(milliseconds: 3500), (_) {
@@ -103,6 +118,110 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
         );
       }
     });
+  }
+
+  Future<void> _loadOfferings() async {
+    try {
+      final pkgs = await BillingService.getOfferings();
+      if (!mounted) return;
+      setState(() {
+        _weeklyPkg = _findPackage(pkgs, _PlanKind.weekly);
+        _monthlyPkg = _findPackage(pkgs, _PlanKind.monthly);
+        _yearlyPkg = _findPackage(pkgs, _PlanKind.yearly);
+        _offeringsLoaded = true;
+        // If user's currently-selected plan kind is unavailable, fall back
+        // visually to the first one that resolved — but never silently swap
+        // an unrelated billing cycle during purchase. This is just initial UI.
+        if (_packageFor(_selected) == null) {
+          if (_weeklyPkg != null) {
+            _selected = _PlanKind.weekly;
+          } else if (_yearlyPkg != null) {
+            _selected = _PlanKind.yearly;
+          } else if (_monthlyPkg != null) {
+            _selected = _PlanKind.monthly;
+          }
+        }
+      });
+    } catch (e) {
+      debugPrint('[paywall] loadOfferings failed: $e');
+      if (mounted) setState(() => _offeringsLoaded = true);
+    }
+  }
+
+  static Package? _findPackage(List<Package> pkgs, _PlanKind kind) {
+    final candidates = _kPackageIds[kind] ?? const <String>[];
+    for (final id in candidates) {
+      for (final p in pkgs) {
+        if (p.identifier == id) return p;
+      }
+    }
+    return null;
+  }
+
+  Package? _packageFor(_PlanKind kind) {
+    switch (kind) {
+      case _PlanKind.weekly:
+        return _weeklyPkg;
+      case _PlanKind.monthly:
+        return _monthlyPkg;
+      case _PlanKind.yearly:
+        return _yearlyPkg;
+    }
+  }
+
+  /// Parse a numeric value out of a localized priceString like "₺79,99",
+  /// "$9.99", or "9,99 €". Returns null on failure.
+  static double? _parsePrice(String? s) {
+    if (s == null || s.isEmpty) return null;
+    // Keep digits, comma, dot, and minus.
+    final cleaned = s.replaceAll(RegExp(r'[^0-9.,-]'), '');
+    if (cleaned.isEmpty) return null;
+    // Locales like "1.234,56" (TR) → drop thousands dot, swap comma to dot.
+    // Locales like "1,234.56" (US) → drop thousands comma.
+    String normalized = cleaned;
+    final lastComma = normalized.lastIndexOf(',');
+    final lastDot = normalized.lastIndexOf('.');
+    if (lastComma > lastDot) {
+      // Comma is the decimal separator.
+      normalized = normalized.replaceAll('.', '').replaceAll(',', '.');
+    } else {
+      // Dot is the decimal separator (or no separators at all).
+      normalized = normalized.replaceAll(',', '');
+    }
+    return double.tryParse(normalized);
+  }
+
+  /// Compute savings of yearly vs weekly as integer percent. Null if either
+  /// price is unparseable.
+  int? _yearlySavingsPercent() {
+    final w = _parsePrice(_weeklyPkg?.storeProduct.priceString);
+    final y = _parsePrice(_yearlyPkg?.storeProduct.priceString);
+    if (w == null || y == null || w <= 0 || y <= 0) return null;
+    final ratio = 1.0 - (y / (w * 52.0));
+    if (ratio <= 0) return null;
+    return (ratio * 100).round();
+  }
+
+  /// "Per week" price string for the yearly plan, computed from real price.
+  /// Returns the same currency symbol the priceString already uses.
+  String? _yearlyPerWeekText() {
+    final s = _yearlyPkg?.storeProduct.priceString;
+    final y = _parsePrice(s);
+    if (s == null || y == null || y <= 0) return null;
+    final perWeek = y / 52.0;
+    // Extract non-numeric currency markers to re-decorate. Crude but safe.
+    final currency = s.replaceAll(RegExp(r'[0-9.,\s-]'), '');
+    // Use locale-ish formatting: 2 decimals, comma if priceString used comma.
+    final usesComma = s.contains(',') &&
+        (s.lastIndexOf(',') > s.lastIndexOf('.'));
+    final formatted = perWeek.toStringAsFixed(2);
+    final localized = usesComma ? formatted.replaceAll('.', ',') : formatted;
+    // Re-apply currency: prefix if it appeared before any digit, else suffix.
+    final firstDigit = s.indexOf(RegExp(r'[0-9]'));
+    final currencyBefore =
+        firstDigit > 0 && currency.isNotEmpty;
+    if (currency.isEmpty) return localized;
+    return currencyBefore ? '$currency$localized' : '$localized $currency';
   }
 
   @override
@@ -124,37 +243,30 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
 
   Future<void> _onPurchase() async {
     if (_purchasing) return;
+    final match = _packageFor(_selected);
+    if (match == null) {
+      // No silent fallback — fail loud per audit P0.5.
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Bu plan şu an mevcut değil'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
     setState(() => _purchasing = true);
     Analytics.log('paywall_cta_tapped', {
       'trigger': widget.trigger,
       'plan': _selected.name,
+      'package_id': match.identifier,
       'trial': _trialEnabled && !_trialUsed,
     });
     try {
-      final pkgs = await BillingService.getOfferings();
-      Package? match;
-      for (final p in pkgs) {
-        final id = p.storeProduct.identifier.toLowerCase();
-        if (_selected == _PlanKind.weekly && id.contains('week')) match = p;
-        if (_selected == _PlanKind.yearly && id.contains('year')) match = p;
-        if (match == null &&
-            _selected == _PlanKind.yearly &&
-            id.contains('month')) {
-          match = p;
-        }
-      }
-      if (match == null) {
-        await _showFailureDialog(
-          detail:
-              'Ürün listesi alınamadı. Google Play hesabınla giriş yaptığından '
-              've uygulamayı Play Store üzerinden kurduğundan emin olur musun?',
-        );
-        return;
-      }
       final ok = await BillingService.purchase(match);
       if (!mounted) return;
       if (ok) {
         await UsageLimitService.resetAll();
+        notePaywallConverted(widget.trigger);
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -166,7 +278,6 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
         );
         Navigator.of(context).pop();
       } else {
-        // Kullanıcı satın almayı iptal ettiyse dialog gösterme — sessiz geç.
         if (BillingService.lastWasCancellation) return;
         await _showFailureDialog(detail: BillingService.lastErrorMessage);
       }
@@ -252,16 +363,10 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
       backgroundColor: KoalaColors.bg,
       body: SafeArea(
         child: Center(
-          // Geniş ekranlarda (tablet / masaüstü web) kenara kenara yayılmaz —
-          // modal gibi ortada, makul genişlikte durur.
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 460),
             child: LayoutBuilder(
               builder: (context, constraints) {
-                // Uyarlanır yükseklik: içerik ekrana SIĞIYORSA Spacer ile
-                // yayılır, kaydırma olmaz. SIĞMIYORSA (küçük cihaz, mobil
-                // tarayıcı adres çubuğu, vs.) kaydırılır — alttaki footer
-                // hiçbir cihazda kırpılmaz.
                 return SingleChildScrollView(
                   child: ConstrainedBox(
                     constraints:
@@ -340,7 +445,6 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
                   assetPath: _kSlideAssets[i],
                 ),
               ),
-              // Top-left close + top-right Geri Yükle pill, overlay-style.
               Positioned(
                 top: 10,
                 left: 10,
@@ -379,7 +483,6 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
                   ),
                 ),
               ),
-              // Page dots — center-bottom.
               Positioned(
                 left: 0,
                 right: 0,
@@ -409,7 +512,6 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
     );
   }
 
-  // ─── Title + subtitle — centered SnapHome-style ─────────
   Widget _buildTitle() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.center,
@@ -439,7 +541,6 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
     );
   }
 
-  // ─── 3 stacked value bullets — SnapHome-style ───────────
   Widget _buildBulletsGrid() {
     const bullets = [
       'Sınırsız AI tasarım sohbeti',
@@ -485,7 +586,6 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
     );
   }
 
-  // ─── Trial toggle row ───────────────────────────────────
   Widget _buildTrialToggle() {
     return Container(
       height: 46,
@@ -512,7 +612,6 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
             child: Switch(
               value: _trialEnabled,
               onChanged: (v) => setState(() {
-                // Trial ON → weekly (7-day trial), OFF → yearly.
                 _trialEnabled = v && !_trialUsed;
                 _selected = _trialEnabled ? _PlanKind.weekly : _PlanKind.yearly;
               }),
@@ -525,46 +624,85 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
     );
   }
 
-  // ─── Plan cards ─────────────────────────────────────────
   Widget _buildPlanCards() {
     final canTrial = !_trialUsed && _trialEnabled;
-    return Column(
-      children: [
+    final weeklyPrice = _weeklyPkg?.storeProduct.priceString;
+    final monthlyPrice = _monthlyPkg?.storeProduct.priceString;
+    final yearlyPrice = _yearlyPkg?.storeProduct.priceString;
+    final yearlyPerWeek = _yearlyPerWeekText();
+    final savings = _yearlySavingsPercent();
+
+    final tiles = <Widget>[];
+
+    // Weekly tile (always shown — primary trial path). Skeleton until loaded.
+    tiles.add(
+      _PlanCard(
+        selected: _selected == _PlanKind.weekly,
+        onTap: () => setState(() {
+          _selected = _PlanKind.weekly;
+          _trialEnabled = !_trialUsed;
+        }),
+        topLabel: canTrial ? '7 Gün Tam Erişim' : 'Haftalık',
+        subLabel: canTrial
+            ? (weeklyPrice != null
+                ? 'sonra $weeklyPrice/hafta'
+                : 'sonra haftalık yenilenir')
+            : 'haftalık yenilenir',
+        priceMain: weeklyPrice,
+        priceUnit: '/ hafta',
+        priceLoaded: _offeringsLoaded,
+        dimmed: _offeringsLoaded && _weeklyPkg == null,
+      ),
+    );
+
+    // Optional monthly tile — only if RC actually exposes a monthly package.
+    if (_monthlyPkg != null) {
+      tiles.add(const SizedBox(height: 12));
+      tiles.add(
         _PlanCard(
-          selected: _selected == _PlanKind.weekly,
+          selected: _selected == _PlanKind.monthly,
           onTap: () => setState(() {
-            _selected = _PlanKind.weekly;
-            // Selecting weekly re-enables trial (if eligible).
-            _trialEnabled = !_trialUsed;
-          }),
-          topLabel: canTrial ? '7 Gün Tam Erişim' : 'Haftalık',
-          subLabel: canTrial
-              ? 'sonra $_weeklyPrice/hafta'
-              : 'haftalık yenilenir',
-          priceMain: _weeklyPrice,
-          priceUnit: '/ hafta',
-        ),
-        const SizedBox(height: 12),
-        _PlanCard(
-          selected: _selected == _PlanKind.yearly,
-          onTap: () => setState(() {
-            _selected = _PlanKind.yearly;
-            // Selecting yearly auto-disables trial.
+            _selected = _PlanKind.monthly;
             _trialEnabled = false;
           }),
-          topLabel: 'Yıllık',
-          subLabel: '$_yearlyPrice / yıl',
-          priceMain: _yearlyPerWeek,
-          priceUnit: '/ hafta',
-          badge: '%76 TASARRUF',
+          topLabel: 'Aylık',
+          subLabel: monthlyPrice != null
+              ? '$monthlyPrice / ay'
+              : 'aylık yenilenir',
+          priceMain: monthlyPrice,
+          priceUnit: '/ ay',
+          priceLoaded: _offeringsLoaded,
         ),
-      ],
+      );
+    }
+
+    tiles.add(const SizedBox(height: 12));
+    tiles.add(
+      _PlanCard(
+        selected: _selected == _PlanKind.yearly,
+        onTap: () => setState(() {
+          _selected = _PlanKind.yearly;
+          _trialEnabled = false;
+        }),
+        topLabel: 'Yıllık',
+        subLabel: yearlyPrice != null ? '$yearlyPrice / yıl' : 'yıllık yenilenir',
+        priceMain: yearlyPerWeek ?? yearlyPrice,
+        priceUnit: yearlyPerWeek != null ? '/ hafta' : '/ yıl',
+        priceLoaded: _offeringsLoaded,
+        dimmed: _offeringsLoaded && _yearlyPkg == null,
+        badge: savings != null ? '%$savings TASARRUF' : null,
+      ),
     );
+
+    return Column(children: tiles);
   }
 
-  // ─── CTA — purple gradient + looping shimmer sweep ──────
   Widget _buildCta() {
-    final button = Container(
+    final button = Semantics(
+      button: true,
+      enabled: !_purchasing,
+      label: _purchasing ? 'Satın alma işleniyor' : 'Devam et — Pro satın al',
+      child: Container(
       width: double.infinity,
       height: 54,
       decoration: BoxDecoration(
@@ -614,9 +752,9 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
           ),
         ),
       ),
+      ),
     );
     if (_purchasing) return button;
-    // Looping shimmer sweep — every ~2.4s, white glaze passes across.
     return Animate(
       onPlay: (c) => c.repeat(),
       effects: [
@@ -630,7 +768,6 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
     );
   }
 
-  // ─── Footer ─────────────────────────────────────────────
   Widget _buildFooter() {
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -723,9 +860,11 @@ class _PlanCard extends StatelessWidget {
   final VoidCallback onTap;
   final String topLabel;
   final String subLabel;
-  final String priceMain;
+  final String? priceMain;
   final String priceUnit;
   final String? badge;
+  final bool priceLoaded;
+  final bool dimmed;
 
   const _PlanCard({
     required this.selected,
@@ -735,126 +874,186 @@ class _PlanCard extends StatelessWidget {
     required this.priceMain,
     required this.priceUnit,
     this.badge,
+    this.priceLoaded = true,
+    this.dimmed = false,
   });
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          AnimatedContainer(
-            duration: const Duration(milliseconds: 180),
-            curve: Curves.easeOut,
-            padding: const EdgeInsets.fromLTRB(16, 13, 16, 13),
-            decoration: BoxDecoration(
-              color: selected ? _kPurpleSoft : Colors.white,
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(
-                color: selected ? _kPurple : _kBorder.withValues(alpha: 0.55),
-                width: selected ? 1.8 : 1,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: selected
-                      ? _kPurple.withValues(alpha: 0.16)
-                      : Colors.black.withValues(alpha: 0.05),
-                  blurRadius: selected ? 18 : 12,
-                  offset: const Offset(0, 6),
-                  spreadRadius: -4,
+    final priceLabel = priceMain != null
+        ? '$priceMain $priceUnit'
+        : 'Fiyat yükleniyor';
+    return Semantics(
+      button: true,
+      selected: selected,
+      enabled: !dimmed,
+      label: '$topLabel, $subLabel, $priceLabel'
+          '${badge != null ? ', $badge' : ''}',
+      excludeSemantics: false,
+      child: Opacity(
+      opacity: dimmed ? 0.45 : 1.0,
+      child: GestureDetector(
+        onTap: dimmed ? null : onTap,
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 180),
+              curve: Curves.easeOut,
+              padding: const EdgeInsets.fromLTRB(16, 13, 16, 13),
+              decoration: BoxDecoration(
+                color: selected ? _kPurpleSoft : Colors.white,
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(
+                  color: selected ? _kPurple : _kBorder.withValues(alpha: 0.55),
+                  width: selected ? 1.8 : 1,
                 ),
-              ],
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                boxShadow: [
+                  BoxShadow(
+                    color: selected
+                        ? _kPurple.withValues(alpha: 0.16)
+                        : Colors.black.withValues(alpha: 0.05),
+                    blurRadius: selected ? 18 : 12,
+                    offset: const Offset(0, 6),
+                    spreadRadius: -4,
+                  ),
+                ],
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          topLabel,
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w800,
+                            color: KoalaColors.text,
+                            letterSpacing: 0.2,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          subLabel,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w500,
+                            color: KoalaColors.textMed,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
                     mainAxisSize: MainAxisSize.min,
                     children: [
+                      if (priceMain != null)
+                        Text(
+                          priceMain!,
+                          style: const TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w800,
+                            color: KoalaColors.text,
+                            letterSpacing: -0.4,
+                          ),
+                        )
+                      else
+                        _PriceSkeleton(loaded: priceLoaded),
                       Text(
-                        topLabel,
+                        priceUnit,
                         style: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w800,
-                          color: KoalaColors.text,
-                          letterSpacing: 0.2,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        subLabel,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 11.5,
+                          fontSize: 11,
                           fontWeight: FontWeight.w500,
                           color: KoalaColors.textMed,
                         ),
                       ),
                     ],
                   ),
-                ),
-                const SizedBox(width: 8),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      priceMain,
-                      style: const TextStyle(
-                        fontSize: 17,
-                        fontWeight: FontWeight.w800,
-                        color: KoalaColors.text,
-                        letterSpacing: -0.4,
-                      ),
-                    ),
-                    Text(
-                      priceUnit,
-                      style: const TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w500,
-                        color: KoalaColors.textMed,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-          if (badge != null)
-            Positioned(
-              top: -10,
-              left: 16,
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                      colors: [_kPurple, _kPurpleDeep]),
-                  borderRadius: BorderRadius.circular(999),
-                  boxShadow: [
-                    BoxShadow(
-                      color: _kPurple.withValues(alpha: 0.3),
-                      blurRadius: 8,
-                      offset: const Offset(0, 3),
+            if (badge != null)
+              Positioned(
+                top: -10,
+                left: 16,
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                        colors: [_kPurple, _kPurpleDeep]),
+                    borderRadius: BorderRadius.circular(999),
+                    boxShadow: [
+                      BoxShadow(
+                        color: _kPurple.withValues(alpha: 0.3),
+                        blurRadius: 8,
+                        offset: const Offset(0, 3),
+                      ),
+                    ],
+                  ),
+                  child: Text(
+                    badge!,
+                    style: const TextStyle(
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.white,
+                      letterSpacing: 0.5,
                     ),
-                  ],
-                ),
-                child: Text(
-                  badge!,
-                  style: const TextStyle(
-                    fontSize: 10.5,
-                    fontWeight: FontWeight.w800,
-                    color: Colors.white,
-                    letterSpacing: 0.5,
                   ),
                 ),
               ),
-            ),
-        ],
+          ],
+        ),
       ),
+      ),
+    );
+  }
+}
+
+/// Small shimmer placeholder shown in the price slot until RC offerings load.
+/// When `loaded` becomes true but priceMain is still null (offering missing),
+/// renders an em dash so the UI is never empty.
+class _PriceSkeleton extends StatelessWidget {
+  final bool loaded;
+  const _PriceSkeleton({required this.loaded});
+
+  @override
+  Widget build(BuildContext context) {
+    if (loaded) {
+      return const Text(
+        '—',
+        style: TextStyle(
+          fontSize: 17,
+          fontWeight: FontWeight.w800,
+          color: KoalaColors.textTer,
+          letterSpacing: -0.4,
+        ),
+      );
+    }
+    final box = Container(
+      width: 64,
+      height: 18,
+      decoration: BoxDecoration(
+        color: _kPurpleSoft,
+        borderRadius: BorderRadius.circular(6),
+      ),
+    );
+    return Animate(
+      onPlay: (c) => c.repeat(),
+      effects: [
+        ShimmerEffect(
+          duration: const Duration(milliseconds: 1400),
+          color: Colors.white.withValues(alpha: 0.7),
+        ),
+      ],
+      child: box,
     );
   }
 }
@@ -892,8 +1091,7 @@ class _FooterDot extends StatelessWidget {
 }
 
 // ═══════════════════════════════════════════════════════════
-// Carousel slide — bundled asset background, dark gradient,
-// bottom-left tagline. Instant first paint (no async load).
+// Carousel slide — bundled asset background, instant first paint.
 // ═══════════════════════════════════════════════════════════
 class _CarouselSlide extends StatelessWidget {
   final String assetPath;

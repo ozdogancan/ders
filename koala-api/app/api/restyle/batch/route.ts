@@ -170,7 +170,6 @@ export async function POST(req: NextRequest) {
     image?: string;
     room?: string;
     theme?: string;
-    userId?: string;
     reference_url?: string;
   };
   try {
@@ -187,13 +186,17 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Quota + Pro detect. Free → 1 variant only + watermark signal.
-  // Legacy (no auth header) bypasses gate during rollout window.
+  // Auth + quota + Pro detect. Authorization is MANDATORY — no body.userId
+  // fallback (previously allowed quota bypass by spoofing userId).
+  // Legacy clients (no Authorization header at all) are admitted but bypass
+  // quota during the rollout window.
   const auth = await verifyAuthHeader(req);
-  const userId = auth.uid ?? body.userId;
+  if (!auth.ok) {
+    return NextResponse.json({ error: 'auth_required', reason: auth.reason }, { status: 401, headers });
+  }
   let userIsPro = false;
-  if (userId && !auth.legacy) {
-    const q = await checkAndIncrementQuota({ userId, feature: 'restyle' });
+  if (auth.uid && !auth.legacy) {
+    const q = await checkAndIncrementQuota({ userId: auth.uid, feature: 'restyle' });
     if (!q.allowed) {
       return NextResponse.json(
         {
@@ -207,9 +210,9 @@ export async function POST(req: NextRequest) {
       );
     }
     userIsPro = q.isPro;
-  } else if (userId) {
+  } else if (auth.uid) {
     // Legacy path — try to detect pro for variant cap, but don't gate.
-    try { userIsPro = await isProUser(userId); } catch { /* ignore */ }
+    try { userIsPro = await isProUser(auth.uid); } catch { /* ignore */ }
   }
 
   // base64/dataURL normalize.

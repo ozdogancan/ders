@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { corsHeaders } from '@/lib/security';
 import { verifyAuthHeader, logAuthOutcome } from '@/lib/auth-verify';
 import { getProStatus } from '@/lib/billing';
+import { touchUserLastSeen } from '@/lib/last-seen';
 
 export async function OPTIONS(req: NextRequest) {
   return new NextResponse(null, {
@@ -41,5 +42,11 @@ export async function GET(req: NextRequest) {
   }
 
   const status = await getProStatus(userId);
+
+  // Retention tracking — fire-and-forget. NEVER block or fail the response.
+  // /api/billing/status is called on every app launch (Flutter main bootstrap
+  // + paywall + profile), so this is the cheapest piggyback for last_seen.
+  void touchUserLastSeen({ uid: userId }).catch(() => {});
+
   return NextResponse.json(status, { headers });
 }

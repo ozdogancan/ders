@@ -126,15 +126,32 @@ class _CelebrationContent extends StatelessWidget {
           ),
           const SizedBox(width: 12),
           const Expanded(
-            child: Text(
-              'İlk tasarımın hazır! Pro ile sınırsız üret →',
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
-                color: Colors.white,
-                letterSpacing: -0.1,
-                height: 1.3,
-              ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Bu senin için ✨',
+                  style: TextStyle(
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w800,
+                    color: Colors.white,
+                    letterSpacing: -0.1,
+                    height: 1.2,
+                  ),
+                ),
+                SizedBox(height: 2),
+                Text(
+                  'İkincisini Pro ile dene',
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w500,
+                    color: Colors.white,
+                    letterSpacing: -0.1,
+                    height: 1.25,
+                  ),
+                ),
+              ],
             ),
           ),
           const SizedBox(width: 8),

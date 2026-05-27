@@ -140,7 +140,11 @@ class _NavItem extends StatelessWidget {
     final color = selected ? KoalaColors.accentDeep : KoalaColors.textSec;
     return Expanded(
       key: anchorKey,
-      child: Material(
+      child: Semantics(
+        button: true,
+        selected: selected,
+        label: badge > 0 ? '$label, okunmamış bildirim var' : label,
+        child: Material(
         color: Colors.transparent,
         child: InkWell(
           onTap: onTap,
@@ -196,6 +200,7 @@ class _NavItem extends StatelessWidget {
           ),
         ),
       ),
+      ),
     );
   }
 }
@@ -217,7 +222,11 @@ class _ProfileNavItem extends StatelessWidget {
     final color = selected ? KoalaColors.accentDeep : KoalaColors.textSec;
     return Expanded(
       key: anchorKey,
-      child: Material(
+      child: Semantics(
+        button: true,
+        selected: selected,
+        label: 'Profil',
+        child: Material(
         color: Colors.transparent,
         child: InkWell(
           onTap: onTap,
@@ -298,6 +307,7 @@ class _ProfileNavItem extends StatelessWidget {
           ),
         ),
       ),
+      ),
     );
   }
 }
@@ -310,7 +320,10 @@ class _PaylasFab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Expanded(
-      child: GestureDetector(
+      child: Semantics(
+        button: true,
+        label: 'Paylaş — fotoğraf yükle ve AI ile yeniden tasarla',
+        child: GestureDetector(
         onTap: onTap,
         behavior: HitTestBehavior.opaque,
         child: Column(
@@ -339,6 +352,7 @@ class _PaylasFab extends StatelessWidget {
             ),
           ],
         ),
+      ),
       ),
     );
   }

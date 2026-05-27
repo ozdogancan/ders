@@ -16,15 +16,19 @@
 // prompt'u kullanıcının seçimleriyle zenginleşir.
 // ═══════════════════════════════════════════════════════════════════
 
+import 'dart:async';
 import 'dart:typed_data';
 
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
 import '../../../core/theme/koala_tokens.dart';
 import '../../../helpers/paywall_router.dart';
+import '../../../services/analytics_service.dart';
 import '../../../services/quota_service.dart';
+import '../../../services/usage_limit_service.dart';
 import '../mekan_constants.dart';
 import '../mekan_flow_screen.dart';
 
@@ -255,15 +259,35 @@ class _MekanWizardScreenState extends State<MekanWizardScreen> {
   }
 
   Future<void> _finish() async {
-    // Pro paywall — kullanıcı widget'ı baştan sona gezdi; tasarım üretimi
-    // Pro özelliği olduğu için paywall tam burada (yerleşim seçilip
-    // "Devam Et"e basıldıktan sonra) çıkar.
+    // P1.4 — Loss-leader: ilk restyle ÜCRETSİZ. Kullanıcı henüz hiç restyle
+    // üretmemişse paywall'u atlıyoruz; sonuç ekranında FirstRestyleCelebration
+    // soft upsell ile "ikincisini Pro ile dene" mesajı veriyoruz. 2. restyle'da
+    // (count >= 1) server zaten 402 dönecek; wizard sonu paywall'ı sadece
+    // o zaman gösteriyoruz. Pro kullanıcılar her durumda atlar.
+    //
+    // Yeni wizard akışı = yeni "flow" → eski guard'ı temizle ki bu akıştaki
+    // tek paywall (eğer gerekirse) açılabilsin.
+    resetPaywallFlowGuard();
+
     final snap = await QuotaService.fetch();
     if (!snap.isPro) {
-      if (!mounted) return;
-      await showPaywall(context, trigger: 'wizard_finish');
-      final after = await QuotaService.fetch();
-      if (!after.isPro || !mounted) return; // abone olmadı → wizard'da kal
+      // Lifetime restyle sayısını oku. Defensive: hata olursa 0 dön (kullanıcı
+      // ücretsiz olanı alır).
+      final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
+      final lifetimeCount = await UsageLimitService.userRestyleCount(uid);
+
+      if (lifetimeCount == 0) {
+        // İlk restyle: paywall'u atla, doğrudan üretime geç. Sonuç ekranındaki
+        // celebration banner upsell'i yapacak.
+        unawaited(Analytics.log('wizard_finish_free_restyle', {
+          'lifetime_count': lifetimeCount,
+        }));
+      } else {
+        if (!mounted) return;
+        await showPaywall(context, trigger: 'wizard_finish');
+        final after = await QuotaService.fetch();
+        if (!after.isPro || !mounted) return; // abone olmadı → wizard'da kal
+      }
     }
     // Pro stiller için customPromptFlavor'ı prompt'a inject et — backend'de
     // henüz preview/recipe yok, AI customPrompt ile premium varyantı üretir.
@@ -2043,7 +2067,11 @@ class _ContinueBar extends StatelessWidget {
                   ]
                 : null,
           ),
-          child: FilledButton(
+          child: Semantics(
+            button: true,
+            enabled: enabled,
+            label: isLast ? 'Tasarımı Oluştur' : 'Devam Et',
+            child: FilledButton(
             style: FilledButton.styleFrom(
               backgroundColor: enabled
                   ? KoalaColors.accentDeep
@@ -2075,6 +2103,7 @@ class _ContinueBar extends StatelessWidget {
                 ),
               ],
             ),
+          ),
           ),
         ),
       ),

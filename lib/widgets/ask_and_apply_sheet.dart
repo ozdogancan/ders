@@ -187,11 +187,11 @@ class _AskAndApplySheetState extends ConsumerState<_AskAndApplySheet> {
             const SizedBox(height: 14),
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 2),
-              child: Text('Sor ve uygula', style: KoalaText.h2),
+              child: Text('Sor', style: KoalaText.h2),
             ),
             const SizedBox(height: 4),
             Text(
-              'Bu tasarımı kime soralım — ya da kendi mekânına uygulayalım?',
+              'Bu tasarımı kime soralım?',
               style: KoalaText.bodySmall,
             ),
             const SizedBox(height: 12),
@@ -254,16 +254,9 @@ class _AskAndApplySheetState extends ConsumerState<_AskAndApplySheet> {
                   });
                 },
               ),
-            _askOption(
-              leading: const _AskLeading(
-                icon: LucideIcons.wand2,
-                tintGold: true,
-              ),
-              title: 'Mekânıma uygula',
-              subtitle: 'Kendi fotoğrafını seç, bu tarza yeniden tasarlanır',
-              onTap: _onApply,
-              highlight: true,
-            ),
+            // 2026-05-28: "Mekânıma uygula" seçeneği geçici olarak kaldırıldı
+            // (kullanıcı kararı). İleride geri açılacaksa highlight'lı şekilde
+            // tekrar render edilebilir.
           ],
         ),
       ),

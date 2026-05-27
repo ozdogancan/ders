@@ -463,7 +463,7 @@ class _ShareUploadScreenState extends State<ShareUploadScreen>
           fit: BoxFit.cover,
           fadeInDuration: const Duration(milliseconds: 260),
           placeholder: (_, __) => Image.asset(
-            'assets/onboarding/step2.png',
+            'assets/onboarding/step2.webp',
             fit: BoxFit.cover,
             errorBuilder: (_, __, ___) => Container(
               decoration: const BoxDecoration(
@@ -472,7 +472,7 @@ class _ShareUploadScreenState extends State<ShareUploadScreen>
             ),
           ),
           errorWidget: (_, __, ___) => Image.asset(
-            'assets/onboarding/step2.png',
+            'assets/onboarding/step2.webp',
             fit: BoxFit.cover,
             errorBuilder: (_, __, ___) => Container(
               decoration: const BoxDecoration(

@@ -17,6 +17,7 @@ import 'mekan/wizard/mekan_wizard_screen.dart';
 import '../core/theme/koala_tokens.dart';
 import '../services/background_gen.dart';
 import '../services/saved_items_service.dart';
+import '../widgets/koala_back_button.dart';
 import '../widgets/koala_bottom_nav.dart';
 import 'chat_list_screen.dart';
 import 'main_shell.dart';
@@ -387,12 +388,14 @@ class _ProjelerScreenState extends State<ProjelerScreen>
         surfaceTintColor: KoalaColors.bg,
         elevation: 0,
         automaticallyImplyLeading: false,
-        titleSpacing: 20,
+        leading: Navigator.canPop(context) ? const KoalaBackButton() : null,
+        leadingWidth: Navigator.canPop(context) ? 56 : 0,
+        titleSpacing: Navigator.canPop(context) ? 8 : 20,
         toolbarHeight: 64,
         title: Row(
           children: [
             Text(
-              _selectMode ? 'Seç' : 'Projelerim',
+              _selectMode ? 'Seç' : 'AI Stüdyom',
               style: const TextStyle(
                 fontSize: 24,
                 fontWeight: FontWeight.w700,
@@ -580,7 +583,7 @@ class _ProjelerScreenState extends State<ProjelerScreen>
       child: Row(
         children: [
           Text(
-            _selectMode ? 'Seç' : 'Projelerim',
+            _selectMode ? 'Seç' : 'AI Stüdyom',
             style: const TextStyle(
               fontSize: 24,
               fontWeight: FontWeight.w700,

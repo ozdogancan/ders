@@ -1232,7 +1232,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   stops: const [0.0, 0.42, 0.72, 1.0],
                 ).createShader(rect),
                 child: Image.asset(
-                  'assets/pro/hero_1.png',
+                  'assets/pro/hero_1.webp',
                   fit: BoxFit.cover,
                   errorBuilder: (_, __, ___) => const SizedBox.shrink(),
                 ),

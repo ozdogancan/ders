@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
@@ -13,6 +14,9 @@ class CoachmarkStep {
   final String title;
   final String body;
   final IconData? icon;
+  /// Optional illustrative image shown at top of the card. Falls back to
+  /// [icon] (placeholder + errorWidget) if the image fails to load.
+  final String? imageUrl;
   /// Extra padding around the cutout (default 10).
   final double padding;
   /// Force corner radius (default: derived from anchor size).
@@ -23,6 +27,7 @@ class CoachmarkStep {
     required this.title,
     required this.body,
     this.icon,
+    this.imageUrl,
     this.padding = 10,
     this.radius,
   });
@@ -285,6 +290,22 @@ class _CoachmarkCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
+          if (step.imageUrl != null) ...[
+            ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: SizedBox(
+                height: 110,
+                width: double.infinity,
+                child: CachedNetworkImage(
+                  imageUrl: step.imageUrl!,
+                  fit: BoxFit.cover,
+                  placeholder: (_, __) => _ImageFallback(icon: step.icon),
+                  errorWidget: (_, __, ___) => _ImageFallback(icon: step.icon),
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
+          ],
           Row(
             children: [
               if (step.icon != null) ...[
@@ -380,6 +401,24 @@ class _CoachmarkCard extends StatelessWidget {
             ],
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _ImageFallback extends StatelessWidget {
+  final IconData? icon;
+  const _ImageFallback({this.icon});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: KoalaColors.accentSoft,
+      alignment: Alignment.center,
+      child: Icon(
+        icon ?? LucideIcons.sparkles,
+        size: 36,
+        color: KoalaColors.accentDeep,
       ),
     );
   }

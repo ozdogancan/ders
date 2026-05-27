@@ -133,22 +133,17 @@ class DesignDetailScreen extends StatelessWidget {
                       ),
                     ],
                     const SizedBox(height: KoalaSpacing.lg),
-                    // Action row: Uygula (primary) + Sor + Paylaş.
+                    // 2026-05-28: "Uygula" geçici olarak kaldırıldı.
+                    // Action row: Sor (primary) + Paylaş.
                     Row(
                       children: [
                         Expanded(
                           flex: 3,
                           child: _PrimaryActionBtn(
-                            icon: LucideIcons.wand,
-                            label: 'Uygula',
-                            onTap: () => _onApply(context),
+                            icon: LucideIcons.messageCircle,
+                            label: 'Sor',
+                            onTap: () => _onAsk(context),
                           ),
-                        ),
-                        const SizedBox(width: 10),
-                        _IconActionBtn(
-                          icon: LucideIcons.messageCircle,
-                          tooltip: 'Sor',
-                          onTap: () => _onAsk(context),
                         ),
                         const SizedBox(width: 10),
                         _IconActionBtn(

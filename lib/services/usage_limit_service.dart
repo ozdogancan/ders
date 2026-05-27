@@ -7,6 +7,7 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class UsageLimits {
   static const int dailySwipeLimit = 10;
@@ -152,6 +153,38 @@ class UsageLimitService {
     ev[conversationId] = n + 1;
     data[_kEvlumba] = ev;
     await _save(data);
+  }
+
+  /// Lifetime restyle count for a user, summed across all monthly periods in
+  /// `billing_quota_usage` (server-authoritative table). Used by the wizard
+  /// to decide whether to gift a FREE first restyle (loss-leader / wow moment)
+  /// vs. show the paywall.
+  ///
+  /// Defensive: any failure (network, schema mismatch, auth) returns 0 — i.e.
+  /// we assume the user has NEVER restyled, so they get the free one. The
+  /// server still enforces the hard 2/month gate on the API side, so being
+  /// overly generous here cannot grant unlimited generations.
+  static Future<int> userRestyleCount(String uid) async {
+    if (uid.isEmpty) return 0;
+    try {
+      final rows = await Supabase.instance.client
+          .from('billing_quota_usage')
+          .select('count')
+          .eq('user_id', uid)
+          .eq('feature', 'restyle');
+      if (rows is! List) return 0;
+      var total = 0;
+      for (final row in rows) {
+        if (row is Map) {
+          final c = row['count'];
+          if (c is num) total += c.toInt();
+        }
+      }
+      return total;
+    } catch (e) {
+      debugPrint('UsageLimitService.userRestyleCount failed: $e');
+      return 0; // fail-open → user gets the free first restyle
+    }
   }
 
   /// Wipes all usage counters. Call after a successful Pro upgrade.
