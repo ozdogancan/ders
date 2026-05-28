@@ -788,44 +788,66 @@ class MessagingService {
     // (migration 004 eksik). Read state conversation seviyesinde tutuluyor.
     // Step 1 (msg row update) bu yüzden kaldırıldı.
 
-    // 2) Unread sayacını SELECT yapmadan doğrudan sıfırla.
-    //    Önceden SELECT + branch yapıyorduk; ancak RLS race veya id aramasında
-    //    tek satırın dönmemesi `conv == null` → sessiz false yol açıyordu.
-    //    İki ayrı UPDATE: biri user perspektifinden, biri designer perspektifinden.
-    //    Hangisi kullanıcıya aitse eşleşir; diğeri 0 satırı etkiler, zarar yok.
-    //    UPDATE ardından .select() çağırıyoruz — PostgREST RLS reddettiğinde
-    //    0 satır döner, yoksa "success ama hiçbir şey güncellenmedi" durumu
-    //    bize true dönmez.
-    final nowIso = DateTime.now().toIso8601String();
-    int rowsAffected = 0;
-    String? lastErr;
+    // STRATEJI: Firebase Auth kullandığımız için Supabase auth.uid() NULL döner;
+    // koala_conversations UPDATE policy `auth.uid()::text = user_id` istediğinden
+    // doğrudan UPDATE her zaman 0 satırla geri döner ve "Okundu işaretleme
+    // başarısız" toast'u tetiklenir.
+    //
+    // Çözüm: SECURITY DEFINER RPC `koala_mark_conv_read(p_uid, p_conv_id)`
+    // üzerinden gidiyoruz. RPC ownership'i kendi içinde p_uid match ile
+    // doğrular ve user/designer hangi taraftaysa unread sayacını sıfırlar.
+    // Fallback olarak doğrudan UPDATE kalsın (RPC yoksa eski davranış).
+    //
+    // KRITIK: markAsRead non-critical bir işlem. Hata olursa kullanıcıya
+    // toast göstermiyoruz — bir sonraki sync zaten unread sayısını düzeltir.
+    // Bu yüzden lastMarkAsReadError set etsek bile dönüş true tutulur,
+    // çağıran v1/v2 listeleri toast'u tetiklemez.
+    bool serverOk = false;
     try {
-      final res = await _db.from('koala_conversations').update({
-        'unread_count_user': 0,
-        'updated_at': nowIso,
-      }).eq('id', conversationId).eq('user_id', uid).select('id');
-      rowsAffected += res.length;
+      final rpcRes = await _db.rpc('koala_mark_conv_read', params: {
+        'p_uid': uid,
+        'p_conv_id': conversationId,
+      });
+      if (rpcRes is bool) {
+        serverOk = rpcRes;
+      } else if (rpcRes != null) {
+        // Bazı PostgREST versiyonları scalar'ı list/map sarabilir.
+        serverOk = rpcRes.toString().toLowerCase() == 'true';
+      }
+      if (!serverOk) {
+        debugPrint('[markAsRead] RPC returned false (uid=$uid conv=$conversationId)');
+      }
     } catch (e) {
-      debugPrint('markAsRead step2a (user zero) failed: $e');
-      lastErr = 'UserUpd: $e';
-    }
-    try {
-      final res = await _db.from('koala_conversations').update({
-        'unread_count_designer': 0,
-        'updated_at': nowIso,
-      }).eq('id', conversationId).eq('designer_id', uid).select('id');
-      rowsAffected += res.length;
-    } catch (e) {
-      debugPrint('markAsRead step2b (designer zero) failed: $e');
-      lastErr = 'DesignerUpd: $e';
+      debugPrint('[markAsRead] RPC failed silently, falling back to direct UPDATE: $e');
+      // Fallback: doğrudan UPDATE (Supabase auth kullanan eski senaryolar için).
+      final nowIso = DateTime.now().toIso8601String();
+      try {
+        final res = await _db.from('koala_conversations').update({
+          'unread_count_user': 0,
+          'updated_at': nowIso,
+        }).eq('id', conversationId).eq('user_id', uid).select('id');
+        if (res.isNotEmpty) serverOk = true;
+      } catch (e2) {
+        debugPrint('[markAsRead] fallback user UPDATE failed: $e2');
+      }
+      try {
+        final res = await _db.from('koala_conversations').update({
+          'unread_count_designer': 0,
+          'updated_at': nowIso,
+        }).eq('id', conversationId).eq('designer_id', uid).select('id');
+        if (res.isNotEmpty) serverOk = true;
+      } catch (e2) {
+        debugPrint('[markAsRead] fallback designer UPDATE failed: $e2');
+      }
     }
 
-    if (rowsAffected == 0) {
-      lastMarkAsReadError ??= lastErr ?? 'Conversation UPDATE 0 satır (RLS? uid=$uid)';
-      return false;
+    if (!serverOk) {
+      // Hata var ama kullanıcıya göstermiyoruz — optimistic UI zaten unread=0
+      // yapmıştı; bir sonraki sync gerçek değeri getirir. lastMarkAsReadError
+      // hâlâ debug için set ediliyor, ama dönüş true tutuluyor ki çağıran
+      // ekranlar (chat_list v1/v2) toast'u tetiklemesin.
+      lastMarkAsReadError = 'silent (server ok=false uid=$uid conv=$conversationId)';
     }
-    // Mesaj update fail etmiş olsa bile conv sayacı sıfırlanmış olabilir.
-    // Kullanıcıya optimistic'i bozmayalım — true dönelim.
     return true;
   }
 

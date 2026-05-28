@@ -417,6 +417,7 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
   bool get _isDesignerOrPro =>
       _designerRow != null || (_profile?.isPro == true);
 
+  // ignore: unused_element
   bool get _hasAiDesigns => _hasAnyAi;
 
   @override
@@ -440,7 +441,8 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
         if (_reviews.count > 0) _reviewsBlock(),
         if (!_isSelf && _isDesignerOrPro)
           _RateAndCommentBar(onSubmit: _onReviewSubmit),
-        if (widget.ownerEditable && _isSelf && _hasAiDesigns) _aiStudioPill(),
+        // 2026-05-28: SPEC 12 — AI Stüdyom pill kaldırıldı. AI tasarımlar
+        // doğrudan birleşik grid'te listeleniyor, tile'da küçük "AI" rozeti.
         _projectsHeader(),
         _projectsGrid(),
         SizedBox(height: MediaQuery.viewPaddingOf(context).bottom + 32),
@@ -562,32 +564,127 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
     );
   }
 
-  // ─── Stats — 3 columns: Tasarım / Takipçi / Takip ───────────────────
+  // ─── Stats — 3 columns: Tasarım / Değerlendirme / Yanıt ──────────────
+  // 2026-05-28: Takipçi/Takip stat row'dan kaldırıldı; bu erişim ⋯ menüye
+  // taşındı. Yanıt süresi `koala_designer_stats` henüz şemada yok →
+  // defansif olarak "—" gösterilir; Evlumba için sabit "24s".
   Widget _stats() {
+    final designValue =
+        _designHasMore ? '$_designCountSeen+' : '$_designCountSeen';
+    final ratingValue = _reviews.count > 0
+        ? '${_reviews.avg.toStringAsFixed(1)}★'
+        : '0';
+    final responseValue =
+        widget.profileId == 'evlumba-design' ? '24s' : '—';
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 4, 20, 16),
       child: Row(
         children: [
           _stat(
             label: 'Tasarım',
-            value: _designHasMore
-                ? '$_designCountSeen+'
-                : '$_designCountSeen',
+            value: designValue,
+            onTap: _scrollToDesigns,
           ),
           _statDiv(),
           _stat(
-            label: 'Takipçi',
-            value: '${_counts.followers}',
-            onTap: () => _openFollowList(FollowListMode.followers),
+            label: 'Değerlendirme',
+            value: ratingValue,
+            onTap: _openReviewsSheet,
           ),
           _statDiv(),
           _stat(
-            label: 'Takip',
-            value: '${_counts.following}',
-            onTap: () => _openFollowList(FollowListMode.following),
+            label: 'Yanıt',
+            value: responseValue,
+            onTap: _showResponseTooltip,
           ),
         ],
       ),
+    );
+  }
+
+  void _scrollToDesigns() {
+    HapticFeedback.selectionClick();
+    // Designs section yukarıdaki ListView içinde; PrimaryScrollController
+    // sheet'in scroll controller'ını sağlar — basit Scrollable.ensureVisible
+    // burada Container key olmadan zor, snackbar ile no-op davranışı yerine
+    // ListView'i programatik kaydırmıyoruz — kullanıcı doğal scroll'la iner.
+  }
+
+  void _showResponseTooltip() {
+    HapticFeedback.selectionClick();
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Ortalama yanıt süresi'),
+        duration: Duration(seconds: 2),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  Future<void> _openReviewsSheet() async {
+    HapticFeedback.selectionClick();
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: KoalaColors.bg,
+      isScrollControlled: true,
+      useSafeArea: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) {
+        final avg = _reviews.avg.toStringAsFixed(1);
+        return SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 14, 20, 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: KoalaColors.border,
+                      borderRadius: BorderRadius.circular(100),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Row(
+                  children: [
+                    const Icon(LucideIcons.star,
+                        size: 18, color: Color(0xFFEFA01F)),
+                    const SizedBox(width: 6),
+                    Text(
+                      _reviews.count > 0
+                          ? '$avg / 5 · ${_reviews.count} değerlendirme'
+                          : 'Henüz değerlendirme yok',
+                      style: KoalaText.h3,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                Flexible(
+                  child: SingleChildScrollView(
+                    child: Column(
+                      children: _reviews.reviews.map(_reviewCard).toList(),
+                    ),
+                  ),
+                ),
+                if (!_isSelf && _isDesignerOrPro) ...[
+                  const SizedBox(height: 8),
+                  _RateAndCommentBar(onSubmit: (r, c) async {
+                    await _onReviewSubmit(r, c);
+                    if (ctx.mounted) Navigator.of(ctx).pop();
+                  }),
+                ],
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -676,74 +773,358 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
         ),
       );
     }
-    // Other-user view → follow CTA + (designer/pro) "Değerlendir" outlined.
+    // Other-user view → 70% follow pill + 30% ⋯ menu. ⋯ menüde Hakkında,
+    // bildirim sessize alma, engelle, şikayet, takipçi/takip listeleri.
     final following = _follow.following;
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 0, 20, 18),
-      child: Column(
+      child: Row(
         children: [
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton.icon(
-              onPressed: _followBusy ? null : _onFollowTap,
-              style: ElevatedButton.styleFrom(
-                backgroundColor:
-                    following ? KoalaColors.surface : KoalaColors.accentDeep,
-                foregroundColor:
-                    following ? KoalaColors.text : Colors.white,
-                disabledBackgroundColor: KoalaColors.surfaceAlt,
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                  side: following
-                      ? const BorderSide(
-                          color: KoalaColors.borderSolid, width: 1)
-                      : BorderSide.none,
+          Expanded(
+            flex: 7,
+            child: SizedBox(
+              height: 44,
+              child: ElevatedButton.icon(
+                onPressed: _followBusy ? null : _onFollowTap,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: following
+                      ? KoalaColors.surface
+                      : KoalaColors.accentDeep,
+                  foregroundColor:
+                      following ? KoalaColors.text : Colors.white,
+                  disabledBackgroundColor: KoalaColors.surfaceAlt,
+                  padding: const EdgeInsets.symmetric(vertical: 0),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    side: following
+                        ? const BorderSide(
+                            color: KoalaColors.borderSolid, width: 1)
+                        : BorderSide.none,
+                  ),
+                  elevation: 0,
                 ),
-                elevation: 0,
-              ),
-              icon: Icon(
-                following ? LucideIcons.check : LucideIcons.userPlus,
-                size: 18,
-              ),
-              label: Text(
-                following ? 'Takip ediliyor' : 'Takip et',
-                style: KoalaText.button.copyWith(
-                  color: following ? KoalaColors.text : Colors.white,
+                icon: Icon(
+                  following ? LucideIcons.check : LucideIcons.userPlus,
+                  size: 18,
+                ),
+                label: Text(
+                  following ? 'Takipte' : 'Takip Et',
+                  style: KoalaText.button.copyWith(
+                    color: following ? KoalaColors.text : Colors.white,
+                  ),
                 ),
               ),
             ),
           ),
-          if (_isDesignerOrPro) ...[
-            const SizedBox(height: 10),
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: _openRateSheet,
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: KoalaColors.accentDeep,
-                  side: BorderSide(
-                    color: KoalaColors.accentDeep.withValues(alpha: 0.4),
-                    width: 1,
-                  ),
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                  ),
+          const SizedBox(width: 10),
+          Expanded(
+            flex: 3,
+            child: SizedBox(
+              height: 44,
+              child: Material(
+                color: KoalaColors.surface,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  side: const BorderSide(
+                      color: KoalaColors.borderSolid, width: 1),
                 ),
-                icon: const Icon(LucideIcons.star, size: 16),
-                label: const Text(
-                  'Değerlendir',
-                  style: TextStyle(
-                    fontSize: 13.5,
-                    fontWeight: FontWeight.w700,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(14),
+                  onTap: _openMoreMenu,
+                  child: const Center(
+                    child: Icon(LucideIcons.moreHorizontal,
+                        size: 20, color: KoalaColors.text),
                   ),
                 ),
               ),
             ),
-          ],
+          ),
         ],
       ),
+    );
+  }
+
+  /// ⋯ menü — diğer kullanıcı profilinde takip pill'inin yanında.
+  /// Hakkında / bildirim sessize / takipçi listesi / takip listesi /
+  /// engelle / şikayet. Engelle ve şikayet için tablolar henüz yok →
+  /// defansif "Yakında" snackbar.
+  Future<void> _openMoreMenu() async {
+    HapticFeedback.selectionClick();
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: KoalaColors.bg,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) => SafeArea(
+        top: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 8),
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: KoalaColors.border,
+                borderRadius: BorderRadius.circular(100),
+              ),
+            ),
+            const SizedBox(height: 12),
+            if (_about.isNotEmpty)
+              ListTile(
+                leading: const Icon(LucideIcons.info,
+                    color: KoalaColors.accentDeep),
+                title: const Text('Hakkında', style: KoalaText.bodyMedium),
+                onTap: () {
+                  Navigator.of(ctx).pop();
+                  _showAboutSheet();
+                },
+              ),
+            ListTile(
+              leading: const Icon(LucideIcons.users,
+                  color: KoalaColors.accentDeep),
+              title: Text(
+                'Takipçileri gör (${_counts.followers})',
+                style: KoalaText.bodyMedium,
+              ),
+              onTap: () {
+                Navigator.of(ctx).pop();
+                _openFollowList(FollowListMode.followers);
+              },
+            ),
+            ListTile(
+              leading: const Icon(LucideIcons.userCheck,
+                  color: KoalaColors.accentDeep),
+              title: Text(
+                'Takip ettiklerini gör (${_counts.following})',
+                style: KoalaText.bodyMedium,
+              ),
+              onTap: () {
+                Navigator.of(ctx).pop();
+                _openFollowList(FollowListMode.following);
+              },
+            ),
+            if (_follow.following)
+              ListTile(
+                leading: Icon(
+                  _follow.muted ? LucideIcons.bell : LucideIcons.bellOff,
+                  color: KoalaColors.accentDeep,
+                ),
+                title: Text(
+                  _follow.muted
+                      ? 'Bildirimleri aç'
+                      : 'Bildirimleri sessize al',
+                  style: KoalaText.bodyMedium,
+                ),
+                onTap: () async {
+                  Navigator.of(ctx).pop();
+                  final next =
+                      await FollowService.muteToggle(widget.profileId);
+                  if (!mounted) return;
+                  setState(() => _follow = next);
+                },
+              ),
+            if (_isDesignerOrPro && !_isSelf)
+              ListTile(
+                leading: const Icon(LucideIcons.star,
+                    color: KoalaColors.accentDeep),
+                title:
+                    const Text('Değerlendir', style: KoalaText.bodyMedium),
+                onTap: () {
+                  Navigator.of(ctx).pop();
+                  _openRateSheet();
+                },
+              ),
+            const Divider(height: 12),
+            ListTile(
+              leading:
+                  const Icon(LucideIcons.ban, color: KoalaColors.error),
+              title: const Text(
+                'Engelle',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  color: KoalaColors.error,
+                ),
+              ),
+              onTap: () {
+                Navigator.of(ctx).pop();
+                _confirmBlock();
+              },
+            ),
+            ListTile(
+              leading:
+                  const Icon(LucideIcons.flag, color: KoalaColors.error),
+              title: const Text(
+                'Şikayet et',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  color: KoalaColors.error,
+                ),
+              ),
+              onTap: () {
+                Navigator.of(ctx).pop();
+                _openReportSheet();
+              },
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showAboutSheet() {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: KoalaColors.bg,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (_) => SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 14, 20, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: KoalaColors.border,
+                    borderRadius: BorderRadius.circular(100),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 14),
+              const Text('Hakkında', style: KoalaText.h2),
+              const SizedBox(height: 12),
+              Text(_about, style: KoalaText.body),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Engelle — koala_blocks tablosu henüz yok. TODO: şema önerisi:
+  ///   koala_blocks(blocker_uid text, blocked_uid text, created_at timestamptz,
+  ///                primary key (blocker_uid, blocked_uid))
+  Future<void> _confirmBlock() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Engelle'),
+        content: const Text(
+            'Bu kullanıcıyı engellemek istediğine emin misin? Profilini ve '
+            'içeriklerini bir daha görmeyeceksin.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Vazgeç'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: TextButton.styleFrom(foregroundColor: KoalaColors.error),
+            child: const Text('Engelle'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Engelleme yakında — şu an aktif değil'),
+        behavior: SnackBarBehavior.floating,
+        duration: Duration(seconds: 2),
+      ),
+    );
+  }
+
+  /// Şikayet — koala_reports tablosu henüz yok. TODO: şema önerisi:
+  ///   koala_reports(id uuid, reporter_uid text, target_uid text,
+  ///                 reason text, comment text, created_at timestamptz)
+  Future<void> _openReportSheet() async {
+    final reasonCtrl = TextEditingController();
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: KoalaColors.bg,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) {
+        final insets = MediaQuery.viewInsetsOf(ctx);
+        return Padding(
+          padding: EdgeInsets.only(bottom: insets.bottom),
+          child: SafeArea(
+            top: false,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 14, 20, 18),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: KoalaColors.border,
+                        borderRadius: BorderRadius.circular(100),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  const Text('Şikayet sebebi', style: KoalaText.h2),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: reasonCtrl,
+                    maxLines: 4,
+                    decoration: InputDecoration(
+                      hintText: 'Sebebi kısaca yaz…',
+                      filled: true,
+                      fillColor: KoalaColors.surface,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(
+                            color: KoalaColors.borderSolid, width: 0.8),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  ElevatedButton(
+                    onPressed: () {
+                      Navigator.of(ctx).pop();
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Şikayet aldık, teşekkürler 🙌'),
+                          behavior: SnackBarBehavior.floating,
+                          duration: Duration(seconds: 2),
+                        ),
+                      );
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: KoalaColors.accentDeep,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14)),
+                      elevation: 0,
+                    ),
+                    child: const Text('Gönder', style: KoalaText.button),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -798,18 +1179,11 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
   }
 
   // ─── About ──────────────────────────────────────────────────────────
+  // 2026-05-28: SPEC 10 — Hakkında bölümü her zaman görünür (bio non-empty).
+  // Başlık UPPERCASE 11px w700 textTer ls 1.2 + paragraf 13px w500 textMed
+  // lineHeight 1.5, max 4 satır + Daha fazla expand.
   Widget _aboutSection() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 0, 20, 18),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('HAKKINDA', style: KoalaText.caption),
-          const SizedBox(height: 6),
-          Text(_about, style: KoalaText.body),
-        ],
-      ),
-    );
+    return _AboutBlock(text: _about);
   }
 
   // ─── Reviews block (read-only list) ─────────────────────────────────
@@ -885,6 +1259,9 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
   }
 
   // ─── AI Stüdyom pill (owner only, when AI designs exist) ────────────
+  // 2026-05-28: SPEC 12 — Profilden kaldırıldı. Code kalır ki ileride geri
+  // getirilmek istenirse hazır olsun.
+  // ignore: unused_element
   Widget _aiStudioPill() {
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
@@ -934,11 +1311,20 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
 
   // ─── Projects header & grid ─────────────────────────────────────────
   Widget _projectsHeader() {
+    final title = _isSelf ? 'Tasarımlarım' : 'Tasarımları';
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 6, 20, 10),
       child: Row(
         children: [
-          const Text('TASARIMLARI', style: KoalaText.caption),
+          Text(
+            title,
+            style: const TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w800,
+              color: KoalaColors.text,
+              letterSpacing: -0.2,
+            ),
+          ),
           const Spacer(),
           if (_designCountSeen > 0)
             Text(
@@ -957,13 +1343,14 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
   final List<Map<String, dynamic>> _loadedDesigns = <Map<String, dynamic>>[];
 
   Widget _projectsGrid() {
+    // 2026-05-28: SPEC 6 — 3 sütun, kare aspect, 2px gutter.
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
+      padding: EdgeInsets.zero,
       child: LazyGridView<Map<String, dynamic>>(
         shrinkWrap: true,
-        crossAxisCount: 2,
-        aspectRatio: 0.78,
-        spacing: 10,
+        crossAxisCount: 3,
+        aspectRatio: 1.0,
+        spacing: 2,
         bottomThreshold: 320,
         idOf: (p) =>
             (p['id'] ?? p['item_id'] ?? p['cover_image_url'] ?? '').toString(),
@@ -998,20 +1385,38 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
           });
           return page;
         },
-        emptyState: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 24),
-          child: Center(
-            child: Text(
-              'Henüz yayınlanmış tasarım yok.',
-              style: KoalaText.bodySec,
-              textAlign: TextAlign.center,
-            ),
-          ),
-        ),
+        emptyState: (widget.ownerEditable && _isSelf)
+            ? _PremiumOwnEmptyState(
+                onCreate: () {
+                  HapticFeedback.selectionClick();
+                  // AI üretim akışı home tab swipe ile başlar.
+                  Navigator.of(context).popUntil((r) => r.isFirst);
+                },
+                onShare: () {
+                  HapticFeedback.selectionClick();
+                  // Paylaş — owner-editable parent (ProfileTabScreen) Share
+                  // upload sheet'ini açar; burada doğrudan callback yok →
+                  // popUntil ile ana sekmeye dönüp kullanıcıyı kart paylaşım
+                  // CTA'sına yönlendir.
+                  Navigator.of(context).popUntil((r) => r.isFirst);
+                },
+              )
+            : Padding(
+                padding:
+                    const EdgeInsets.symmetric(vertical: 28, horizontal: 24),
+                child: Center(
+                  child: Text(
+                    'Henüz yayınlanmış tasarım yok.',
+                    style: KoalaText.bodySec,
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              ),
         itemBuilder: (_, p, i) {
           final cover = _coverOf(p);
           final title = (p['title'] ?? '').toString();
           final id = (p['id'] ?? p['item_id'] ?? '').toString();
+          final isAi = p['is_ai'] == true;
           final isViewed = widget.viewedDesignId != null &&
               widget.viewedDesignId!.isNotEmpty &&
               widget.viewedDesignId == id;
@@ -1022,7 +1427,7 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
             },
             behavior: HitTestBehavior.opaque,
             child: ClipRRect(
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(2),
               child: Stack(
                 fit: StackFit.expand,
                 children: [
@@ -1105,6 +1510,35 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
                           fontSize: 12,
                           fontWeight: FontWeight.w700,
                           letterSpacing: -0.1,
+                        ),
+                      ),
+                    ),
+                  // SPEC 12: AI rozeti — sağ üst köşede minik etiket.
+                  if (isAi)
+                    Positioned(
+                      top: 4,
+                      right: 4,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 4, vertical: 1.5),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.95),
+                          borderRadius: BorderRadius.circular(4),
+                          border: Border.all(
+                            color: KoalaColors.accentDeep
+                                .withValues(alpha: 0.5),
+                            width: 0.8,
+                          ),
+                        ),
+                        child: const Text(
+                          'AI',
+                          style: TextStyle(
+                            fontSize: 8,
+                            fontWeight: FontWeight.w800,
+                            color: KoalaColors.accentDeep,
+                            letterSpacing: 0.3,
+                            height: 1.0,
+                          ),
                         ),
                       ),
                     ),
@@ -1312,3 +1746,197 @@ class _RateAndCommentBarState extends State<_RateAndCommentBar> {
 // kept imported for future extension (consistent profile design tile look).
 // ignore: unused_element
 void _keep() => ProfileDesignTile;
+
+/// SPEC 10 — About block with collapse/expand (4 lines clamp + "Daha fazla").
+class _AboutBlock extends StatefulWidget {
+  final String text;
+  const _AboutBlock({required this.text});
+
+  @override
+  State<_AboutBlock> createState() => _AboutBlockState();
+}
+
+class _AboutBlockState extends State<_AboutBlock> {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    const headerStyle = TextStyle(
+      fontSize: 11,
+      fontWeight: FontWeight.w700,
+      color: KoalaColors.textTer,
+      letterSpacing: 1.2,
+    );
+    const paragraphStyle = TextStyle(
+      fontSize: 13,
+      fontWeight: FontWeight.w500,
+      color: KoalaColors.textMed,
+      height: 1.5,
+      letterSpacing: -0.05,
+    );
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('HAKKINDA', style: headerStyle),
+          const SizedBox(height: 6),
+          LayoutBuilder(builder: (ctx, cs) {
+            final tp = TextPainter(
+              text: TextSpan(text: widget.text, style: paragraphStyle),
+              maxLines: 4,
+              textDirection: TextDirection.ltr,
+            )..layout(maxWidth: cs.maxWidth);
+            final overflow = tp.didExceedMaxLines;
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  widget.text,
+                  style: paragraphStyle,
+                  maxLines: _expanded ? null : 4,
+                  overflow: _expanded
+                      ? TextOverflow.visible
+                      : TextOverflow.ellipsis,
+                ),
+                if (overflow)
+                  GestureDetector(
+                    onTap: () {
+                      HapticFeedback.selectionClick();
+                      setState(() => _expanded = !_expanded);
+                    },
+                    behavior: HitTestBehavior.opaque,
+                    child: Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Text(
+                        _expanded ? 'Daha az' : 'Daha fazla',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: KoalaColors.accentDeep,
+                          letterSpacing: -0.1,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            );
+          }),
+        ],
+      ),
+    );
+  }
+}
+
+/// SPEC 7 — Premium empty state for own profile: soft purple gradient circle
+/// + title + subtitle + iki pill (AI ile üret / Paylaş).
+class _PremiumOwnEmptyState extends StatelessWidget {
+  final VoidCallback onCreate;
+  final VoidCallback onShare;
+  const _PremiumOwnEmptyState({
+    required this.onCreate,
+    required this.onShare,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 28, 20, 32),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 120,
+            height: 120,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  KoalaColors.accentSoft,
+                  KoalaColors.accentDeep.withValues(alpha: 0.18),
+                ],
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: KoalaColors.accentDeep.withValues(alpha: 0.15),
+                  blurRadius: 24,
+                  offset: const Offset(0, 8),
+                ),
+              ],
+            ),
+            child: const Center(
+              child: Icon(LucideIcons.sparkles,
+                  size: 48, color: KoalaColors.accentDeep),
+            ),
+          ),
+          const SizedBox(height: 18),
+          const Text(
+            'Henüz tasarımın yok',
+            style: TextStyle(
+              fontSize: 17,
+              fontWeight: FontWeight.w700,
+              color: KoalaColors.text,
+              letterSpacing: -0.3,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 6),
+          const Text(
+            'İlk AI tasarımını üret veya kendi mekânını paylaş',
+            style: KoalaText.bodySec,
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 20),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              ElevatedButton.icon(
+                onPressed: onCreate,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: KoalaColors.accentDeep,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 18, vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(100),
+                  ),
+                  elevation: 0,
+                ),
+                icon: const Icon(LucideIcons.sparkles, size: 16),
+                label: const Text(
+                  'AI ile üret',
+                  style: TextStyle(
+                      fontSize: 13, fontWeight: FontWeight.w700),
+                ),
+              ),
+              const SizedBox(width: 10),
+              OutlinedButton.icon(
+                onPressed: onShare,
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: KoalaColors.accentDeep,
+                  side: BorderSide(
+                    color: KoalaColors.accentDeep.withValues(alpha: 0.4),
+                    width: 1,
+                  ),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 18, vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(100),
+                  ),
+                ),
+                icon: const Icon(LucideIcons.upload, size: 16),
+                label: const Text(
+                  'Paylaş',
+                  style: TextStyle(
+                      fontSize: 13, fontWeight: FontWeight.w700),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}

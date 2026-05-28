@@ -1912,10 +1912,12 @@ class _StyleDiscoveryLiveScreenState
         ((_currentCard?['designer_id'] ?? '').toString().isEmpty) ||
         _askingInFlight;
     final undoDisabled = _history.isEmpty || _animatingExit;
+    // 2026-05-28: spaceEvenly → center + sabit 14px spacing. Butonlar ekran
+    // ortasında kümelenir, kenarlara yayılmaz.
     return Padding(
       padding: const EdgeInsets.fromLTRB(18, 8, 18, 10),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
           _ActionBtn(
             icon: LucideIcons.undo2,
@@ -1923,12 +1925,14 @@ class _StyleDiscoveryLiveScreenState
             onTap: undoDisabled ? null : _undo,
             variant: _ActionVariant.outlined,
           ),
+          const SizedBox(width: 14),
           _ActionBtn(
             icon: LucideIcons.x,
             label: 'Geç',
             onTap: disabled ? null : () => _swipe(liked: false),
             variant: _ActionVariant.outlined,
           ),
+          const SizedBox(width: 14),
           _ActionBtn(
             icon: LucideIcons.heart,
             label: 'Beğen',
@@ -1936,6 +1940,7 @@ class _StyleDiscoveryLiveScreenState
             variant: _ActionVariant.primary,
             large: true,
           ),
+          const SizedBox(width: 14),
           _ActionBtn(
             icon: LucideIcons.messageCircle,
             label: 'Sor',
@@ -2137,15 +2142,10 @@ class _Card extends StatelessWidget {
       ),
     );
 
-    // Karta `aspect` alanına göre oran uygula — deck alanı içinde merkezle.
-    // BoxFit.cover zaten görseli dolduruyor; AspectRatio kart kutusunun
-    // yüksekliğini/genişliğini orana göre kısıtlar.
-    return Center(
-      child: AspectRatio(
-        aspectRatio: _aspectRatio(),
-        child: card,
-      ),
-    );
+    // 2026-05-28: AspectRatio kaldırıldı — kart, deck alanını full-bleed
+    // doldurur. `aspect` portrait/landscape olsa bile BoxFit.cover ile aynı
+    // kart frame'inde gösterilir (letterbox yok).
+    return card;
   }
 }
 
@@ -2478,7 +2478,7 @@ enum _ActionVariant { outlined, soft, primary, gold }
 
 /// Modern aksiyon butonu — ikon dairesi + alt label.
 /// Koala aksent paletine sadık, hepsi aynı görsel dilde.
-class _ActionBtn extends StatelessWidget {
+class _ActionBtn extends StatefulWidget {
   const _ActionBtn({
     required this.icon,
     required this.label,
@@ -2495,7 +2495,21 @@ class _ActionBtn extends StatelessWidget {
   final bool small;
 
   @override
+  State<_ActionBtn> createState() => _ActionBtnState();
+}
+
+class _ActionBtnState extends State<_ActionBtn> {
+  bool _pressed = false;
+
+  @override
   Widget build(BuildContext context) {
+    final icon = widget.icon;
+    final label = widget.label;
+    final variant = widget.variant;
+    final onTap = widget.onTap;
+    final large = widget.large;
+    final small = widget.small;
+
     final disabled = onTap == null;
     final size = large ? 64.0 : (small ? 44.0 : 52.0);
     final iconSize = large ? 32.0 : (small ? 18.0 : 22.0);
@@ -2504,16 +2518,23 @@ class _ActionBtn extends StatelessWidget {
     Color fg;
     Color? border;
     List<BoxShadow>? shadow;
+    Gradient? bgGradient;
 
     switch (variant) {
       case _ActionVariant.outlined:
         if (label == 'Sor') {
-          bg = KoalaColors.accentDeep.withValues(alpha: 0.08);
+          // 2026-05-28: Soft purple gradient fill + ince border + chip shadow.
+          bg = Colors.transparent;
+          bgGradient = const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xFFF4F2FE), Color(0xFFEDE9FF)],
+          );
           fg = KoalaColors.accentDeep;
-          border = KoalaColors.accentDeep.withValues(alpha: 0.3);
+          border = KoalaColors.accentDeep.withValues(alpha: 0.35);
           shadow = [
             BoxShadow(
-              color: KoalaColors.accentDeep.withValues(alpha: 0.10),
+              color: KoalaColors.accentDeep.withValues(alpha: 0.08),
               blurRadius: 10,
               offset: const Offset(0, 3),
             ),
@@ -2581,22 +2602,31 @@ class _ActionBtn extends StatelessWidget {
             ? null
             : () {
                 HapticFeedback.mediumImpact();
-                onTap!();
+                onTap();
               },
+        onTapDown: onTap == null ? null : (_) => setState(() => _pressed = true),
+        onTapUp: onTap == null ? null : (_) => setState(() => _pressed = false),
+        onTapCancel: onTap == null ? null : () => setState(() => _pressed = false),
         behavior: HitTestBehavior.opaque,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Container(
-              width: size,
-              height: size,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: bg,
-                border: border != null ? Border.all(color: border) : null,
-                boxShadow: shadow,
+            AnimatedScale(
+              scale: _pressed ? 0.96 : 1.0,
+              duration: const Duration(milliseconds: 120),
+              curve: Curves.easeOut,
+              child: Container(
+                width: size,
+                height: size,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: bgGradient == null ? bg : null,
+                  gradient: bgGradient,
+                  border: border != null ? Border.all(color: border) : null,
+                  boxShadow: shadow,
+                ),
+                child: Icon(icon, color: fg, size: iconSize),
               ),
-              child: Icon(icon, color: fg, size: iconSize),
             ),
             const SizedBox(height: 7),
             Text(
@@ -3501,12 +3531,29 @@ class _BrandLockup extends StatelessWidget {
       mainAxisAlignment: MainAxisAlignment.center,
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text('koala', style: _wordmark()),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.baseline,
+          textBaseline: TextBaseline.alphabetic,
+          children: [
+            Text('koala', style: _wordmark()),
+            const SizedBox(width: 6),
+            const Text(
+              'by evlumba',
+              style: TextStyle(
+                fontSize: 13,
+                fontStyle: FontStyle.italic,
+                fontWeight: FontWeight.w500,
+                color: KoalaColors.accentDeep,
+                letterSpacing: -0.1,
+                height: 1.0,
+              ),
+            ),
+          ],
+        ),
         const SizedBox(height: 2),
         const Text(
           'Evin için ilham.',
-          // 2026-05-28: Slogan kısaltıldı — actions row değişikliği sonrası
-          // hala truncate'leniyordu. Kısa ve etkili.
           style: TextStyle(
             fontSize: 13,
             fontWeight: FontWeight.w500,
@@ -3668,13 +3715,13 @@ class _SettingsButton extends StatelessWidget {
               ),
               if (isPro)
                 Positioned(
-                  top: 2,
-                  right: 2,
+                  top: -4,
+                  right: -4,
                   child: Container(
-                    width: 10,
-                    height: 10,
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 3, vertical: 2),
                     decoration: BoxDecoration(
-                      shape: BoxShape.circle,
+                      borderRadius: BorderRadius.circular(6),
                       gradient: const LinearGradient(
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
@@ -3683,11 +3730,22 @@ class _SettingsButton extends StatelessWidget {
                       border: Border.all(color: Colors.white, width: 1.5),
                       boxShadow: [
                         BoxShadow(
-                          color: const Color(0xFFD4A853).withValues(alpha: 0.45),
+                          color:
+                              const Color(0xFFD4A853).withValues(alpha: 0.45),
                           blurRadius: 4,
                           offset: const Offset(0, 1),
                         ),
                       ],
+                    ),
+                    child: const Text(
+                      'Pro',
+                      style: TextStyle(
+                        fontSize: 7.5,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.white,
+                        letterSpacing: 0.2,
+                        height: 1.0,
+                      ),
                     ),
                   ),
                 ),
