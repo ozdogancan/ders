@@ -22,6 +22,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show Supabase;
 
 import '../../core/theme/koala_tokens.dart';
@@ -35,7 +36,9 @@ import '../../services/user_profile_service.dart';
 import '../../widgets/free_consult_sheet.dart';
 import '../../widgets/verified_badge.dart';
 import '../conversation_detail_screen.dart';
+import '../share/share_upload_screen.dart' show openShareUploadSheet;
 import 'follow_list_sheet.dart';
+import 'pro_application_sheet.dart';
 import 'profile_design_tile.dart';
 
 class UnifiedProfileView extends StatefulWidget {
@@ -97,6 +100,12 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
 
   DesignerReviewsResult _reviews = DesignerReviewsResult.empty;
 
+  // FIX 2 (2026-05-28): Own profile role view ('homeowner' | 'pro').
+  // Only meaningful when user is Pro — the segmented switch lets them flip
+  // their public face. Persisted via SharedPreferences.
+  static const String _kRoleSwitchPrefKey = 'profile_role_view';
+  String _viewRole = 'homeowner';
+
   // ─── Design grid state (CustomScrollView + SliverGrid) ─────────────────
   // KRİTİK MIMARI: GridView.shrinkWrap'i ListView'ün içine sarmak iç içe
   // viewport hatası verdiği için 2026-05-28'de proper Slivers'a geçildi.
@@ -111,6 +120,7 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
   void initState() {
     super.initState();
     _scrollCtrl.addListener(_onScroll);
+    _restoreRole();
     _loadAll();
     // Tasarım sayfasını _loadAll ile paralel başlat — header dolduktan
     // sonra grid de hazır olsun.
@@ -206,6 +216,11 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
   String? get _currentUid => FirebaseAuth.instance.currentUser?.uid;
 
   bool get _isSelf => _currentUid != null && _currentUid == widget.profileId;
+
+  /// FIX 4 (2026-05-28): own profile renders premium 2-col grid (large
+  /// tiles, portrait aspect), other profiles keep the compact 3-col grid.
+  bool get _isOwnGrid => widget.ownerEditable && _isSelf;
+  int get _gridCols => _isOwnGrid ? 2 : 3;
 
   Future<void> _loadAll() async {
     // PART B — `koala_profile_bundle` ile counts + reviews tek RPC'de.
@@ -546,6 +561,28 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
     }
   }
 
+  Future<void> _restoreRole() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final r = prefs.getString(_kRoleSwitchPrefKey);
+      if (r != null && mounted) setState(() => _viewRole = r);
+    } catch (_) {/* swallow */}
+  }
+
+  Future<void> _saveRole(String role) async {
+    HapticFeedback.selectionClick();
+    if (mounted) setState(() => _viewRole = role);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_kRoleSwitchPrefKey, role);
+    } catch (_) {/* swallow */}
+  }
+
+  Future<void> _openProApplication() async {
+    HapticFeedback.selectionClick();
+    await showProApplicationSheet(context);
+  }
+
   Future<void> _onFollowTap() async {
     if (_followBusy) return;
     HapticFeedback.selectionClick();
@@ -608,7 +645,19 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
     if (stored.isNotEmpty) return stored;
     final n =
         ((d?['full_name'] ?? d?['business_name'] ?? '') as String).trim();
-    return n.isNotEmpty ? n : 'Profil';
+    if (n.isNotEmpty) return n;
+    // FIX 1 (2026-05-28): own profile fallback — auth displayName → email prefix.
+    if (_isSelf) {
+      final auth = FirebaseAuth.instance.currentUser;
+      final authName = (auth?.displayName ?? '').trim();
+      if (authName.isNotEmpty) return authName;
+      final email = (auth?.email ?? '').trim();
+      if (email.isNotEmpty && email.contains('@')) {
+        final prefix = email.split('@').first.trim();
+        if (prefix.isNotEmpty) return prefix;
+      }
+    }
+    return 'Profil';
   }
 
   String get _avatarUrl {
@@ -712,15 +761,20 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
     if (_loadedDesigns.isEmpty) {
       return [SliverToBoxAdapter(child: _emptyDesignsState())];
     }
+    // FIX 4 (2026-05-28): own profile premium grid (2-col, portrait, 12px
+    // gaps, 16h padding); other profiles keep compact 3-col 2px-gap grid.
+    final isOwn = _isOwnGrid;
     final out = <Widget>[
       SliverPadding(
-        padding: EdgeInsets.zero,
+        padding: isOwn
+            ? const EdgeInsets.symmetric(horizontal: 16)
+            : EdgeInsets.zero,
         sliver: SliverGrid(
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 3,
-            mainAxisSpacing: 2,
-            crossAxisSpacing: 2,
-            childAspectRatio: 1.0,
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: _gridCols,
+            mainAxisSpacing: isOwn ? 12 : 2,
+            crossAxisSpacing: isOwn ? 12 : 2,
+            childAspectRatio: isOwn ? 0.78 : 1.0,
           ),
           delegate: SliverChildBuilderDelegate(
             (ctx, i) => _designTile(i),
@@ -763,19 +817,12 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
 
   Widget _emptyDesignsState() {
     if (widget.ownerEditable && _isSelf) {
-      return _PremiumOwnEmptyState(
-        onCreate: () {
+      // FIX 6 (2026-05-28): emotional empty state — large illustration +
+      // headline + CTA. WHOLE block tappable → opens share modal sheet.
+      return _OwnEmptyShareCta(
+        onTap: () async {
           HapticFeedback.selectionClick();
-          // AI üretim akışı home tab swipe ile başlar.
-          Navigator.of(context).popUntil((r) => r.isFirst);
-        },
-        onShare: () {
-          HapticFeedback.selectionClick();
-          // Paylaş — owner-editable parent (ProfileTabScreen) Share
-          // upload sheet'ini açar; burada doğrudan callback yok →
-          // popUntil ile ana sekmeye dönüp kullanıcıyı kart paylaşım
-          // CTA'sına yönlendir.
-          Navigator.of(context).popUntil((r) => r.isFirst);
+          await openShareUploadSheet(context);
         },
       );
     }
@@ -844,6 +891,16 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
             style: KoalaText.bodySec,
             textAlign: TextAlign.center,
           ),
+          // FIX 2 (2026-05-28): Own profile — Pro CTA pill OR role switch.
+          if (widget.ownerEditable && _isSelf) ...[
+            const SizedBox(height: 10),
+            _profile?.isPro == true
+                ? _RoleSegmentedSwitch(
+                    current: _viewRole,
+                    onChange: _saveRole,
+                  )
+                : _ProUpsellPill(onTap: _openProApplication),
+          ],
         ],
       ),
     ),
@@ -1869,30 +1926,43 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
   }
 
   // ─── Projects header & grid ─────────────────────────────────────────
+  /// FIX 5 (2026-05-28): premium uppercase header — "TASARIMLARIM" /
+  /// "TASARIMLARI". Right-side count uses textTer 12px w600.
   Widget _projectsHeader() {
-    final title = _isSelf ? 'Tasarımlarım' : 'Tasarımları';
+    final title = _isSelf ? 'TASARIMLARIM' : 'TASARIMLARI';
+    // Align horizontal padding with the grid below (16 on own, 20 elsewhere).
+    final hPad = _isOwnGrid ? 16.0 : 20.0;
+    String? countLabel;
+    if (_designTotalCount != null && _designTotalCount! > 0) {
+      countLabel = '${_designTotalCount!} adet';
+    } else if (_loadedDesigns.isNotEmpty) {
+      countLabel = (_hasMoreDesigns && _loadedDesigns.isNotEmpty)
+          ? '${_loadedDesigns.length}+ adet'
+          : '${_loadedDesigns.length} adet';
+    }
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 6, 20, 10),
+      padding: EdgeInsets.fromLTRB(hPad, 6, hPad, 10),
       child: Row(
         children: [
           Text(
             title,
             style: const TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.w800,
-              color: KoalaColors.text,
-              letterSpacing: -0.2,
+              fontSize: 11.5,
+              fontWeight: FontWeight.w700,
+              color: KoalaColors.textTer,
+              letterSpacing: 1.2,
             ),
           ),
           const Spacer(),
-          if (_designTotalCount != null && _designTotalCount! > 0)
-            Text('${_designTotalCount!} adet', style: KoalaText.labelSmall)
-          else if (_loadedDesigns.isNotEmpty)
+          if (countLabel != null)
             Text(
-              (_hasMoreDesigns && _loadedDesigns.isNotEmpty)
-                  ? '${_loadedDesigns.length}+ adet'
-                  : '${_loadedDesigns.length} adet',
-              style: KoalaText.labelSmall,
+              countLabel,
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: KoalaColors.textTer,
+                letterSpacing: -0.1,
+              ),
             ),
         ],
       ),
@@ -1909,6 +1979,9 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
           final id = (p['id'] ?? p['item_id'] ?? '').toString();
           final isAi = p['is_ai'] == true;
           final isOwner = widget.ownerEditable && _isSelf;
+          // FIX 4 (2026-05-28): own profile renders a simplified tile —
+          // larger radius, only the category overlay (no AI/Gizli badges).
+          final isOwnTile = isOwner;
           // Owner-only "private" rozet: AI default private, shared default public.
           final isPrivate = isOwner &&
               (isAi
@@ -1917,6 +1990,7 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
           final isViewed = widget.viewedDesignId != null &&
               widget.viewedDesignId!.isNotEmpty &&
               widget.viewedDesignId == id;
+          final categoryLabel = isOwnTile ? _categoryLabel(p) : '';
           return GestureDetector(
             onTap: () {
               HapticFeedback.selectionClick();
@@ -1930,7 +2004,7 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
                 : null,
             behavior: HitTestBehavior.opaque,
             child: ClipRRect(
-              borderRadius: BorderRadius.circular(2),
+              borderRadius: BorderRadius.circular(isOwnTile ? 14 : 2),
               child: Stack(
                 fit: StackFit.expand,
                 children: [
@@ -1993,7 +2067,26 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
                       ),
                     ),
                   ],
-                  if (title.isNotEmpty)
+                  // OWN profile: only category text overlay (bottom-left,
+                  // white 13px w700, no AI/Gizli badges).
+                  if (isOwnTile && categoryLabel.isNotEmpty)
+                    Positioned(
+                      left: 12,
+                      right: 12,
+                      bottom: 10,
+                      child: Text(
+                        categoryLabel,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: -0.1,
+                        ),
+                      ),
+                    ),
+                  if (!isOwnTile && title.isNotEmpty)
                     Positioned(
                       left: 10,
                       right: 10,
@@ -2011,7 +2104,7 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
                       ),
                     ),
                   // Owner gizli rozet — sol alt köşede minik göz-kapalı.
-                  if (isPrivate)
+                  if (!isOwnTile && isPrivate)
                     Positioned(
                       left: 6,
                       bottom: 6,
@@ -2042,7 +2135,7 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
                       ),
                     ),
                   // SPEC 12: AI rozeti — sağ üst köşede minik etiket.
-                  if (isAi)
+                  if (!isOwnTile && isAi)
                     Positioned(
                       top: 4,
                       right: 4,
@@ -2167,6 +2260,44 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
         ),
       ),
     );
+  }
+
+  /// FIX 4 (2026-05-28): build a short, friendly category label for the
+  /// own-profile tile overlay. Prefer explicit `category`, fall back to
+  /// `room_type` (translated TR), then first style tag.
+  String _categoryLabel(Map<String, dynamic> p) {
+    String cap(String s) {
+      if (s.isEmpty) return s;
+      return s
+          .split(' ')
+          .map((w) => w.isEmpty ? w : '${w[0].toUpperCase()}${w.substring(1)}')
+          .join(' ');
+    }
+    String trRoom(String key) {
+      const map = {
+        'living_room': 'Salon',
+        'bedroom': 'Yatak Odası',
+        'kitchen': 'Mutfak',
+        'bathroom': 'Banyo',
+        'dining_room': 'Yemek Odası',
+        'office': 'Çalışma',
+        'kids_room': 'Çocuk Odası',
+        'hall': 'Hol',
+      };
+      return map[key] ?? cap(key.replaceAll('_', ' '));
+    }
+    final cat = (p['category'] ?? '').toString().trim();
+    if (cat.isNotEmpty) return cap(cat);
+    final room = (p['room_type'] ?? p['roomType'] ?? '').toString().trim();
+    if (room.isNotEmpty) return trRoom(room);
+    final tags = p['tags'];
+    if (tags is List && tags.isNotEmpty) {
+      final t = tags.first.toString().trim();
+      if (t.isNotEmpty) return cap(t);
+    }
+    final style = (p['style'] ?? '').toString().trim();
+    if (style.isNotEmpty) return cap(style);
+    return '';
   }
 
   String _coverOf(Map<String, dynamic> p) {
@@ -2501,8 +2632,228 @@ class _AboutBlockState extends State<_AboutBlock> {
   }
 }
 
+/// FIX 2 (2026-05-28) — Pro upsell pill shown on own profile when user is
+/// NOT pro. Subtle gold gradient, transitions to Pro application sheet.
+class _ProUpsellPill extends StatelessWidget {
+  final VoidCallback onTap;
+  const _ProUpsellPill({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(100),
+        onTap: onTap,
+        child: Container(
+          height: 32,
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          decoration: BoxDecoration(
+            color: const Color(0xFFFFF8E8),
+            borderRadius: BorderRadius.circular(100),
+            border: Border.all(
+              color: const Color(0xFFD4A853).withValues(alpha: 0.35),
+              width: 0.8,
+            ),
+          ),
+          child: const Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                '✨ Profesyonel ol',
+                style: TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xFFD4A853),
+                  letterSpacing: -0.1,
+                ),
+              ),
+              SizedBox(width: 4),
+              Icon(LucideIcons.arrowRight, size: 14, color: Color(0xFFD4A853)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// FIX 2 (2026-05-28) — Segmented role switch (Ev Sahibi | Profesyonel) for
+/// users that already are Pro and toggle their public face.
+class _RoleSegmentedSwitch extends StatelessWidget {
+  final String current; // 'homeowner' | 'pro'
+  final ValueChanged<String> onChange;
+  const _RoleSegmentedSwitch({required this.current, required this.onChange});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 32,
+      padding: const EdgeInsets.all(3),
+      decoration: BoxDecoration(
+        color: KoalaColors.surface,
+        borderRadius: BorderRadius.circular(100),
+        border: Border.all(color: KoalaColors.borderSolid, width: 0.6),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _seg('Ev Sahibi', current == 'homeowner', () => onChange('homeowner')),
+          _seg('Profesyonel', current == 'pro', () => onChange('pro')),
+        ],
+      ),
+    );
+  }
+
+  Widget _seg(String label, bool active, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeOut,
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+        decoration: BoxDecoration(
+          color: active ? KoalaColors.accentDeep : Colors.transparent,
+          borderRadius: BorderRadius.circular(100),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+            color: active ? Colors.white : KoalaColors.textSec,
+            letterSpacing: -0.1,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// FIX 6 (2026-05-28) — Emotional empty state for own profile when no
+/// designs exist. Large 3D-style illustration (fallback to gradient +
+/// sparkles when the seed URL hasn't been generated yet) + headline +
+/// subtitle. WHOLE block tappable, opens the share upload modal.
+class _OwnEmptyShareCta extends StatelessWidget {
+  final VoidCallback onTap;
+  const _OwnEmptyShareCta({required this.onTap});
+
+  // TODO(koala-seed): Generate the dedicated 3D empty-state image via the
+  // seed-empty-state endpoint once it exists. For now CachedNetworkImage
+  // falls back to a soft gradient + sparkles icon if the URL 404s.
+  static const String _illustrationUrl =
+      'https://xgefjepaqnghaotqybpi.supabase.co/storage/v1/object/public/koala-seed/empty/own-designs-3d.webp';
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(24),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 14),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SizedBox(
+                  width: 200,
+                  height: 200,
+                  child: CachedNetworkImage(
+                    imageUrl: _illustrationUrl,
+                    fit: BoxFit.contain,
+                    placeholder: (_, _) => _fallback(),
+                    errorWidget: (_, _, _) => _fallback(),
+                  ),
+                ),
+                const SizedBox(height: 18),
+                const Text(
+                  'İlk tasarımını paylaş ✨',
+                  style: KoalaText.h3,
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 6),
+                const Text(
+                  'AI ile üret ya da kendi mekânının fotoğrafını yükle',
+                  style: KoalaText.bodySec,
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 18),
+                Container(
+                  height: 44,
+                  padding: const EdgeInsets.symmetric(horizontal: 22),
+                  decoration: BoxDecoration(
+                    color: KoalaColors.accentDeep,
+                    borderRadius: BorderRadius.circular(100),
+                    boxShadow: [
+                      BoxShadow(
+                        color: KoalaColors.accentDeep.withValues(alpha: 0.30),
+                        blurRadius: 14,
+                        offset: const Offset(0, 6),
+                      ),
+                    ],
+                  ),
+                  alignment: Alignment.center,
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(LucideIcons.plus, size: 16, color: Colors.white),
+                      SizedBox(width: 6),
+                      Text(
+                        'Paylaş',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.white,
+                          letterSpacing: -0.1,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _fallback() {
+    return Container(
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            KoalaColors.accentSoft,
+            KoalaColors.accentDeep.withValues(alpha: 0.18),
+          ],
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: KoalaColors.accentDeep.withValues(alpha: 0.15),
+            blurRadius: 24,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: const Center(
+        child: Icon(LucideIcons.sparkles,
+            size: 72, color: KoalaColors.accentDeep),
+      ),
+    );
+  }
+}
+
 /// SPEC 7 — Premium empty state for own profile: soft purple gradient circle
 /// + title + subtitle + iki pill (AI ile üret / Paylaş).
+/// FIX 6 (2026-05-28): Superseded by `_OwnEmptyShareCta`. Kept for ref.
+// ignore: unused_element
 class _PremiumOwnEmptyState extends StatelessWidget {
   final VoidCallback onCreate;
   final VoidCallback onShare;

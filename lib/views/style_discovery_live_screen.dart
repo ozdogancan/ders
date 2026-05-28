@@ -2171,16 +2171,22 @@ class _Card extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   Expanded(
-                    child: AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 200),
-                      switchInCurve: Curves.easeOut,
-                      switchOutCurve: Curves.easeIn,
-                      child: designer == null
-                          ? const _DesignerBlockSkeleton(
-                              key: ValueKey('skeleton'))
-                          : _DesignerBlock(
-                              key: const ValueKey('hydrated'),
-                              designer: designer!),
+                    child: Align(
+                      alignment: Alignment.bottomLeft,
+                      child: AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 200),
+                        switchInCurve: Curves.easeOut,
+                        switchOutCurve: Curves.easeIn,
+                        // 2026-05-28: SOL-ALT sabit. AnimatedSwitcher default
+                        // center'a yaslıyordu — Align ile sol-alt'a kilitle.
+                        alignment: Alignment.bottomLeft,
+                        child: designer == null
+                            ? const _DesignerBlockSkeleton(
+                                key: ValueKey('skeleton'))
+                            : _DesignerBlock(
+                                key: const ValueKey('hydrated'),
+                                designer: designer!),
+                      ),
                     ),
                   ),
                   // 2026-05-28: "Profili Gör" pill kaldırıldı — karta tap

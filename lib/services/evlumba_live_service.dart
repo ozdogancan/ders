@@ -659,11 +659,15 @@ class EvlumbaLiveService {
       if (!isReady) {
         return (items: <Map<String, dynamic>>[], hasMore: false, cursor: null);
       }
+      // 2026-05-28 FIX 3: `is_published=true` filter removed because many
+      // existing designer_projects rows have NULL/false on this column even
+      // though they are curated (e.g. Neslihan Doğan). Treat the table as
+      // curated upstream by Evlumba team. TODO: re-enable filter once a
+      // backfill sets is_published=true for all curated rows.
       var q = client
           .from('designer_projects')
           .select('*, designer_project_images(image_url, sort_order)')
-          .eq('designer_id', designerId)
-          .eq('is_published', true);
+          .eq('designer_id', designerId);
       if (beforeCreatedAt != null && beforeCreatedAt.isNotEmpty) {
         q = q.lt('created_at', beforeCreatedAt);
       }
@@ -671,6 +675,8 @@ class EvlumbaLiveService {
           .order('created_at', ascending: false)
           .limit(limit);
       final rows = List<Map<String, dynamic>>.from(data);
+      debugPrint(
+          '[evlumba] getDesignerProjectsPaged($designerId) → ${rows.length} rows');
       final nextCursor =
           rows.isNotEmpty ? rows.last['created_at']?.toString() : null;
       return (

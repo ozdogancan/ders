@@ -28,10 +28,37 @@ import '../../services/shared_design_service.dart';
 import '../../widgets/koala_back_button.dart';
 
 class ShareUploadScreen extends StatefulWidget {
-  const ShareUploadScreen({super.key});
+  /// FIX 7 (2026-05-28): when true the screen is being hosted inside a
+  /// `showModalBottomSheet` rather than as a full route. We tweak the
+  /// chrome (rounded top, drag handle) so it looks like a sheet.
+  final bool inSheet;
+  const ShareUploadScreen({super.key, this.inSheet = false});
 
   @override
   State<ShareUploadScreen> createState() => _ShareUploadScreenState();
+}
+
+/// FIX 7 (2026-05-28): open the share composer as a popup modal sheet
+/// (92% maxHeight, draggable). Returns once the sheet is dismissed.
+Future<void> openShareUploadSheet(BuildContext context) async {
+  final mq = MediaQuery.of(context);
+  await showModalBottomSheet<bool>(
+    context: context,
+    backgroundColor: KoalaColors.bg,
+    isScrollControlled: true,
+    useSafeArea: true,
+    enableDrag: true,
+    isDismissible: true,
+    barrierColor: Colors.black54,
+    constraints: BoxConstraints(maxHeight: mq.size.height * 0.92),
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+    ),
+    builder: (ctx) => const ClipRRect(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      child: ShareUploadScreen(inSheet: true),
+    ),
+  );
 }
 
 class _ShareUploadScreenState extends State<ShareUploadScreen>
@@ -251,7 +278,7 @@ class _ShareUploadScreenState extends State<ShareUploadScreen>
   // ─── Build ───
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    final scaffold = Scaffold(
       backgroundColor: KoalaColors.bg,
       // Step 0'da kendi içinde tam ekran hero göstereceğiz; AppBar'ı sade
       // tutuyoruz ki "dünyaya açılan kapı" hissi bozulmasın.
@@ -327,6 +354,27 @@ class _ShareUploadScreenState extends State<ShareUploadScreen>
                   : _stepPublishing(),
         ),
       ),
+    );
+    if (!widget.inSheet) return scaffold;
+    // FIX 7 (2026-05-28): hosted in a modal sheet — add a small drag handle
+    // at the top above the existing Scaffold chrome.
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const SizedBox(height: 8),
+        Center(
+          child: Container(
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+              color: KoalaColors.border,
+              borderRadius: BorderRadius.circular(100),
+            ),
+          ),
+        ),
+        const SizedBox(height: 6),
+        Expanded(child: scaffold),
+      ],
     );
   }
 

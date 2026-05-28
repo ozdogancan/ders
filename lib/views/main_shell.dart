@@ -20,7 +20,7 @@ import 'chat_list_screen.dart';
 import 'home_screen.dart';
 import 'mekan/wizard/mekan_wizard_screen.dart';
 import 'profile_tab_screen.dart';
-import 'share/share_upload_screen.dart';
+import 'share/share_upload_screen.dart' show openShareUploadSheet;
 import 'splash_screen.dart';
 import 'style_discovery_live_screen.dart';
 
@@ -262,14 +262,13 @@ class MainShellState extends ConsumerState<MainShell> {
   /// Paylaş aksiyonu — IG-tarzı composer (foto + caption + AI moderation).
   /// Pro gate YOK; paylaşım tüm kullanıcılara açık. AI re-design ayrı bir
   /// feature (mekan wizard) — burada sadece feed'e post.
+  ///
+  /// FIX 7 (2026-05-28): + butonu artık fullscreen route yerine popup modal
+  /// (showModalBottomSheet, 92% maxHeight) açar. Daha hafif, kullanıcı yarı
+  /// yarıya geri kalabilir; alt sayfayla bağlantı kopmuyor.
   Future<void> _onPaylasTap() async {
     if (!mounted) return;
-    await Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => const ShareUploadScreen(),
-        fullscreenDialog: true,
-      ),
-    );
+    await openShareUploadSheet(context);
   }
 
   @override
