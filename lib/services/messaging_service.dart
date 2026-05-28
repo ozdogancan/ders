@@ -80,10 +80,13 @@ class MessagingService {
         uid = user?.uid;
       } catch (_) {}
     }
-    // 3. Hâlâ null → anonim sign-in'i KENDİMİZ tetikle.
-    //    main.dart'taki signInAnonymously sessizce fail etmiş olabilir
-    //    (network dip, guard flag, vs.). Burada retry garantisi.
+    // 3. Hâlâ null → SADECE REQUIRE_LOGIN=false ise anonim oturum aç.
+    //    Misafir kapalıyken (production) sessizce anon hesap üretmiyoruz;
+    //    caller fail-fast yapar ve UI kullanıcıyı /auth'a yönlendirir.
     if (uid == null) {
+      if (Env.requireLogin) {
+        throw StateError('Oturum açılmamış. Lütfen giriş yapın.');
+      }
       try {
         final cred = await FirebaseAuth.instance
             .signInAnonymously()

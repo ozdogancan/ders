@@ -36,6 +36,10 @@ class CollectionsService {
       } catch (_) {}
     }
     if (uid == null) {
+      if (Env.requireLogin) {
+        lastCreateError = 'Oturum açılmamış. Lütfen giriş yapın.';
+        return null;
+      }
       try {
         final cred = await FirebaseAuth.instance
             .signInAnonymously()

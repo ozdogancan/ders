@@ -38,6 +38,15 @@ const Set<String> _kAlwaysShowTriggers = {
   'manual_upgrade',
   'profile_upgrade_button',
   'first_restyle_celebration',
+  // Hard quota walls — the user has literally hit a gate and the CTA is the
+  // only path forward. Suppressing these makes the button look broken.
+  'swipe_quota_end',
+  'quota_end',
+  'daily_limit',
+  'restyle_limit',
+  'restyle_quota',
+  'save_quota',
+  'chat_quota',
 };
 
 /// Reset the per-flow guard. Call at the start of a wizard / new restyle so

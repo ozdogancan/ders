@@ -167,32 +167,12 @@ class _AuthEntryScreenState extends State<AuthEntryScreen>
     }
   }
 
+  // 2026-05: Misafir girişi tamamen kaldırıldı. Bu metod artık çağrılmıyor
+  // (UI'dan kaldırıldı) ama tip referansları için no-op bırakıldı.
+  // Eski anonim sign-in path'i kasıtlı olarak yok.
   Future<void> _handleGuestLogin() async {
-    if (_loadingAction != null) return;
-    _safeSetState(() => _loadingAction = AuthActionType.google);
-    try {
-      // Zaten bir kullanıcı varsa (anonim dahil) tekrar sign-in deneme
-      final existing = FirebaseAuth.instance.currentUser;
-      if (existing == null) {
-        await FirebaseAuth.instance.signInAnonymously();
-      }
-      if (!mounted) return;
-      if (widget.returnOnSuccess) {
-        Navigator.of(context).pop(false); // false = guest, not real login
-        return;
-      }
-      await AuthCoordinator.goToHome(context);
-    } catch (e) {
-      debugPrint('Guest login error: $e');
-      // Hata olsa bile devam et — REQUIRE_LOGIN=false ise auth olmadan da çalışır
-      if (!mounted) return;
-      if (widget.returnOnSuccess) {
-        Navigator.of(context).pop(false);
-        return;
-      }
-      await AuthCoordinator.goToHome(context);
-    }
-    if (mounted) _safeSetState(() => _loadingAction = null);
+    debugPrint('Guest login disabled — REQUIRE_LOGIN=true');
+    return;
   }
 
 

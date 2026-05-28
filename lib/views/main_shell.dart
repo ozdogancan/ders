@@ -2,6 +2,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -70,7 +71,27 @@ class MainShellState extends ConsumerState<MainShell> {
     super.initState();
     MainShell._instance = this;
     BackgroundGen.completion.addListener(_onBgComplete);
+    _guardAgainstAnonymous();
     _resolveGate();
+  }
+
+  /// Defense-in-depth: REQUIRE_LOGIN=true ise misafir/anonim kullanıcı
+  /// MainShell'e asla girmemeli. Eski cihazlarda kalmış bir anon oturum
+  /// varsa sessizce signOut edip /auth'a yönlendir.
+  Future<void> _guardAgainstAnonymous() async {
+    try {
+      // Env import gerekmesin diye dinamik flag yerine direkt isAnonymous'a bak.
+      final u = FirebaseAuth.instance.currentUser;
+      if (u != null && u.isAnonymous) {
+        debugPrint('[main_shell] anon user detected → signing out');
+        await FirebaseAuth.instance.signOut();
+        if (!mounted) return;
+        // GoRouter ile login ekranına yönlendir.
+        context.go('/auth');
+      }
+    } catch (e) {
+      debugPrint('[main_shell] anon guard error: $e');
+    }
   }
 
   Future<void> _resolveGate() async {

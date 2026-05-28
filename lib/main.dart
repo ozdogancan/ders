@@ -194,11 +194,26 @@ class _BootstrapAppState extends State<_BootstrapApp> {
       debugPrint('Firebase init skipped: $error');
     }
 
-    // Login gerektirmiyorsa ve kullanıcı yoksa anonim giriş dene
-    if (!Env.requireLogin && FirebaseAuth.instance.currentUser == null) {
+    // 2026-05: Misafir kullanıcı tamamen kaldırıldı (REQUIRE_LOGIN=true).
+    // signInAnonymously() çağrısı yapılmıyor — kullanıcı /auth ekranında
+    // gerçek bir hesapla giriş yapana kadar currentUser=null kalır.
+    // Geriye dönük güvenlik: eğer eski bir cihazda anonim oturum kaldıysa
+    // sessizce signOut et ki AuthGate login duvarına yönlendirsin.
+    if (Env.requireLogin) {
+      final existing = FirebaseAuth.instance.currentUser;
+      if (existing != null && existing.isAnonymous) {
+        try {
+          await FirebaseAuth.instance.signOut();
+          debugPrint('Stale anonymous session signed out');
+        } catch (e) {
+          debugPrint('Anonymous sign-out skipped: $e');
+        }
+      }
+    } else if (FirebaseAuth.instance.currentUser == null) {
+      // Geliştirme modu (REQUIRE_LOGIN=false): anonim oturum hâlâ destekli.
       try {
         await FirebaseAuth.instance.signInAnonymously();
-        debugPrint('Anonymous auth completed');
+        debugPrint('Anonymous auth completed (dev mode)');
       } catch (e) {
         debugPrint('Anonymous auth skipped: $e');
       }

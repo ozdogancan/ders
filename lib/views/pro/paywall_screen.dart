@@ -85,6 +85,15 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
   Package? _monthlyPkg;
   Package? _yearlyPkg;
   bool _offeringsLoaded = false;
+  // RC unavailable (web, init failed, no offering) → use display-only fallback
+  // prices so the user is never staring at "—". These are estimates — the
+  // backend is the source of truth for actual charge amounts.
+  bool _useFallbackPrices = false;
+  Timer? _offeringsTimeout;
+
+  // Fallback price strings — kept in sync with Play Console SKUs as of v1.0.135.
+  static const String _kFallbackWeekly = '₺79,99';
+  static const String _kFallbackYearly = '₺999,99';
 
   @override
   void initState() {
@@ -121,14 +130,43 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
   }
 
   Future<void> _loadOfferings() async {
+    // Safety net: if RC never resolves (web / init failure / network), flip
+    // to fallback prices after 3s so the UI is never empty.
+    _offeringsTimeout = Timer(const Duration(seconds: 3), () {
+      if (!mounted) return;
+      if (!_offeringsLoaded ||
+          (_weeklyPkg == null && _yearlyPkg == null && _monthlyPkg == null)) {
+        setState(() {
+          _offeringsLoaded = true;
+          _useFallbackPrices = true;
+        });
+      }
+    });
     try {
       final pkgs = await BillingService.getOfferings();
       if (!mounted) return;
+      // Diagnostic: log identifiers + priceStrings so we can debug missing
+      // prices in production (priceString empty vs package missing).
+      for (final p in pkgs) {
+        debugPrint(
+          '[paywall] package id=${p.identifier} '
+          'productId=${p.storeProduct.identifier} '
+          'price="${p.storeProduct.priceString}"',
+        );
+      }
       setState(() {
         _weeklyPkg = _findPackage(pkgs, _PlanKind.weekly);
         _monthlyPkg = _findPackage(pkgs, _PlanKind.monthly);
         _yearlyPkg = _findPackage(pkgs, _PlanKind.yearly);
         _offeringsLoaded = true;
+        // If RC returned nothing useful, fall back to estimate strings.
+        final wMissing = _weeklyPkg == null ||
+            (_weeklyPkg?.storeProduct.priceString ?? '').isEmpty;
+        final yMissing = _yearlyPkg == null ||
+            (_yearlyPkg?.storeProduct.priceString ?? '').isEmpty;
+        if (wMissing && yMissing) {
+          _useFallbackPrices = true;
+        }
         // If user's currently-selected plan kind is unavailable, fall back
         // visually to the first one that resolved — but never silently swap
         // an unrelated billing cycle during purchase. This is just initial UI.
@@ -144,7 +182,12 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
       });
     } catch (e) {
       debugPrint('[paywall] loadOfferings failed: $e');
-      if (mounted) setState(() => _offeringsLoaded = true);
+      if (mounted) {
+        setState(() {
+          _offeringsLoaded = true;
+          _useFallbackPrices = true;
+        });
+      }
     }
   }
 
@@ -237,6 +280,7 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
   @override
   void dispose() {
     _heroTimer?.cancel();
+    _offeringsTimeout?.cancel();
     _heroController.dispose();
     super.dispose();
   }
@@ -246,9 +290,12 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
     final match = _packageFor(_selected);
     if (match == null) {
       // No silent fallback — fail loud per audit P0.5.
+      final msg = _useFallbackPrices
+          ? 'Pro satın alımı için Koala uygulamasını telefonundan aç'
+          : 'Bu plan şu an mevcut değil';
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Bu plan şu an mevcut değil'),
+        SnackBar(
+          content: Text(msg),
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -626,11 +673,21 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
 
   Widget _buildPlanCards() {
     final canTrial = !_trialUsed && _trialEnabled;
-    final weeklyPrice = _weeklyPkg?.storeProduct.priceString;
-    final monthlyPrice = _monthlyPkg?.storeProduct.priceString;
-    final yearlyPrice = _yearlyPkg?.storeProduct.priceString;
-    final yearlyPerWeek = _yearlyPerWeekText();
-    final savings = _yearlySavingsPercent();
+    String? weeklyPrice = _weeklyPkg?.storeProduct.priceString;
+    String? monthlyPrice = _monthlyPkg?.storeProduct.priceString;
+    String? yearlyPrice = _yearlyPkg?.storeProduct.priceString;
+    if (weeklyPrice == null || weeklyPrice.isEmpty) weeklyPrice = null;
+    if (monthlyPrice == null || monthlyPrice.isEmpty) monthlyPrice = null;
+    if (yearlyPrice == null || yearlyPrice.isEmpty) yearlyPrice = null;
+    // Display-only fallback so the user is never staring at an em-dash.
+    if (_useFallbackPrices) {
+      weeklyPrice ??= _kFallbackWeekly;
+      yearlyPrice ??= _kFallbackYearly;
+    }
+    final yearlyPerWeek = _yearlyPerWeekText() ??
+        (_useFallbackPrices ? '₺19,23' : null);
+    final savings = _yearlySavingsPercent() ??
+        (_useFallbackPrices ? 76 : null);
 
     final tiles = <Widget>[];
 
@@ -651,7 +708,7 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
         priceMain: weeklyPrice,
         priceUnit: '/ hafta',
         priceLoaded: _offeringsLoaded,
-        dimmed: _offeringsLoaded && _weeklyPkg == null,
+        dimmed: _offeringsLoaded && _weeklyPkg == null && !_useFallbackPrices,
       ),
     );
 
@@ -689,8 +746,8 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
         priceMain: yearlyPerWeek ?? yearlyPrice,
         priceUnit: yearlyPerWeek != null ? '/ hafta' : '/ yıl',
         priceLoaded: _offeringsLoaded,
-        dimmed: _offeringsLoaded && _yearlyPkg == null,
-        badge: savings != null ? '%$savings TASARRUF' : null,
+        dimmed: _offeringsLoaded && _yearlyPkg == null && !_useFallbackPrices,
+        badge: savings != null ? '%$savings TASARRUF' : 'EN AVANTAJLI',
       ),
     );
 
