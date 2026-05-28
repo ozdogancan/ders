@@ -2177,9 +2177,9 @@ class _Card extends StatelessWidget {
                         duration: const Duration(milliseconds: 200),
                         switchInCurve: Curves.easeOut,
                         switchOutCurve: Curves.easeIn,
-                        // 2026-05-28: SOL-ALT sabit. AnimatedSwitcher default
-                        // center'a yaslıyordu — Align ile sol-alt'a kilitle.
-                        alignment: Alignment.bottomLeft,
+                        // 2026-05-28: SOL-ALT sabit (dış Align bunu yapıyor).
+                        // AnimatedSwitcher.alignment bu Flutter sürümünde
+                        // yok — dış Align widget yeterli.
                         child: designer == null
                             ? const _DesignerBlockSkeleton(
                                 key: ValueKey('skeleton'))
