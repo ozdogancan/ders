@@ -33,7 +33,6 @@ import '../../services/saved_items_service.dart';
 import '../../services/shared_design_service.dart';
 import '../../services/user_profile_service.dart';
 import '../../widgets/free_consult_sheet.dart';
-import '../../widgets/lazy_grid_view.dart';
 import '../../widgets/verified_badge.dart';
 import '../conversation_detail_screen.dart';
 import 'follow_list_sheet.dart';
@@ -85,12 +84,8 @@ class UnifiedProfileView extends StatefulWidget {
 class _UnifiedProfileViewState extends State<UnifiedProfileView> {
   KoalaUserProfile? _profile;
   Map<String, dynamic>? _designerRow; // From profiles table (designers)
-  /// Header stat'i için ilk sayfada gözlenen design sayısı. Pagination olduğu
-  /// için "kesin toplam" değil — hasMore ise "N+" gösterilir.
-  int _designCountSeen = 0;
-  bool _designHasMore = true;
-  /// Server-side toplam tasarım sayısı (count exact). _designCountSeen pagination
-  /// halen tamamlanmamış olsa bile "49 adet" göstermek için doğrudan kullanılır.
+  /// Server-side toplam tasarım sayısı (count exact). Header için "N adet"
+  /// göstermek için doğrudan kullanılır.
   int? _designTotalCount;
   /// AI tasarımları (owner-only) — ayrı sekmede yüklenir.
   bool _hasAnyAi = false;
@@ -102,10 +97,110 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
 
   DesignerReviewsResult _reviews = DesignerReviewsResult.empty;
 
+  // ─── Design grid state (CustomScrollView + SliverGrid) ─────────────────
+  // KRİTİK MIMARI: GridView.shrinkWrap'i ListView'ün içine sarmak iç içe
+  // viewport hatası verdiği için 2026-05-28'de proper Slivers'a geçildi.
+  final ScrollController _scrollCtrl = ScrollController();
+  final List<Map<String, dynamic>> _loadedDesigns = <Map<String, dynamic>>[];
+  dynamic _designsCursor;
+  bool _loadingInitialDesigns = true;
+  bool _loadingMoreDesigns = false;
+  bool _hasMoreDesigns = true;
+
   @override
   void initState() {
     super.initState();
+    _scrollCtrl.addListener(_onScroll);
     _loadAll();
+    // Tasarım sayfasını _loadAll ile paralel başlat — header dolduktan
+    // sonra grid de hazır olsun.
+    _loadInitialDesigns();
+  }
+
+  @override
+  void dispose() {
+    _scrollCtrl.removeListener(_onScroll);
+    _scrollCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadInitialDesigns() async {
+    try {
+      final page = await _fetchDesignsPage(null);
+      if (!mounted) return;
+      final seen = <String>{};
+      final fresh = <Map<String, dynamic>>[];
+      for (final m in page.items) {
+        final id =
+            (m['id'] ?? m['item_id'] ?? m['cover_image_url'] ?? '').toString();
+        if (id.isEmpty || seen.contains(id)) continue;
+        seen.add(id);
+        fresh.add(m);
+      }
+      setState(() {
+        _loadedDesigns
+          ..clear()
+          ..addAll(fresh);
+        _designsCursor = page.cursor;
+        _hasMoreDesigns = page.hasMore;
+        _loadingInitialDesigns = false;
+      });
+      debugPrint(
+          '[profile-grid] fetch initial returned ${page.items.length} hasMore=${page.hasMore}');
+    } catch (e) {
+      debugPrint('[profile-grid] initial load failed: $e');
+      if (!mounted) return;
+      setState(() {
+        _loadingInitialDesigns = false;
+        _hasMoreDesigns = false;
+      });
+    }
+  }
+
+  void _onScroll() {
+    if (!_scrollCtrl.hasClients) return;
+    final pos = _scrollCtrl.position;
+    if (pos.maxScrollExtent - pos.pixels <= 320 &&
+        !_loadingMoreDesigns &&
+        _hasMoreDesigns) {
+      _loadMoreDesigns();
+    }
+  }
+
+  Future<void> _loadMoreDesigns() async {
+    if (_loadingMoreDesigns || !_hasMoreDesigns) return;
+    setState(() => _loadingMoreDesigns = true);
+    try {
+      final page = await _fetchDesignsPage(_designsCursor);
+      if (!mounted) return;
+      final seen = <String>{
+        for (final m in _loadedDesigns)
+          (m['id'] ?? m['item_id'] ?? m['cover_image_url'] ?? '').toString()
+      };
+      final fresh = <Map<String, dynamic>>[];
+      for (final m in page.items) {
+        final id =
+            (m['id'] ?? m['item_id'] ?? m['cover_image_url'] ?? '').toString();
+        if (id.isEmpty || seen.contains(id)) continue;
+        seen.add(id);
+        fresh.add(m);
+      }
+      setState(() {
+        _loadedDesigns.addAll(fresh);
+        _designsCursor = page.cursor;
+        _hasMoreDesigns = page.hasMore;
+        _loadingMoreDesigns = false;
+      });
+      debugPrint(
+          '[profile-grid] fetch more returned ${page.items.length} hasMore=${page.hasMore}');
+    } catch (e) {
+      debugPrint('[profile-grid] load more failed: $e');
+      if (!mounted) return;
+      setState(() {
+        _loadingMoreDesigns = false;
+        _hasMoreDesigns = false;
+      });
+    }
   }
 
   String? get _currentUid => FirebaseAuth.instance.currentUser?.uid;
@@ -575,21 +670,124 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
         ),
       );
     }
-    return ListView(
-      padding: EdgeInsets.zero,
-      children: [
-        _hero(),
-        _stats(),
-        _actionsRow(),
-        if (_about.isNotEmpty) _aboutSection(),
+    final bottomPad = MediaQuery.viewPaddingOf(context).bottom;
+    debugPrint(
+        '[profile-grid] sliver build items=${_loadedDesigns.length} loadingInit=$_loadingInitialDesigns loadingMore=$_loadingMoreDesigns hasMore=$_hasMoreDesigns');
+    return CustomScrollView(
+      controller: _scrollCtrl,
+      slivers: [
+        SliverToBoxAdapter(child: _hero()),
+        SliverToBoxAdapter(child: _stats()),
+        SliverToBoxAdapter(child: _actionsRow()),
+        if (_about.isNotEmpty) SliverToBoxAdapter(child: _aboutSection()),
         // 2026-05-28 FIX 2: Reviews INLINE'dan kaldırıldı — sadece
         // "Değerlendirme" stat tap'iyle açılan bottom sheet'te gösteriliyor.
         // 2026-05-28: SPEC 12 — AI Stüdyom pill kaldırıldı. AI tasarımlar
         // doğrudan birleşik grid'te listeleniyor, tile'da küçük "AI" rozeti.
-        _projectsHeader(),
-        _projectsGrid(),
-        SizedBox(height: MediaQuery.viewPaddingOf(context).bottom + 32),
+        SliverToBoxAdapter(child: _projectsHeader()),
+        ..._buildDesignsSlivers(),
+        SliverToBoxAdapter(child: SizedBox(height: bottomPad + 32)),
       ],
+    );
+  }
+
+  /// CRITICAL fix — true SliverGrid (NOT GridView wrapped in shrinkWrap).
+  /// Loading / empty / grid + (optional) loadingMore / endcap slivers.
+  List<Widget> _buildDesignsSlivers() {
+    if (_loadingInitialDesigns) {
+      return const [
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: EdgeInsets.symmetric(vertical: 40),
+            child: Center(
+              child: CircularProgressIndicator(
+                color: KoalaColors.accentDeep,
+                strokeWidth: 2,
+              ),
+            ),
+          ),
+        ),
+      ];
+    }
+    if (_loadedDesigns.isEmpty) {
+      return [SliverToBoxAdapter(child: _emptyDesignsState())];
+    }
+    final out = <Widget>[
+      SliverPadding(
+        padding: EdgeInsets.zero,
+        sliver: SliverGrid(
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 3,
+            mainAxisSpacing: 2,
+            crossAxisSpacing: 2,
+            childAspectRatio: 1.0,
+          ),
+          delegate: SliverChildBuilderDelegate(
+            (ctx, i) => _designTile(i),
+            childCount: _loadedDesigns.length,
+          ),
+        ),
+      ),
+    ];
+    if (_loadingMoreDesigns) {
+      out.add(const SliverToBoxAdapter(
+        child: Padding(
+          padding: EdgeInsets.symmetric(vertical: 20),
+          child: Center(
+            child: SizedBox(
+              width: 22,
+              height: 22,
+              child: CircularProgressIndicator(
+                color: KoalaColors.accentDeep,
+                strokeWidth: 2,
+              ),
+            ),
+          ),
+        ),
+      ));
+    } else if (!_hasMoreDesigns && _loadedDesigns.isNotEmpty) {
+      out.add(const SliverToBoxAdapter(
+        child: Padding(
+          padding: EdgeInsets.symmetric(vertical: 22),
+          child: Center(
+            child: Text(
+              'Hepsi bu kadar 🐨',
+              style: KoalaText.labelSmall,
+            ),
+          ),
+        ),
+      ));
+    }
+    return out;
+  }
+
+  Widget _emptyDesignsState() {
+    if (widget.ownerEditable && _isSelf) {
+      return _PremiumOwnEmptyState(
+        onCreate: () {
+          HapticFeedback.selectionClick();
+          // AI üretim akışı home tab swipe ile başlar.
+          Navigator.of(context).popUntil((r) => r.isFirst);
+        },
+        onShare: () {
+          HapticFeedback.selectionClick();
+          // Paylaş — owner-editable parent (ProfileTabScreen) Share
+          // upload sheet'ini açar; burada doğrudan callback yok →
+          // popUntil ile ana sekmeye dönüp kullanıcıyı kart paylaşım
+          // CTA'sına yönlendir.
+          Navigator.of(context).popUntil((r) => r.isFirst);
+        },
+      );
+    }
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 24),
+      child: Center(
+        child: Text(
+          'Henüz yayınlanmış tasarım yok.',
+          style: KoalaText.bodySec,
+          textAlign: TextAlign.center,
+        ),
+      ),
     );
   }
 
@@ -719,11 +917,10 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
   // defansif olarak "—" gösterilir; Evlumba için sabit "24s".
   Widget _stats() {
     // Server-side exact total varsa onu kullan; yoksa "+" eki ile gözlenen.
+    final seen = _loadedDesigns.length;
     final designValue = _designTotalCount != null
         ? '${_designTotalCount!}'
-        : ((_designHasMore && _designCountSeen > 0)
-            ? '$_designCountSeen+'
-            : '$_designCountSeen');
+        : ((_hasMoreDesigns && seen > 0) ? '$seen+' : '$seen');
     final ratingValue = _reviews.count > 0
         ? '${_reviews.avg.toStringAsFixed(1)}★'
         : '0';
@@ -1690,11 +1887,11 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
           const Spacer(),
           if (_designTotalCount != null && _designTotalCount! > 0)
             Text('${_designTotalCount!} adet', style: KoalaText.labelSmall)
-          else if (_designCountSeen > 0)
+          else if (_loadedDesigns.isNotEmpty)
             Text(
-              (_designHasMore && _designCountSeen > 0)
-                  ? '$_designCountSeen+ adet'
-                  : '$_designCountSeen adet',
+              (_hasMoreDesigns && _loadedDesigns.isNotEmpty)
+                  ? '${_loadedDesigns.length}+ adet'
+                  : '${_loadedDesigns.length} adet',
               style: KoalaText.labelSmall,
             ),
         ],
@@ -1702,81 +1899,11 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
     );
   }
 
-  /// Tüm yüklenen tasarımlar — onTapDesign tıklama callback'i ve viewedDesign
-  /// overlay'i için referans tutulur. LazyGridView itemBuilder'ından beslenir.
-  final List<Map<String, dynamic>> _loadedDesigns = <Map<String, dynamic>>[];
-
-  Widget _projectsGrid() {
-    // 2026-05-28: SPEC 6 — 3 sütun, kare aspect, 2px gutter.
-    return Padding(
-      padding: EdgeInsets.zero,
-      child: LazyGridView<Map<String, dynamic>>(
-        shrinkWrap: true,
-        crossAxisCount: 3,
-        aspectRatio: 1.0,
-        spacing: 2,
-        bottomThreshold: 320,
-        idOf: (p) =>
-            (p['id'] ?? p['item_id'] ?? p['cover_image_url'] ?? '').toString(),
-        fetch: (cursor) async {
-          final page = await _fetchDesignsPage(cursor);
-          // Header counter güncelleme — setState kullanmıyoruz (LazyGridView
-          // zaten setState'e tetikleniyor; bir microtask ertelemesiyle parent
-          // rebuild'i postFrame'e bırak).
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (!mounted) return;
-            // LazyGridView ile aynı dedupe — kullanıcı tap'inde
-            // _loadedDesigns sıralaması grid ile bire bir.
-            final seen = <String>{
-              for (final m in _loadedDesigns)
-                (m['id'] ?? m['item_id'] ?? m['cover_image_url'] ?? '')
-                    .toString()
-            };
-            final fresh = <Map<String, dynamic>>[];
-            for (final m in page.items) {
-              final id =
-                  (m['id'] ?? m['item_id'] ?? m['cover_image_url'] ?? '')
-                      .toString();
-              if (id.isEmpty || seen.contains(id)) continue;
-              seen.add(id);
-              fresh.add(m);
-            }
-            setState(() {
-              _loadedDesigns.addAll(fresh);
-              _designCountSeen = _loadedDesigns.length;
-              _designHasMore = page.hasMore;
-            });
-          });
-          return page;
-        },
-        emptyState: (widget.ownerEditable && _isSelf)
-            ? _PremiumOwnEmptyState(
-                onCreate: () {
-                  HapticFeedback.selectionClick();
-                  // AI üretim akışı home tab swipe ile başlar.
-                  Navigator.of(context).popUntil((r) => r.isFirst);
-                },
-                onShare: () {
-                  HapticFeedback.selectionClick();
-                  // Paylaş — owner-editable parent (ProfileTabScreen) Share
-                  // upload sheet'ini açar; burada doğrudan callback yok →
-                  // popUntil ile ana sekmeye dönüp kullanıcıyı kart paylaşım
-                  // CTA'sına yönlendir.
-                  Navigator.of(context).popUntil((r) => r.isFirst);
-                },
-              )
-            : Padding(
-                padding:
-                    const EdgeInsets.symmetric(vertical: 28, horizontal: 24),
-                child: Center(
-                  child: Text(
-                    'Henüz yayınlanmış tasarım yok.',
-                    style: KoalaText.bodySec,
-                    textAlign: TextAlign.center,
-                  ),
-                ),
-              ),
-        itemBuilder: (_, p, i) {
+  /// Tek bir tasarım tile'ı — SliverGrid'in `SliverChildBuilderDelegate`
+  /// callback'inden çağrılır. `_loadedDesigns[i]` üzerinden indeks bazlı
+  /// çalışır; tap callback'inde tüm liste + index forward edilir.
+  Widget _designTile(int i) {
+          final p = _loadedDesigns[i];
           final cover = _coverOf(p);
           final title = (p['title'] ?? '').toString();
           final id = (p['id'] ?? p['item_id'] ?? '').toString();
@@ -1947,9 +2074,6 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
               ),
             ),
           );
-        },
-      ),
-    );
   }
 
   /// FIX 9 — Own design tile long-press: Gizle / Yayınla toggle action sheet.

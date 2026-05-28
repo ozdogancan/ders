@@ -528,6 +528,7 @@ class _StyleDiscoveryLiveScreenState
               if (!mounted) return;
               setState(() => _deck.addAll(filtered));
               _precacheNext();
+              unawaited(_prefetchDesignersForBatch(filtered));
               debugPrint(
                   'StyleDiscoveryLive[server]: ranked=${serverRanked.length} filtered=${filtered.length} deck=${_deck.length}');
               return;
@@ -590,10 +591,58 @@ class _StyleDiscoveryLiveScreenState
       if (!mounted) return;
       setState(() => _deck.addAll(ranked));
       _precacheNext();
+      // Designer chip'leri instant olsun diye batch'in tüm designer'larını
+      // tek seferde hydrate et — kullanıcı kartı görür görmez chip dolu.
+      unawaited(_prefetchDesignersForBatch(ranked));
     } catch (e) {
       debugPrint('StyleDiscoveryLive: fetchBatch failed → $e');
     } finally {
       _fetchingMore = false;
+    }
+  }
+
+  /// Batch içindeki tüm distinct designer_id'leri tek bir Supabase IN query
+  /// ile çek ve `_designerCache`'i hydrate et. Per-card lazy fetch yerine
+  /// batch fetch — chip skeleton'dan gerçek state'e tek frame'de geçer.
+  Future<void> _prefetchDesignersForBatch(
+      List<Map<String, dynamic>> batch) async {
+    try {
+      if (batch.isEmpty) return;
+      final ids = <String>{};
+      for (final p in batch) {
+        final did = (p['designer_id'] ?? '').toString();
+        if (did.isEmpty) continue;
+        if (did == 'evlumba-design') continue; // sentetik, zaten cache'te.
+        if (_designerCache.containsKey(did)) continue;
+        if (_designerInFlight.contains(did)) continue;
+        ids.add(did);
+      }
+      if (ids.isEmpty) return;
+      for (final id in ids) {
+        _designerInFlight.add(id);
+      }
+      final rows =
+          await EvlumbaLiveService.getDesignersByIds(ids.toList());
+      if (!mounted) {
+        for (final id in ids) {
+          _designerInFlight.remove(id);
+        }
+        return;
+      }
+      setState(() {
+        for (final d in rows) {
+          final id = (d['id'] ?? '').toString();
+          if (id.isEmpty) continue;
+          _designerCache[id] = d;
+        }
+        for (final id in ids) {
+          _designerInFlight.remove(id);
+        }
+      });
+      debugPrint(
+          'StyleDiscoveryLive: prefetch designers → ${rows.length}/${ids.length}');
+    } catch (e) {
+      debugPrint('StyleDiscoveryLive: prefetch designers failed → $e');
     }
   }
 
@@ -2109,27 +2158,37 @@ class _Card extends StatelessWidget {
             ),
           ),
 
-          // Alt overlay: tasarımcı bilgisi (sol-alt) + "Profili Gör →" pill
-          // (sağ-alt). Üstteki başlık/tagline kaldırıldı.
-          if (designer != null)
-            Positioned(
-              bottom: 0,
-              left: 0,
-              right: 0,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 14, 18),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Expanded(
-                      child: _DesignerBlock(designer: designer!),
+          // Alt overlay: tasarımcı bilgisi (sol-alt). designer henüz hydrate
+          // edilmediyse SKELETON placeholder gösterilir; cache dolduğunda
+          // AnimatedSwitcher ile 200ms fade swap.
+          Positioned(
+            bottom: 0,
+            left: 0,
+            right: 0,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 14, 18),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Expanded(
+                    child: AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 200),
+                      switchInCurve: Curves.easeOut,
+                      switchOutCurve: Curves.easeIn,
+                      child: designer == null
+                          ? const _DesignerBlockSkeleton(
+                              key: ValueKey('skeleton'))
+                          : _DesignerBlock(
+                              key: const ValueKey('hydrated'),
+                              designer: designer!),
                     ),
-                    // 2026-05-28: "Profili Gör" pill kaldırıldı — karta tap
-                    // zaten profil sheet'i açıyor.
-                  ],
-                ),
+                  ),
+                  // 2026-05-28: "Profili Gör" pill kaldırıldı — karta tap
+                  // zaten profil sheet'i açıyor.
+                ],
               ),
             ),
+          ),
           // 3 sayfa noktası KALDIRILDI — sahte ritim, gereksiz.
           // palette dots şu an UI'da gösterilmiyor — _paletteColors helper'ı
           // ileride geri getirilebilir. Kullanılmadığı için referansını
@@ -2152,7 +2211,7 @@ class _Card extends StatelessWidget {
 /// Kartın sol-altında: yuvarlak avatar + tasarımcı adı + verified check
 /// + altında "İç Mimar · N proje" satırı.
 class _DesignerBlock extends StatelessWidget {
-  const _DesignerBlock({required this.designer});
+  const _DesignerBlock({super.key, required this.designer});
   final Map<String, dynamic> designer;
 
   @override
@@ -2271,6 +2330,60 @@ class _DesignerBlock extends StatelessWidget {
     if (parts.length == 1) return parts.first.characters.first.toUpperCase();
     return (parts.first.characters.first + parts.last.characters.first)
         .toUpperCase();
+  }
+}
+
+/// Designer chip skeleton placeholder — designer henüz cache'de yokken
+/// kartın sol-altında gri yuvarlak + 2 gri bar gösterilir. Blank/white
+/// area olmaz; cache hydrate olunca AnimatedSwitcher ile 200ms fade swap.
+class _DesignerBlockSkeleton extends StatelessWidget {
+  const _DesignerBlockSkeleton({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final shimmer = Colors.white.withValues(alpha: 0.32);
+    final shimmerLite = Colors.white.withValues(alpha: 0.22);
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 36,
+          height: 36,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: shimmer,
+            border: Border.all(
+              color: Colors.white.withValues(alpha: 0.35),
+              width: 1.2,
+            ),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 96,
+              height: 12,
+              decoration: BoxDecoration(
+                color: shimmer,
+                borderRadius: BorderRadius.circular(6),
+              ),
+            ),
+            const SizedBox(height: 6),
+            Container(
+              width: 64,
+              height: 10,
+              decoration: BoxDecoration(
+                color: shimmerLite,
+                borderRadius: BorderRadius.circular(5),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
   }
 }
 
