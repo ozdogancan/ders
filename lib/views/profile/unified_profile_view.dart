@@ -722,21 +722,42 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
     final bottomPad = MediaQuery.viewPaddingOf(context).bottom;
     debugPrint(
         '[profile-grid] sliver build items=${_loadedDesigns.length} loadingInit=$_loadingInitialDesigns loadingMore=$_loadingMoreDesigns hasMore=$_hasMoreDesigns');
-    return CustomScrollView(
-      controller: _scrollCtrl,
-      slivers: [
-        SliverToBoxAdapter(child: _hero()),
-        SliverToBoxAdapter(child: _stats()),
-        SliverToBoxAdapter(child: _actionsRow()),
-        if (_about.isNotEmpty) SliverToBoxAdapter(child: _aboutSection()),
-        // 2026-05-28 FIX 2: Reviews INLINE'dan kaldırıldı — sadece
-        // "Değerlendirme" stat tap'iyle açılan bottom sheet'te gösteriliyor.
-        // 2026-05-28: SPEC 12 — AI Stüdyom pill kaldırıldı. AI tasarımlar
-        // doğrudan birleşik grid'te listeleniyor, tile'da küçük "AI" rozeti.
-        SliverToBoxAdapter(child: _projectsHeader()),
-        ..._buildDesignsSlivers(),
-        SliverToBoxAdapter(child: SizedBox(height: bottomPad + 32)),
-      ],
+    // 2026-05-28 FIX 5: pull-down overscroll'da hero'nun mor gradient'i
+    // boş/beyaza kesilmesin diye CustomScrollView'i top-aligned soft purple
+    // gradient'li bir Container'ın içine al + BouncingScrollPhysics ver.
+    // Container hero'nun stop'larıyla aynı tonu kullanır → overscroll'da
+    // gradient'in mantıken yukarıya uzandığı hissi.
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            KoalaColors.accentSoft.withValues(alpha: 0.55),
+            KoalaColors.bg,
+          ],
+          stops: const [0.0, 0.25],
+        ),
+      ),
+      child: CustomScrollView(
+        controller: _scrollCtrl,
+        physics: const BouncingScrollPhysics(
+          parent: AlwaysScrollableScrollPhysics(),
+        ),
+        slivers: [
+          SliverToBoxAdapter(child: _hero()),
+          SliverToBoxAdapter(child: _stats()),
+          SliverToBoxAdapter(child: _actionsRow()),
+          if (_about.isNotEmpty) SliverToBoxAdapter(child: _aboutSection()),
+          // 2026-05-28 FIX 2: Reviews INLINE'dan kaldırıldı — sadece
+          // "Değerlendirme" stat tap'iyle açılan bottom sheet'te gösteriliyor.
+          // 2026-05-28: SPEC 12 — AI Stüdyom pill kaldırıldı. AI tasarımlar
+          // doğrudan birleşik grid'te listeleniyor, tile'da küçük "AI" rozeti.
+          SliverToBoxAdapter(child: _projectsHeader()),
+          ..._buildDesignsSlivers(),
+          SliverToBoxAdapter(child: SizedBox(height: bottomPad + 32)),
+        ],
+      ),
     );
   }
 
@@ -981,8 +1002,15 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
     final ratingValue = _reviews.count > 0
         ? '${_reviews.avg.toStringAsFixed(1)}★'
         : '0';
+    // 2026-05-28 FIX 4: Yanıt stat semantics.
+    //  • Evlumba (sentetik) → ⚡ <1 saat (responds faster than designers).
+    //  • Other Pro/designer profiles → "24s" default (until
+    //    koala_designer_stats.avg_response_time_sec is wired in).
+    //  • Non-designer users → "—" (no meaningful response stat).
+    final isEvlumba = widget.profileId == 'evlumba-design';
+    final showResponseStat = isEvlumba || _isDesignerOrPro;
     final responseValue =
-        widget.profileId == 'evlumba-design' ? '24s' : '—';
+        isEvlumba ? '<1 saat' : (_isDesignerOrPro ? '24s' : '—');
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 4, 20, 16),
       child: Row(
@@ -998,13 +1026,62 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
             value: ratingValue,
             onTap: _openReviewsSheet,
           ),
-          _statDiv(),
-          _stat(
-            label: 'Yanıt',
-            value: responseValue,
-            onTap: _showResponseTooltip,
-          ),
+          if (showResponseStat) ...[
+            _statDiv(),
+            isEvlumba
+                ? _statEvlumbaResponse(
+                    label: 'Yanıt',
+                    onTap: _showResponseTooltip,
+                  )
+                : _stat(
+                    label: 'Yanıt',
+                    value: responseValue,
+                    onTap: _showResponseTooltip,
+                  ),
+          ],
         ],
+      ),
+    );
+  }
+
+  /// 2026-05-28 FIX 4: Evlumba'ya özel "⚡ <1 saat" compact widget — diğer
+  /// tasarımcılardan daha hızlı yanıt verdiğini görsel olarak vurgular.
+  Widget _statEvlumbaResponse({
+    required String label,
+    VoidCallback? onTap,
+  }) {
+    final body = Column(
+      children: [
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: const [
+            Icon(LucideIcons.zap, size: 14, color: Color(0xFFE0A300)),
+            SizedBox(width: 4),
+            Text(
+              '<1 saat',
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+                color: KoalaColors.text,
+                letterSpacing: -0.3,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 2),
+        Text(label, style: KoalaText.labelSmall),
+      ],
+    );
+    if (onTap == null) return Expanded(child: body);
+    return Expanded(
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: body,
+        ),
       ),
     );
   }
@@ -1982,11 +2059,8 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
           // FIX 4 (2026-05-28): own profile renders a simplified tile —
           // larger radius, only the category overlay (no AI/Gizli badges).
           final isOwnTile = isOwner;
-          // Owner-only "private" rozet: AI default private, shared default public.
-          final isPrivate = isOwner &&
-              (isAi
-                  ? p['is_public'] != true
-                  : (p['status']?.toString() ?? 'published') != 'published');
+          // 2026-05-28 FIX 3: public/private surfacing removed from UI.
+          // is_public column still exists in DB but is no longer toggleable.
           final isViewed = widget.viewedDesignId != null &&
               widget.viewedDesignId!.isNotEmpty &&
               widget.viewedDesignId == id;
@@ -2103,37 +2177,8 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
                         ),
                       ),
                     ),
-                  // Owner gizli rozet — sol alt köşede minik göz-kapalı.
-                  if (!isOwnTile && isPrivate)
-                    Positioned(
-                      left: 6,
-                      bottom: 6,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 5, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withValues(alpha: 0.55),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: const Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(LucideIcons.eyeOff,
-                                size: 10, color: Colors.white),
-                            SizedBox(width: 3),
-                            Text(
-                              'Gizli',
-                              style: TextStyle(
-                                fontSize: 9,
-                                fontWeight: FontWeight.w700,
-                                color: Colors.white,
-                                letterSpacing: 0.2,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
+                  // 2026-05-28 FIX 3: Gizli rozet removed (no more
+                  // public/private surfacing in profile UI).
                   // SPEC 12: AI rozeti — sağ üst köşede minik etiket.
                   if (!isOwnTile && isAi)
                     Positioned(
@@ -2169,17 +2214,12 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
           );
   }
 
-  /// FIX 9 — Own design tile long-press: Gizle / Yayınla toggle action sheet.
-  /// AI items: saved_items.is_public; Shared items: koala_user_shared_designs.status.
+  /// 2026-05-28 FIX 3 — Own design tile long-press action sheet.
+  /// Public/private toggle removed; only Düzenle / Sil / İptal.
   Future<void> _showOwnTileActionSheet(Map<String, dynamic> p) async {
     final isAi = p['is_ai'] == true;
     final id = (p['id'] ?? p['item_id'] ?? '').toString();
     if (id.isEmpty) return;
-    final currentlyPublic = isAi
-        ? (p['is_public'] == true)
-        : ((p['status'] ?? 'published').toString() == 'published');
-    final nextPublic = !currentlyPublic;
-    final toggleLabel = nextPublic ? 'Yayınla' : 'Gizle';
     await showModalBottomSheet<void>(
       context: context,
       backgroundColor: KoalaColors.bg,
@@ -2202,51 +2242,29 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
             ),
             const SizedBox(height: 12),
             ListTile(
-              leading: Icon(
-                nextPublic ? LucideIcons.eye : LucideIcons.eyeOff,
-                color: KoalaColors.accentDeep,
-              ),
-              title:
-                  Text(toggleLabel, style: KoalaText.bodyMedium),
+              leading: const Icon(LucideIcons.pencil,
+                  color: KoalaColors.accentDeep),
+              title: const Text('Düzenle', style: KoalaText.bodyMedium),
               subtitle: Text(
-                currentlyPublic
-                    ? 'Şu an herkes görebilir'
-                    : 'Şu an sadece sen görüyorsun',
+                'Başlık veya açıklamayı değiştir',
+                style: KoalaText.labelSmall,
+              ),
+              onTap: () {
+                Navigator.of(ctx).pop();
+                _editTile(p);
+              },
+            ),
+            ListTile(
+              leading: const Icon(LucideIcons.trash2,
+                  color: KoalaColors.error),
+              title: const Text('Sil', style: KoalaText.bodyMedium),
+              subtitle: Text(
+                'Bu tasarım profilden kaldırılır',
                 style: KoalaText.labelSmall,
               ),
               onTap: () async {
                 Navigator.of(ctx).pop();
-                final ok = isAi
-                    ? await SavedItemsService.setVisibility(
-                        itemId: id, isPublic: nextPublic)
-                    : await SharedDesignService.setVisibility(
-                        id: id, isPublic: nextPublic);
-                if (!mounted) return;
-                if (ok) {
-                  setState(() {
-                    // Local row update — UI immediate.
-                    if (isAi) {
-                      p['is_public'] = nextPublic;
-                    } else {
-                      p['status'] = nextPublic ? 'published' : 'private';
-                    }
-                  });
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(nextPublic
-                          ? 'Yayınlandı — herkes görebilir'
-                          : 'Gizlendi — sadece sen görüyorsun'),
-                      behavior: SnackBarBehavior.floating,
-                      duration: const Duration(seconds: 2),
-                    ),
-                  );
-                } else {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('İşlem başarısız, tekrar dene'),
-                    ),
-                  );
-                }
+                await _confirmAndDeleteTile(p, isAi: isAi, id: id);
               },
             ),
             ListTile(
@@ -2260,6 +2278,188 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
         ),
       ),
     );
+  }
+
+  /// Edit tile — opens a simple title/description editor.
+  Future<void> _editTile(Map<String, dynamic> p) async {
+    final titleCtl = TextEditingController(
+      text: (p['title'] ?? '').toString(),
+    );
+    final descCtl = TextEditingController(
+      text: (p['description'] ?? p['caption'] ?? '').toString(),
+    );
+    final isAi = p['is_ai'] == true;
+    final id = (p['id'] ?? p['item_id'] ?? '').toString();
+    final saved = await showModalBottomSheet<bool>(
+      context: context,
+      backgroundColor: KoalaColors.bg,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) => Padding(
+        padding: EdgeInsets.only(
+          left: 20,
+          right: 20,
+          top: 16,
+          bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: KoalaColors.border,
+                  borderRadius: BorderRadius.circular(100),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Text('Tasarımı düzenle', style: KoalaText.h2),
+            const SizedBox(height: 16),
+            TextField(
+              controller: titleCtl,
+              decoration: const InputDecoration(
+                labelText: 'Başlık',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: descCtl,
+              maxLines: 3,
+              decoration: const InputDecoration(
+                labelText: 'Açıklama',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: TextButton(
+                    onPressed: () => Navigator.of(ctx).pop(false),
+                    child: const Text('İptal'),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: FilledButton(
+                    onPressed: () => Navigator.of(ctx).pop(true),
+                    child: const Text('Kaydet'),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+    if (saved != true || !mounted) return;
+    final newTitle = titleCtl.text.trim();
+    final newDesc = descCtl.text.trim();
+    bool ok = false;
+    try {
+      if (isAi) {
+        ok = await SavedItemsService.updateItem(
+          type: SavedItemType.project,
+          itemId: id,
+          title: newTitle,
+        );
+      } else {
+        ok = await SharedDesignService.update(
+          id,
+          title: newTitle.isEmpty ? null : newTitle,
+          description: newDesc.isEmpty ? null : newDesc,
+        );
+      }
+    } catch (_) {
+      ok = false;
+    }
+    if (!mounted) return;
+    if (ok) {
+      setState(() {
+        p['title'] = newTitle;
+        if (!isAi) p['description'] = newDesc;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Güncellendi'),
+          behavior: SnackBarBehavior.floating,
+          duration: Duration(seconds: 2),
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Güncellenemedi, tekrar dene')),
+      );
+    }
+  }
+
+  /// Delete tile with a confirmation dialog.
+  Future<void> _confirmAndDeleteTile(
+    Map<String, dynamic> p, {
+    required bool isAi,
+    required String id,
+  }) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Bu tasarımı silmek istiyor musun?'),
+        content: const Text(
+            'Bu işlem geri alınamaz. Tasarım profilinden kalıcı olarak kaldırılır.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Vazgeç'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: KoalaColors.error,
+            ),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Sil'),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true || !mounted) return;
+    bool ok = false;
+    try {
+      if (isAi) {
+        ok = await SavedItemsService.removeItem(
+          type: SavedItemType.project,
+          itemId: id,
+        );
+      } else {
+        ok = await SharedDesignService.delete(id);
+      }
+    } catch (_) {
+      ok = false;
+    }
+    if (!mounted) return;
+    if (ok) {
+      setState(() {
+        _loadedDesigns.removeWhere(
+          (e) => (e['id'] ?? e['item_id'] ?? '').toString() == id,
+        );
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Tasarım silindi'),
+          behavior: SnackBarBehavior.floating,
+          duration: Duration(seconds: 2),
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Silinemedi, tekrar dene')),
+      );
+    }
   }
 
   /// FIX 4 (2026-05-28): build a short, friendly category label for the

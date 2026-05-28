@@ -41,11 +41,9 @@ import 'chat_list_screen.dart';
 import 'projeler_screen.dart';
 import '../services/evlumba_live_service.dart';
 import '../services/koala_seed_service.dart';
-import '../widgets/lazy_grid_view.dart';
 import '../services/messaging_service.dart';
 import '../services/saved_items_service.dart';
 import '../services/analytics_service.dart';
-import '../services/follow_service.dart';
 import '../services/notifications_feed_service.dart';
 import '../services/taste_profile_service.dart';
 import '../services/swipe_feed_service.dart';
@@ -516,10 +514,18 @@ class _StyleDiscoveryLiveScreenState
           );
           if (serverRanked != null && serverRanked.isNotEmpty) {
             final filtered = <Map<String, dynamic>>[];
+            // 2026-05-28 FIX 3a: server ranker is taste-only, not category-
+            // aware. Enforce the active category filter here.
+            final cat = _selectedCategory?.trim().toLowerCase();
             for (final p in serverRanked) {
               final id = p['id']?.toString() ?? '';
               if (id.isEmpty || _seenIds.contains(id)) continue;
               if (_coverOf(p).isEmpty) continue;
+              if (cat != null && cat.isNotEmpty) {
+                final pt =
+                    (p['project_type'] ?? '').toString().trim().toLowerCase();
+                if (pt != cat) continue;
+              }
               _seenIds.add(id);
               filtered.add(p);
             }
@@ -586,10 +592,32 @@ class _StyleDiscoveryLiveScreenState
             ? List<Map<String, dynamic>>.from(_deck)
             : _deck.sublist(_deck.length - 10),
       );
+      // 2026-05-28 FIX 3a: enforce category filter POST-rank. Ranker may
+      // include cards whose project_type drifts from the active filter
+      // (esp. seeded cards mapped via _seedRoomTr). Drop any mismatch.
+      final cat = _selectedCategory?.trim().toLowerCase();
+      final List<Map<String, dynamic>> finalRanked;
+      if (cat != null && cat.isNotEmpty) {
+        finalRanked = <Map<String, dynamic>>[];
+        var wrong = 0;
+        for (final c in ranked) {
+          final pt =
+              (c['project_type'] ?? '').toString().trim().toLowerCase();
+          if (pt == cat) {
+            finalRanked.add(c);
+          } else {
+            wrong++;
+          }
+        }
+        debugPrint(
+            '[swipe-filter] category=$_selectedCategory wrongRooms=$wrong kept=${finalRanked.length}');
+      } else {
+        finalRanked = ranked;
+      }
       debugPrint(
-          'StyleDiscoveryLive: batch=${batch.length} filtered=${filtered.length} ranked=${ranked.length} deck=${_deck.length + ranked.length} offset=$_offset');
+          'StyleDiscoveryLive: batch=${batch.length} filtered=${filtered.length} ranked=${ranked.length} final=${finalRanked.length} deck=${_deck.length + finalRanked.length} offset=$_offset');
       if (!mounted) return;
-      setState(() => _deck.addAll(ranked));
+      setState(() => _deck.addAll(finalRanked));
       _precacheNext();
       // Designer chip'leri instant olsun diye batch'in tüm designer'larını
       // tek seferde hydrate et — kullanıcı kartı görür görmez chip dolu.
@@ -709,15 +737,19 @@ class _StyleDiscoveryLiveScreenState
   }
 
   /// Havuzdan, kategoriye uyan ve henüz eklenmemiş seeded kartları
-  /// batch'e harmanlar (en çok 5 / batch).
+  /// batch'e harmanlar.
+  /// 2026-05-28 FIX 3b: cold-start kullanıcılar (0 like) için kota 7'ye
+  /// yükseldi — Evlumba görünürlüğünü garanti eder. 20+ like'tan sonra
+  /// 5'e geri döner (normal kişiselleştirme akışı).
   void _blendSeedCards(List<Map<String, dynamic>> batch) {
     if (_seedPool.isEmpty) return;
     // Kaynak filtresi 'real' iken seeded kartları gizle.
     if (_sourceFilter == 'real') return;
     final cat = _selectedCategory?.trim().toLowerCase();
+    final maxBlend = _likeCount < 20 ? 7 : 5;
     var added = 0;
     for (final s in _seedPool) {
-      if (added >= 5) break;
+      if (added >= maxBlend) break;
       final id = s['id']?.toString() ?? '';
       if (id.isEmpty || _seenIds.contains(id)) continue;
       if (cat != null &&
@@ -1961,8 +1993,8 @@ class _StyleDiscoveryLiveScreenState
         ((_currentCard?['designer_id'] ?? '').toString().isEmpty) ||
         _askingInFlight;
     final undoDisabled = _history.isEmpty || _animatingExit;
-    // 2026-05-28: spaceEvenly → center + sabit 14px spacing. Butonlar ekran
-    // ortasında kümelenir, kenarlara yayılmaz.
+    // 2026-05-28 FIX 3c: 14px → 22px spacing — butonlar artık birbirine
+    // yapışık görünmüyor; "Sor" pillinin dikkat çekiciliği için nefes alanı.
     return Padding(
       padding: const EdgeInsets.fromLTRB(18, 8, 18, 10),
       child: Row(
@@ -1974,14 +2006,14 @@ class _StyleDiscoveryLiveScreenState
             onTap: undoDisabled ? null : _undo,
             variant: _ActionVariant.outlined,
           ),
-          const SizedBox(width: 14),
+          const SizedBox(width: 22),
           _ActionBtn(
             icon: LucideIcons.x,
             label: 'Geç',
             onTap: disabled ? null : () => _swipe(liked: false),
             variant: _ActionVariant.outlined,
           ),
-          const SizedBox(width: 14),
+          const SizedBox(width: 22),
           _ActionBtn(
             icon: LucideIcons.heart,
             label: 'Beğen',
@@ -1989,7 +2021,7 @@ class _StyleDiscoveryLiveScreenState
             variant: _ActionVariant.primary,
             large: true,
           ),
-          const SizedBox(width: 14),
+          const SizedBox(width: 22),
           _ActionBtn(
             icon: LucideIcons.messageCircle,
             label: 'Sor',
@@ -2617,8 +2649,29 @@ class _ActionBtn extends StatefulWidget {
   State<_ActionBtn> createState() => _ActionBtnState();
 }
 
-class _ActionBtnState extends State<_ActionBtn> {
+class _ActionBtnState extends State<_ActionBtn>
+    with SingleTickerProviderStateMixin {
   bool _pressed = false;
+  // 2026-05-28 FIX 3d: shimmer for the "Sor" pill. Low-contrast diagonal
+  // light pass every 8 seconds (600ms duration). Inactive for other labels.
+  AnimationController? _shimmerCtl;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.label == 'Sor') {
+      _shimmerCtl = AnimationController(
+        vsync: this,
+        duration: const Duration(milliseconds: 8000),
+      )..repeat();
+    }
+  }
+
+  @override
+  void dispose() {
+    _shimmerCtl?.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -2630,8 +2683,13 @@ class _ActionBtnState extends State<_ActionBtn> {
     final small = widget.small;
 
     final disabled = onTap == null;
-    final size = large ? 64.0 : (small ? 44.0 : 52.0);
-    final iconSize = large ? 32.0 : (small ? 18.0 : 22.0);
+    // 2026-05-28 FIX 3d: "Sor" gets a slightly larger circle (56) so its
+    // glow + shimmer reads as a distinct entry point next to outlined peers.
+    final isSor = label == 'Sor';
+    final size = large
+        ? 64.0
+        : (small ? 44.0 : (isSor ? 56.0 : 52.0));
+    final iconSize = large ? 32.0 : (small ? 18.0 : (isSor ? 22.0 : 22.0));
 
     Color bg;
     Color fg;
@@ -2642,7 +2700,9 @@ class _ActionBtnState extends State<_ActionBtn> {
     switch (variant) {
       case _ActionVariant.outlined:
         if (label == 'Sor') {
-          // 2026-05-28: Soft purple gradient fill + ince border + chip shadow.
+          // 2026-05-28 FIX 3d: bumped border alpha 0.35 → 0.45, added an
+          // inset-ish soft inner shadow (white highlight + deeper purple
+          // for depth). Shimmer pass is overlaid below.
           bg = Colors.transparent;
           bgGradient = const LinearGradient(
             begin: Alignment.topLeft,
@@ -2650,12 +2710,18 @@ class _ActionBtnState extends State<_ActionBtn> {
             colors: [Color(0xFFF4F2FE), Color(0xFFEDE9FF)],
           );
           fg = KoalaColors.accentDeep;
-          border = KoalaColors.accentDeep.withValues(alpha: 0.35);
+          border = KoalaColors.accentDeep.withValues(alpha: 0.45);
           shadow = [
             BoxShadow(
-              color: KoalaColors.accentDeep.withValues(alpha: 0.08),
+              color: KoalaColors.accentDeep.withValues(alpha: 0.15),
               blurRadius: 10,
-              offset: const Offset(0, 3),
+              spreadRadius: -1,
+              offset: const Offset(0, 4),
+            ),
+            BoxShadow(
+              color: Colors.white.withValues(alpha: 0.55),
+              blurRadius: 6,
+              offset: const Offset(0, -1),
             ),
           ];
         } else {
@@ -2744,7 +2810,52 @@ class _ActionBtnState extends State<_ActionBtn> {
                   border: border != null ? Border.all(color: border) : null,
                   boxShadow: shadow,
                 ),
-                child: Icon(icon, color: fg, size: iconSize),
+                child: ClipOval(
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      // 2026-05-28 FIX 3d: shimmer overlay (Sor only).
+                      // 600ms light pass left→right inside the 8s loop;
+                      // dwell phase covers the remaining 7.4s.
+                      if (_shimmerCtl != null)
+                        AnimatedBuilder(
+                          animation: _shimmerCtl!,
+                          builder: (_, _) {
+                            final t = _shimmerCtl!.value;
+                            // Active only during first 0..0.075 of loop
+                            // (~600ms of 8000ms).
+                            const pulseEnd = 0.075;
+                            if (t > pulseEnd) {
+                              return const SizedBox.shrink();
+                            }
+                            final p = t / pulseEnd; // 0..1 within pulse
+                            return Positioned.fill(
+                              child: IgnorePointer(
+                                child: FractionalTranslation(
+                                  translation: Offset(-1.0 + p * 2.0, 0),
+                                  child: DecoratedBox(
+                                    decoration: BoxDecoration(
+                                      gradient: LinearGradient(
+                                        begin: Alignment.centerLeft,
+                                        end: Alignment.centerRight,
+                                        colors: [
+                                          Colors.white.withValues(alpha: 0),
+                                          Colors.white.withValues(alpha: 0.45),
+                                          Colors.white.withValues(alpha: 0),
+                                        ],
+                                        stops: const [0.35, 0.5, 0.65],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      Icon(icon, color: fg, size: iconSize),
+                    ],
+                  ),
+                ),
               ),
             ),
             const SizedBox(height: 7),
@@ -4029,7 +4140,9 @@ class _ProPill extends StatelessWidget {
 }
 
 // ═══════════════════════════════════════════════════════════
-// Mekana uygula pill + Kategori snapshot + Designer profile sheet
+// Mekana uygula pill + Kategori snapshot
+// (DesignerProfileSheet was removed 2026-05-28 — swipe-card tap now
+//  opens the shared UnifiedProfileView, see _openDesignerSheet above.)
 // ═══════════════════════════════════════════════════════════
 
 /// Karta yerleşen altın aksan CTA: "Mekanıma uygula" (AI restyle başlatır).
@@ -4103,666 +4216,3 @@ class _CatSnapshot {
   });
 }
 
-/// Tasarımcı profil sheet'i — karta dokununca açılır. Bilgi + diğer
-/// projeler grid + Sor aksiyonu.
-class DesignerProfileSheet extends StatefulWidget {
-  final String designerId;
-  final Map<String, dynamic>? designer;
-  final List<Map<String, dynamic>>? seedPool;
-  final VoidCallback onAsk;
-
-  const DesignerProfileSheet({
-    super.key,
-    required this.designerId,
-    required this.designer,
-    required this.onAsk,
-    this.seedPool,
-  });
-
-  @override
-  State<DesignerProfileSheet> createState() => _DesignerProfileSheetState();
-}
-
-class _DesignerProfileSheetState extends State<DesignerProfileSheet> {
-  List<Map<String, dynamic>> _projects = const [];
-  bool _loading = true;
-  FollowState _follow = FollowState.empty;
-  bool _followBusy = false;
-  int _reviewCount = 0;
-  double? _avgRating;
-  /// LazyGridView parent scroll için sheet controller'ı.
-  ScrollController? _sheetCtrl;
-  /// LazyGridView'dan biriken projeler — _openProjectSwipe(i) için.
-  final List<Map<String, dynamic>> _loadedProjects = <Map<String, dynamic>>[];
-
-  @override
-  void initState() {
-    super.initState();
-    _loadAll();
-  }
-
-  Future<void> _loadAll() async {
-    // Projeler artık LazyGridView üzerinden paginated fetch — burada
-    // sadece follow + stats. _projects başlangıçta boş, grid kendi
-    // doldurur.
-    final followF = FollowService.stateFor(widget.designerId);
-    final statsF = _fetchStats();
-    final results =
-        await Future.wait([followF, statsF], eagerError: false);
-    if (!mounted) return;
-    setState(() {
-      _follow = results[0] as FollowState;
-      final stats = results[1] as Map<String, dynamic>?;
-      _reviewCount = (stats?['review_count'] as num?)?.toInt() ?? 0;
-      _avgRating = (stats?['avg_rating'] as num?)?.toDouble();
-      _loading = false;
-    });
-  }
-
-  // ignore: unused_element
-  Future<List<Map<String, dynamic>>> _fetchProjects() async {
-    try {
-      if (widget.designerId == 'evlumba-design') {
-        return List<Map<String, dynamic>>.from(widget.seedPool ?? const []);
-      }
-      return await EvlumbaLiveService.getProjects(
-        designerId: widget.designerId,
-        limit: 30,
-      );
-    } catch (e) {
-      debugPrint('profile projects load failed: $e');
-      return const [];
-    }
-  }
-
-  Future<Map<String, dynamic>?> _fetchStats() async {
-    try {
-      final res = await Supabase.instance.client
-          .from('v_designer_stats')
-          .select('review_count, avg_rating')
-          .eq('designer_id', widget.designerId)
-          .maybeSingle();
-      return res == null ? null : Map<String, dynamic>.from(res);
-    } catch (e) {
-      debugPrint('profile stats load failed: $e');
-      return null;
-    }
-  }
-
-  Future<void> _onFollowTap() async {
-    if (_followBusy) return;
-    setState(() => _followBusy = true);
-    final next = await FollowService.toggle(widget.designerId);
-    if (!mounted) return;
-    setState(() {
-      _follow = next;
-      _followBusy = false;
-    });
-  }
-
-  Future<void> _onMuteTap() async {
-    if (_followBusy || !_follow.following) return;
-    setState(() => _followBusy = true);
-    final next = await FollowService.muteToggle(widget.designerId);
-    if (!mounted) return;
-    setState(() {
-      _follow = next;
-      _followBusy = false;
-    });
-  }
-
-  String _coverOf(Map<String, dynamic> p) {
-    for (final k in ['cover_image_url', 'cover_url', 'image_url']) {
-      final v = (p[k] ?? '').toString().trim();
-      if (v.isNotEmpty && !v.startsWith('data:')) return v;
-    }
-    final imgs = p['designer_project_images'] as List?;
-    if (imgs != null && imgs.isNotEmpty) {
-      final sorted = List<Map<String, dynamic>>.from(
-        imgs.whereType<Map>().map((e) => Map<String, dynamic>.from(e)),
-      )..sort((a, b) => ((a['sort_order'] as num?)?.toInt() ?? 9999)
-          .compareTo((b['sort_order'] as num?)?.toInt() ?? 9999));
-      return (sorted.first['image_url'] ?? '').toString();
-    }
-    return '';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final d = widget.designer;
-    final name = ((d?['full_name'] ?? d?['business_name'] ?? '') as String)
-        .trim();
-    final profession = ((d?['profession'] ?? d?['specialty'] ?? '') as String)
-        .trim();
-    final city = ((d?['city'] ?? '') as String).trim();
-    final avatar = ((d?['avatar_url'] ?? '') as String).trim();
-    final bio = ((d?['bio'] ?? d?['about'] ?? '') as String).trim();
-    final isEvlumba = widget.designerId == 'evlumba-design';
-
-    return DraggableScrollableSheet(
-      initialChildSize: 0.92,
-      minChildSize: 0.55,
-      maxChildSize: 0.96,
-      expand: false,
-      builder: (context, scrollController) {
-        _sheetCtrl = scrollController;
-        return Column(
-          children: [
-            const SizedBox(height: 10),
-            Container(
-              width: 42,
-              height: 4,
-              decoration: BoxDecoration(
-                color: KoalaColors.border,
-                borderRadius: BorderRadius.circular(100),
-              ),
-            ),
-            Expanded(
-              child: ListView(
-                controller: scrollController,
-                padding: EdgeInsets.zero,
-                children: [
-                  _hero(name, profession, city, avatar, isEvlumba),
-                  _stats(),
-                  _actions(),
-                  if (bio.isNotEmpty) _aboutSection(bio),
-                  _projectsHeader(),
-                  _projectsGrid(),
-                  const SizedBox(height: 32),
-                ],
-              ),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  Widget _hero(String name, String profession, String city, String avatar,
-      bool isEvlumba) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            KoalaColors.accentSoft.withValues(alpha: 0.55),
-            KoalaColors.bg,
-          ],
-        ),
-      ),
-      child: Column(
-        children: [
-          _avatar(avatar, isEvlumba),
-          const SizedBox(height: 14),
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Flexible(
-                child: Text(
-                  name.isNotEmpty ? name : 'Tasarımcı',
-                  style: KoalaText.h2,
-                  textAlign: TextAlign.center,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              if (isVerifiedDesignerId(widget.designerId)) ...[
-                const SizedBox(width: 6),
-                const VerifiedBadge(size: 18),
-              ],
-            ],
-          ),
-          if (profession.isNotEmpty || city.isNotEmpty) ...[
-            const SizedBox(height: 4),
-            Text(
-              [profession, if (city.isNotEmpty) city]
-                  .where((s) => s.isNotEmpty)
-                  .join(' · '),
-              style: KoalaText.bodySec,
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _avatar(String url, bool isEvlumba) {
-    final hasUrl = url.isNotEmpty;
-    return Container(
-      width: 96,
-      height: 96,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        gradient: isEvlumba
-            ? const SweepGradient(
-                colors: [
-                  KoalaColors.accentDeep,
-                  KoalaColors.brandLight,
-                  Color(0xFFFFC44C),
-                  KoalaColors.accent,
-                  KoalaColors.accentDeep,
-                ],
-              )
-            : null,
-        color: isEvlumba ? null : Colors.transparent,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.10),
-            blurRadius: 18,
-            offset: const Offset(0, 6),
-          ),
-        ],
-      ),
-      padding: EdgeInsets.all(isEvlumba ? 3 : 0),
-      child: Container(
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: hasUrl ? Colors.white : KoalaColors.accentSoft,
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: hasUrl
-            ? CachedNetworkImage(
-                imageUrl: url,
-                fit: BoxFit.cover,
-                placeholder: (_, _) =>
-                    Container(color: KoalaColors.accentSoft),
-                errorWidget: (_, _, _) => const Center(
-                    child: Icon(LucideIcons.user,
-                        size: 36, color: KoalaColors.accentDeep)),
-              )
-            : const Center(
-                child: Icon(LucideIcons.user,
-                    size: 36, color: KoalaColors.accentDeep),
-              ),
-      ),
-    );
-  }
-
-  Widget _stats() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 4, 20, 16),
-      child: Row(
-        children: [
-          _stat(label: 'Tasarım', value: '${_projects.length}'),
-          _statDiv(),
-          _stat(
-            label: _reviewCount > 0
-                ? 'Puan ($_reviewCount)'
-                : 'Değerlendirme',
-            value: _avgRating != null
-                ? _avgRating!.toStringAsFixed(1)
-                : '—',
-            subtle: _avgRating == null,
-          ),
-          _statDiv(),
-          _stat(label: 'Yanıt', value: '24s'),
-        ],
-      ),
-    );
-  }
-
-  Widget _stat(
-      {required String label, required String value, bool subtle = false}) {
-    return Expanded(
-      child: Column(
-        children: [
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w700,
-              color: subtle ? KoalaColors.textTer : KoalaColors.text,
-              letterSpacing: -0.3,
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(label, style: KoalaText.labelSmall),
-        ],
-      ),
-    );
-  }
-
-  Widget _statDiv() =>
-      Container(width: 1, height: 26, color: KoalaColors.border);
-
-  Widget _actions() {
-    final following = _follow.following;
-    final muted = _follow.muted;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 0, 20, 18),
-      child: Row(
-        children: [
-          Expanded(
-            child: ElevatedButton.icon(
-              onPressed: _followBusy ? null : _onFollowTap,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: following
-                    ? KoalaColors.surface
-                    : KoalaColors.accentDeep,
-                foregroundColor: following
-                    ? KoalaColors.text
-                    : Colors.white,
-                disabledBackgroundColor: KoalaColors.surfaceAlt,
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                  side: following
-                      ? const BorderSide(
-                          color: KoalaColors.borderSolid, width: 1)
-                      : BorderSide.none,
-                ),
-                elevation: 0,
-              ),
-              icon: Icon(
-                following ? LucideIcons.check : LucideIcons.userPlus,
-                size: 18,
-              ),
-              label: Text(
-                following ? 'Takip ediliyor' : 'Takip et',
-                style: KoalaText.button.copyWith(
-                  color: following ? KoalaColors.text : Colors.white,
-                ),
-              ),
-            ),
-          ),
-          if (following) ...[
-            const SizedBox(width: 10),
-            _FollowMenuButton(
-              muted: muted,
-              busy: _followBusy,
-              onMute: _onMuteTap,
-              onUnfollow: _onFollowTap,
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _aboutSection(String bio) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 0, 20, 18),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('HAKKINDA', style: KoalaText.caption),
-          const SizedBox(height: 6),
-          Text(bio, style: KoalaText.body),
-        ],
-      ),
-    );
-  }
-
-  Widget _projectsHeader() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 4, 20, 10),
-      child: Row(
-        children: [
-          const Text('TASARIMLARI', style: KoalaText.caption),
-          const Spacer(),
-          if (_projects.isNotEmpty)
-            Text('${_projects.length} adet', style: KoalaText.labelSmall),
-        ],
-      ),
-    );
-  }
-
-  Widget _projectsGrid() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: LazyGridView<Map<String, dynamic>>(
-        shrinkWrap: true,
-        parentScrollController: _sheetCtrl,
-        crossAxisCount: 2,
-        aspectRatio: 0.78,
-        spacing: 10,
-        bottomThreshold: 320,
-        idOf: (p) =>
-            (p['id'] ?? p['cover_image_url'] ?? p['image_url'] ?? '')
-                .toString(),
-        fetch: (cursor) async {
-          final page = widget.designerId == KoalaSeedService.evlumbaDesignerId
-              ? await KoalaSeedService.evlumbaCardsPaged(
-                  limit: 18, beforeCreatedAt: cursor as String?)
-              : await EvlumbaLiveService.getDesignerProjectsPaged(
-                  widget.designerId,
-                  limit: 18,
-                  beforeCreatedAt: cursor as String?,
-                );
-          // _loadedProjects biriktir — tap navigation için.
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (!mounted) return;
-            final seen = <String>{
-              for (final m in _loadedProjects)
-                (m['id'] ?? m['cover_image_url'] ?? m['image_url'] ?? '')
-                    .toString()
-            };
-            final fresh = <Map<String, dynamic>>[];
-            for (final m in page.items) {
-              final id =
-                  (m['id'] ?? m['cover_image_url'] ?? m['image_url'] ?? '')
-                      .toString();
-              if (id.isEmpty || seen.contains(id)) continue;
-              seen.add(id);
-              fresh.add(m);
-            }
-            setState(() {
-              _loadedProjects.addAll(fresh);
-              _projects = _loadedProjects; // header/stats için
-            });
-          });
-          return page;
-        },
-        emptyState: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 24),
-          child: Center(
-            child: Text(
-              'Henüz yayınlanmış tasarım yok.',
-              style: KoalaText.bodySec,
-              textAlign: TextAlign.center,
-            ),
-          ),
-        ),
-        itemBuilder: (_, p, i) {
-          final cover = _coverOf(p);
-          final title = (p['title'] ?? '').toString();
-          return GestureDetector(
-            onTap: () => _openProjectSwipe(i),
-            behavior: HitTestBehavior.opaque,
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(14),
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  if (cover.isNotEmpty)
-                    CachedNetworkImage(
-                      imageUrl: cover,
-                      fit: BoxFit.cover,
-                      memCacheWidth: 400,
-                      placeholder: (_, _) =>
-                          Container(color: KoalaColors.surfaceAlt),
-                      errorWidget: (_, _, _) =>
-                          Container(color: KoalaColors.surfaceAlt),
-                    )
-                  else
-                    Container(color: KoalaColors.surfaceAlt),
-                  Positioned.fill(
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          colors: [
-                            Colors.transparent,
-                            Colors.black.withValues(alpha: 0.55),
-                          ],
-                          stops: const [0.55, 1.0],
-                        ),
-                      ),
-                    ),
-                  ),
-                  if (title.isNotEmpty)
-                    Positioned(
-                      left: 10,
-                      right: 10,
-                      bottom: 10,
-                      child: Text(
-                        title,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: -0.1,
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-            ),
-          );
-        },
-      ),
-    );
-  }
-
-  /// Tasarımcının tasarımlarından birine tıklanınca açılır — tam ekran
-  /// PageView ile diğer tasarımlara yatay swipe ederek geçiş. Her sayfada
-  /// persistent Sor butonu var (showAskAndApplySheet'i açar). Ekstra fetch
-  /// yok — _projects zaten yüklü.
-  void _openProjectSwipe(int initialIndex) {
-    final d = widget.designer;
-    final designerName =
-        ((d?['full_name'] ?? d?['business_name'] ?? '') as String).trim();
-    final designerAvatar = ((d?['avatar_url'] ?? '') as String).trim();
-    HapticFeedback.selectionClick();
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        fullscreenDialog: true,
-        builder: (_) => DesignerDesignSwipeScreen(
-          projects: List<Map<String, dynamic>>.from(_projects),
-          initialIndex: initialIndex,
-          designerId: widget.designerId,
-          designerName: designerName.isNotEmpty ? designerName : null,
-          designerAvatarUrl: designerAvatar.isNotEmpty ? designerAvatar : null,
-        ),
-      ),
-    );
-  }
-
-  // ignore: unused_element
-  void _showProjectPreview(String cover, String title) {
-    if (cover.isEmpty) return;
-    showDialog<void>(
-      context: context,
-      barrierColor: Colors.black.withValues(alpha: 0.9),
-      builder: (ctx) => Dialog(
-        backgroundColor: Colors.transparent,
-        insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(18),
-              child: CachedNetworkImage(
-                imageUrl: cover,
-                fit: BoxFit.contain,
-              ),
-            ),
-            const SizedBox(height: 12),
-            if (title.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Text(
-                  title,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-            const SizedBox(height: 12),
-            IconButton(
-              icon: const Icon(LucideIcons.x, color: Colors.white),
-              onPressed: () => Navigator.pop(ctx),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// "Takip ediliyor" yanındaki overflow düğmesi — sessize al / takipten çık.
-class _FollowMenuButton extends StatelessWidget {
-  final bool muted;
-  final bool busy;
-  final VoidCallback onMute;
-  final VoidCallback onUnfollow;
-  const _FollowMenuButton({
-    required this.muted,
-    required this.busy,
-    required this.onMute,
-    required this.onUnfollow,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return PopupMenuButton<String>(
-      enabled: !busy,
-      tooltip: 'Daha fazla',
-      icon: const Icon(LucideIcons.moreHorizontal, color: KoalaColors.text),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      color: KoalaColors.surface,
-      onSelected: (v) {
-        if (v == 'mute') onMute();
-        if (v == 'unfollow') onUnfollow();
-      },
-      itemBuilder: (_) => [
-        PopupMenuItem<String>(
-          value: 'mute',
-          child: Row(
-            children: [
-              Icon(
-                muted ? LucideIcons.bell : LucideIcons.bellOff,
-                size: 18,
-                color: KoalaColors.text,
-              ),
-              const SizedBox(width: 10),
-              Text(
-                muted ? 'Bildirimleri aç' : 'Bildirimleri sessize al',
-                style: KoalaText.label,
-              ),
-            ],
-          ),
-        ),
-        PopupMenuItem<String>(
-          value: 'unfollow',
-          child: Row(
-            children: [
-              const Icon(LucideIcons.userMinus,
-                  size: 18, color: KoalaColors.error),
-              const SizedBox(width: 10),
-              const Text(
-                'Takipten çık',
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w500,
-                  color: KoalaColors.error,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}

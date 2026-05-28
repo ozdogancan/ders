@@ -90,7 +90,20 @@ class ShareModerationResult {
   final bool ok;
   final String? reason;
   final String? detail;
-  const ShareModerationResult({required this.ok, this.reason, this.detail});
+  /// 2026-05-28 FIX 2: auto-detected room type (one of the closed enum
+  /// returned by the moderation API — 'salon', 'yatak_odasi', etc).
+  /// Empty when unsure or when ok==false.
+  final String roomType;
+  /// 2026-05-28 FIX 2: auto-detected style ('modern', 'minimal', ...).
+  /// Empty when unsure or when ok==false.
+  final String style;
+  const ShareModerationResult({
+    required this.ok,
+    this.reason,
+    this.detail,
+    this.roomType = '',
+    this.style = '',
+  });
 }
 
 class SharedDesignService {
@@ -158,6 +171,8 @@ class SharedDesignService {
         ok: j['ok'] == true,
         reason: j['reason']?.toString(),
         detail: j['detail']?.toString(),
+        roomType: (j['room_type'] ?? '').toString(),
+        style: (j['style'] ?? '').toString(),
       );
     } catch (e) {
       debugPrint('[SharedDesignService] moderate error: $e');

@@ -12,6 +12,7 @@
 // tile but route taps to gallery picker with an info snackbar, so the
 // affordance isn't hidden and discovery feels consistent across platforms.
 
+import 'dart:async';
 import 'dart:typed_data';
 import 'dart:ui';
 
@@ -50,7 +51,9 @@ Future<void> openShareUploadSheet(BuildContext context) async {
     enableDrag: true,
     isDismissible: true,
     barrierColor: Colors.black54,
-    constraints: BoxConstraints(maxHeight: mq.size.height * 0.92),
+    // 2026-05-28 FIX 2: cap to 0.85 so the sheet doesn't visually overflow
+    // beyond the popup area on tall devices.
+    constraints: BoxConstraints(maxHeight: mq.size.height * 0.85),
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
     ),
@@ -64,13 +67,29 @@ Future<void> openShareUploadSheet(BuildContext context) async {
 class _ShareUploadScreenState extends State<ShareUploadScreen>
     with TickerProviderStateMixin {
   final ImagePicker _picker = ImagePicker();
-  final TextEditingController _captionCtl = TextEditingController();
 
   Uint8List? _bytes;
-  int _step = 0; // 0=pick, 1=compose, 2=publishing
+  // 2026-05-28 FIX 2: step semantics
+  //   0 = picker (galeriden seç)
+  //   1 = analyze / review / reject — AI çalışırken loading, biterse ya
+  //       reject UI ya da onay UI (Yayınla butonu) gösterilir.
+  //   2 = publishing (yüklüyor / yayına alıyor)
+  int _step = 0;
   bool _busy = false;
-  String? _selectedRoom;
-  final Set<String> _selectedTags = <String>{};
+
+  // 2026-05-28 FIX 2: AI analysis state
+  // ─ _analyzing: AI çağrısı sürüyor (loading overlay).
+  // ─ _analyzeOk: API ok=true döndü → review UI.
+  // ─ _analyzeReject: API ok=false → reject UI.
+  // ─ _detectedRoom/_detectedStyle: ok=true ise ham anahtar (örn 'salon').
+  // ─ _uploadedUrl: ilk upload sonucu, publish'te tekrar yüklemiyoruz.
+  bool _analyzing = false;
+  bool _analyzeOk = false;
+  bool _analyzeReject = false;
+  String _detectedRoomRaw = ''; // e.g. 'salon', 'yatak_odasi'
+  String _detectedStyleRaw = ''; // e.g. 'modern'
+  String _rejectMsg = '';
+  String? _uploadedUrl;
 
   // Publishing sub-state.
   // 0=upload, 1=moderate, 2=publish, 3=done, -1=fail
@@ -79,26 +98,8 @@ class _ShareUploadScreenState extends State<ShareUploadScreen>
 
   late final AnimationController _sparkleCtl;
 
-  // Style discovery ekranı ile uyumlu Türkçe oda tipleri.
-  static const List<_RoomOpt> _rooms = [
-    _RoomOpt('living_room', 'Salon'),
-    _RoomOpt('bedroom', 'Yatak Odası'),
-    _RoomOpt('kitchen', 'Mutfak'),
-    _RoomOpt('bathroom', 'Banyo'),
-    _RoomOpt('dining_room', 'Yemek Odası'),
-    _RoomOpt('office', 'Çalışma'),
-    _RoomOpt('kids_room', 'Çocuk Odası'),
-    _RoomOpt('hall', 'Hol'),
-  ];
-
-  static const List<String> _tagOptions = [
-    'modern',
-    'minimal',
-    'skandinav',
-    'boho',
-    'klasik',
-    'endüstriyel',
-  ];
+  // 2026-05-28 FIX 2: oda/tarz seçim chip'leri kaldırıldı — AI tespit
+  // ediyor. Eski _rooms / _tagOptions sabitleri silindi.
 
   @override
   void initState() {
@@ -111,10 +112,51 @@ class _ShareUploadScreenState extends State<ShareUploadScreen>
 
   @override
   void dispose() {
-    _captionCtl.dispose();
     _sparkleCtl.dispose();
     super.dispose();
   }
+
+  // ─── 2026-05-28 FIX 2: kategori / tarz görünen etiketleri ───
+  // API ham anahtarları → kullanıcı yüzünde gösterilecek TR etiket.
+  static const Map<String, String> _kRoomLabel = {
+    'salon': 'Salon',
+    'yatak_odasi': 'Yatak Odası',
+    'mutfak': 'Mutfak',
+    'banyo': 'Banyo',
+    'antre': 'Antre',
+    'balkon': 'Balkon',
+    'yemek_odasi': 'Yemek Odası',
+    'cocuk_odasi': 'Çocuk Odası',
+    'ofis': 'Ofis',
+  };
+  static const Map<String, String> _kStyleLabel = {
+    'modern': 'Modern',
+    'minimal': 'Minimal',
+    'skandinav': 'Skandinav',
+    'klasik': 'Klasik',
+    'bohem': 'Bohem',
+    'endustriyel': 'Endüstriyel',
+    'luks': 'Lüks',
+    'japandi': 'Japandi',
+  };
+  // shared_designs DB konvansiyonu (style_discovery deck'i ile uyumlu)
+  // için backend ham anahtarını DB anahtarına çeviriyoruz.
+  static const Map<String, String> _kRoomToDbKey = {
+    'salon': 'living_room',
+    'yatak_odasi': 'bedroom',
+    'mutfak': 'kitchen',
+    'banyo': 'bathroom',
+    'antre': 'hall',
+    'balkon': 'balcony',
+    'yemek_odasi': 'dining_room',
+    'cocuk_odasi': 'kids_room',
+    'ofis': 'office',
+  };
+
+  String get _detectedRoomLabel =>
+      _kRoomLabel[_detectedRoomRaw] ?? '';
+  String get _detectedStyleLabel =>
+      _kStyleLabel[_detectedStyleRaw] ?? '';
 
   // ─── Step 1: foto seç ───
   Future<void> _pick(ImageSource source) async {
@@ -137,12 +179,73 @@ class _ShareUploadScreenState extends State<ShareUploadScreen>
       setState(() {
         _bytes = optimized;
         _step = 1;
+        _analyzing = true;
+        _analyzeOk = false;
+        _analyzeReject = false;
+        _detectedRoomRaw = '';
+        _detectedStyleRaw = '';
+        _rejectMsg = '';
+        _uploadedUrl = null;
       });
+      // 2026-05-28 FIX 2: AI analyze → review/reject UI before publish.
+      unawaited(_analyze());
     } catch (e) {
       // Don't block UI — surface actual error so user knows what went wrong
       // (e.g. permission denied vs. cancelled).
       _snack('Fotoğraf seçilemedi: $e');
     }
+  }
+
+  // 2026-05-28 FIX 2: AI uygunluk + kategori/tarz analizi.
+  // Upload → moderate. Sonuçta ya review UI ya reject UI'e geçeriz.
+  // publish() çağrısı kullanıcıya kalır (Yayınla butonu).
+  Future<void> _analyze() async {
+    if (_bytes == null) return;
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      _snack('Önce giriş yap');
+      if (mounted) {
+        setState(() {
+          _analyzing = false;
+          _step = 0;
+        });
+      }
+      return;
+    }
+
+    // 1) Upload — moderate API public URL bekliyor.
+    final url = await SharedDesignService.uploadImage(_bytes!);
+    if (url == null) {
+      if (!mounted) return;
+      setState(() {
+        _analyzing = false;
+        _analyzeReject = true;
+        _rejectMsg = 'Fotoğraf yüklenemedi — bağlantını kontrol et.';
+      });
+      return;
+    }
+
+    // 2) Moderate + kategori/tarz tespiti.
+    final mod = await SharedDesignService.moderate(imageUrl: url);
+    if (!mounted) return;
+    if (!mod.ok) {
+      setState(() {
+        _analyzing = false;
+        _analyzeReject = true;
+        _rejectMsg = _humanReason(mod.reason ?? 'unknown');
+        _uploadedUrl = url; // not used; we re-upload on retry anyway.
+      });
+      return;
+    }
+
+    // 3) Onaylandı — review UI.
+    setState(() {
+      _analyzing = false;
+      _analyzeOk = true;
+      _detectedRoomRaw = mod.roomType;
+      _detectedStyleRaw = mod.style;
+      _uploadedUrl = url;
+    });
   }
 
   // Decode + 1280 max edge + JPG q75. Memory koruma için tek pass.
@@ -163,7 +266,9 @@ class _ShareUploadScreenState extends State<ShareUploadScreen>
     }
   }
 
-  // ─── Step 3: yayınla ───
+  // ─── Step 2: yayınla ───
+  // 2026-05-28 FIX 2: artık burada upload + moderate yok — onlar analyze
+  // fazında bitti. Sadece publish (insert) yapıyoruz.
   Future<void> _publish() async {
     if (_bytes == null || _busy) return;
     final user = FirebaseAuth.instance.currentUser;
@@ -171,41 +276,31 @@ class _ShareUploadScreenState extends State<ShareUploadScreen>
       _snack('Önce giriş yap');
       return;
     }
+    final url = _uploadedUrl;
+    if (url == null) {
+      // Defensive: shouldn't happen because Yayınla only enabled after ok.
+      _snack('Önce fotoğraf analiz edilmeli');
+      return;
+    }
 
     setState(() {
       _busy = true;
       _step = 2;
-      _pubPhase = 0;
+      _pubPhase = 2; // upload + moderate done, jump straight to publish phase.
       _failMsg = null;
     });
 
-    // 1) Upload
-    final url = await SharedDesignService.uploadImage(_bytes!);
-    if (url == null) {
-      _fail('Yükleme başarısız — bağlantını kontrol et');
-      return;
-    }
-    if (!mounted) return;
-    setState(() => _pubPhase = 1);
+    // DB için ham anahtarı standartlaştır.
+    final dbRoom = _kRoomToDbKey[_detectedRoomRaw] ?? _detectedRoomRaw;
+    final tags = <String>[
+      if (_detectedStyleRaw.isNotEmpty) _detectedStyleRaw,
+    ];
 
-    // 2) AI moderation
-    final mod = await SharedDesignService.moderate(imageUrl: url);
-    if (!mod.ok) {
-      final reason = mod.reason ?? 'unknown';
-      _fail(_humanReason(reason));
-      return;
-    }
-    if (!mounted) return;
-    setState(() => _pubPhase = 2);
-
-    // 3) Insert published row
     final saved = await SharedDesignService.publish(
       imageUrl: url,
-      description: _captionCtl.text.trim().isEmpty
-          ? null
-          : _captionCtl.text.trim(),
-      roomType: _selectedRoom,
-      tags: _selectedTags.toList(),
+      description: null,
+      roomType: dbRoom.isEmpty ? null : dbRoom,
+      tags: tags,
     );
     if (saved == null) {
       _fail('Yayınlanamadı — tekrar dene');
@@ -260,11 +355,20 @@ class _ShareUploadScreenState extends State<ShareUploadScreen>
   }
 
   void _retryFromFail() {
+    // 2026-05-28 FIX 2: tüm analiz/state'i sıfırla, picker'a dön.
     setState(() {
-      _step = 1;
+      _step = 0;
+      _bytes = null;
       _busy = false;
       _pubPhase = 0;
       _failMsg = null;
+      _analyzing = false;
+      _analyzeOk = false;
+      _analyzeReject = false;
+      _detectedRoomRaw = '';
+      _detectedStyleRaw = '';
+      _rejectMsg = '';
+      _uploadedUrl = null;
     });
   }
 
@@ -289,7 +393,11 @@ class _ShareUploadScreenState extends State<ShareUploadScreen>
               elevation: 0,
               surfaceTintColor: KoalaColors.bg,
               title: Text(
-                _step == 1 ? 'Yeni gönderi' : 'Yayınlanıyor',
+                _step == 1
+                    ? (_analyzing
+                        ? 'Analiz ediliyor'
+                        : (_analyzeReject ? 'Uygun değil' : 'Onayla ve yayınla'))
+                    : 'Yayınlanıyor',
                 style: KoalaText.h2,
               ),
               leading: KoalaBackButton(
@@ -297,39 +405,13 @@ class _ShareUploadScreenState extends State<ShareUploadScreen>
                     ? () {}
                     : () {
                         if (_step == 1) {
-                          setState(() => _step = 0);
+                          _retryFromFail();
                         } else {
                           Navigator.of(context).pop();
                         }
                       },
               ),
               leadingWidth: 64,
-              actions: [
-                if (_step == 1)
-                  Padding(
-                    padding: const EdgeInsets.only(right: KoalaSpacing.md),
-                    child: TextButton(
-                      onPressed: _busy ? null : _publish,
-                      style: TextButton.styleFrom(
-                        backgroundColor: KoalaColors.accent,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 16, vertical: 8),
-                        shape: RoundedRectangleBorder(
-                          borderRadius:
-                              BorderRadius.circular(KoalaRadius.pill),
-                        ),
-                      ),
-                      child: const Text(
-                        'Yayınla',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w700,
-                          fontSize: 14,
-                        ),
-                      ),
-                    ),
-                  ),
-              ],
             ),
       body: AnimatedSwitcher(
         duration: const Duration(milliseconds: 240),
@@ -347,10 +429,11 @@ class _ShareUploadScreenState extends State<ShareUploadScreen>
         },
         child: KeyedSubtree(
           key: ValueKey<int>(_step),
+          // 2026-05-28 FIX 2: step 1 artık AI review/reject ekranı.
           child: _step == 0
               ? _stepPick()
               : _step == 1
-                  ? _stepCompose()
+                  ? _stepReview()
                   : _stepPublishing(),
         ),
       ),
@@ -455,22 +538,14 @@ class _ShareUploadScreenState extends State<ShareUploadScreen>
                               textAlign: TextAlign.center,
                             ),
                             const SizedBox(height: KoalaSpacing.xxl),
+                            // 2026-05-28 FIX 2: Camera tile removed — only
+                            // gallery picker, prominent single tile.
                             _pickTile(
                               icon: LucideIcons.image,
                               label: 'Galeriden seç',
                               sub: 'Cihazındaki bir fotoğrafı yükle',
                               gradient: true,
                               onTap: () => _pick(ImageSource.gallery),
-                            ),
-                            const SizedBox(height: KoalaSpacing.md),
-                            _pickTile(
-                              icon: LucideIcons.camera,
-                              label: 'Kamera ile çek',
-                              sub: kIsWeb
-                                  ? 'Tarayıcıda galeri açılır'
-                                  : 'Anlık bir fotoğraf çek',
-                              gradient: false,
-                              onTap: () => _pick(ImageSource.camera),
                             ),
                             const SizedBox(height: KoalaSpacing.lg),
                             const Text(
@@ -496,35 +571,64 @@ class _ShareUploadScreenState extends State<ShareUploadScreen>
     );
   }
 
-  // Gemini-generated hero (16:9). Falls back to onboarding asset, then to
-  // brand gradient if neither loads — so screen never breaks.
-  static const String _heroUrl =
+  // Gemini-generated hero (16:9). 2026-05-28 FIX 2: v2 (cinematic editorial)
+  // is the primary; falls back to v1, then onboarding asset, then brand
+  // gradient if nothing loads — so screen never breaks.
+  static const String _heroUrlV2 =
+      'https://xgefjepaqnghaotqybpi.supabase.co/storage/v1/object/public/koala-seed/share/hero-v2.webp';
+  static const String _heroUrlV1 =
       'https://xgefjepaqnghaotqybpi.supabase.co/storage/v1/object/public/koala-seed/share/hero-v1.webp';
 
   Widget _heroIllustration() {
     return Stack(
       fit: StackFit.expand,
       children: [
-        // Background image with cascading fallback: remote → asset → gradient.
+        // Background image with cascading fallback: v2 → v1 → asset → gradient.
         CachedNetworkImage(
-          imageUrl: _heroUrl,
+          imageUrl: _heroUrlV2,
           fit: BoxFit.cover,
           fadeInDuration: const Duration(milliseconds: 260),
-          placeholder: (_, __) => Image.asset(
-            'assets/onboarding/step2.webp',
+          placeholder: (_, __) => CachedNetworkImage(
+            imageUrl: _heroUrlV1,
             fit: BoxFit.cover,
-            errorBuilder: (_, __, ___) => Container(
-              decoration: const BoxDecoration(
-                gradient: KoalaColors.accentGradientV,
+            placeholder: (_, __) => Image.asset(
+              'assets/onboarding/step2.webp',
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => Container(
+                decoration: const BoxDecoration(
+                  gradient: KoalaColors.accentGradientV,
+                ),
+              ),
+            ),
+            errorWidget: (_, __, ___) => Image.asset(
+              'assets/onboarding/step2.webp',
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => Container(
+                decoration: const BoxDecoration(
+                  gradient: KoalaColors.accentGradientV,
+                ),
               ),
             ),
           ),
-          errorWidget: (_, __, ___) => Image.asset(
-            'assets/onboarding/step2.webp',
+          errorWidget: (_, __, ___) => CachedNetworkImage(
+            imageUrl: _heroUrlV1,
             fit: BoxFit.cover,
-            errorBuilder: (_, __, ___) => Container(
-              decoration: const BoxDecoration(
-                gradient: KoalaColors.accentGradientV,
+            placeholder: (_, __) => Image.asset(
+              'assets/onboarding/step2.webp',
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => Container(
+                decoration: const BoxDecoration(
+                  gradient: KoalaColors.accentGradientV,
+                ),
+              ),
+            ),
+            errorWidget: (_, __, ___) => Image.asset(
+              'assets/onboarding/step2.webp',
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => Container(
+                decoration: const BoxDecoration(
+                  gradient: KoalaColors.accentGradientV,
+                ),
               ),
             ),
           ),
@@ -669,215 +773,337 @@ class _ShareUploadScreenState extends State<ShareUploadScreen>
     );
   }
 
-  // ─── Step 2: Compose ───
-  Widget _stepCompose() {
+  // ─── Step 2 (FIX 2): AI Analyze → Review / Reject ───
+  // 3 alt-state:
+  //   _analyzing   → loading overlay (spinner + "Analiz ediliyor")
+  //   _analyzeReject → uygun değil ekranı (soft red, Başka fotoğraf seç)
+  //   _analyzeOk   → onay ekranı (görsel + chip'ler + Yayınla butonu)
+  Widget _stepReview() {
+    if (_analyzing) return _reviewAnalyzing();
+    if (_analyzeReject) return _reviewReject();
+    return _reviewOk();
+  }
+
+  // Loading state — premium-quiet: küçük spinner + tek satır metin.
+  Widget _reviewAnalyzing() {
     return SafeArea(
-      child: LayoutBuilder(
-        builder: (context, c) {
-          final previewH = c.maxHeight * 0.45;
-          return Stack(
-            children: [
-              SingleChildScrollView(
-                physics: const ClampingScrollPhysics(),
-                padding: EdgeInsets.fromLTRB(
-                  KoalaSpacing.lg,
-                  KoalaSpacing.sm,
-                  KoalaSpacing.lg,
-                  // bottom space for pinned bar.
-                  88,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          if (_bytes != null)
+            ImageFiltered(
+              imageFilter: ImageFilter.blur(sigmaX: 22, sigmaY: 22),
+              child: Image.memory(_bytes!, fit: BoxFit.cover),
+            ),
+          Container(color: KoalaColors.bg.withValues(alpha: 0.82)),
+          Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _publishingBlock(false),
+                const SizedBox(height: KoalaSpacing.xl),
+                const Text(
+                  'Analiz ediliyor…',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: KoalaColors.text,
+                  ),
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    // Preview
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(20),
-                      child: SizedBox(
-                        height: previewH,
-                        width: double.infinity,
-                        child: _bytes == null
-                            ? Container(color: KoalaColors.surfaceAlt)
-                            : Image.memory(_bytes!, fit: BoxFit.cover),
-                      ),
-                    ),
-                    const SizedBox(height: KoalaSpacing.lg),
-                    // Card with form
-                    Container(
-                      padding: const EdgeInsets.all(KoalaSpacing.lg),
-                      decoration: BoxDecoration(
-                        color: KoalaColors.surface,
-                        borderRadius:
-                            BorderRadius.circular(KoalaRadius.lg),
-                        border: Border.all(
-                            color: KoalaColors.border, width: 0.5),
-                        boxShadow: KoalaShadows.card,
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          const Text('Açıklama', style: KoalaText.label),
-                          const SizedBox(height: KoalaSpacing.sm),
-                          TextField(
-                            controller: _captionCtl,
-                            maxLength: 250,
-                            maxLines: 4,
-                            style: KoalaText.body,
-                            decoration: InputDecoration(
-                              hintText:
-                                  'Bu mekan hakkında bir şeyler yaz…',
-                              hintStyle: KoalaText.hint,
-                              filled: true,
-                              fillColor: KoalaColors.surfaceMuted,
-                              contentPadding: const EdgeInsets.all(14),
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(
-                                    KoalaRadius.sm),
-                                borderSide: BorderSide(
-                                    color: KoalaColors.border),
-                              ),
-                              enabledBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(
-                                    KoalaRadius.sm),
-                                borderSide: BorderSide(
-                                    color: KoalaColors.border),
-                              ),
-                              focusedBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(
-                                    KoalaRadius.sm),
-                                borderSide: const BorderSide(
-                                    color: KoalaColors.accent,
-                                    width: 1.4),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: KoalaSpacing.md),
-                          const Text('Oda tipi', style: KoalaText.label),
-                          const SizedBox(height: KoalaSpacing.sm),
-                          Wrap(
-                            spacing: KoalaSpacing.sm,
-                            runSpacing: KoalaSpacing.sm,
-                            children: _rooms.map((r) {
-                              final on = _selectedRoom == r.key;
-                              return _chip(
-                                label: r.label,
-                                selected: on,
-                                onTap: () => setState(() =>
-                                    _selectedRoom = on ? null : r.key),
-                              );
-                            }).toList(),
-                          ),
-                          const SizedBox(height: KoalaSpacing.lg),
-                          const Text('Tarz etiketleri',
-                              style: KoalaText.label),
-                          const SizedBox(height: KoalaSpacing.sm),
-                          Wrap(
-                            spacing: KoalaSpacing.sm,
-                            runSpacing: KoalaSpacing.sm,
-                            children: _tagOptions.map((t) {
-                              final on = _selectedTags.contains(t);
-                              return _chip(
-                                label: t,
-                                selected: on,
-                                onTap: () {
-                                  setState(() {
-                                    if (on) {
-                                      _selectedTags.remove(t);
-                                    } else {
-                                      _selectedTags.add(t);
-                                    }
-                                  });
-                                },
-                              );
-                            }).toList(),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
+                const SizedBox(height: 8),
+                Text(
+                  'AI fotoğrafını inceliyor — birkaç saniye sürer.',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: KoalaColors.textSec,
+                    height: 1.4,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Reject state — premium-warm: turuncu daire + sad-koala ikon + açıklama.
+  Widget _reviewReject() {
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.all(KoalaSpacing.xl),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 104,
+              height: 104,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: const Color(0xFFFFEDDD),
+                border: Border.all(
+                  color: const Color(0xFFFFB680),
+                  width: 1.2,
                 ),
               ),
-              // Pinned bottom bar
-              Positioned(
-                left: 0,
-                right: 0,
-                bottom: 0,
-                child: Container(
-                  padding: const EdgeInsets.fromLTRB(
-                      KoalaSpacing.lg, KoalaSpacing.md,
-                      KoalaSpacing.lg, KoalaSpacing.lg),
-                  decoration: BoxDecoration(
-                    color: KoalaColors.bg.withValues(alpha: 0.92),
-                    border: Border(
-                      top: BorderSide(
-                          color: KoalaColors.border, width: 0.5),
-                    ),
+              child: const Icon(
+                LucideIcons.imageOff,
+                size: 44,
+                color: Color(0xFFC25A1A),
+              ),
+            ),
+            const SizedBox(height: KoalaSpacing.xl),
+            const Text(
+              'Bu fotoğraf uygun değil',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w800,
+                color: KoalaColors.text,
+                letterSpacing: -0.3,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 10),
+            Text(
+              _rejectMsg.isEmpty
+                  ? 'Bir oda fotoğrafı bekliyoruz. Başka bir görsel deneyebilirsin.'
+                  : _rejectMsg,
+              style: const TextStyle(
+                fontSize: 14,
+                color: KoalaColors.textSec,
+                height: 1.45,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: KoalaSpacing.xl),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: _retryFromFail,
+                icon: const Icon(LucideIcons.image, size: 18),
+                label: const Text(
+                  'Başka bir fotoğraf seç',
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
                   ),
-                  child: Row(
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: KoalaColors.accent,
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius:
+                        BorderRadius.circular(KoalaRadius.pill),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text(
+                'Vazgeç',
+                style: TextStyle(
+                  color: KoalaColors.textSec,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // OK state — görsel preview + "Analiz tamamlandı" kartı + Yayınla butonu.
+  Widget _reviewOk() {
+    final hasRoom = _detectedRoomLabel.isNotEmpty;
+    final hasStyle = _detectedStyleLabel.isNotEmpty;
+    return SafeArea(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(
+          KoalaSpacing.lg,
+          KoalaSpacing.sm,
+          KoalaSpacing.lg,
+          KoalaSpacing.xl,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Preview — 280h, rounded 16.
+            ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: SizedBox(
+                height: 280,
+                width: double.infinity,
+                child: _bytes == null
+                    ? Container(color: KoalaColors.surfaceAlt)
+                    : Image.memory(_bytes!, fit: BoxFit.cover),
+              ),
+            ),
+            const SizedBox(height: KoalaSpacing.lg),
+            // Analiz tamamlandı kartı.
+            Container(
+              padding: const EdgeInsets.all(KoalaSpacing.lg),
+              decoration: BoxDecoration(
+                color: KoalaColors.surface,
+                borderRadius: BorderRadius.circular(KoalaRadius.lg),
+                border: Border.all(
+                  color: KoalaColors.accent.withValues(alpha: 0.35),
+                  width: 1,
+                ),
+                boxShadow: KoalaShadows.card,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
                     children: [
-                      Expanded(
-                        flex: 1,
-                        child: OutlinedButton(
-                          onPressed: _busy
-                              ? null
-                              : () => setState(() => _step = 0),
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: KoalaColors.text,
-                            side: BorderSide(
-                                color: KoalaColors.borderSolid),
-                            padding: const EdgeInsets.symmetric(
-                                vertical: 14),
-                            shape: RoundedRectangleBorder(
-                              borderRadius:
-                                  BorderRadius.circular(KoalaRadius.md),
-                            ),
-                          ),
-                          child: const Text(
-                            'Geri',
-                            style: TextStyle(
-                                fontWeight: FontWeight.w600,
-                                fontSize: 15),
-                          ),
+                      Container(
+                        padding: const EdgeInsets.all(7),
+                        decoration: BoxDecoration(
+                          color: KoalaColors.accent.withValues(alpha: 0.14),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          LucideIcons.sparkles,
+                          size: 16,
+                          color: KoalaColors.accentDeep,
                         ),
                       ),
-                      const SizedBox(width: KoalaSpacing.md),
-                      Expanded(
-                        flex: 2,
-                        child: ElevatedButton(
-                          onPressed: _busy ? null : _publish,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: KoalaColors.accent,
-                            foregroundColor: Colors.white,
-                            elevation: 0,
-                            padding: const EdgeInsets.symmetric(
-                                vertical: 14),
-                            shape: RoundedRectangleBorder(
-                              borderRadius:
-                                  BorderRadius.circular(KoalaRadius.md),
-                            ),
-                          ),
-                          child: const Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Text(
-                                'Devam et',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 15,
-                                ),
-                              ),
-                              SizedBox(width: 6),
-                              Icon(LucideIcons.arrowRight, size: 18),
-                            ],
+                      const SizedBox(width: 10),
+                      const Expanded(
+                        child: Text(
+                          'Analiz tamamlandı',
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w800,
+                            color: KoalaColors.text,
+                            letterSpacing: -0.2,
                           ),
                         ),
                       ),
                     ],
                   ),
+                  if (hasRoom || hasStyle) ...[
+                    const SizedBox(height: KoalaSpacing.md),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        if (hasRoom)
+                          _analysisChip(
+                            icon: LucideIcons.layoutGrid,
+                            label: 'Kategori: $_detectedRoomLabel',
+                          ),
+                        if (hasStyle)
+                          _analysisChip(
+                            icon: LucideIcons.palette,
+                            label: 'Tarz: $_detectedStyleLabel',
+                          ),
+                      ],
+                    ),
+                  ],
+                  const SizedBox(height: KoalaSpacing.md),
+                  Text(
+                    hasRoom || hasStyle
+                        ? 'Tasarımını kategorize ettik. Doğru görünüyorsa yayınla.'
+                        : 'Fotoğraf onaylandı — yayınlamaya hazır.',
+                    style: const TextStyle(
+                      fontSize: 13,
+                      color: KoalaColors.textSec,
+                      height: 1.45,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: KoalaSpacing.xl),
+            // Yayınla — premium purple gradient.
+            Container(
+              decoration: BoxDecoration(
+                gradient: KoalaColors.accentGradient,
+                borderRadius:
+                    BorderRadius.circular(KoalaRadius.pill),
+                boxShadow: KoalaShadows.accentGlow,
+              ),
+              child: SizedBox(
+                height: 52,
+                child: ElevatedButton.icon(
+                  onPressed: _busy ? null : _publish,
+                  icon: const Icon(LucideIcons.sparkles, size: 18),
+                  label: const Text(
+                    'Yayınla ✨',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: -0.2,
+                    ),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.transparent,
+                    shadowColor: Colors.transparent,
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius:
+                          BorderRadius.circular(KoalaRadius.pill),
+                    ),
+                  ),
                 ),
               ),
-            ],
-          );
-        },
+            ),
+            const SizedBox(height: 8),
+            Center(
+              child: TextButton.icon(
+                onPressed: _retryFromFail,
+                icon: const Icon(LucideIcons.image,
+                    size: 14, color: KoalaColors.textSec),
+                label: const Text(
+                  'Başka fotoğraf seç',
+                  style: TextStyle(
+                    color: KoalaColors.textSec,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 13,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _analysisChip({required IconData icon, required String label}) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+      decoration: BoxDecoration(
+        color: KoalaColors.accent.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(100),
+        border: Border.all(
+          color: KoalaColors.accent.withValues(alpha: 0.40),
+          width: 0.8,
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 13, color: KoalaColors.accentDeep),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: const TextStyle(
+              fontSize: 12.5,
+              fontWeight: FontWeight.w700,
+              color: KoalaColors.accentDeep,
+              letterSpacing: -0.1,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1092,42 +1318,7 @@ class _ShareUploadScreenState extends State<ShareUploadScreen>
     );
   }
 
-  // ─── Bits ───
-  Widget _chip({
-    required String label,
-    required bool selected,
-    required VoidCallback onTap,
-  }) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(KoalaRadius.pill),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 160),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-        decoration: BoxDecoration(
-          color: selected ? KoalaColors.accent : KoalaColors.surface,
-          borderRadius: BorderRadius.circular(KoalaRadius.pill),
-          border: Border.all(
-            color: selected
-                ? KoalaColors.accent
-                : KoalaColors.borderSolid,
-          ),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            color: selected ? Colors.white : KoalaColors.text,
-            fontWeight: FontWeight.w600,
-            fontSize: 13,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _RoomOpt {
-  final String key;
-  final String label;
-  const _RoomOpt(this.key, this.label);
+  // 2026-05-28 FIX 2: _chip helper ve _RoomOpt class kaldırıldı —
+  // kategori/tarz chip'leri AI tarafından dolduruluyor, _analysisChip
+  // doğrudan label'ı render ediyor.
 }

@@ -19,6 +19,30 @@ import 'package:lucide_icons/lucide_icons.dart';
 import '../../core/theme/koala_tokens.dart';
 import '../../services/user_profile_service.dart';
 
+// ─── Türkiye'nin 81 ili (alfabetik) ──────────────────────────────────
+// 2026-05-28 FIX 4: il seçici için sabit liste. Popüler iller (İstanbul,
+// Ankara, İzmir, Bursa, Antalya) seçici sheet'inde ayrı bir bölümde önce
+// gösterilir, ardından alfabetik tam liste gelir.
+const List<String> _kTurkishProvinces = <String>[
+  'Adana', 'Adıyaman', 'Afyonkarahisar', 'Ağrı', 'Aksaray', 'Amasya',
+  'Ankara', 'Antalya', 'Ardahan', 'Artvin', 'Aydın', 'Balıkesir',
+  'Bartın', 'Batman', 'Bayburt', 'Bilecik', 'Bingöl', 'Bitlis', 'Bolu',
+  'Burdur', 'Bursa', 'Çanakkale', 'Çankırı', 'Çorum', 'Denizli',
+  'Diyarbakır', 'Düzce', 'Edirne', 'Elazığ', 'Erzincan', 'Erzurum',
+  'Eskişehir', 'Gaziantep', 'Giresun', 'Gümüşhane', 'Hakkari', 'Hatay',
+  'Iğdır', 'Isparta', 'İstanbul', 'İzmir', 'Kahramanmaraş', 'Karabük',
+  'Karaman', 'Kars', 'Kastamonu', 'Kayseri', 'Kilis', 'Kırıkkale',
+  'Kırklareli', 'Kırşehir', 'Kocaeli', 'Konya', 'Kütahya', 'Malatya',
+  'Manisa', 'Mardin', 'Mersin', 'Muğla', 'Muş', 'Nevşehir', 'Niğde',
+  'Ordu', 'Osmaniye', 'Rize', 'Sakarya', 'Samsun', 'Şanlıurfa', 'Siirt',
+  'Sinop', 'Sivas', 'Şırnak', 'Tekirdağ', 'Tokat', 'Trabzon', 'Tunceli',
+  'Uşak', 'Van', 'Yalova', 'Yozgat', 'Zonguldak',
+];
+
+const List<String> _kPopularProvinces = <String>[
+  'İstanbul', 'Ankara', 'İzmir', 'Bursa', 'Antalya',
+];
+
 /// Profesyonel başvuru sheet'ini açar. Settings ekranı bunu kullanır.
 Future<bool?> showProApplicationSheet(BuildContext context) {
   return showModalBottomSheet<bool>(
@@ -32,9 +56,12 @@ Future<bool?> showProApplicationSheet(BuildContext context) {
       maxHeight: MediaQuery.of(context).size.height * 0.88,
     ),
     shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
     ),
-    builder: (_) => const ProApplicationSheet(),
+    builder: (_) => const ClipRRect(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      child: ProApplicationSheet(),
+    ),
   );
 }
 
@@ -369,13 +396,52 @@ class _ProApplicationSheetState extends ConsumerState<ProApplicationSheet>
           icon: LucideIcons.user,
         ),
         const SizedBox(height: 22),
-        _UnderlineField(
+        // 2026-05-28 FIX 4: konum çek pill + 81 il picker.
+        Align(
+          alignment: Alignment.centerLeft,
+          child: _LocationPill(onTap: _fillCityFromLocation),
+        ),
+        const SizedBox(height: 10),
+        _CityPickerField(
           controller: _city,
-          label: 'Şehir',
-          icon: LucideIcons.mapPin,
+          onTap: _openCityPicker,
         ),
       ],
     );
+  }
+
+  // ─── FIX 4: il seçici sheet ──────────────────────────────────────
+  Future<void> _openCityPicker() async {
+    HapticFeedback.selectionClick();
+    final picked = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: KoalaColors.bg,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (_) => _CityPickerSheet(current: _city.text.trim()),
+    );
+    if (picked != null && picked.isNotEmpty) {
+      setState(() => _city.text = picked);
+    }
+  }
+
+  // ─── FIX 4: konum çek (geolocator yok → bilgi snackbar) ──────────
+  Future<void> _fillCityFromLocation() async {
+    HapticFeedback.selectionClick();
+    if (!mounted) return;
+    // geolocator paketi henüz pubspec'te yok; kullanıcıyı manuel seçime
+    // yönlendir ama akışı bloklamadan.
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content:
+            Text('Konum servisi yakında — şimdilik listeden seçebilirsin.'),
+        behavior: SnackBarBehavior.floating,
+        duration: Duration(seconds: 2),
+      ),
+    );
+    await _openCityPicker();
   }
 
   Widget _buildStep2() {
@@ -1117,6 +1183,341 @@ class _GradientPrimaryButton extends StatelessWidget {
             shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(16)),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// 2026-05-28 FIX 4 — Şehir seçici: tap'lı picker field + 81 il sheet +
+// "Konumumdan çek" pill. geolocator paketi eklenirse _LocationPill içinde
+// kullanılabilir; şimdilik snackbar bilgi mesajı + manuel seçim.
+// ═══════════════════════════════════════════════════════════════════════
+
+class _LocationPill extends StatelessWidget {
+  final VoidCallback onTap;
+  const _LocationPill({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(100),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(100),
+        child: Container(
+          padding:
+              const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+          decoration: BoxDecoration(
+            color: KoalaColors.accent.withValues(alpha: 0.10),
+            borderRadius: BorderRadius.circular(100),
+            border: Border.all(
+              color: KoalaColors.accentDeep.withValues(alpha: 0.30),
+              width: 0.8,
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: const [
+              Icon(LucideIcons.mapPin,
+                  size: 13, color: KoalaColors.accentDeep),
+              SizedBox(width: 6),
+              Text(
+                'Konumumdan çek',
+                style: TextStyle(
+                  fontFamily: 'Manrope',
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w700,
+                  color: KoalaColors.accentDeep,
+                  letterSpacing: -0.1,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Tap-only field that visually matches `_UnderlineField` but opens the
+/// city picker sheet instead of accepting keyboard input.
+class _CityPickerField extends StatelessWidget {
+  final TextEditingController controller;
+  final VoidCallback onTap;
+  const _CityPickerField({required this.controller, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final hasText = controller.text.trim().isNotEmpty;
+    final accentColor =
+        hasText ? KoalaColors.accentDeep : KoalaColors.textSec;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            AnimatedDefaultTextStyle(
+              duration: const Duration(milliseconds: 180),
+              style: TextStyle(
+                fontFamily: 'Manrope',
+                fontSize: hasText ? 11 : 14,
+                fontWeight: FontWeight.w600,
+                color: accentColor,
+                letterSpacing: hasText ? 0.4 : 0,
+              ),
+              child: Text(hasText ? 'ŞEHİR' : 'Şehir'),
+            ),
+            const SizedBox(height: 4),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Icon(
+                    LucideIcons.mapPin,
+                    size: 16,
+                    color: accentColor,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.only(bottom: 8, top: 4),
+                    child: Text(
+                      hasText ? controller.text : 'İlini seç',
+                      style: TextStyle(
+                        fontFamily: 'Manrope',
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                        color: hasText
+                            ? KoalaColors.text
+                            : KoalaColors.textTer,
+                      ),
+                    ),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Icon(
+                    LucideIcons.chevronDown,
+                    size: 16,
+                    color: accentColor,
+                  ),
+                ),
+              ],
+            ),
+            Container(
+              height: 1,
+              color: hasText
+                  ? KoalaColors.accentDeep.withValues(alpha: 0.50)
+                  : KoalaColors.border,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CityPickerSheet extends StatefulWidget {
+  final String current;
+  const _CityPickerSheet({required this.current});
+
+  @override
+  State<_CityPickerSheet> createState() => _CityPickerSheetState();
+}
+
+class _CityPickerSheetState extends State<_CityPickerSheet> {
+  final TextEditingController _searchCtl = TextEditingController();
+  String _q = '';
+
+  @override
+  void dispose() {
+    _searchCtl.dispose();
+    super.dispose();
+  }
+
+  List<String> get _filteredAll {
+    if (_q.isEmpty) return _kTurkishProvinces;
+    final lq = _q.toLowerCase().trim();
+    return _kTurkishProvinces
+        .where((p) => p.toLowerCase().contains(lq))
+        .toList(growable: false);
+  }
+
+  List<String> get _filteredPopular {
+    if (_q.isEmpty) return _kPopularProvinces;
+    final lq = _q.toLowerCase().trim();
+    return _kPopularProvinces
+        .where((p) => p.toLowerCase().contains(lq))
+        .toList(growable: false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final mq = MediaQuery.of(context);
+    final maxH = mq.size.height * 0.82;
+    final popular = _filteredPopular;
+    final all = _filteredAll;
+    return ConstrainedBox(
+      constraints: BoxConstraints(maxHeight: maxH),
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: EdgeInsets.only(bottom: mq.viewInsets.bottom),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: 8),
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: KoalaColors.border,
+                    borderRadius: BorderRadius.circular(100),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              const Text('İlini seç', style: KoalaText.h2),
+              const SizedBox(height: 12),
+              Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16),
+                child: TextField(
+                  controller: _searchCtl,
+                  autofocus: false,
+                  onChanged: (v) => setState(() => _q = v),
+                  decoration: InputDecoration(
+                    prefixIcon: const Icon(LucideIcons.search,
+                        size: 18, color: KoalaColors.textSec),
+                    hintText: 'Ara… (örn. İstanbul)',
+                    isDense: true,
+                    filled: true,
+                    fillColor: KoalaColors.surfaceAlt,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(
+                        color: KoalaColors.accentDeep,
+                        width: 1.2,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Expanded(
+                child: ListView(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  children: [
+                    if (popular.isNotEmpty) ...[
+                      const Padding(
+                        padding: EdgeInsets.fromLTRB(12, 12, 12, 6),
+                        child: Text(
+                          'POPÜLER',
+                          style: TextStyle(
+                            fontFamily: 'Manrope',
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: KoalaColors.textSec,
+                            letterSpacing: 0.8,
+                          ),
+                        ),
+                      ),
+                      ...popular.map((p) => _row(p, popular: true)),
+                      const Divider(
+                        height: 18,
+                        thickness: 0.5,
+                        indent: 12,
+                        endIndent: 12,
+                      ),
+                    ],
+                    const Padding(
+                      padding: EdgeInsets.fromLTRB(12, 4, 12, 6),
+                      child: Text(
+                        'TÜM İLLER',
+                        style: TextStyle(
+                          fontFamily: 'Manrope',
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: KoalaColors.textSec,
+                          letterSpacing: 0.8,
+                        ),
+                      ),
+                    ),
+                    if (all.isEmpty)
+                      const Padding(
+                        padding: EdgeInsets.all(24),
+                        child: Center(
+                          child: Text(
+                            'Sonuç yok',
+                            style: TextStyle(color: KoalaColors.textSec),
+                          ),
+                        ),
+                      )
+                    else
+                      ...all.map((p) => _row(p, popular: false)),
+                    const SizedBox(height: 16),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _row(String name, {required bool popular}) {
+    final selected = name == widget.current;
+    return InkWell(
+      onTap: () {
+        HapticFeedback.selectionClick();
+        Navigator.of(context).pop(name);
+      },
+      borderRadius: BorderRadius.circular(8),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        child: Row(
+          children: [
+            Icon(
+              popular ? LucideIcons.star : LucideIcons.mapPin,
+              size: 16,
+              color: popular ? KoalaColors.accentDeep : KoalaColors.textSec,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                name,
+                style: TextStyle(
+                  fontFamily: 'Manrope',
+                  fontSize: 15,
+                  fontWeight:
+                      selected ? FontWeight.w700 : FontWeight.w500,
+                  color: KoalaColors.text,
+                ),
+              ),
+            ),
+            if (selected)
+              const Icon(LucideIcons.check,
+                  size: 18, color: KoalaColors.accentDeep),
+          ],
         ),
       ),
     );

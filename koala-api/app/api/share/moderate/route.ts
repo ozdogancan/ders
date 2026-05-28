@@ -43,11 +43,30 @@ const RESPONSE_SCHEMA = {
       type: 'number',
       description: '0.0-1.0 confidence in this assessment',
     },
+    // 2026-05-28 FIX 2: extend moderation response with category + style so
+    // Flutter can show "AI auto-analyzed" confirmation pre-publish.
+    room_type: {
+      type: 'string',
+      description:
+        "Detected room type. One of: 'salon' | 'yatak_odasi' | 'mutfak' | 'banyo' | 'antre' | 'balkon' | 'yemek_odasi' | 'cocuk_odasi' | 'ofis'. Empty string if uncertain.",
+    },
+    style: {
+      type: 'string',
+      description:
+        "Detected interior style. One of: 'modern' | 'minimal' | 'skandinav' | 'klasik' | 'bohem' | 'endustriyel' | 'luks' | 'japandi'. Empty string if uncertain.",
+    },
   },
-  required: ['is_room', 'inappropriate', 'inappropriate_reason', 'confidence'],
+  required: [
+    'is_room',
+    'inappropriate',
+    'inappropriate_reason',
+    'confidence',
+    'room_type',
+    'style',
+  ],
 };
 
-const PROMPT = `Bu görseli iki kritere göre değerlendir ve JSON dön.
+const PROMPT = `Bu görseli değerlendir ve JSON dön.
 
 1) is_room: SADECE bir iç mekân oda fotoğrafı mı? (salon, yatak odası, mutfak,
    banyo, yemek odası, çalışma odası, çocuk odası, hol, koridor, balkon iç
@@ -58,6 +77,14 @@ const PROMPT = `Bu görseli iki kritere göre değerlendir ve JSON dön.
    nefret sembolleri, yasadışı madde reklamı veya açıkça uygunsuz içerik var
    mı? Yoksa false ve inappropriate_reason='none'.
 
+3) room_type (is_room=true ise zorunlu): odanın tipini şu sabit kümeden seç:
+   'salon' | 'yatak_odasi' | 'mutfak' | 'banyo' | 'antre' | 'balkon' |
+   'yemek_odasi' | 'cocuk_odasi' | 'ofis'. Emin değilsen ''.
+
+4) style (is_room=true ise zorunlu): tasarım tarzını şu sabit kümeden seç:
+   'modern' | 'minimal' | 'skandinav' | 'klasik' | 'bohem' | 'endustriyel' |
+   'luks' | 'japandi'. Emin değilsen ''.
+
 Sadece JSON dön, başka metin yok.`;
 
 interface ModerationResult {
@@ -65,6 +92,8 @@ interface ModerationResult {
   inappropriate: boolean;
   inappropriate_reason: string;
   confidence: number;
+  room_type: string;
+  style: string;
 }
 
 function buildImagePart(image: string): Record<string, unknown> {
@@ -107,11 +136,38 @@ async function callGemini(image: string, apiKey: string): Promise<ModerationResu
 
   const parsed = JSON.parse(text) as Record<string, unknown>;
   const conf = Number(parsed.confidence);
+  // 2026-05-28 FIX 2: defensive — accept only the closed enum for room_type
+  // and style. Anything outside → empty string, Flutter hides the chip.
+  const ALLOWED_ROOMS = new Set([
+    'salon',
+    'yatak_odasi',
+    'mutfak',
+    'banyo',
+    'antre',
+    'balkon',
+    'yemek_odasi',
+    'cocuk_odasi',
+    'ofis',
+  ]);
+  const ALLOWED_STYLES = new Set([
+    'modern',
+    'minimal',
+    'skandinav',
+    'klasik',
+    'bohem',
+    'endustriyel',
+    'luks',
+    'japandi',
+  ]);
+  const rawRoom = String(parsed.room_type ?? '').toLowerCase().trim();
+  const rawStyle = String(parsed.style ?? '').toLowerCase().trim();
   return {
     is_room: parsed.is_room === true,
     inappropriate: parsed.inappropriate === true,
     inappropriate_reason: String(parsed.inappropriate_reason ?? 'none').toLowerCase(),
     confidence: Number.isFinite(conf) ? Math.max(0, Math.min(1, conf)) : 0.7,
+    room_type: ALLOWED_ROOMS.has(rawRoom) ? rawRoom : '',
+    style: ALLOWED_STYLES.has(rawStyle) ? rawStyle : '',
   };
 }
 
@@ -195,5 +251,16 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  return NextResponse.json({ ok: true, confidence: result.confidence }, { headers: cors });
+  return NextResponse.json(
+    {
+      ok: true,
+      confidence: result.confidence,
+      // 2026-05-28 FIX 2: surface auto-detected category + style for the
+      // pre-publish confirmation UI. Empty string when unsure → Flutter
+      // gracefully hides the chip.
+      room_type: result.room_type,
+      style: result.style,
+    },
+    { headers: cors },
+  );
 }
