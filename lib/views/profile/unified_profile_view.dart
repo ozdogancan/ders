@@ -20,6 +20,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show Supabase;
 
@@ -31,8 +32,10 @@ import '../../services/koala_seed_service.dart';
 import '../../services/saved_items_service.dart';
 import '../../services/shared_design_service.dart';
 import '../../services/user_profile_service.dart';
+import '../../widgets/free_consult_sheet.dart';
 import '../../widgets/lazy_grid_view.dart';
 import '../../widgets/verified_badge.dart';
+import '../conversation_detail_screen.dart';
 import 'follow_list_sheet.dart';
 import 'profile_design_tile.dart';
 
@@ -79,12 +82,8 @@ class UnifiedProfileView extends StatefulWidget {
   State<UnifiedProfileView> createState() => _UnifiedProfileViewState();
 }
 
-/// FIX 5 — reviews sheet sort/filter chip seçimi.
-enum _ReviewFilter { newest, fiveStarPlus, lowRating, all }
-
 class _UnifiedProfileViewState extends State<UnifiedProfileView> {
   KoalaUserProfile? _profile;
-  _ReviewFilter _reviewFilter = _ReviewFilter.newest;
   Map<String, dynamic>? _designerRow; // From profiles table (designers)
   /// Header stat'i için ilk sayfada gözlenen design sayısı. Pagination olduğu
   /// için "kesin toplam" değil — hasMore ise "N+" gösterilir.
@@ -793,7 +792,10 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
           final mq = MediaQuery.of(ctx);
           final maxH = mq.size.height * 0.88;
           final avg = _reviews.avg.toStringAsFixed(1);
-          final filtered = _filteredReviews(_reviewFilter);
+          // 2026-05-28 FIX 2: Sort/filter chips kaldırıldı. Reviews her zaman
+          // newest-first (createdAt DESC) gösterilir.
+          final filtered = List<DesignerReview>.from(_reviews.reviews)
+            ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
           // FIX 3: Self değilse her zaman Değerlendir CTA görünür (Pro/designer
           // kısıtlaması kaldırıldı — kullanıcılar her profili değerlendirebilir).
           final showCta = !_isSelf;
@@ -841,28 +843,6 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
                     ),
                   ),
                   const SizedBox(height: 12),
-                  // Sort/filter chips
-                  SizedBox(
-                    height: 36,
-                    child: ListView(
-                      scrollDirection: Axis.horizontal,
-                      padding: const EdgeInsets.symmetric(horizontal: 20),
-                      children: [
-                        _filterChip('En yeni', _ReviewFilter.newest,
-                            setSheetState),
-                        const SizedBox(width: 8),
-                        _filterChip('5★ üstü', _ReviewFilter.fiveStarPlus,
-                            setSheetState),
-                        const SizedBox(width: 8),
-                        _filterChip('Düşük puan', _ReviewFilter.lowRating,
-                            setSheetState),
-                        const SizedBox(width: 8),
-                        _filterChip(
-                            'Tümü', _ReviewFilter.all, setSheetState),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 8),
                   Flexible(
                     child: filtered.isEmpty
                         ? Padding(
@@ -902,59 +882,6 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
           );
         });
       },
-    );
-  }
-
-  List<DesignerReview> _filteredReviews(_ReviewFilter f) {
-    final all = List<DesignerReview>.from(_reviews.reviews);
-    switch (f) {
-      case _ReviewFilter.newest:
-        all.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-        return all;
-      case _ReviewFilter.fiveStarPlus:
-        return all.where((r) => r.rating >= 5).toList()
-          ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
-      case _ReviewFilter.lowRating:
-        return all.where((r) => r.rating <= 3).toList()
-          ..sort((a, b) => a.rating.compareTo(b.rating));
-      case _ReviewFilter.all:
-        all.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-        return all;
-    }
-  }
-
-  Widget _filterChip(
-      String label, _ReviewFilter value, StateSetter setSheetState) {
-    final active = _reviewFilter == value;
-    return GestureDetector(
-      onTap: () {
-        HapticFeedback.selectionClick();
-        setSheetState(() {});
-        setState(() => _reviewFilter = value);
-      },
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 160),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-        decoration: BoxDecoration(
-          color: active ? KoalaColors.accentDeep : KoalaColors.surface,
-          borderRadius: BorderRadius.circular(99),
-          border: Border.all(
-            color: active
-                ? KoalaColors.accentDeep
-                : KoalaColors.borderSolid,
-            width: 0.8,
-          ),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 12.5,
-            fontWeight: FontWeight.w700,
-            color: active ? Colors.white : KoalaColors.text,
-            letterSpacing: -0.1,
-          ),
-        ),
-      ),
     );
   }
 
@@ -1043,15 +970,14 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
         ),
       );
     }
-    // Other-user view → 70% follow pill + 30% ⋯ menu. ⋯ menüde Hakkında,
-    // bildirim sessize alma, engelle, şikayet, takipçi/takip listeleri.
+    // Other-user view → follow pill + message icon + ⋯ menu.
+    // 2026-05-28 FIX 4: Message icon eklendi (kendi profilimizde değilse).
     final following = _follow.following;
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 0, 20, 18),
       child: Row(
         children: [
           Expanded(
-            flex: 7,
             child: SizedBox(
               height: 44,
               child: ElevatedButton.icon(
@@ -1087,29 +1013,88 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
             ),
           ),
           const SizedBox(width: 10),
-          Expanded(
-            flex: 3,
-            child: SizedBox(
+          // Message button — subtle accent-soft circular, brand-tinted icon.
+          Consumer(builder: (ctx, ref, _) {
+            return SizedBox(
+              width: 44,
               height: 44,
               child: Material(
-                color: KoalaColors.surface,
+                color: KoalaColors.accentDeep.withValues(alpha: 0.10),
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                  side: const BorderSide(
-                      color: KoalaColors.borderSolid, width: 1),
+                  borderRadius: BorderRadius.circular(22),
+                  side: const BorderSide(color: Colors.white, width: 1),
                 ),
                 child: InkWell(
-                  borderRadius: BorderRadius.circular(14),
-                  onTap: _openMoreMenu,
+                  borderRadius: BorderRadius.circular(22),
+                  onTap: () => _onMessageTap(ref),
                   child: const Center(
-                    child: Icon(LucideIcons.moreHorizontal,
-                        size: 20, color: KoalaColors.text),
+                    child: Icon(LucideIcons.messageCircle,
+                        size: 20, color: KoalaColors.accentDeep),
                   ),
+                ),
+              ),
+            );
+          }),
+          const SizedBox(width: 10),
+          SizedBox(
+            width: 44,
+            height: 44,
+            child: Material(
+              color: KoalaColors.surface,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+                side: const BorderSide(
+                    color: KoalaColors.borderSolid, width: 1),
+              ),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(14),
+                onTap: _openMoreMenu,
+                child: const Center(
+                  child: Icon(LucideIcons.moreHorizontal,
+                      size: 20, color: KoalaColors.text),
                 ),
               ),
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  /// FIX 4 — message icon tap routing.
+  ///  - Evlumba designer → enterEvlumbaConversation (paywall/free-consult sheet).
+  ///  - Other designer (designerRow non-null) → push ConversationDetailScreen.
+  ///  - Regular user → TODO snackbar.
+  Future<void> _onMessageTap(WidgetRef ref) async {
+    HapticFeedback.selectionClick();
+    if (widget.profileId == KoalaSeedService.evlumbaDesignerId) {
+      await enterEvlumbaConversation(context, ref);
+      return;
+    }
+    if (_designerRow != null) {
+      final name =
+          ((_designerRow?['full_name'] ?? _designerRow?['business_name'] ?? '')
+                  as String)
+              .trim();
+      final avatar =
+          ((_designerRow?['avatar_url'] ?? '') as String).trim();
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => ConversationDetailScreen(
+            designerId: widget.profileId,
+            designerName: name.isNotEmpty ? name : 'Tasarımcı',
+            designerAvatarUrl: avatar.isNotEmpty ? avatar : null,
+          ),
+        ),
+      );
+      return;
+    }
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Yakında — kullanıcı sohbeti'),
+        behavior: SnackBarBehavior.floating,
+        duration: Duration(seconds: 2),
       ),
     );
   }
@@ -1471,7 +1456,73 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
     return '${(d.inDays / 365).floor()} yıl';
   }
 
+  // ─── Reviewer pseudo-identity helpers (FIX 3) ─────────────────────────
+  // Stable from a seed string: same seed → same initials, color, avatar.
+  static const List<String> _firstLetters = [
+    'A','B','C','D','E','F','G','H','K','M','N','O','P','R','S','T','U','V','Y','Z'
+  ];
+  static const List<String> _lastLetters = [
+    'A','B','D','E','K','L','M','N','R','S','T','Y','Z'
+  ];
+  static const List<String> _pravatarUrls = [
+    'https://i.pravatar.cc/100?u=1',
+    'https://i.pravatar.cc/100?u=2',
+    'https://i.pravatar.cc/100?u=3',
+    'https://i.pravatar.cc/100?u=4',
+    'https://i.pravatar.cc/100?u=5',
+    'https://i.pravatar.cc/100?u=6',
+  ];
+  static const List<Color> _avatarBgColors = [
+    Color(0xFF6C5CE7), // accentDeep
+    Color(0xFFE17055), // soft coral
+    Color(0xFF00B894), // teal
+    Color(0xFFEFA01F), // amber
+    Color(0xFF0984E3), // blue
+    Color(0xFFD63031), // red
+    Color(0xFF6F42C1), // violet
+    Color(0xFF20C997), // mint
+  ];
+
+  int _stableHash(String s) {
+    // FNV-1a 32-bit for stability across runs (String.hashCode is randomized).
+    int h = 0x811c9dc5;
+    for (int i = 0; i < s.length; i++) {
+      h ^= s.codeUnitAt(i);
+      h = (h * 0x01000193) & 0xFFFFFFFF;
+    }
+    return h;
+  }
+
+  String _pseudoInitials(String seed) {
+    if (seed.isEmpty) return 'A. K.';
+    final h = _stableHash(seed);
+    final first = _firstLetters[h % _firstLetters.length];
+    final last = _lastLetters[(h ~/ _firstLetters.length) % _lastLetters.length];
+    return '$first. $last.';
+  }
+
+  bool _useAvatarForSeed(String seed) {
+    if (seed.isEmpty) return false;
+    return _stableHash(seed) % 3 == 0; // ~33%
+  }
+
+  String _avatarUrlForSeed(String seed) {
+    final h = _stableHash(seed);
+    return _pravatarUrls[h % _pravatarUrls.length];
+  }
+
+  Color _avatarBgColorForSeed(String seed) {
+    if (seed.isEmpty) return KoalaColors.accentDeep;
+    final h = _stableHash(seed);
+    return _avatarBgColors[h % _avatarBgColors.length];
+  }
+
   Widget _reviewCard(DesignerReview r) {
+    final seed = (r.reviewerId.isNotEmpty ? r.reviewerId : r.id);
+    final initials = _pseudoInitials(seed);
+    final useAvatar = _useAvatarForSeed(seed);
+    final avatarUrl = useAvatar ? _avatarUrlForSeed(seed) : null;
+    final bgColor = _avatarBgColorForSeed(seed);
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(12),
@@ -1488,20 +1539,45 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
               Container(
                 width: 28,
                 height: 28,
-                decoration: const BoxDecoration(
+                decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: KoalaColors.accentSoft,
+                  color: bgColor,
                 ),
-                child: const Center(
-                  child: Icon(LucideIcons.user,
-                      size: 14, color: KoalaColors.accentDeep),
-                ),
+                clipBehavior: Clip.antiAlias,
+                child: avatarUrl != null
+                    ? CachedNetworkImage(
+                        imageUrl: avatarUrl,
+                        fit: BoxFit.cover,
+                        placeholder: (_, _) => Container(color: bgColor),
+                        errorWidget: (_, _, _) => Center(
+                          child: Text(
+                            initials,
+                            style: const TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.white,
+                              letterSpacing: 0.2,
+                            ),
+                          ),
+                        ),
+                      )
+                    : Center(
+                        child: Text(
+                          initials,
+                          style: const TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white,
+                            letterSpacing: 0.2,
+                          ),
+                        ),
+                      ),
               ),
               const SizedBox(width: 8),
-              const Expanded(
+              Expanded(
                 child: Text(
-                  'Kullanıcı',
-                  style: TextStyle(
+                  initials,
+                  style: const TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w700,
                     color: KoalaColors.text,

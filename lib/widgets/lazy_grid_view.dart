@@ -200,6 +200,8 @@ class _LazyGridViewState<T> extends State<LazyGridView<T>> {
 
   @override
   Widget build(BuildContext context) {
+    debugPrint(
+        '[lazy-grid build] items=${_items.length} hasMore=$_hasMore loadingInitial=$_loadingInitial loadingMore=$_loadingMore shrinkWrap=${widget.shrinkWrap}');
     if (_loadingInitial) {
       return Padding(
         padding: const EdgeInsets.symmetric(vertical: 40),
@@ -226,7 +228,39 @@ class _LazyGridViewState<T> extends State<LazyGridView<T>> {
           );
     }
 
-    // Grid + footer: tek CustomScrollView içine SliverGrid + SliverToBoxAdapter.
+    if (widget.shrinkWrap) {
+      // ─────────────────────────────────────────────────────────────
+      // FIX (2026-05-28): The previous nested CustomScrollView(shrinkWrap)
+      // path collapsed to 0 height when the parent was a ListView (header
+      // showed "N adet" but tiles never painted). Replaced with the proven
+      // GridView.builder(shrinkWrap+NeverScrollable) + footer Column pattern.
+      // ─────────────────────────────────────────────────────────────
+      return Padding(
+        padding: widget.padding,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              padding: EdgeInsets.zero,
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: widget.crossAxisCount,
+                mainAxisSpacing: widget.spacing,
+                crossAxisSpacing: widget.spacing,
+                childAspectRatio: widget.aspectRatio,
+              ),
+              itemCount: _items.length,
+              itemBuilder: (ctx, i) => widget.itemBuilder(ctx, _items[i], i),
+            ),
+            _footer(),
+          ],
+        ),
+      );
+    }
+
+    // Self-scrolling path — CustomScrollView with own controller.
     final slivers = <Widget>[
       SliverPadding(
         padding: widget.padding,
@@ -243,20 +277,8 @@ class _LazyGridViewState<T> extends State<LazyGridView<T>> {
           ),
         ),
       ),
-      SliverToBoxAdapter(
-        child: _footer(),
-      ),
+      SliverToBoxAdapter(child: _footer()),
     ];
-
-    if (widget.shrinkWrap) {
-      // shrinkWrap path: parent scroll. CustomScrollView shrinkWrap=true.
-      return CustomScrollView(
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        slivers: slivers,
-      );
-    }
-
     return CustomScrollView(
       controller: _internalCtrl,
       slivers: slivers,
