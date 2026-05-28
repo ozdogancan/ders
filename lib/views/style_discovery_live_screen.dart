@@ -49,6 +49,7 @@ import '../services/taste_profile_service.dart';
 import '../services/swipe_feed_service.dart';
 import '../services/usage_limit_service.dart';
 import '../widgets/verified_badge.dart';
+import 'pro/widgets/pro_badge.dart';
 
 class StyleDiscoveryLiveScreen extends ConsumerStatefulWidget {
   const StyleDiscoveryLiveScreen({super.key});
@@ -370,6 +371,7 @@ class _StyleDiscoveryLiveScreenState
       final seedBatch = <Map<String, dynamic>>[];
       _blendSeedCards(seedBatch);
       if (mounted) {
+        _applyPinnedSeedSlots(seedBatch);
         setState(() {
           if (seedBatch.isNotEmpty) _deck.addAll(seedBatch);
           _loading = false;
@@ -425,6 +427,7 @@ class _StyleDiscoveryLiveScreenState
         filtered.add(p);
       }
       if (filtered.isEmpty || !mounted) return;
+      _applyPinnedSeedSlots(filtered);
       setState(() {
         _deck.addAll(filtered);
         _loading = false;
@@ -532,6 +535,7 @@ class _StyleDiscoveryLiveScreenState
             if (filtered.isNotEmpty) {
               _offset += serverRanked.length;
               if (!mounted) return;
+              _applyPinnedSeedSlots(filtered);
               setState(() => _deck.addAll(filtered));
               _precacheNext();
               unawaited(_prefetchDesignersForBatch(filtered));
@@ -617,6 +621,7 @@ class _StyleDiscoveryLiveScreenState
       debugPrint(
           'StyleDiscoveryLive: batch=${batch.length} filtered=${filtered.length} ranked=${ranked.length} final=${finalRanked.length} deck=${_deck.length + finalRanked.length} offset=$_offset');
       if (!mounted) return;
+      _applyPinnedSeedSlots(finalRanked);
       setState(() => _deck.addAll(finalRanked));
       _precacheNext();
       // Designer chip'leri instant olsun diye batch'in tüm designer'larını
@@ -738,15 +743,16 @@ class _StyleDiscoveryLiveScreenState
 
   /// Havuzdan, kategoriye uyan ve henüz eklenmemiş seeded kartları
   /// batch'e harmanlar.
-  /// 2026-05-28 FIX 3b: cold-start kullanıcılar (0 like) için kota 7'ye
-  /// yükseldi — Evlumba görünürlüğünü garanti eder. 20+ like'tan sonra
-  /// 5'e geri döner (normal kişiselleştirme akışı).
+  /// 2026-05-28 FIX 3c: cold-start kullanıcılar (0 like) için kota 8'e
+  /// yükseldi (önceki: 7) — Evlumba görünürlüğünü garanti eder.
+  /// 20+ like'tan sonra 6'ya iner (önceki: 5).
   void _blendSeedCards(List<Map<String, dynamic>> batch) {
     if (_seedPool.isEmpty) return;
     // Kaynak filtresi 'real' iken seeded kartları gizle.
     if (_sourceFilter == 'real') return;
     final cat = _selectedCategory?.trim().toLowerCase();
-    final maxBlend = _likeCount < 20 ? 7 : 5;
+    final coldStart = _likeCount < 20;
+    final maxBlend = coldStart ? 8 : 6;
     var added = 0;
     for (final s in _seedPool) {
       if (added >= maxBlend) break;
@@ -762,6 +768,50 @@ class _StyleDiscoveryLiveScreenState
       added++;
     }
     if (added > 0) batch.shuffle(_rng);
+    debugPrint(
+        '[swipe-blend] cold=$coldStart evlumbaInBatch=$added (target=$maxBlend)');
+  }
+
+  /// 2026-05-28 FIX 3c: Pinned slot guarantee — _deck'in her 7. slot'unda
+  /// (slot index % 7 == 0, slot 0 hariç) bir Evlumba seed kartı bulundur.
+  /// Mevcut deck pozisyonunda Evlumba yoksa, pool'dan görülmemiş bir kart
+  /// alıp o slot'a yerleştir. Pool'da uygun kart kalmadıysa skip.
+  /// Çağrı yeri: _blendSeedCards sonrası ranker bittikten sonra deck'e
+  /// eklenmeden hemen önce — şimdilik defansif olarak deck'i post-process
+  /// ediyoruz (in-place).
+  void _applyPinnedSeedSlots(List<Map<String, dynamic>> deckTail) {
+    if (_seedPool.isEmpty) return;
+    if (_sourceFilter == 'real') return;
+    // Bu çağrı yalnızca _deck'e eklenecek tail batch üzerinde çalışır.
+    // Slot index = global _deck.length + i (yeni kartların pozisyonu).
+    final baseIdx = _deck.length;
+    for (var i = 0; i < deckTail.length; i++) {
+      final globalSlot = baseIdx + i;
+      if (globalSlot == 0) continue;
+      if (globalSlot % 7 != 0) continue;
+      final current = deckTail[i];
+      final isAlreadySeed =
+          (current['designer_id'] ?? '').toString() == 'evlumba-design' ||
+              (current['source'] ?? '').toString() == 'gemini-seed';
+      if (isAlreadySeed) continue;
+      // Pool'dan görülmemiş bir Evlumba bul.
+      Map<String, dynamic>? pick;
+      for (final s in _seedPool) {
+        final sid = s['id']?.toString() ?? '';
+        if (sid.isEmpty) continue;
+        if (_seenIds.contains(sid)) continue;
+        // deckTail içinde zaten varsa skip.
+        final alreadyInTail = deckTail
+            .any((c) => (c['id']?.toString() ?? '') == sid);
+        if (alreadyInTail) continue;
+        pick = s;
+        break;
+      }
+      if (pick == null) break; // pool tükendi
+      _seenIds.add(pick['id']!.toString());
+      deckTail[i] = pick;
+      debugPrint('[swipe-blend] pinned Evlumba at slot=$globalSlot');
+    }
   }
 
   void _precacheNext() {
@@ -1348,7 +1398,13 @@ class _StyleDiscoveryLiveScreenState
             Expanded(
               child: PrimaryScrollController(
                 controller: scrollController,
-                child: UnifiedProfileView(
+                // 2026-05-28 FIX 1: ClipRRect ile sarmalama — sheet'in 28px
+                // rounded-top'unu UnifiedProfileView'un mor gradient'i ile
+                // birebir hizala.
+                child: ClipRRect(
+                  borderRadius: const BorderRadius.vertical(
+                      top: Radius.circular(28)),
+                  child: UnifiedProfileView(
                   profileId: designerId,
                   viewedDesignId:
                       viewedDesignId.isEmpty ? null : viewedDesignId,
@@ -1381,6 +1437,7 @@ class _StyleDiscoveryLiveScreenState
                       ),
                     );
                   },
+                ),
                 ),
               ),
             ),
@@ -2190,9 +2247,10 @@ class _Card extends StatelessWidget {
             ),
           ),
 
-          // Alt overlay: tasarımcı bilgisi (sol-alt). designer henüz hydrate
-          // edilmediyse SKELETON placeholder gösterilir; cache dolduğunda
-          // AnimatedSwitcher ile 200ms fade swap.
+          // Alt overlay: tasarımcı bilgisi (sol-alt).
+          // 2026-05-28 FIX 3: AnimatedSwitcher kaldırıldı — kart açılır
+          // açılmaz skeleton ya da hydrated block INSTANT görünüyor.
+          // 200ms fade gecikmesi yok.
           Positioned(
             bottom: 0,
             left: 0,
@@ -2205,20 +2263,9 @@ class _Card extends StatelessWidget {
                   Expanded(
                     child: Align(
                       alignment: Alignment.bottomLeft,
-                      child: AnimatedSwitcher(
-                        duration: const Duration(milliseconds: 200),
-                        switchInCurve: Curves.easeOut,
-                        switchOutCurve: Curves.easeIn,
-                        // 2026-05-28: SOL-ALT sabit (dış Align bunu yapıyor).
-                        // AnimatedSwitcher.alignment bu Flutter sürümünde
-                        // yok — dış Align widget yeterli.
-                        child: designer == null
-                            ? const _DesignerBlockSkeleton(
-                                key: ValueKey('skeleton'))
-                            : _DesignerBlock(
-                                key: const ValueKey('hydrated'),
-                                designer: designer!),
-                      ),
+                      child: designer == null
+                          ? const _DesignerBlockSkeleton()
+                          : _DesignerBlock(designer: designer!),
                     ),
                   ),
                   // 2026-05-28: "Profili Gör" pill kaldırıldı — karta tap
@@ -2269,6 +2316,11 @@ class _DesignerBlock extends StatelessWidget {
         (designer['id'] ?? designer['designer_id'] ?? '').toString();
     final initials = _initials(name);
     final isVerified = isVerifiedDesignerId(designerId);
+    // 2026-05-28 FIX 5: Pro işareti — designer payload'unda is_pro flag'i
+    // varsa kartta da gradient PRO pill göster.
+    final isPro = (designer['is_pro'] == true) ||
+        (designer['isPro'] == true) ||
+        ((designer['plan'] ?? '').toString().toLowerCase() == 'pro');
 
     final subtitle = projectCount != null && projectCount > 0
         ? '$profession · $projectCount proje'
@@ -2339,6 +2391,10 @@ class _DesignerBlock extends StatelessWidget {
                   if (isVerified) ...[
                     const SizedBox(width: 5),
                     const VerifiedBadge(size: 13),
+                  ],
+                  if (isPro) ...[
+                    const SizedBox(width: 5),
+                    const ProBadge(compact: true),
                   ],
                 ],
               ),

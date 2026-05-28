@@ -35,6 +35,7 @@ import '../../services/shared_design_service.dart';
 import '../../services/user_profile_service.dart';
 import '../../widgets/free_consult_sheet.dart';
 import '../../widgets/verified_badge.dart';
+import '../pro/widgets/pro_badge.dart';
 import '../conversation_detail_screen.dart';
 import '../share/share_upload_screen.dart' show openShareUploadSheet;
 import 'follow_list_sheet.dart';
@@ -727,16 +728,26 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
     // gradient'li bir Container'ın içine al + BouncingScrollPhysics ver.
     // Container hero'nun stop'larıyla aynı tonu kullanır → overscroll'da
     // gradient'in mantıken yukarıya uzandığı hissi.
-    return DecoratedBox(
+    // 2026-05-28 FIX 1: Daha güçlü mor gradient + popup'ın rounded-top'una
+    // yapışsın diye ClipRRect ile saralım. Stops [0.0, 0.50] → renk aşağıya
+    // daha uzun uzanır, eğreti durmaz.
+    return ClipRRect(
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+      child: DecoratedBox(
       decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
           colors: [
-            KoalaColors.accentSoft.withValues(alpha: 0.55),
+            // 2026-05-28 FIX 1b: VISIBLE purple band on the rounded top.
+            // accentSoft (#F3F0FF) is near-white; even at α0.95 it reads pale.
+            // Mix to accentMuted (#A78BFA) for a clearly purple top, fade to
+            // accentSoft at mid, then bg.
+            KoalaColors.accentMuted.withValues(alpha: 0.55),
+            KoalaColors.accentSoft,
             KoalaColors.bg,
           ],
-          stops: const [0.0, 0.25],
+          stops: const [0.0, 0.35, 0.75],
         ),
       ),
       child: CustomScrollView(
@@ -757,6 +768,7 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
           ..._buildDesignsSlivers(),
           SliverToBoxAdapter(child: SizedBox(height: bottomPad + 32)),
         ],
+      ),
       ),
     );
   }
@@ -865,19 +877,28 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
     // FIX 5: Hero gradient bottom sheet rounded-top'ı respect etsin diye
     // ClipRRect ile saralım. ProfileTab dışında her zaman bottom-sheet
     // konteynerinde açılıyor (radius 24-28).
+    // 2026-05-28 FIX 1: Hero gradient'i kuvvetlendir — popup'ın rounded
+    // top'una yapışmış kalın bir lavender blok hissi. Solid stop bandı
+    // (0..0.55) sonra bg'ye yumuşak geçiş.
     return ClipRRect(
-      borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
       child: Container(
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(20, 16, 20, 18),
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 22),
       decoration: BoxDecoration(
+        // 2026-05-28 FIX 1b: Hero gradient — gerçekten görünür mor blok.
+        // accentMuted (#A78BFA) yumuşatılmış solid blok → accentSoft → bg'ye
+        // şeffaflık. Popup'ın rounded top'una "mor giydirme" hissi.
         gradient: LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
           colors: [
-            KoalaColors.accentSoft.withValues(alpha: 0.55),
-            KoalaColors.bg,
+            KoalaColors.accentMuted.withValues(alpha: 0.65),
+            KoalaColors.accentMuted.withValues(alpha: 0.30),
+            KoalaColors.accentSoft.withValues(alpha: 0.85),
+            KoalaColors.bg.withValues(alpha: 0.0),
           ],
+          stops: const [0.0, 0.45, 0.80, 1.0],
         ),
       ),
       child: Column(
@@ -901,6 +922,12 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
                   _profile?.verified == true) ...[
                 const SizedBox(width: 6),
                 const VerifiedBadge(size: 18),
+              ],
+              // 2026-05-28 FIX 5: Pro badge — herhangi bir profil Pro ise
+              // (kendi ya da başkası) ismin yanında gradient pill göster.
+              if (_profile?.isPro == true) ...[
+                const SizedBox(width: 6),
+                const ProBadge(),
               ],
             ],
           ),

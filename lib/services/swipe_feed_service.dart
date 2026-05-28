@@ -512,20 +512,19 @@ class SwipeFeedService {
       }
     }
 
-    // (4c) Evlumba seed boost — 2026-05-28 FIX 3b. After removing the
-    // "ensureEvlumbaFirst" hack, Reels-style variety constraints push seed
-    // cards down. Give them a flat +2.5 so they remain visible to cold-start
-    // users (no likes yet). Ramps off as taste profile matures (sampleCount).
+    // (4c) Evlumba seed boost — 2026-05-28 FIX 3c. Boost'u +5.0 cold-start,
+    // +1.0 mature taste'e çıkardık (önceki: +2.5 → +0.5). Variety constraint
+    // ve normal ranking altında seed kartlar yine de görünür kalmalı.
     if (_isSeeded(card)) {
       final samples = profile.sampleCount;
-      // Cold start (≤20 likes) → +2.5. Mature taste (≥40 likes) → +0.5.
+      // Cold start (≤20 likes) → +5.0. Mature taste (≥40 likes) → +1.0.
       double boost;
       if (samples <= 20) {
-        boost = 2.5;
+        boost = 5.0;
       } else if (samples >= 40) {
-        boost = 0.5;
+        boost = 1.0;
       } else {
-        boost = 2.5 - ((samples - 20) / 20.0) * 2.0;
+        boost = 5.0 - ((samples - 20) / 20.0) * 4.0;
       }
       s += boost;
     }

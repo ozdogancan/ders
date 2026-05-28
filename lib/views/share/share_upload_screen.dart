@@ -441,22 +441,53 @@ class _ShareUploadScreenState extends State<ShareUploadScreen>
     if (!widget.inSheet) return scaffold;
     // FIX 7 (2026-05-28): hosted in a modal sheet — add a small drag handle
     // at the top above the existing Scaffold chrome.
-    return Column(
-      mainAxisSize: MainAxisSize.min,
+    // 2026-05-28 FIX 2b: Sheet'in rounded top'una mor gradient overlay
+    // (popup paterni ile aynı). Stack ile drag handle + içerik üstüne çizer.
+    return Stack(
       children: [
-        const SizedBox(height: 8),
-        Center(
-          child: Container(
-            width: 40,
-            height: 4,
-            decoration: BoxDecoration(
-              color: KoalaColors.border,
-              borderRadius: BorderRadius.circular(100),
+        // Üstten ~64 px boyunca mor gradient — modal sheet'in rounded
+        // top'una "mor giydirme" hissi (drag handle bandı). İçerik üstüne
+        // bindirmiyor; hızlıca transparan'a iniyor.
+        Positioned(
+          top: 0,
+          left: 0,
+          right: 0,
+          height: 64,
+          child: IgnorePointer(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    KoalaColors.accentMuted.withValues(alpha: 0.70),
+                    KoalaColors.accentSoft.withValues(alpha: 0.55),
+                    KoalaColors.bg.withValues(alpha: 0.0),
+                  ],
+                  stops: const [0.0, 0.55, 1.0],
+                ),
+              ),
             ),
           ),
         ),
-        const SizedBox(height: 6),
-        Expanded(child: scaffold),
+        Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 8),
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.6),
+                  borderRadius: BorderRadius.circular(100),
+                ),
+              ),
+            ),
+            const SizedBox(height: 6),
+            Expanded(child: scaffold),
+          ],
+        ),
       ],
     );
   }
