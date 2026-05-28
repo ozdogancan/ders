@@ -33,7 +33,7 @@ export async function OPTIONS(req: NextRequest) {
 }
 
 interface Body {
-  op: 'save' | 'remove' | 'isSaved' | 'update';
+  op: 'save' | 'remove' | 'isSaved' | 'update' | 'setVisibility';
   userId: string;
   itemType: string;
   itemId: string;
@@ -42,6 +42,7 @@ interface Body {
   subtitle?: string;
   extraData?: Record<string, unknown>;
   collectionId?: string;
+  isPublic?: boolean;
 }
 
 export async function POST(req: NextRequest) {
@@ -180,6 +181,19 @@ export async function POST(req: NextRequest) {
         .eq('item_id', itemId);
       if (error) throw error;
       return NextResponse.json({ ok: true }, { headers });
+    }
+
+    if (op === 'setVisibility') {
+      // AI proje gizli/yayın toggle (owner-only). saved_items.is_public flag.
+      const isPublic = body.isPublic === true;
+      const { error } = await sb
+        .from('saved_items')
+        .update({ is_public: isPublic })
+        .eq('user_id', userId)
+        .eq('item_type', itemType)
+        .eq('item_id', itemId);
+      if (error) throw error;
+      return NextResponse.json({ ok: true, isPublic }, { headers });
     }
 
     return NextResponse.json({ error: 'unknown op' }, { status: 400, headers });

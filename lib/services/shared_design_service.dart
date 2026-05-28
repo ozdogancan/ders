@@ -12,7 +12,8 @@ import 'dart:convert';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
-import 'package:supabase_flutter/supabase_flutter.dart' show Supabase, FileOptions;
+import 'package:supabase_flutter/supabase_flutter.dart'
+    show Supabase, FileOptions, CountOption;
 import 'package:uuid/uuid.dart';
 
 import '../core/config/env.dart';
@@ -269,12 +270,15 @@ class SharedDesignService {
       final items = rows.map(SharedDesign.fromRow).toList();
       final nextCursor =
           rows.isNotEmpty ? rows.last['published_at']?.toString() : null;
+      debugPrint('[profile-grid] shared_designs uid=$uid returned=${rows.length} hasMore=${rows.length >= limit}');
       return (
         items: items,
         hasMore: rows.length >= limit,
         cursor: nextCursor,
       );
     } catch (e) {
+      // Tablo henüz yok (koala_user_shared_designs migration apply edilmemiş)
+      // → empty page döndür, AI fazına geçilebilsin.
       debugPrint('[SharedDesignService] publicByUidPaged failed: $e');
       return (items: <SharedDesign>[], hasMore: false, cursor: null);
     }
@@ -295,6 +299,50 @@ class SharedDesignService {
       limit: limit,
       beforeCreatedAt: beforeCreatedAt,
     );
+  }
+
+  /// Kullanıcının (kendi veya başkasının) published shared_designs sayısı.
+  /// Header'da "N adet" göstermek için.
+  static Future<int> totalCount({String? ownerUid}) async {
+    final uid = ownerUid ?? _uid;
+    if (uid == null) return 0;
+    try {
+      final res = await Supabase.instance.client
+          .from(_table)
+          .select('id')
+          .eq('user_id', uid)
+          .eq('status', 'published')
+          .count(CountOption.exact);
+      return res.count;
+    } catch (e) {
+      // Tablo henüz yok → 0 dön (defansif).
+      debugPrint('[SharedDesignService] totalCount failed (table missing?): $e');
+      return 0;
+    }
+  }
+
+  /// Gizli/yayın toggle — owner-only. status='published' ↔ 'private'.
+  /// Other users zaten sadece status='published' satırları görüyor.
+  static Future<bool> setVisibility({
+    required String id,
+    required bool isPublic,
+  }) async {
+    final uid = _uid;
+    if (uid == null) return false;
+    try {
+      await Supabase.instance.client
+          .from(_table)
+          .update({
+            'status': isPublic ? 'published' : 'private',
+            if (isPublic) 'published_at': DateTime.now().toIso8601String(),
+          })
+          .eq('id', id)
+          .eq('user_id', uid);
+      return true;
+    } catch (e) {
+      debugPrint('[SharedDesignService] setVisibility failed: $e');
+      return false;
+    }
   }
 
   static Future<bool> delete(String id) async {

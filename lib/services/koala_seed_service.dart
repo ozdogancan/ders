@@ -20,6 +20,24 @@ class KoalaSeedService {
   /// Sentetik tasarımcı için sabit id — UI tarafında kullanılır.
   static const String evlumbaDesignerId = 'evlumba-design';
 
+  /// Evlumba portfolyo toplam sayısı — header'da "49 adet" göstermek için.
+  /// Defansif — fail durumunda 0 döner.
+  static Future<int> evlumbaCardsTotalCount() async {
+    try {
+      final db = Supabase.instance.client;
+      final res = await db
+          .from('koala_cards')
+          .select('id')
+          .eq('source', 'gemini-seed')
+          .eq('is_published', true)
+          .count(CountOption.exact);
+      return res.count;
+    } catch (e) {
+      debugPrint('KoalaSeedService.evlumbaCardsTotalCount failed: $e');
+      return 0;
+    }
+  }
+
   /// Evlumba seed kartları — paginated. Cursor `String?` ISO created_at.
   /// İlk sayfada beforeCreatedAt=null → top quality.
   static Future<PagedResult<Map<String, dynamic>>> evlumbaCardsPaged({

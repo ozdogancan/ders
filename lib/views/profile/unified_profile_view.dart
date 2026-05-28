@@ -14,6 +14,8 @@
 // Stüdyom →" pill appears above the design grid when AI designs exist.
 // ═══════════════════════════════════════════════════════════════════════
 
+import 'dart:async';
+
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -88,6 +90,9 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
   /// için "kesin toplam" değil — hasMore ise "N+" gösterilir.
   int _designCountSeen = 0;
   bool _designHasMore = true;
+  /// Server-side toplam tasarım sayısı (count exact). _designCountSeen pagination
+  /// halen tamamlanmamış olsa bile "49 adet" göstermek için doğrudan kullanılır.
+  int? _designTotalCount;
   /// AI tasarımları (owner-only) — ayrı sekmede yüklenir.
   bool _hasAnyAi = false;
   bool _loading = true;
@@ -144,6 +149,7 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
               : DesignerReviewsResult.empty;
           _loading = false;
         });
+        unawaited(_loadDesignTotal());
         return;
       }
     } catch (e) {
@@ -164,6 +170,7 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
       _reviews = results[4] as DesignerReviewsResult;
       _loading = false;
     });
+    unawaited(_loadDesignTotal());
   }
 
   /// Sadece owner için: AI Stüdyom pill'ini göstermek için bir tane olsun yeter.
@@ -177,6 +184,43 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
       _hasAnyAi = page.items.isNotEmpty;
     } catch (_) {
       _hasAnyAi = false;
+    }
+  }
+
+  /// Designs section'ı için server-side exact total — header'da "N adet"
+  /// göstermek için. Best-effort, fail durumunda null bırakılır ve fallback
+  /// "_designCountSeen" değeri kullanılır.
+  Future<void> _loadDesignTotal() async {
+    try {
+      if (widget.profileId == KoalaSeedService.evlumbaDesignerId) {
+        final c = await KoalaSeedService.evlumbaCardsTotalCount();
+        if (mounted) setState(() => _designTotalCount = c);
+        return;
+      }
+      if (widget.ownerEditable && _isSelf) {
+        final results = await Future.wait([
+          SharedDesignService.totalCount(),
+          SavedItemsService.totalCountForType(SavedItemType.project),
+        ]);
+        if (mounted) {
+          setState(() => _designTotalCount = (results[0]) + (results[1]));
+        }
+        return;
+      }
+      // Other user / designer — public only.
+      final results = await Future.wait([
+        SharedDesignService.totalCount(ownerUid: widget.profileId),
+        SavedItemsService.totalCountForType(
+          SavedItemType.project,
+          ownerUid: widget.profileId,
+          publicOnly: true,
+        ),
+      ]);
+      if (mounted) {
+        setState(() => _designTotalCount = (results[0]) + (results[1]));
+      }
+    } catch (e) {
+      debugPrint('[unified_profile] design total count failed: $e');
     }
   }
 
@@ -251,12 +295,17 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
       _fetchDesignsPage(dynamic cursor) async {
     try {
       if (widget.ownerEditable && _isSelf) {
+        debugPrint('[profile-grid] fetch self cursor=$cursor hasAnyAi=$_hasAnyAi');
         // Owner two-phase: önce shared, bittiğinde AI.
+        // BUG FIX (2026-05-28): shared page bombası empty olunca LazyGridView
+        // fresh.isEmpty → _hasMore=false yapıyordu ve AI fazına HİÇ geçilmiyordu.
+        // Çözüm: shared empty + !hasMore ise burada hemen AI fazına geç ve
+        // ilk AI sayfasını döndür.
         final state = (cursor is Map)
             ? Map<String, dynamic>.from(cursor)
             : <String, dynamic>{'phase': 'shared', 'cursor': null};
-        final phase = (state['phase'] ?? 'shared').toString();
-        final c = state['cursor'] as String?;
+        var phase = (state['phase'] ?? 'shared').toString();
+        var c = state['cursor'] as String?;
 
         if (phase == 'shared') {
           final page = await SharedDesignService.mySharedPaged(
@@ -266,6 +315,25 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
           final items = page.items
               .map((s) => {...s.toMapForProfileTab(), 'is_ai': false})
               .toList();
+          if (items.isEmpty && !page.hasMore) {
+            // Shared yok → direkt AI fazına geç ve AI ilk sayfasını dön.
+            phase = 'ai';
+            c = null;
+            debugPrint(
+                '[profile-grid] shared empty, jumping to ai phase');
+            final aiPage = await SavedItemsService.getByTypePaged(
+              SavedItemType.project,
+              limit: 18,
+              beforeCreatedAt: c,
+            );
+            final aiItems =
+                aiPage.items.map((m) => {...m, 'is_ai': true}).toList();
+            return (
+              items: aiItems,
+              hasMore: aiPage.hasMore,
+              cursor: {'phase': 'ai', 'cursor': aiPage.cursor},
+            );
+          }
           // Shared bittiğinde phase'i 'ai'ye geçir, cursor'u null'la sıfırla.
           final nextCursor = page.hasMore
               ? {'phase': 'shared', 'cursor': page.cursor}
@@ -293,6 +361,7 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
 
       // Other user — Evlumba synthetic
       if (widget.profileId == KoalaSeedService.evlumbaDesignerId) {
+        debugPrint('[profile-grid] fetch evlumba cursor=$cursor');
         final page = await KoalaSeedService.evlumbaCardsPaged(
           limit: 18,
           beforeCreatedAt: cursor as String?,
@@ -304,7 +373,69 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
         );
       }
 
+      // Other user (not designer) — public shared_designs + public AI projects.
+      // _designerRow null ise civil kullanıcı profili.
+      if (_designerRow == null) {
+        debugPrint(
+            '[profile-grid] fetch other-user public cursor=$cursor uid=${widget.profileId}');
+        // Tek fazlı: shared_designs (status=published) — AI public yoksa boş.
+        final state = (cursor is Map)
+            ? Map<String, dynamic>.from(cursor)
+            : <String, dynamic>{'phase': 'shared', 'cursor': null};
+        final phase = (state['phase'] ?? 'shared').toString();
+        final c = state['cursor'] as String?;
+        if (phase == 'shared') {
+          final page = await SharedDesignService.publicByUidPaged(
+            widget.profileId,
+            limit: 18,
+            beforeCreatedAt: c,
+          );
+          final items = page.items
+              .map((s) => {...s.toMapForProfileTab(), 'is_ai': false})
+              .toList();
+          if (items.isEmpty && !page.hasMore) {
+            // Direkt AI public fazına geç.
+            final aiPage = await SavedItemsService.getByTypePaged(
+              SavedItemType.project,
+              limit: 18,
+              ownerUid: widget.profileId,
+              publicOnly: true,
+            );
+            final aiItems =
+                aiPage.items.map((m) => {...m, 'is_ai': true}).toList();
+            return (
+              items: aiItems,
+              hasMore: aiPage.hasMore,
+              cursor: {'phase': 'ai', 'cursor': aiPage.cursor},
+            );
+          }
+          return (
+            items: items,
+            hasMore: page.hasMore || true,
+            cursor: page.hasMore
+                ? {'phase': 'shared', 'cursor': page.cursor}
+                : {'phase': 'ai', 'cursor': null},
+          );
+        } else {
+          final aiPage = await SavedItemsService.getByTypePaged(
+            SavedItemType.project,
+            limit: 18,
+            beforeCreatedAt: c,
+            ownerUid: widget.profileId,
+            publicOnly: true,
+          );
+          final aiItems =
+              aiPage.items.map((m) => {...m, 'is_ai': true}).toList();
+          return (
+            items: aiItems,
+            hasMore: aiPage.hasMore,
+            cursor: {'phase': 'ai', 'cursor': aiPage.cursor},
+          );
+        }
+      }
+
       // Other designer
+      debugPrint('[profile-grid] fetch designer cursor=$cursor uid=${widget.profileId}');
       final page = await EvlumbaLiveService.getDesignerProjectsPaged(
         widget.profileId,
         limit: 18,
@@ -404,7 +535,17 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
     final fromProfile = (_profile?.about ?? '').trim();
     if (fromProfile.isNotEmpty) return fromProfile;
     final d = _designerRow;
-    return ((d?['bio'] ?? d?['about'] ?? '') as String).trim();
+    final fromRow = ((d?['bio'] ?? d?['about'] ?? '') as String).trim();
+    if (fromRow.isNotEmpty) return fromRow;
+    // FIX 4: Evlumba için hardcoded fallback — profiles tablosunda bio yok.
+    if (widget.profileId == KoalaSeedService.evlumbaDesignerId) {
+      return 'Evlumba Design, modern ve fonksiyonel iç mekan tasarımları sunan '
+          'genç bir stüdyo. Her projeyi yaşam tarzınıza ve mekânınızın ruhuna '
+          'göre kişiselleştiriyor. Salon, yatak odası, mutfak ve çocuk odası '
+          'dönüşümlerinde 200+ projeyi tamamladık. İlk danışma her zaman '
+          'ücretsiz — bir fikirle gel, hayalini birlikte gerçekleştirelim.';
+    }
+    return '';
   }
 
   String get _role {
@@ -456,7 +597,12 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
   // ─── Hero — SS5 ─────────────────────────────────────────────────────
   Widget _hero() {
     final isEvlumba = widget.profileId == 'evlumba-design';
-    return Container(
+    // FIX 5: Hero gradient bottom sheet rounded-top'ı respect etsin diye
+    // ClipRRect ile saralım. ProfileTab dışında her zaman bottom-sheet
+    // konteynerinde açılıyor (radius 24-28).
+    return ClipRRect(
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+      child: Container(
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 18),
       decoration: BoxDecoration(
@@ -503,6 +649,7 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
           ),
         ],
       ),
+    ),
     );
   }
 
@@ -572,10 +719,12 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
   // taşındı. Yanıt süresi `koala_designer_stats` henüz şemada yok →
   // defansif olarak "—" gösterilir; Evlumba için sabit "24s".
   Widget _stats() {
-    // FIX 3: "+" sadece hasMore && count > 0 ise. Count=0 ise düz "0".
-    final designValue = (_designHasMore && _designCountSeen > 0)
-        ? '$_designCountSeen+'
-        : '$_designCountSeen';
+    // Server-side exact total varsa onu kullan; yoksa "+" eki ile gözlenen.
+    final designValue = _designTotalCount != null
+        ? '${_designTotalCount!}'
+        : ((_designHasMore && _designCountSeen > 0)
+            ? '$_designCountSeen+'
+            : '$_designCountSeen');
     final ratingValue = _reviews.count > 0
         ? '${_reviews.avg.toStringAsFixed(1)}★'
         : '0';
@@ -645,7 +794,9 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
           final maxH = mq.size.height * 0.88;
           final avg = _reviews.avg.toStringAsFixed(1);
           final filtered = _filteredReviews(_reviewFilter);
-          final showCta = !_isSelf && _isDesignerOrPro;
+          // FIX 3: Self değilse her zaman Değerlendir CTA görünür (Pro/designer
+          // kısıtlaması kaldırıldı — kullanıcılar her profili değerlendirebilir).
+          final showCta = !_isSelf;
           return ConstrainedBox(
             constraints: BoxConstraints(maxHeight: maxH),
             child: SafeArea(
@@ -1461,9 +1612,10 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
             ),
           ),
           const Spacer(),
-          if (_designCountSeen > 0)
+          if (_designTotalCount != null && _designTotalCount! > 0)
+            Text('${_designTotalCount!} adet', style: KoalaText.labelSmall)
+          else if (_designCountSeen > 0)
             Text(
-              // FIX 3: "+" sadece hasMore && count > 0 ise.
               (_designHasMore && _designCountSeen > 0)
                   ? '$_designCountSeen+ adet'
                   : '$_designCountSeen adet',
@@ -1553,6 +1705,12 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
           final title = (p['title'] ?? '').toString();
           final id = (p['id'] ?? p['item_id'] ?? '').toString();
           final isAi = p['is_ai'] == true;
+          final isOwner = widget.ownerEditable && _isSelf;
+          // Owner-only "private" rozet: AI default private, shared default public.
+          final isPrivate = isOwner &&
+              (isAi
+                  ? p['is_public'] != true
+                  : (p['status']?.toString() ?? 'published') != 'published');
           final isViewed = widget.viewedDesignId != null &&
               widget.viewedDesignId!.isNotEmpty &&
               widget.viewedDesignId == id;
@@ -1561,6 +1719,12 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
               HapticFeedback.selectionClick();
               widget.onTapDesign?.call(_loadedDesigns, i);
             },
+            onLongPress: (widget.ownerEditable && _isSelf)
+                ? () {
+                    HapticFeedback.mediumImpact();
+                    _showOwnTileActionSheet(p);
+                  }
+                : null,
             behavior: HitTestBehavior.opaque,
             child: ClipRRect(
               borderRadius: BorderRadius.circular(2),
@@ -1603,31 +1767,25 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
                       ),
                     ),
                     Positioned(
-                      left: 8,
-                      top: 8,
+                      left: 6,
+                      top: 6,
+                      // FIX 7: koyu pill + beyaz text (önceki versiyon ters
+                      // renkliydi).
                       child: Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 4),
+                            horizontal: 6, vertical: 3),
                         decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.92),
-                          borderRadius: BorderRadius.circular(99),
+                          color: KoalaColors.text.withValues(alpha: 0.85),
+                          borderRadius: BorderRadius.circular(4),
                         ),
-                        child: const Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(LucideIcons.eye,
-                                size: 11, color: KoalaColors.accentDeep),
-                            SizedBox(width: 4),
-                            Text(
-                              'Bunu görüntülediniz',
-                              style: TextStyle(
-                                fontSize: 10.5,
-                                fontWeight: FontWeight.w700,
-                                color: KoalaColors.accentDeep,
-                                letterSpacing: -0.1,
-                              ),
-                            ),
-                          ],
+                        child: const Text(
+                          'Bunu görüntülediniz',
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.white,
+                            letterSpacing: -0.05,
+                          ),
                         ),
                       ),
                     ),
@@ -1646,6 +1804,37 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
                           fontSize: 12,
                           fontWeight: FontWeight.w700,
                           letterSpacing: -0.1,
+                        ),
+                      ),
+                    ),
+                  // Owner gizli rozet — sol alt köşede minik göz-kapalı.
+                  if (isPrivate)
+                    Positioned(
+                      left: 6,
+                      bottom: 6,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 5, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.55),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(LucideIcons.eyeOff,
+                                size: 10, color: Colors.white),
+                            SizedBox(width: 3),
+                            Text(
+                              'Gizli',
+                              style: TextStyle(
+                                fontSize: 9,
+                                fontWeight: FontWeight.w700,
+                                color: Colors.white,
+                                letterSpacing: 0.2,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ),
@@ -1683,6 +1872,99 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
             ),
           );
         },
+      ),
+    );
+  }
+
+  /// FIX 9 — Own design tile long-press: Gizle / Yayınla toggle action sheet.
+  /// AI items: saved_items.is_public; Shared items: koala_user_shared_designs.status.
+  Future<void> _showOwnTileActionSheet(Map<String, dynamic> p) async {
+    final isAi = p['is_ai'] == true;
+    final id = (p['id'] ?? p['item_id'] ?? '').toString();
+    if (id.isEmpty) return;
+    final currentlyPublic = isAi
+        ? (p['is_public'] == true)
+        : ((p['status'] ?? 'published').toString() == 'published');
+    final nextPublic = !currentlyPublic;
+    final toggleLabel = nextPublic ? 'Yayınla' : 'Gizle';
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: KoalaColors.bg,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) => SafeArea(
+        top: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 8),
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: KoalaColors.border,
+                borderRadius: BorderRadius.circular(100),
+              ),
+            ),
+            const SizedBox(height: 12),
+            ListTile(
+              leading: Icon(
+                nextPublic ? LucideIcons.eye : LucideIcons.eyeOff,
+                color: KoalaColors.accentDeep,
+              ),
+              title:
+                  Text(toggleLabel, style: KoalaText.bodyMedium),
+              subtitle: Text(
+                currentlyPublic
+                    ? 'Şu an herkes görebilir'
+                    : 'Şu an sadece sen görüyorsun',
+                style: KoalaText.labelSmall,
+              ),
+              onTap: () async {
+                Navigator.of(ctx).pop();
+                final ok = isAi
+                    ? await SavedItemsService.setVisibility(
+                        itemId: id, isPublic: nextPublic)
+                    : await SharedDesignService.setVisibility(
+                        id: id, isPublic: nextPublic);
+                if (!mounted) return;
+                if (ok) {
+                  setState(() {
+                    // Local row update — UI immediate.
+                    if (isAi) {
+                      p['is_public'] = nextPublic;
+                    } else {
+                      p['status'] = nextPublic ? 'published' : 'private';
+                    }
+                  });
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(nextPublic
+                          ? 'Yayınlandı — herkes görebilir'
+                          : 'Gizlendi — sadece sen görüyorsun'),
+                      behavior: SnackBarBehavior.floating,
+                      duration: const Duration(seconds: 2),
+                    ),
+                  );
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('İşlem başarısız, tekrar dene'),
+                    ),
+                  );
+                }
+              },
+            ),
+            ListTile(
+              leading: const Icon(LucideIcons.x,
+                  color: KoalaColors.textSec),
+              title: const Text('İptal', style: KoalaText.bodyMedium),
+              onTap: () => Navigator.of(ctx).pop(),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
       ),
     );
   }

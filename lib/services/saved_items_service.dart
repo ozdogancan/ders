@@ -314,21 +314,31 @@ class SavedItemsService {
   /// Defansif cursor-based pagination. `beforeCreatedAt` null ise top sayfa.
   /// Aynı `getByType` ile aynı sıralama (created_at DESC).
   /// Return shape `LazyGridView` ile uyumlu.
+  ///
+  /// [ownerUid] verilirse o kullanıcının publish edilmiş öğelerini döner
+  /// (is_public=true). Verilmediyse current user'ın TÜM öğelerini (private+public)
+  /// döner — owner kendi gizli AI'larını da görsün diye.
   static Future<({List<Map<String, dynamic>> items, bool hasMore, dynamic cursor})>
       getByTypePaged(
     SavedItemType type, {
     int limit = 18,
     String? beforeCreatedAt,
+    String? ownerUid,
+    bool publicOnly = false,
   }) async {
-    if (_uid == null || !Env.hasSupabaseConfig) {
+    final targetUid = ownerUid ?? _uid;
+    if (targetUid == null || !Env.hasSupabaseConfig) {
       return (items: <Map<String, dynamic>>[], hasMore: false, cursor: null);
     }
     try {
       var q = _db
           .from('saved_items')
-          .select('id, item_id, item_type, title, image_url, subtitle, extra_data, created_at')
-          .eq('user_id', _uid!)
+          .select('id, item_id, item_type, title, image_url, subtitle, extra_data, is_public, created_at')
+          .eq('user_id', targetUid)
           .eq('item_type', _serverItemType(type));
+      if (publicOnly) {
+        q = q.eq('is_public', true);
+      }
       if (beforeCreatedAt != null && beforeCreatedAt.isNotEmpty) {
         q = q.lt('created_at', beforeCreatedAt);
       }
@@ -338,6 +348,8 @@ class SavedItemsService {
       final rows = List<Map<String, dynamic>>.from(res);
       final nextCursor =
           rows.isNotEmpty ? rows.last['created_at']?.toString() : null;
+      debugPrint('[profile-grid] saved_items.${type.name} uid=$targetUid '
+          'publicOnly=$publicOnly returned=${rows.length} hasMore=${rows.length >= limit}');
       return (
         items: rows,
         hasMore: rows.length >= limit,
@@ -347,6 +359,63 @@ class SavedItemsService {
       debugPrint('SavedItemsService.getByTypePaged error: $e');
       return (items: <Map<String, dynamic>>[], hasMore: false, cursor: null);
     }
+  }
+
+  /// Tipe göre toplam sayı — header için. publicOnly true ise sadece
+  /// is_public=true sayılır.
+  static Future<int> totalCountForType(
+    SavedItemType type, {
+    String? ownerUid,
+    bool publicOnly = false,
+  }) async {
+    final targetUid = ownerUid ?? _uid;
+    if (targetUid == null || !Env.hasSupabaseConfig) return 0;
+    try {
+      var q = _db
+          .from('saved_items')
+          .select('id')
+          .eq('user_id', targetUid)
+          .eq('item_type', _serverItemType(type));
+      if (publicOnly) q = q.eq('is_public', true);
+      final res = await q.count(CountOption.exact);
+      return res.count;
+    } catch (e) {
+      debugPrint('SavedItemsService.totalCountForType error: $e');
+      return 0;
+    }
+  }
+
+  /// AI projesi (saved_items) için gizli/yayın toggle. Owner-only — RLS
+  /// service_role gerektirdiğinden koala-api proxy üzerinden gider.
+  static Future<bool> setVisibility({
+    required String itemId,
+    required bool isPublic,
+    SavedItemType type = SavedItemType.project,
+  }) async {
+    if (_uid == null) return false;
+    final res = await _callProxy({
+      'op': 'setVisibility',
+      'userId': _uid,
+      'itemType': type.name,
+      'itemId': itemId,
+      'isPublic': isPublic,
+    });
+    if (res == null) {
+      // Fallback: direct DB update (works if RLS open for owner update).
+      try {
+        await _db
+            .from('saved_items')
+            .update({'is_public': isPublic})
+            .eq('user_id', _uid!)
+            .eq('item_id', itemId)
+            .eq('item_type', _serverItemType(type));
+        return true;
+      } catch (e) {
+        debugPrint('SavedItemsService.setVisibility fallback error: $e');
+        return false;
+      }
+    }
+    return true;
   }
 
   // ─── TÜM KAYDEDİLENLER ──────────────────────────────
