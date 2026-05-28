@@ -77,8 +77,12 @@ class UnifiedProfileView extends StatefulWidget {
   State<UnifiedProfileView> createState() => _UnifiedProfileViewState();
 }
 
+/// FIX 5 — reviews sheet sort/filter chip seçimi.
+enum _ReviewFilter { newest, fiveStarPlus, lowRating, all }
+
 class _UnifiedProfileViewState extends State<UnifiedProfileView> {
   KoalaUserProfile? _profile;
+  _ReviewFilter _reviewFilter = _ReviewFilter.newest;
   Map<String, dynamic>? _designerRow; // From profiles table (designers)
   /// Header stat'i için ilk sayfada gözlenen design sayısı. Pagination olduğu
   /// için "kesin toplam" değil — hasMore ise "N+" gösterilir.
@@ -438,9 +442,8 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
         _stats(),
         _actionsRow(),
         if (_about.isNotEmpty) _aboutSection(),
-        if (_reviews.count > 0) _reviewsBlock(),
-        if (!_isSelf && _isDesignerOrPro)
-          _RateAndCommentBar(onSubmit: _onReviewSubmit),
+        // 2026-05-28 FIX 2: Reviews INLINE'dan kaldırıldı — sadece
+        // "Değerlendirme" stat tap'iyle açılan bottom sheet'te gösteriliyor.
         // 2026-05-28: SPEC 12 — AI Stüdyom pill kaldırıldı. AI tasarımlar
         // doğrudan birleşik grid'te listeleniyor, tile'da küçük "AI" rozeti.
         _projectsHeader(),
@@ -569,8 +572,10 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
   // taşındı. Yanıt süresi `koala_designer_stats` henüz şemada yok →
   // defansif olarak "—" gösterilir; Evlumba için sabit "24s".
   Widget _stats() {
-    final designValue =
-        _designHasMore ? '$_designCountSeen+' : '$_designCountSeen';
+    // FIX 3: "+" sadece hasMore && count > 0 ise. Count=0 ise düz "0".
+    final designValue = (_designHasMore && _designCountSeen > 0)
+        ? '$_designCountSeen+'
+        : '$_designCountSeen';
     final ratingValue = _reviews.count > 0
         ? '${_reviews.avg.toStringAsFixed(1)}★'
         : '0';
@@ -621,6 +626,9 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
     );
   }
 
+  /// FIX 5 — Değerlendirme stat tap → reviews bottom sheet:
+  /// drag handle + header + 4 filter chips + scrollable list + sticky CTA.
+  /// "Değerlendir" CTA tap → ayrı bir bottom sheet (form-on-form push) açar.
   Future<void> _openReviewsSheet() async {
     HapticFeedback.selectionClick();
     await showModalBottomSheet<void>(
@@ -632,59 +640,170 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (ctx) {
-        final avg = _reviews.avg.toStringAsFixed(1);
-        return SafeArea(
-          top: false,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 14, 20, 20),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Center(
-                  child: Container(
-                    width: 40,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: KoalaColors.border,
-                      borderRadius: BorderRadius.circular(100),
+        return StatefulBuilder(builder: (ctx, setSheetState) {
+          final mq = MediaQuery.of(ctx);
+          final maxH = mq.size.height * 0.88;
+          final avg = _reviews.avg.toStringAsFixed(1);
+          final filtered = _filteredReviews(_reviewFilter);
+          final showCta = !_isSelf && _isDesignerOrPro;
+          return ConstrainedBox(
+            constraints: BoxConstraints(maxHeight: maxH),
+            child: SafeArea(
+              top: false,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const SizedBox(height: 10),
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: KoalaColors.border,
+                        borderRadius: BorderRadius.circular(100),
+                      ),
                     ),
                   ),
-                ),
-                const SizedBox(height: 14),
-                Row(
-                  children: [
-                    const Icon(LucideIcons.star,
-                        size: 18, color: Color(0xFFEFA01F)),
-                    const SizedBox(width: 6),
-                    Text(
-                      _reviews.count > 0
-                          ? '$avg / 5 · ${_reviews.count} değerlendirme'
-                          : 'Henüz değerlendirme yok',
-                      style: KoalaText.h3,
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 14),
-                Flexible(
-                  child: SingleChildScrollView(
+                  const SizedBox(height: 14),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
                     child: Column(
-                      children: _reviews.reviews.map(_reviewCard).toList(),
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('Değerlendirmeler', style: KoalaText.h2),
+                        const SizedBox(height: 4),
+                        Row(
+                          children: [
+                            const Icon(LucideIcons.star,
+                                size: 14, color: Color(0xFFEFA01F)),
+                            const SizedBox(width: 4),
+                            Text(
+                              _reviews.count > 0
+                                  ? '$avg★ (${_reviews.count} değerlendirme)'
+                                  : 'Henüz değerlendirme yok',
+                              style: KoalaText.bodySec,
+                            ),
+                          ],
+                        ),
+                      ],
                     ),
                   ),
-                ),
-                if (!_isSelf && _isDesignerOrPro) ...[
+                  const SizedBox(height: 12),
+                  // Sort/filter chips
+                  SizedBox(
+                    height: 36,
+                    child: ListView(
+                      scrollDirection: Axis.horizontal,
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      children: [
+                        _filterChip('En yeni', _ReviewFilter.newest,
+                            setSheetState),
+                        const SizedBox(width: 8),
+                        _filterChip('5★ üstü', _ReviewFilter.fiveStarPlus,
+                            setSheetState),
+                        const SizedBox(width: 8),
+                        _filterChip('Düşük puan', _ReviewFilter.lowRating,
+                            setSheetState),
+                        const SizedBox(width: 8),
+                        _filterChip(
+                            'Tümü', _ReviewFilter.all, setSheetState),
+                      ],
+                    ),
+                  ),
                   const SizedBox(height: 8),
-                  _RateAndCommentBar(onSubmit: (r, c) async {
-                    await _onReviewSubmit(r, c);
-                    if (ctx.mounted) Navigator.of(ctx).pop();
-                  }),
+                  Flexible(
+                    child: filtered.isEmpty
+                        ? Padding(
+                            padding: const EdgeInsets.symmetric(
+                                vertical: 32, horizontal: 24),
+                            child: Center(
+                              child: Text(
+                                _reviews.count == 0
+                                    ? 'Henüz değerlendirme yok.'
+                                    : 'Bu filtreye uygun değerlendirme yok.',
+                                style: KoalaText.bodySec,
+                                textAlign: TextAlign.center,
+                              ),
+                            ),
+                          )
+                        : ListView.builder(
+                            padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
+                            itemCount: filtered.length,
+                            itemBuilder: (_, i) => _reviewCard(filtered[i]),
+                          ),
+                  ),
+                  if (showCta)
+                    Padding(
+                      padding: EdgeInsets.fromLTRB(
+                          20, 8, 20, mq.padding.bottom + 12),
+                      child: _DegerlendirCta(
+                        onTap: () async {
+                          HapticFeedback.selectionClick();
+                          Navigator.of(ctx).pop();
+                          await _openRateSheet();
+                        },
+                      ),
+                    ),
                 ],
-              ],
+              ),
             ),
-          ),
-        );
+          );
+        });
       },
+    );
+  }
+
+  List<DesignerReview> _filteredReviews(_ReviewFilter f) {
+    final all = List<DesignerReview>.from(_reviews.reviews);
+    switch (f) {
+      case _ReviewFilter.newest:
+        all.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+        return all;
+      case _ReviewFilter.fiveStarPlus:
+        return all.where((r) => r.rating >= 5).toList()
+          ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      case _ReviewFilter.lowRating:
+        return all.where((r) => r.rating <= 3).toList()
+          ..sort((a, b) => a.rating.compareTo(b.rating));
+      case _ReviewFilter.all:
+        all.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+        return all;
+    }
+  }
+
+  Widget _filterChip(
+      String label, _ReviewFilter value, StateSetter setSheetState) {
+    final active = _reviewFilter == value;
+    return GestureDetector(
+      onTap: () {
+        HapticFeedback.selectionClick();
+        setSheetState(() {});
+        setState(() => _reviewFilter = value);
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: active ? KoalaColors.accentDeep : KoalaColors.surface,
+          borderRadius: BorderRadius.circular(99),
+          border: Border.all(
+            color: active
+                ? KoalaColors.accentDeep
+                : KoalaColors.borderSolid,
+            width: 0.8,
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 12.5,
+            fontWeight: FontWeight.w700,
+            color: active ? Colors.white : KoalaColors.text,
+            letterSpacing: -0.1,
+          ),
+        ),
+      ),
     );
   }
 
@@ -1186,36 +1305,19 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
     return _AboutBlock(text: _about);
   }
 
-  // ─── Reviews block (read-only list) ─────────────────────────────────
-  Widget _reviewsBlock() {
-    final avg = _reviews.avg.toStringAsFixed(1);
-    final shown = _reviews.reviews.take(3).toList();
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 0, 20, 14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Icon(LucideIcons.star,
-                  size: 16, color: Color(0xFFEFA01F)),
-              const SizedBox(width: 6),
-              Text(
-                'Yorumlar ($avg/5 · ${_reviews.count})',
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w800,
-                  color: KoalaColors.text,
-                  letterSpacing: -0.2,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          ...shown.map(_reviewCard),
-        ],
-      ),
-    );
+  // FIX 2: Inline _reviewsBlock kaldırıldı — reviews artık sadece
+  // "Değerlendirme" stat tap'iyle açılan bottom sheet'te gösterilir.
+
+
+  String _relativeTime(DateTime dt) {
+    final d = DateTime.now().difference(dt);
+    if (d.inMinutes < 1) return 'az önce';
+    if (d.inMinutes < 60) return '${d.inMinutes} dk';
+    if (d.inHours < 24) return '${d.inHours} sa';
+    if (d.inDays < 7) return '${d.inDays} gün';
+    if (d.inDays < 30) return '${(d.inDays / 7).floor()} hf';
+    if (d.inDays < 365) return '${(d.inDays / 30).floor()} ay';
+    return '${(d.inDays / 365).floor()} yıl';
   }
 
   Widget _reviewCard(DesignerReview r) {
@@ -1230,6 +1332,39 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Row(
+            children: [
+              Container(
+                width: 28,
+                height: 28,
+                decoration: const BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: KoalaColors.accentSoft,
+                ),
+                child: const Center(
+                  child: Icon(LucideIcons.user,
+                      size: 14, color: KoalaColors.accentDeep),
+                ),
+              ),
+              const SizedBox(width: 8),
+              const Expanded(
+                child: Text(
+                  'Kullanıcı',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: KoalaColors.text,
+                    letterSpacing: -0.1,
+                  ),
+                ),
+              ),
+              Text(
+                _relativeTime(r.createdAt),
+                style: KoalaText.labelSmall,
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
           Row(
             children: List.generate(
               5,
@@ -1328,7 +1463,8 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
           const Spacer(),
           if (_designCountSeen > 0)
             Text(
-              _designHasMore
+              // FIX 3: "+" sadece hasMore && count > 0 ise.
+              (_designHasMore && _designCountSeen > 0)
                   ? '$_designCountSeen+ adet'
                   : '$_designCountSeen adet',
               style: KoalaText.labelSmall,
@@ -1746,6 +1882,61 @@ class _RateAndCommentBarState extends State<_RateAndCommentBar> {
 // kept imported for future extension (consistent profile design tile look).
 // ignore: unused_element
 void _keep() => ProfileDesignTile;
+
+/// FIX 5 — Reviews sheet'in altındaki sticky "Değerlendir" CTA. Premium
+/// gradient pill, tam genişlik (accentDeep → accent).
+class _DegerlendirCta extends StatelessWidget {
+  final VoidCallback onTap;
+  const _DegerlendirCta({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(99),
+        child: Ink(
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              begin: Alignment.centerLeft,
+              end: Alignment.centerRight,
+              colors: [KoalaColors.accentDeep, KoalaColors.accent],
+            ),
+            borderRadius: BorderRadius.circular(99),
+            boxShadow: [
+              BoxShadow(
+                color: KoalaColors.accentDeep.withValues(alpha: 0.30),
+                blurRadius: 16,
+                offset: const Offset(0, 6),
+              ),
+            ],
+          ),
+          child: Container(
+            height: 50,
+            alignment: Alignment.center,
+            child: const Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(LucideIcons.star, size: 18, color: Colors.white),
+                SizedBox(width: 8),
+                Text(
+                  'Değerlendir',
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                    color: Colors.white,
+                    letterSpacing: -0.2,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
 
 /// SPEC 10 — About block with collapse/expand (4 lines clamp + "Daha fazla").
 class _AboutBlock extends StatefulWidget {
