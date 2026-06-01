@@ -108,7 +108,7 @@ class _ChatListScreenV1State extends ConsumerState<ChatListScreenV1> {
   /// [silent] true ise shimmer/spinner gösterme — background refresh için.
   /// WhatsApp gibi: gelen mesaj var diye ekran "yükleniyor"a flash atmaz,
   /// sadece sessizce liste merge olur.
-  Future<void> _load({bool silent = false}) async {
+  Future<void> _load({bool silent = false, bool forceRefresh = false}) async {
     if (!silent) {
       setState(() {
         _loading = true;
@@ -118,14 +118,19 @@ class _ChatListScreenV1State extends ConsumerState<ChatListScreenV1> {
     try {
       // PART C — koala_chat_list_bundle ile counterparty + unread tek RPC'de.
       // Bundle başarısızsa orijinal getConversations'a düşer.
+      // [forceRefresh] true → bundle cache'i bypass et (yeni/okunmuş mesaj
+      // sonrası unread sayıları + nokta GÜNCEL gelsin; sessiz reload'lar hep
+      // taze veri ister, yoksa 15sn'lik tick eski cache'i döndürürdü).
       final uidForBundle = MessagingService.currentUserId ?? '';
       Future<List<Map<String, dynamic>>> resolveConvs() async {
         if (uidForBundle.isEmpty) {
           return MessagingService.getConversations();
         }
         try {
-          final bundle =
-              await MessagingService.loadChatListBundle(uidForBundle);
+          final bundle = await MessagingService.loadChatListBundle(
+            uidForBundle,
+            forceRefresh: forceRefresh || silent,
+          );
           if (bundle != null) return bundle;
         } catch (_) {/* fallback */}
         return MessagingService.getConversations();
@@ -346,7 +351,7 @@ class _ChatListScreenV1State extends ConsumerState<ChatListScreenV1> {
     final messenger = ScaffoldMessenger.maybeOf(context);
     try {
       final synced = await MessagingService.pullInbound();
-      await _load();
+      await _load(forceRefresh: true);
       if (!mounted) return;
       // Yeni mesaj yoksa sessiz ol — SnackBar açma, liste yenilenmesi
       // zaten yeterli feedback. Sadece gerçekten YENİ mesaj geldiyse bildir.
@@ -2196,6 +2201,9 @@ class _ChatListScreenV1State extends ConsumerState<ChatListScreenV1> {
             }
           });
           _pushUnreadToShell();
+          // Bundle cache'i geçersiz kıl — yoksa sonraki sessiz reload eski
+          // (unread>0) cache'i döndürüp noktayı geri getirir.
+          MessagingService.invalidateChatBundleCache();
           // Server'a yaz. Başarısız olursa (RLS vs.) optimistic değeri
           // realtime güncellemesi eventually geri çevirebilir — bunu
           // kullanıcıya göstermek için hata durumunda SnackBar.

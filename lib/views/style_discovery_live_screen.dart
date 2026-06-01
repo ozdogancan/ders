@@ -1644,12 +1644,10 @@ class _StyleDiscoveryLiveScreenState
                 onTap: () {
                   Navigator.of(ctx).pop();
                   // Kart görselini Koala AI sohbetine "kullanıcı fotoyu eklemiş
-                  // gibi" iliştir — initState'te pendingImageUrl indirilip
-                  // input üstünde preview olarak görünür. Kullanıcı isterse
-                  // metni düzenleyip gönderir, foto ile birlikte AI'a gider.
+                  // gibi" iliştir — input üstünde preview olarak görünür.
+                  // Composer BOŞ bırakılır (default metin yok): kullanıcı kendi
+                  // sorusunu yazar; boş gönderirse AI görseli genel analiz eder.
                   context.push('/chat/ai', extra: {
-                    'initialText':
-                        'Bu tasarımı evimde nasıl uygulayabilirim?',
                     if (coverUrl.isNotEmpty) 'pendingImageUrl': coverUrl,
                   });
                 },

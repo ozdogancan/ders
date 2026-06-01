@@ -1057,8 +1057,7 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
   };
 
   void _onChipTap(String chipText) {
-    // AI yanıt verirken chip tap edilmesin — aksi halde "_loading=true"
-    // çiftleşiyor ve UI'daki send-butonu spinner'ı sıkışıyordu.
+    // AI yanıt verirken chip tap edilmesin.
     if (_loading) return;
     HapticFeedback.lightImpact();
     final lower = chipText.toLowerCase();
@@ -1069,88 +1068,13 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
       }
     }
 
-    final ctx = _photoAnalysisContext;
-    // Profile fallback'leri: foto analizi > onboarding profili > son çare default
-    final profileStyle = ctx?['style'] ?? _ai.userStyle;
-    final profileRoom = ctx?['room'] ?? _ai.userRoom;
-    final profileBudget = _ai.userBudget;
-
-    // "Uzman/tasarımcı/iç mimar öner" → designerMatch intent'i (search_designers garanti)
-    if (lower.contains('uzman') ||
-        lower.contains('tasarımcı') ||
-        lower.contains('iç mimar') ||
-        lower.contains('mimar öner') ||
-        lower.contains('mimar bul') ||
-        lower.contains('mimar ara')) {
-      _dispatchIntent(
-        chipText,
-        KoalaIntent.designerMatch,
-        {'style': profileStyle ?? 'modern'},
-      );
-      return;
-    }
-
-    // "Fotoğraf çekeyim 📸" → kamera/galeri picker aç, AI'a gönderme
-    if (lower.contains('fotoğraf çek') || lower.contains('fotoğraf çekeyim')) {
-      setState(() {
-        _msgs.add(_Msg(role: 'user', text: chipText));
-      });
-      _scrollDown();
-      _showPicker();
-      return;
-    }
-
-    // "Yeniden tasarla" / "Odamı yenile" → roomRenovation intent'i
-    if (lower.contains('yeniden tasarla') ||
-        (lower.contains('yenile') && (lower.contains('oda') || lower.contains('salon') ||
-            lower.contains('mutfak') || lower.contains('banyo') || lower.contains('evim')))) {
-      _dispatchIntent(
-        chipText,
-        KoalaIntent.roomRenovation,
-        {
-          'room': profileRoom ?? 'salon',
-          'style': profileStyle ?? 'modern',
-        },
-      );
-      return;
-    }
-
-    // "Bütçe planı" / "30K bütçem var" → budgetPlan intent'i
-    final isBudgetRequest = lower.contains('bütçe') &&
-        (lower.contains('plan') || lower.contains('planla') ||
-            RegExp(r'\d+\s*k\b').hasMatch(lower) || lower.contains('tl'));
-    if (isBudgetRequest) {
-      _dispatchIntent(
-        chipText,
-        KoalaIntent.budgetPlan,
-        {
-          if (profileRoom != null) 'room': profileRoom,
-          if (profileBudget != null) 'budget': profileBudget,
-        },
-      );
-      return;
-    }
-
-    // "Renk paleti / renk öner" → colorAdvice intent'i
-    if (lower.contains('renk paleti') || lower.contains('renk öner') ||
-        (lower.contains('renk') && lower.contains('tarz'))) {
-      _dispatchIntent(
-        chipText,
-        KoalaIntent.colorAdvice,
-        {if (profileRoom != null) 'room': profileRoom},
-      );
-      return;
-    }
-
-    // "Önce-sonra / dönüşüm" → beforeAfter intent'i
-    if (lower.contains('önce-sonra') || lower.contains('önce sonra') ||
-        lower.contains('dönüşüm') || lower.contains('ilham')) {
-      _dispatchIntent(chipText, KoalaIntent.beforeAfter, const {});
-      return;
-    }
-
-    // Diğer chip'ler: kullanıcı temiz text görür, AI bağlamı hiddenContext ile alır
-    _sendToAI(text: chipText, hiddenContext: _buildHiddenContext());
+    // Kullanıcı isteği: akıllı çipe basınca OTOMATIK arama/gönderme YAPMA —
+    // sadece metni composer'a yaz, imleci sona al, klavyeyi aç. Kullanıcı
+    // metni düzenleyip kendisi gönderir (eklenen görsel varsa onunla birleşir).
+    _ctrl.text = chipText;
+    _ctrl.selection = TextSelection.collapsed(offset: _ctrl.text.length);
+    _inputFocus.requestFocus();
+    _onComposerTextChanged();
   }
 
   /// Chip metnini kullanıcı balonuna ekler + history'ye yazar + intent çağırır.
@@ -2014,8 +1938,8 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
       return [
         _suggestionChip(LucideIcons.wand2, 'Bu odayı yeniden tasarla', KoalaColors.accentDeep,
           () => _onChipTap('Bu odayı yeniden tasarla')),
-        _suggestionChip(LucideIcons.palette, 'Renk paletini değiştir', KoalaColors.pink,
-          () => _onChipTap('Bu odanın renk paletini değiştir')),
+        _suggestionChip(LucideIcons.palette, 'Renk paletini analiz et', KoalaColors.pink,
+          () => _onChipTap('Bu odanın renk paletini analiz et')),
         _suggestionChip(LucideIcons.userCheck, 'Bu oda için uzman öner', KoalaColors.greenAlt,
           () => _onChipTap('Bu oda için uzman öner')),
         _suggestionChip(LucideIcons.sparkles, 'Farklı bir stil dene', KoalaColors.accentDeep,
