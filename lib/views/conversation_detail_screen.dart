@@ -25,6 +25,8 @@ import '../widgets/koala_widgets.dart';
 import '../widgets/media_upload_helper.dart';
 import 'chat/widgets/quote_card.dart';
 import 'designer_profile_screen.dart';
+import 'profile/unified_profile_view.dart';
+import 'designer/designer_design_swipe.dart';
 
 /// Evlumba Design = Koala'nın resmî tasarım stüdyosu kanalı. n8n köprüsü
 /// üzerinden Telegram'a yansıtılır. Chat detayı bu kanal için premium görünür:
@@ -316,10 +318,11 @@ class _ConversationDetailScreenState extends ConsumerState<ConversationDetailScr
         }).toList();
         // Defansif dedupe: aynı cover_image_url'yi tekrar eden satır yok et,
         // sonra portfolyo barını 8 ile sınırla.
+        // Kullanıcı isteği: 8 ile sınırlama — tüm (dedupe'li) tasarımlar gelsin.
         final deduped = _dedupeByCover(projects);
         if (mounted) {
           setState(() {
-            _designerProjects = deduped.take(8).toList();
+            _designerProjects = deduped;
             _designerTotalCount = totalCount;
           });
         }
@@ -338,7 +341,7 @@ class _ConversationDetailScreenState extends ConsumerState<ConversationDetailScr
       final detail = await EvlumbaLiveService.getDesignerById(widget.designerId!);
       final projects = await EvlumbaLiveService.getDesignerProjects(
         widget.designerId!,
-        limit: 30,
+        limit: 60,
       );
 
       // Gerçek toplam published proje sayısı (limit'siz exact count). Portfolio
@@ -368,11 +371,10 @@ class _ConversationDetailScreenState extends ConsumerState<ConversationDetailScr
         }
       }
 
-      // Real-designer dedupe: Bahar Temirci gibi tasarımcılarda DB'de aynı
-      // cover_image_url'in farklı project_type rowlarıyla tekrar ettiği görüldü
-      // (örn yatak odası = antre aynı görsel). Client-side cover URL'yle dedupe
-      // edip 8'e cap'liyoruz.
-      final deduped = _dedupeByCover(projects).take(8).toList();
+      // Real-designer dedupe: aynı cover_image_url'in farklı project_type
+      // rowlarıyla tekrar etmesi temizlenir. Kullanıcı isteği: 8 cap KALDIRILDI
+      // — tüm (dedupe'li) tasarımlar gösterilir.
+      final deduped = _dedupeByCover(projects);
 
       if (mounted) {
         setState(() {
@@ -950,28 +952,58 @@ class _ConversationDetailScreenState extends ConsumerState<ConversationDetailScr
     HapticFeedback.selectionClick();
     final did = widget.designerId;
     if (did == null || did.isEmpty) return;
-    if (_isEvlumba) {
-      _showEvlumbaStudioSheet();
-      return;
-    }
-    if (_kHasMiniProfile) {
-      // TODO(profile-agent): mini_profile_sheet.dart merge edildiğinde
-      // aşağıdaki blok aktive edilecek. Import ekleyin:
-      //   import 'profile/mini_profile_sheet.dart';
-      // ve şu çağrıyı yapın:
-      //   showModalBottomSheet<void>(
-      //     context: context,
-      //     isScrollControlled: true,
-      //     backgroundColor: Colors.transparent,
-      //     builder: (_) => MiniProfileSheet(designerId: did),
-      //   );
-      // Şimdilik defansif fallback — sayfa aç.
-    }
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => DesignerProfileScreen(
-          designerId: did,
-          designerName: widget.designerName,
+    // Kullanıcı isteği: ayrı profil SAYFASI (DesignerProfileScreen) DEĞİL —
+    // swipe'daki MEVCUT popup profil (UnifiedProfileView bottom sheet) açılsın.
+    // Evlumba dahil tüm tasarımcılarda tutarlı.
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: KoalaColors.bg,
+      barrierColor: Colors.black54,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      builder: (ctx) => DraggableScrollableSheet(
+        initialChildSize: 0.92,
+        minChildSize: 0.55,
+        maxChildSize: 0.96,
+        expand: false,
+        builder: (_, scrollController) => Column(
+          children: [
+            const SizedBox(height: 10),
+            Container(
+              width: 42,
+              height: 4,
+              decoration: BoxDecoration(
+                color: KoalaColors.border,
+                borderRadius: BorderRadius.circular(100),
+              ),
+            ),
+            Expanded(
+              child: ClipRRect(
+                borderRadius:
+                    const BorderRadius.vertical(top: Radius.circular(28)),
+                child: UnifiedProfileView(
+                  scrollController: scrollController,
+                  profileId: did,
+                  onTapDesign: (items, index) {
+                    Navigator.of(ctx).push(
+                      MaterialPageRoute(
+                        fullscreenDialog: true,
+                        builder: (_) => DesignerDesignSwipeScreen(
+                          projects: items,
+                          initialIndex: index,
+                          designerId: did,
+                          designerName: widget.designerName,
+                          designerAvatarUrl: widget.designerAvatarUrl,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );

@@ -2125,7 +2125,11 @@ class _ChatListScreenV1State extends ConsumerState<ChatListScreenV1> {
         titleLower == nameLower ||
         titleLower.contains(nameLower) ||
         nameLower.contains(titleLower);
-    if (!titleIsJustName) {
+    if (isEvlumba) {
+      // Evlumba resmî kanalında konuşma başlığı (örn "Hub Office Projesi")
+      // gösterme — her zaman "Tasarım stüdyosu".
+      subtitle = profession;
+    } else if (!titleIsJustName) {
       subtitle = rawTitle;
     } else if (profession.isNotEmpty) {
       subtitle = profession;
