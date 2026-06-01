@@ -1390,7 +1390,17 @@ class KoalaAIService {
       case 'search_projects':
         return '${roomPretty.isNotEmpty ? roomPretty : 'Senin için'} $cardCount tasarım örneği:';
       case 'search_designers':
-        return '$cardCount tasarımcı buldum, incele:';
+        final style = (args['style'] as String?)?.trim() ?? '';
+        if (roomPretty.isNotEmpty && style.isNotEmpty) {
+          return '$roomPretty ve $style çizgisine en yakın $cardCount tasarımcıyı seçtim:';
+        }
+        if (roomPretty.isNotEmpty) {
+          return '$roomPretty projelerinde güçlü $cardCount tasarımcı seçtim:';
+        }
+        if (style.isNotEmpty) {
+          return '$style tarzına yakın $cardCount tasarımcı seçtim:';
+        }
+        return 'Portföyü en güçlü $cardCount tasarımcıyı seçtim, incele:';
       default:
         return '';
     }

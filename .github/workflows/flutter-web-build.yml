@@ -75,6 +75,12 @@ jobs:
           if git diff --cached --quiet; then
             echo "No build/web changes — skipping commit."
           else
-            git commit -m "ci: rebuild build/web [skip ci]"
+            # NOT: "[skip ci]" KULLANMA — Vercel bu etiketi gören commit'i
+            # deploy etmez. Workflow zaten `paths-ignore: build/web/**` ile
+            # kendi build/web commit'inde yeniden tetiklenmiyor; bu yüzden
+            # [skip ci]'ye gerek yok ve eklenirse canlı sürüm hep 1 build geride
+            # kalıyor (Vercel yalnız stale build/web içeren feat commit'lerinde
+            # deploy ediyordu).
+            git commit -m "ci: rebuild build/web"
             git push
           fi

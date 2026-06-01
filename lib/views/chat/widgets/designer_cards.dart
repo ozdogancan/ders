@@ -11,6 +11,7 @@ import '../../../services/messaging_service.dart';
 import '../../../services/saved_items_service.dart';
 import '../../../widgets/save_button.dart';
 import '../../../widgets/projects_gallery_popup.dart';
+import '../../profile/unified_profile_view.dart';
 
 /// AI chat içinde gösterilen tasarımcı kartı.
 /// Uzman Bul ekranındaki `_ExpertCard` ile görsel olarak birebir aynı —
@@ -168,7 +169,74 @@ class _ChatExpertCard extends StatelessWidget {
   void _openProfile(BuildContext context) {
     if (_id.isEmpty) return;
     HapticFeedback.lightImpact();
-    context.push('/designer/$_id');
+    // Tam sayfa push yerine swipe'taki ile aynı popup profil (UnifiedProfileView
+    // bottom sheet). Karttaki veriyle seed'lenir; ağ fetch'i beklemeden açılır.
+    final seed = <String, dynamic>{
+      'id': _id,
+      'full_name': _name,
+      if ((designer['business_name'] ?? '').toString().trim().isNotEmpty)
+        'business_name': designer['business_name'],
+      if ((designer['specialty'] ?? '').toString().trim().isNotEmpty)
+        'profession': designer['specialty'],
+      if (_avatar.isNotEmpty) 'avatar_url': _avatar,
+      if ((designer['city'] ?? '').toString().trim().isNotEmpty)
+        'city': designer['city'],
+    };
+    final pool = _projects;
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: KoalaColors.bg,
+      barrierColor: Colors.black54,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      builder: (ctx) => DraggableScrollableSheet(
+        initialChildSize: 0.92,
+        minChildSize: 0.55,
+        maxChildSize: 0.96,
+        expand: false,
+        builder: (_, scrollController) => Column(
+          children: [
+            const SizedBox(height: 10),
+            Container(
+              width: 42,
+              height: 4,
+              decoration: BoxDecoration(
+                color: KoalaColors.border,
+                borderRadius: BorderRadius.circular(100),
+              ),
+            ),
+            Expanded(
+              child: ClipRRect(
+                borderRadius:
+                    const BorderRadius.vertical(top: Radius.circular(28)),
+                child: UnifiedProfileView(
+                  scrollController: scrollController,
+                  profileId: _id,
+                  seedProfile: seed,
+                  seedPool: pool.isNotEmpty ? pool : null,
+                  onTapDesign: (items, index) {
+                    if (items.isEmpty) return;
+                    Navigator.of(ctx).pop();
+                    ProjectsGalleryPopup.show(
+                      context,
+                      projects: items,
+                      initialIndex: index.clamp(0, items.length - 1),
+                      designer: {
+                        'id': _id,
+                        'full_name': _name,
+                        'avatar_url': _avatar,
+                      },
+                    );
+                  },
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Future<void> _openChat(BuildContext context) async {
@@ -255,18 +323,24 @@ class _ChatExpertCard extends StatelessWidget {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _ExpertAvatar(url: _avatar, name: _name, size: 64),
+              GestureDetector(
+                onTap: () => _openProfile(context),
+                child: _ExpertAvatar(url: _avatar, name: _name, size: 64),
+              ),
               const SizedBox(width: 14),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      _name,
-                      style: GoogleFonts.manrope(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w800,
-                        color: KoalaColors.text,
+                    GestureDetector(
+                      onTap: () => _openProfile(context),
+                      child: Text(
+                        _name,
+                        style: GoogleFonts.manrope(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                          color: KoalaColors.text,
+                        ),
                       ),
                     ),
                     const SizedBox(height: 4),
