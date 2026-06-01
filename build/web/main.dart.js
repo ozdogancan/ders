@@ -153605,7 +153605,7 @@ h=h?B.ayK:k
 m=A.a([new A.N(B.a0q,r,k),q,B.a3,p,B.as,o,B.aU,B.aUA,new A.xx(n,k),B.aU,B.aUy,new A.xx(A.a([new A.ik(B.anv,"Dil","T\xfcrk\xe7e",k,l.gaP5(),!1,k),new A.ik(B.anM,"Sat\u0131n Al\u0131mlar\u0131 Geri Y\xfckle",k,h,m,!1,k)],s),k),B.aU],s)
 if(f)B.c.H(m,A.a([B.aUC,new A.xx(A.a([new A.ik(B.ang,"Aboneli\u011fi Y\xf6net",k,k,l.gaLL(),!1,k)],s),k),B.aU],s))
 m.push(B.aUz)
-h=B.c.gU("1.0.157+161".split("+"))
+h=B.c.gU("1.0.158+162".split("+"))
 m.push(new A.xx(A.a([new A.ik(B.uy,"Bizi De\u011ferlendirin",k,k,l.gaRm(),!1,k),new A.ik(B.bC,"Geri Bildirim",k,k,l.gaP2(),!1,k),new A.ik(B.f8,"Uygulamam\u0131z\u0131 Payla\u015f",k,k,l.gaUq(),!1,k),new A.ik(B.IH,"Gizlilik Politikas\u0131",k,k,new A.bny(a),!1,k),new A.ik(B.ur,"Kullan\u0131m \u015eartlar\u0131",k,k,new A.bnz(a),!1,k),new A.ik(B.anq,"KVKK Ayd\u0131nlatma Metni",k,k,new A.bnA(l),!1,k),new A.ik(B.IA,"Versiyon",h,k,k,!1,k)],s),k))
 if(!l.gCO()){h=l.as
 r=!h
