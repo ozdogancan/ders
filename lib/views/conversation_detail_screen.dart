@@ -995,7 +995,7 @@ class _ConversationDetailScreenState extends ConsumerState<ConversationDetailScr
                           'id': did,
                           'full_name': 'Evlumba Design',
                           'business_name': 'Evlumba Design',
-                          'profession': 'Tasarım Stüdyosu',
+                          'profession': 'İç Mimari Stüdyosu',
                           'avatar_url':
                               widget.designerAvatarUrl ?? _kEvlumbaAvatarUrl,
                           'is_verified': true,
@@ -1088,7 +1088,7 @@ class _ConversationDetailScreenState extends ConsumerState<ConversationDetailScr
                                 size: 16, color: Color(0xFF1DA1F2)),
                           ],
                         ),
-                        Text('Tasarım stüdyosu',
+                        Text('İç Mimari Stüdyosu',
                             style: TextStyle(
                               fontSize: 12,
                               color: KoalaColors.textTer,
@@ -1785,7 +1785,7 @@ class _ConversationDetailScreenState extends ConsumerState<ConversationDetailScr
       if (city.isNotEmpty) city,
     ];
     final subLine =
-        _isEvlumba ? 'Tasar\u0131m st\u00fcdyosu' : subParts.join(' \u00b7 ');
+        _isEvlumba ? '\u0130\u00e7 Mimari St\u00fcdyosu' : subParts.join(' \u00b7 ');
 
     // Evlumba avatar URL widget.designerAvatarUrl ile gelmeyebilir (eski
     // conversation lazy a\u00e7\u0131l\u0131\u015f\u0131 vs.). Fallback olarak sabit Evlumba URL.
@@ -1876,11 +1876,11 @@ class _ConversationDetailScreenState extends ConsumerState<ConversationDetailScr
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
-                          // Onaylı rozeti — Evlumba + GERÇEKTEN doğrulanmış
-                          // (is_verified=true) tasarımcı. role=designer olsa bile
-                          // doğrulanmamışsa (gökhan özfırat gibi) rozet YOK.
-                          if (_isEvlumba ||
-                              _designerDetail?['is_verified'] == true) ...[
+                          // Onaylı rozeti — Evlumba marketplace'ten gelen TÜM
+                          // tasarımcılar profesyoneldir → tik alır. _designerDetail
+                          // yalnız getDesignerById ile (marketplace) dolar; ev
+                          // sahiplerinde (Firebase uid) null kalır → rozet YOK.
+                          if (_isEvlumba || _designerDetail != null) ...[
                             const SizedBox(width: 5),
                             const VerifiedBadge(size: 15),
                           ],

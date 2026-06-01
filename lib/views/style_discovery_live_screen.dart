@@ -1415,6 +1415,8 @@ class _StyleDiscoveryLiveScreenState
       'liked': liked,
       'id': card['id']?.toString() ?? '',
     });
+    // Geri al yalnızca son kartı geri alabilir — tek adımlık geçmiş tut.
+    if (_history.length > 1) _history.removeRange(0, _history.length - 1);
     // Her gerçek swipe sayılır — Pro slot cadence'ı için.
     _swipeCount++;
     // Günlük kota sayacı — sessizce arttır, paywall popup AÇMA. Deck-level
@@ -2082,7 +2084,8 @@ class _StyleDiscoveryLiveScreenState
 
   void _onTabActivate() {
     if (MainShell.activeTab.value != KoalaTab.home) return;
-    if (_selectedCategory != null) _applyCategory('');
+    // Kullanıcının seçtiği kategori (örn. Yatak Odası) sekmeler arası gezinince
+    // korunmalı — ana sayfaya dönünce "Hepsi"ye sıfırlamıyoruz.
   }
 
   @override
@@ -2764,7 +2767,13 @@ class _Card extends StatelessWidget {
                       alignment: Alignment.bottomLeft,
                       child: designer == null
                           ? const _DesignerBlockSkeleton()
-                          : _DesignerBlock(designer: designer!),
+                          : _DesignerBlock(
+                              designer: designer!,
+                              // Evlumba'dan gelen, tasarımı olan tüm kişiler
+                              // profesyonel → tik alır. Yalnız kullanıcı (ev
+                              // sahibi) paylaşımları (_user_share) tik almaz.
+                              verified: project['_user_share'] != true,
+                            ),
                     ),
                   ),
                   // 2026-05-28: "Profili Gör" pill kaldırıldı — karta tap
@@ -2795,8 +2804,9 @@ class _Card extends StatelessWidget {
 /// Kartın sol-altında: yuvarlak avatar + tasarımcı adı + verified check
 /// + altında "İç Mimar · N proje" satırı.
 class _DesignerBlock extends StatelessWidget {
-  const _DesignerBlock({super.key, required this.designer});
+  const _DesignerBlock({super.key, required this.designer, this.verified = false});
   final Map<String, dynamic> designer;
+  final bool verified;
 
   @override
   Widget build(BuildContext context) {
@@ -2814,7 +2824,7 @@ class _DesignerBlock extends StatelessWidget {
     final designerId =
         (designer['id'] ?? designer['designer_id'] ?? '').toString();
     final initials = _initials(name);
-    final isVerified = isVerifiedDesignerId(designerId);
+    final isVerified = verified || isVerifiedDesignerId(designerId);
     // 2026-05-28 FIX 5: Pro işareti — designer payload'unda is_pro flag'i
     // varsa kartta da gradient PRO pill göster.
     final isPro = (designer['is_pro'] == true) ||

@@ -426,10 +426,11 @@ class _ChatListScreenV1State extends ConsumerState<ChatListScreenV1> {
           'name': name.isEmpty ? null : name,
           'avatar': avatar.isEmpty ? null : avatar,
           'profession': prof.isEmpty ? null : prof,
-          // Onaylı rozet için gerçek doğrulama bayrağı (Evlumba is_verified).
-          // role=designer olsa bile is_verified=false ise rozet GÖSTERİLMEZ.
+          // Onaylı rozet: Evlumba marketplace'ten dönen TÜM tasarımcılar
+          // profesyoneldir → tik alır. Ev sahipleri (Firebase uid) bu sorguda
+          // bulunmaz, fallback null kayda düşer → rozet GÖSTERİLMEZ.
           // Map değer tipi String? olduğundan '1'/null olarak tutulur.
-          'is_verified': p['is_verified'] == true ? '1' : null,
+          'is_verified': '1',
         };
       }
       // Bulunamayan ID'ler için null set et
@@ -2131,9 +2132,9 @@ class _ChatListScreenV1State extends ConsumerState<ChatListScreenV1> {
         titleLower.contains(nameLower) ||
         nameLower.contains(titleLower);
     if (isEvlumba) {
-      // Evlumba resmî kanalında konuşma başlığı (örn "Hub Office Projesi")
-      // gösterme — her zaman "Tasarım stüdyosu".
-      subtitle = profession;
+      // Evlumba resmî kanalında isim yanında etiket gösterme — kullanıcı
+      // "iç mimari stüdyosu" yazısının mesaj listesinde tekrarını istemiyor.
+      subtitle = '';
     } else if (!titleIsJustName) {
       subtitle = rawTitle;
     } else if (profession.isNotEmpty) {

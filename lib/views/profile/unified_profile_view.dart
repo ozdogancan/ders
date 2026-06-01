@@ -113,6 +113,10 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
   static const String _kRoleSwitchPrefKey = 'profile_role_view';
   String _viewRole = 'homeowner';
 
+  // Profesyonel başvuru durumu (own profile). 'pending' iken tekrar başvuru
+  // alınmaz — "Profesyonel başvurunuz incelenmekte" gösterilir.
+  ProApplicationStatus _proApp = ProApplicationStatus.none;
+
   // ─── Design grid state (CustomScrollView + SliverGrid) ─────────────────
   // KRİTİK MIMARI: GridView.shrinkWrap'i ListView'ün içine sarmak iç içe
   // viewport hatası verdiği için 2026-05-28'de proper Slivers'a geçildi.
@@ -172,6 +176,16 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
     _profileReady = _loadProfile();
     _loadAll();
     _loadInitialDesigns();
+    _loadProApplication();
+  }
+
+  /// Own profile: en son profesyonel başvuru durumunu çek. 'pending' ise
+  /// CTA yerine "incelenmekte" rozeti gösterilir.
+  Future<void> _loadProApplication() async {
+    if (!widget.ownerEditable) return;
+    if (_currentUid == null || _currentUid != widget.profileId) return;
+    final status = await UserProfileService.latestApplication();
+    if (mounted) setState(() => _proApp = status);
   }
 
   @override
@@ -662,8 +676,15 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
   }
 
   Future<void> _openProApplication() async {
+    // Zaten beklemede bir başvuru varsa tekrar açma — tek başvuru hakkı.
+    if (_proApp.isPending) return;
     HapticFeedback.selectionClick();
-    await showProApplicationSheet(context);
+    final submitted = await showProApplicationSheet(context);
+    if (submitted == true && mounted) {
+      // Backend kaydı işlenene kadar UI'ı iyimser şekilde 'pending'e çek.
+      setState(() => _proApp = const ProApplicationStatus(status: 'pending'));
+      _loadProApplication();
+    }
   }
 
   Future<void> _onFollowTap() async {
@@ -784,7 +805,7 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
         ((d?['profession'] ?? d?['specialty'] ?? '') as String).trim();
     if (prof.isNotEmpty) return prof;
     if (widget.profileId == KoalaSeedService.evlumbaDesignerId) {
-      return 'Tasarım Stüdyosu';
+      return 'İç Mimari Stüdyosu';
     }
     if (_profile?.isPro == true) return 'Profesyonel Tasarımcı';
     // "Ev Sahibi" etiketi YALNIZCA kullanıcının KENDİ profili için. Başka
@@ -902,7 +923,9 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
           ),
         ),
       ));
-    } else if (!_hasMoreDesigns && _loadedDesigns.isNotEmpty) {
+    } else if (!_hasMoreDesigns &&
+        _loadedDesigns.isNotEmpty &&
+        !(widget.ownerEditable && _isSelf)) {
       out.add(const SliverToBoxAdapter(
         child: Padding(
           padding: EdgeInsets.symmetric(vertical: 22),
@@ -1003,7 +1026,9 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
                     current: _viewRole,
                     onChange: _saveRole,
                   )
-                : _ProUpsellPill(onTap: _openProApplication),
+                : (_proApp.isPending
+                    ? const _ProPendingPill()
+                    : _ProUpsellPill(onTap: _openProApplication)),
           ],
         ],
       ),
@@ -2933,6 +2958,44 @@ class _AboutBlockState extends State<_AboutBlock> {
               ],
             );
           }),
+        ],
+      ),
+    );
+  }
+}
+
+/// Başvuru beklemedeyken gösterilen bilgi rozeti — tıklanamaz. Kullanıcı
+/// yalnızca bir kez başvurabilir; inceleme bitene kadar bu görünür.
+class _ProPendingPill extends StatelessWidget {
+  const _ProPendingPill();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 32,
+      padding: const EdgeInsets.symmetric(horizontal: 14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF8E8),
+        borderRadius: BorderRadius.circular(100),
+        border: Border.all(
+          color: const Color(0xFFD4A853).withValues(alpha: 0.35),
+          width: 0.8,
+        ),
+      ),
+      child: const Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(LucideIcons.clock, size: 13, color: Color(0xFFB8874A)),
+          SizedBox(width: 6),
+          Text(
+            'Profesyonel başvurunuz incelenmekte',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFFB8874A),
+              letterSpacing: -0.1,
+            ),
+          ),
         ],
       ),
     );
