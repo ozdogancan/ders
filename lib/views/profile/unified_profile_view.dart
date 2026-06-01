@@ -2489,6 +2489,9 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
           .join(' ');
     }
 
+    // Seed kartları (evlumba) yalnızca project_type taşır — ÖNCE onu dene.
+    final pt = (p['project_type'] ?? '').toString().trim();
+    if (pt.isNotEmpty) return pretty(pt);
     final cat = (p['category'] ?? '').toString().trim();
     if (cat.isNotEmpty) return pretty(cat);
     final room = (p['room_type'] ?? p['roomType'] ?? '').toString().trim();

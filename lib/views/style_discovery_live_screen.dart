@@ -901,7 +901,7 @@ class _StyleDiscoveryLiveScreenState
   // koala_cards room_type -> designer_projects project_type (TR etiket).
   static const Map<String, String> _seedRoomTr = {
     'salon': 'Oturma Odası', 'yatak_odasi': 'Yatak Odası', 'mutfak': 'Mutfak',
-    'banyo': 'Banyo', 'cocuk_odasi': 'Çocuk Odası', 'ofis': 'Çalışma Odası',
+    'banyo': 'Banyo', 'cocuk_odasi': 'Çocuk Odası', 'ofis': 'Ofis',
     'antre': 'Antre', 'balkon': 'Balkon',
   };
 
@@ -1000,8 +1000,12 @@ class _StyleDiscoveryLiveScreenState
       (key: '', label: 'Hepsi', icon: LucideIcons.layoutGrid),
     ];
     // key = ham project_type (DB filtresi bununla eşleşir), label = pretty TR.
+    // Çok az tasarımı olan kategoriler (örn. tek "Konut") pill OLMAZ — seçince
+    // boş swipe'a sebep oluyordu. Min eşik altındakiler atlanır.
+    const minCount = 5;
     final seenLabels = <String>{'Hepsi'};
     for (final k in sorted) {
+      if ((counts[k] ?? 0) < minCount) continue;
       final label = _prettyRoom(k);
       if (label.isEmpty || !seenLabels.add(label)) continue; // dup label atla
       opts.add((key: k, label: label, icon: _iconForCategory(k)));
@@ -1193,9 +1197,10 @@ class _StyleDiscoveryLiveScreenState
       'bathroom': 'Banyo',
       'kids room': 'Çocuk Odası',
       'cocuk odasi': 'Çocuk Odası',
-      'office': 'Çalışma Odası',
-      'ofis': 'Çalışma Odası',
-      'calisma odasi': 'Çalışma Odası',
+      'office': 'Ofis',
+      'ofis': 'Ofis',
+      'calisma odasi': 'Ofis',
+      'çalışma odası': 'Ofis',
       'dining room': 'Yemek Odası',
       'yemek odasi': 'Yemek Odası',
       'hallway': 'Antre',
@@ -1467,6 +1472,31 @@ class _StyleDiscoveryLiveScreenState
     if (remaining <= _prefetchThreshold) {
       _fetchBatch();
     }
+    // Deck tehlikeli derecede azaldıysa (ağ fetch'i yetişemeyebilir) RAM'deki
+    // seed havuzundan ANINDA doldur — kullanıcı asla boş kart / "biraz
+    // dinlenelim" görmez. Ağ batch'i sonra gelip gerçek tasarımlarla zenginleştirir.
+    if (remaining <= 2) {
+      _topUpWithSeeds();
+    }
+  }
+
+  /// Deck'i bellekteki seed havuzundan (ağ YOK) anında doldurur — son çare
+  /// tampon. Kategori filtresine uyan, henüz deck'te olmayan seed'leri ekler.
+  void _topUpWithSeeds({int count = 8}) {
+    if (_seedPool.isEmpty || _sourceFilter == 'real') return;
+    final cat = _selectedCategory?.trim().toLowerCase();
+    final pool = (cat == null || cat.isEmpty)
+        ? _seedPool
+        : _seedPool
+            .where((s) =>
+                (s['project_type'] ?? '').toString().toLowerCase() == cat)
+            .toList();
+    if (pool.isEmpty) return;
+    final shuffled = List<Map<String, dynamic>>.from(pool)..shuffle(_rng);
+    final add = shuffled.take(count).toList();
+    if (add.isEmpty || !mounted) return;
+    setState(() => _deck.addAll(add));
+    _precacheNext();
   }
 
   void _prefetchCurrentDesigner() {
@@ -2385,14 +2415,15 @@ class _StyleDiscoveryLiveScreenState
   }
 
   Widget _noMoreCards() {
-    // Bu ekran asla kalıcı bir "durak" olmamalı — deck boşaldıysa hemen yeni
-    // batch çek. _fetchBatch wrap-around ile (offset+seenIds reset) kartları
-    // sonsuza kadar geri getirir, böylece kullanıcı her zaman kaydırabilir.
-    if (!_fetchingMore) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted && _currentCard == null) _fetchBatch();
-      });
-    }
+    // Bu ekran asla kalıcı bir "durak" olmamalı. Deck boşaldıysa post-frame'de
+    // ÖNCE RAM'deki seed'lerle anında doldur (ağ beklemeden), AYRICA ağdan
+    // gerçek tasarımları çek. Böylece "biraz dinlenelim" bir frame'den fazla
+    // görünmez ve kullanıcı her zaman kaydırabilir.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _currentCard != null) return;
+      _topUpWithSeeds();
+      if (!_fetchingMore) _fetchBatch();
+    });
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
