@@ -40223,7 +40223,7 @@ j=$.b7().b
 j===$&&A.b()
 l=t.z
 s=7
-return A.c(j.kv("koala_user_profile_upsert",A.G(["p_uid",n,"p_display_name",c,"p_about",a,"p_contact",b],t.N,l),l),$async$b0e)
+return A.c(j.kv("koala_user_profile_upsert",A.G(["p_uid",n,"p_display_name",c,"p_about",a,"p_contact",b,"p_avatar_url",null,"p_set_avatar",!1],t.N,l),l),$async$b0e)
 case 7:q=!0
 s=1
 break
@@ -153703,7 +153703,7 @@ g.push(new A.i1(B.anF,"Sat\u0131n Al\u0131mlar\u0131 Geri Y\xfckle",j,m?B.ayD:j,
 g=A.a([new A.N(B.a0s,r,j),q,B.a3,p,B.as,o,B.aV,B.aUn,new A.xx(n,j),B.aV,B.aUl,new A.xx(g,j),B.aV],s)
 if(e)B.c.H(g,A.a([B.aUp,new A.xx(A.a([new A.i1(B.an9,"Aboneli\u011fi Y\xf6net",j,j,k.gaLV(),!1,j)],s),j),B.aV],s))
 g.push(B.aUm)
-r=B.c.gU("1.0.165+169".split("+"))
+r=B.c.gU("1.0.166+170".split("+"))
 g.push(new A.xx(A.a([new A.i1(B.ux,"Bizi De\u011ferlendirin",j,j,k.gaRx(),!1,j),new A.i1(B.bC,"Geri Bildirim",j,j,k.gaPf(),!1,j),new A.i1(B.f8,"Uygulamam\u0131z\u0131 Payla\u015f",j,j,k.gaUC(),!1,j),new A.i1(B.II,"Gizlilik Politikas\u0131",j,j,new A.bnE(a),!1,j),new A.i1(B.uq,"Kullan\u0131m \u015eartlar\u0131",j,j,new A.bnF(a),!1,j),new A.i1(B.anj,"KVKK Ayd\u0131nlatma Metni",j,j,new A.bnG(k),!1,j),new A.i1(B.IB,"Versiyon",r,j,j,!1,j)],s),j))
 if(!k.gyh()){r=k.as
 q=!r
