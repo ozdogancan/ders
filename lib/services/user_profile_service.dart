@@ -185,6 +185,10 @@ class UserProfileService {
     final uid = _uid;
     if (uid == null) return false;
     try {
+      // 6 parametrenin TAMAMINI gönder — DB'de hâlâ 4-arg overload duruyor
+      // (20260527 migration'ı canlıya uygulanmadı), 4-arg çağrı PGRST203
+      // "ambiguous function" hatası verip kaydı engelliyordu. Avatar
+      // parametrelerini eklemek çağrıyı tek overload'a (6-arg) sabitler.
       await Supabase.instance.client.rpc(
         'koala_user_profile_upsert',
         params: {
@@ -192,6 +196,8 @@ class UserProfileService {
           'p_display_name': displayName,
           'p_about': about,
           'p_contact': contact ?? const {},
+          'p_avatar_url': null,
+          'p_set_avatar': false,
         },
       );
       return true;
