@@ -96,20 +96,29 @@ interface ModerationResult {
   style: string;
 }
 
-function buildImagePart(image: string): Record<string, unknown> {
+async function buildImagePart(image: string): Promise<Record<string, unknown>> {
   if (image.startsWith('data:')) {
     const m = image.match(/^data:([^;]+);base64,(.*)$/);
     if (!m) throw new Error('invalid_data_url');
     return { inlineData: { mimeType: m[1], data: m[2] } };
   }
   if (/^https?:\/\//i.test(image)) {
-    return { fileData: { mimeType: 'image/jpeg', fileUri: image } };
+    // KRİTİK: Gemini `fileData.fileUri` yalnızca Google-hosted (Files API/GCS)
+    // dosyaları için güvenilir; Supabase storage gibi rastgele https URL'leri
+    // çoğu zaman ÇEKEMEZ → görselsiz değerlendirip is_room=false döner
+    // (gerçek oturma odası "not_a_room" diye yanlış reddediliyordu). Çözüm:
+    // bytes'ı server'da indir, inlineData (base64) olarak gönder.
+    const resp = await fetch(image);
+    if (!resp.ok) throw new Error(`image_fetch_${resp.status}`);
+    const ct = resp.headers.get('content-type') || 'image/jpeg';
+    const buf = Buffer.from(await resp.arrayBuffer());
+    return { inlineData: { mimeType: ct, data: buf.toString('base64') } };
   }
   throw new Error('invalid_image_url');
 }
 
 async function callGemini(image: string, apiKey: string): Promise<ModerationResult> {
-  const imagePart = buildImagePart(image);
+  const imagePart = await buildImagePart(image);
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
 
   const r = await fetch(url, {
