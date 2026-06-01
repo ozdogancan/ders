@@ -177,9 +177,12 @@ class _BootstrapAppState extends State<_BootstrapApp> {
 
   Future<void> _initializeBackends() async {
     try {
+      // Timeout — web'de Firebase JS SDK bazen asılabiliyor; SplashScreen'in
+      // sonsuza kalmaması için 12sn sınır. Hata/timeout → catch loglar, app
+      // devam eder (login gerekiyorsa /auth'a yönlenir, splash'ta takılmaz).
       await Firebase.initializeApp(
         options: DefaultFirebaseOptions.currentPlatform,
-      );
+      ).timeout(const Duration(seconds: 12));
       // Crashlytics collection: sadece mobil release build'de aç. Debug'da
       // false tutarak geliştirme sırasında fake crash flood'u engelle.
       if (!kIsWeb) {
@@ -203,7 +206,9 @@ class _BootstrapAppState extends State<_BootstrapApp> {
       final existing = FirebaseAuth.instance.currentUser;
       if (existing != null && existing.isAnonymous) {
         try {
-          await FirebaseAuth.instance.signOut();
+          await FirebaseAuth.instance
+              .signOut()
+              .timeout(const Duration(seconds: 6));
           debugPrint('Stale anonymous session signed out');
         } catch (e) {
           debugPrint('Anonymous sign-out skipped: $e');
@@ -266,8 +271,13 @@ class _BootstrapAppState extends State<_BootstrapApp> {
 
     // NOT: Bildirim izni artık home_screen'de isteniyor, onboarding'de değil
 
-    // Router state (onboarding flag)
-    await initRouterState();
+    // Router state (onboarding flag) — prefs okuması; yine de timeout+catch ile
+    // sar ki hiçbir koşulda init (ve dolayısıyla SplashScreen) asılı kalmasın.
+    try {
+      await initRouterState().timeout(const Duration(seconds: 6));
+    } catch (e) {
+      debugPrint('initRouterState skipped: $e');
+    }
 
     // Evlumba DB (read-only source)
     if (Env.hasEvlumbaConfig) {

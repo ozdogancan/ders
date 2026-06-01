@@ -561,9 +561,12 @@ class EvlumbaLiveService {
       q = q.or('title.ilike.%$query%,description.ilike.%$query%');
     }
 
+    // Timeout — asılı sorgu _fetchBatch'i (ve _fetchingMore guard'ını) sonsuza
+    // kilitlemesin, swipe yükleme ekranında takılmaya yol açmasın.
     final data = await q
         .order('created_at', ascending: false)
-        .range(offset, offset + limit - 1);
+        .range(offset, offset + limit - 1)
+        .timeout(const Duration(seconds: 8));
     debugPrint('EvlumbaLive: ${data.length} projects fetched');
     return List<Map<String, dynamic>>.from(data);
   }

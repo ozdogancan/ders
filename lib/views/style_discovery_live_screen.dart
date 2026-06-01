@@ -440,6 +440,15 @@ class _StyleDiscoveryLiveScreenState
   }
 
   Future<void> _bootstrap() async {
+    // WATCHDOG: hiçbir koşulda yükleme ekranında (kullanıcıya "splash" gibi
+    // görünüyor) sonsuz takılma OLMASIN. 7sn sonra _loading hâlâ açıksa zorla
+    // kapat — deck boşsa _noMoreCards seed top-up/recycle ile kendini doldurur.
+    Future<void>.delayed(const Duration(seconds: 7), () {
+      if (mounted && _loading) {
+        debugPrint('StyleDiscoveryLive: bootstrap watchdog → force loading=false');
+        setState(() => _loading = false);
+      }
+    });
     // 1) Evlumba Design seeded havuzunu ÖNCE yükle (Koala DB) — warm deck'in
     //    de evlumba interleave alabilmesi için pool hazır olmalı.
     await _loadSeedPool();
