@@ -50,7 +50,10 @@ jobs:
 
       - name: Build web (release, dart-defines)
         run: |
+          APP_VERSION=$(grep '^version:' pubspec.yaml | head -1 | sed 's/version:[[:space:]]*//' | tr -d ' \r')
+          echo "Building APP_VERSION=$APP_VERSION"
           flutter build web --release \
+            --dart-define=APP_VERSION=$APP_VERSION \
             --dart-define=KOALA_API_URL=https://koala-api-olive.vercel.app \
             --dart-define=SUPABASE_URL=https://xgefjepaqnghaotqybpi.supabase.co \
             --dart-define=SUPABASE_ANON_KEY=sb_publishable_ogP9BmI1n7xxUCTz3xDijA_xeIDyl7k \

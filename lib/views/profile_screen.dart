@@ -51,10 +51,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   bool _deleting = false;
   bool _restoring = false;
 
-  // pubspec.yaml: version: 1.0.98+102
-  // package_info_plus is not in pubspec; hardcoded.
-  // TODO: switch to package_info_plus when added.
-  static const String _appVersion = '1.0.98';
+  // Sürüm artık build-time --dart-define=APP_VERSION ile pubspec'ten gelir
+  // (CI + build_web.ps1 + build_android.ps1 hepsi geçiriyor). Define yoksa
+  // (örn. salt `flutter run`) defaultValue gösterilir. Elle bumplamak yok.
+  static const String _appVersionRaw =
+      String.fromEnvironment('APP_VERSION', defaultValue: '');
+  static String get _appVersion =>
+      _appVersionRaw.isEmpty ? '1.0.150' : _appVersionRaw.split('+').first;
   static const String _supportEmail = 'info@evlumba.com';
   static const String _feedbackEmail = 'info@evlumba.com';
   static const String _kvkkUrl = 'https://www.koalatutor.com/kvkk';

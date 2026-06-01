@@ -32,7 +32,12 @@ if ([string]::IsNullOrEmpty($SUPABASE_ANON_KEY) -or $SUPABASE_ANON_KEY -eq "YOUR
 # ── Build ──
 Write-Host "`nBuilding Flutter Web (release)..." -ForegroundColor Green
 
+# Sürümü pubspec.yaml'dan oku — settings ekranı APP_VERSION define'ından gösterir.
+$APP_VERSION = ((Select-String -Path "pubspec.yaml" -Pattern '^version:\s*(.+)$').Matches[0].Groups[1].Value).Trim()
+Write-Host "  APP_VERSION=$APP_VERSION" -ForegroundColor DarkGray
+
 flutter build web --release --tree-shake-icons --no-source-maps `
+  --dart-define=APP_VERSION=$APP_VERSION `
   --dart-define=AI_PROVIDER=gemini `
   --dart-define=KOALA_API_URL=$KOALA_API_URL `
   --dart-define=SUPABASE_URL=$SUPABASE_URL `

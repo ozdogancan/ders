@@ -65,7 +65,12 @@ flutter pub get | Out-Null
 # -- Build AAB --
 Write-Host "`nBuilding Android App Bundle (release)..." -ForegroundColor Green
 
+# Sürümü pubspec.yaml'dan oku — settings ekranı APP_VERSION define'ından gösterir.
+$APP_VERSION = ((Select-String -Path "pubspec.yaml" -Pattern '^version:\s*(.+)$').Matches[0].Groups[1].Value).Trim()
+Write-Host "  APP_VERSION=$APP_VERSION" -ForegroundColor DarkGray
+
 flutter build appbundle --release `
+  --dart-define=APP_VERSION=$APP_VERSION `
   --dart-define=AI_PROVIDER=gemini `
   --dart-define=KOALA_API_URL=$KOALA_API_URL `
   --dart-define=SUPABASE_URL=$SUPABASE_URL `
