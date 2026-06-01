@@ -303,7 +303,7 @@ class _ConversationDetailScreenState extends ConsumerState<ConversationDetailScr
             .eq('source', 'gemini-seed')
             .eq('is_published', true)
             .order('quality_score', ascending: false, nullsFirst: false)
-            .limit(60);
+            .limit(400); // tüm evlumba tasarımları (371+) — 8/60 cap kaldırıldı
         final rows = List<Map<String, dynamic>>.from(res);
         final projects = rows.map<Map<String, dynamic>>((r) {
           final img = (r['cdn_url'] ?? r['original_url'] ?? '').toString();
@@ -1861,11 +1861,11 @@ class _ConversationDetailScreenState extends ConsumerState<ConversationDetailScr
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
-                          // Onaylı rozeti — Evlumba + gerçek tasarımcılar (UUID).
-                          // Ev sahipleri rozet almaz. İsimden sonra, branded.
+                          // Onaylı rozeti — Evlumba + GERÇEKTEN doğrulanmış
+                          // (is_verified=true) tasarımcı. role=designer olsa bile
+                          // doğrulanmamışsa (gökhan özfırat gibi) rozet YOK.
                           if (_isEvlumba ||
-                              isVerifiedDesignerId(
-                                  (widget.designerId ?? '').toString())) ...[
+                              _designerDetail?['is_verified'] == true) ...[
                             const SizedBox(width: 5),
                             const VerifiedBadge(size: 15),
                           ],

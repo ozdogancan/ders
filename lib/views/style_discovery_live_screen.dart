@@ -324,8 +324,15 @@ class _StyleDiscoveryLiveScreenState
   }
 
   Future<void> _loadSavedCategory() async {
-    _selectedCategory = null;
-    // Tutorial gif kaldırıldı — kullanıcı kart tap'ini kendi keşfedecek.
+    // Seçili kategori session'lar/sekme geçişleri arası KALICI olsun: prefs'ten
+    // geri yükle. Boş/'' ise "Hepsi" (null).
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final saved = (prefs.getString(_prefsCategoryKey) ?? '').trim();
+      _selectedCategory = saved.isEmpty ? null : saved;
+    } catch (_) {
+      _selectedCategory = null;
+    }
   }
 
   Future<void> _refreshQuota() async {
@@ -2173,15 +2180,26 @@ class _StyleDiscoveryLiveScreenState
   /// AppBar'ın hemen altında — net, her zaman görünür yatay kategori bar'ı.
   /// Kullanıcı AppBar süzgeç ikonunu gözden kaçırırsa bile buradan seçebilir.
   Widget _buildCategoryBar() {
+    // Seçili kategori HER ZAMAN en başta görünsün (kullanıcı isteği). Hepsi
+    // seçiliyse zaten ilk. Aksi halde seçili pill'i listenin önüne taşı.
+    final opts = List.of(_categoryOptions);
+    final sel = _selectedCategory ?? '';
+    if (sel.isNotEmpty) {
+      final idx = opts.indexWhere((e) => e.key == sel);
+      if (idx > 0) {
+        final item = opts.removeAt(idx);
+        opts.insert(0, item);
+      }
+    }
     return SizedBox(
       height: 64,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
-        itemCount: _categoryOptions.length,
+        itemCount: opts.length,
         separatorBuilder: (_, __) => const SizedBox(width: 10),
         itemBuilder: (_, i) {
-          final e = _categoryOptions[i];
+          final e = opts[i];
           final active = (_selectedCategory ?? '') == e.key;
           return _CategoryChip(
             label: e.label,

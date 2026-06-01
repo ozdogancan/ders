@@ -48,12 +48,9 @@ class VerifiedBadge extends StatelessWidget {
 /// DEĞİL — onların id'si Firebase uid (UUID değil), tasarımcılarınki ise
 /// Evlumba designer_projects.designer_id = UUID. Bu yüzden UUID formatı
 /// kontrol edilir: UUID → tasarımcı (verified), Firebase uid → ev sahibi (hayır).
-final RegExp _kUuidRe = RegExp(
-  r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
-);
-
-bool isVerifiedDesignerId(String designerId) {
-  if (designerId.isEmpty) return false;
-  if (designerId == 'evlumba-design') return true;
-  return _kUuidRe.hasMatch(designerId);
-}
+/// Yalnızca Evlumba resmî stüdyosu id-bazlı verified. Gerçek tasarımcıların
+/// verified durumu id'den DEĞİL, profillerindeki `is_verified` bayrağından
+/// gelir (role=designer olsa bile is_verified=false → rozet yok). Eski UUID
+/// heuristic'i tüm tasarımcılara (gökhan özfırat gibi doğrulanmamışlara) yanlış
+/// rozet veriyordu — kaldırıldı.
+bool isVerifiedDesignerId(String designerId) => designerId == 'evlumba-design';

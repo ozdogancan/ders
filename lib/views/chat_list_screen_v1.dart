@@ -426,6 +426,10 @@ class _ChatListScreenV1State extends ConsumerState<ChatListScreenV1> {
           'name': name.isEmpty ? null : name,
           'avatar': avatar.isEmpty ? null : avatar,
           'profession': prof.isEmpty ? null : prof,
+          // Onaylı rozet için gerçek doğrulama bayrağı (Evlumba is_verified).
+          // role=designer olsa bile is_verified=false ise rozet GÖSTERİLMEZ.
+          // Map değer tipi String? olduğundan '1'/null olarak tutulur.
+          'is_verified': p['is_verified'] == true ? '1' : null,
         };
       }
       // Bulunamayan ID'ler için null set et
@@ -2348,7 +2352,7 @@ class _ChatListScreenV1State extends ConsumerState<ChatListScreenV1> {
                       // Onaylı rozeti — Evlumba + tüm gerçek tasarımcılar
                       // (UUID id). Ev sahipleri (Firebase uid) ROZET ALMAZ.
                       // İsimden hemen sonra, tek tutarlı branded badge.
-                      if (isEvlumba || isVerifiedDesignerId(designerId)) ...[
+                      if (isEvlumba || cached?['is_verified'] == '1') ...[
                         const SizedBox(width: 5),
                         const Padding(
                           padding: EdgeInsets.only(bottom: 1),
