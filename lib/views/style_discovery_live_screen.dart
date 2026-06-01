@@ -80,7 +80,7 @@ class _StyleDiscoveryLiveScreenState
     extends ConsumerState<StyleDiscoveryLiveScreen>
     with TickerProviderStateMixin {
   static const int _batchSize = 10;
-  static const int _prefetchThreshold = 3; // kalan kart sayısı < bu → fetch
+  static const int _prefetchThreshold = 6; // kalan kart sayısı < bu → fetch
 
   // Kategori filtresi — opsiyonel. null / boş = Hepsi.
   // Persist key: SharedPreferences üzerinden session'lar arası korunur.
@@ -90,18 +90,47 @@ class _StyleDiscoveryLiveScreenState
   // arka planda gelince swap ediliyor.
   static const String _prefsDeckCacheKey = 'style_discovery_deck_cache_v1';
   static const int _deckCacheMax = 12;
-  // Sıra burada UI'da kullanılan sıra — bottom sheet chip sırası.
-  // Key = DB'deki project_type değeri (Türkçe, ilike ile eşleştirilir).
-  // Sadece canlı verilerde gerçekten proje olan kategoriler listelenir.
-  static const List<({String key, String label, IconData icon})>
-      _categoryOptions = [
+  // Kategori chip listesi — `_loadCategories()` ile tüm tasarımların (gerçek
+  // designer_projects + Evlumba seed) gerçek project_type'larından dinamik
+  // doldurulur. Sıra: en çok tasarımı olan kategori başta, en az olan sonda
+  // ("Hepsi" hep ilk). Yükleme bitene kadar yalnızca "Hepsi" görünür.
+  List<({String key, String label, IconData icon})> _categoryOptions = const [
     (key: '', label: 'Hepsi', icon: LucideIcons.layoutGrid),
-    (key: 'Oturma Odası', label: 'Oturma Odası', icon: LucideIcons.sofa),
-    (key: 'Yatak Odası', label: 'Yatak Odası', icon: LucideIcons.bed),
-    (key: 'Mutfak', label: 'Mutfak', icon: LucideIcons.chefHat),
-    (key: 'Banyo', label: 'Banyo', icon: LucideIcons.bath),
-    (key: 'Antre', label: 'Antre', icon: LucideIcons.doorOpen),
   ];
+  bool _categoriesLoaded = false;
+
+  // TR project_type etiketine uygun ikon — bilinmeyen kategoriler için grid.
+  static IconData _iconForCategory(String label) {
+    switch (label.trim().toLowerCase()) {
+      case 'oturma odası':
+      case 'salon':
+        return LucideIcons.sofa;
+      case 'yatak odası':
+        return LucideIcons.bed;
+      case 'mutfak':
+        return LucideIcons.chefHat;
+      case 'banyo':
+        return LucideIcons.bath;
+      case 'antre':
+        return LucideIcons.doorOpen;
+      case 'çocuk odası':
+        return LucideIcons.baby;
+      case 'çalışma odası':
+      case 'ofis':
+        return LucideIcons.briefcase;
+      case 'yemek odası':
+        return LucideIcons.utensils;
+      case 'balkon':
+      case 'teras':
+        return LucideIcons.flower2;
+      case 'bahçe':
+        return LucideIcons.trees;
+      case 'giyinme odası':
+        return LucideIcons.shirt;
+      default:
+        return LucideIcons.layoutGrid;
+    }
+  }
   String? _selectedCategory; // null = Hepsi
   // Tasarım kaynağı filtresi — 'all' (hepsi), 'evlumba' (yalnız Evlumba Design),
   // 'real' (yalnız tasarımcı projeleri). Filtre ikonundan ayarlanır.
@@ -142,6 +171,16 @@ class _StyleDiscoveryLiveScreenState
   // Evlumba designer_projects feed'ine harmanlanır.
   final List<Map<String, dynamic>> _seedPool = [];
   bool _seedLoaded = false;
+  // Evlumba seed kuyruğu — havuzdan karıştırılmış kopya, round-robin tüketilir;
+  // tükenince yeniden karıştırılıp baştan başlar. Böylece evlumba kartı seans
+  // boyunca düzenli aralıklarla gelir ve "havuz bitti" diye kesilmez.
+  final List<Map<String, dynamic>> _seedQueue = [];
+  int _seedQueueIdx = 0;
+  // Deck'e eklenen toplam kart sayacı (interleave kadansı için global pozisyon).
+  // İlk evlumba `_seedFirstSlot`, sonrası her `_seedEvery` kartta bir.
+  int _seedSlotCounter = 0;
+  static const int _seedFirstSlot = 2; // 3. kart evlumba olur (neredeyse anında)
+  static const int _seedEvery = 4; // sonra her 4 kartta bir
 
   double _dragDx = 0;
   double _dragDy = 0;
@@ -358,10 +397,11 @@ class _StyleDiscoveryLiveScreenState
   }
 
   Future<void> _bootstrap() async {
-    // 1) Disk cache'den anında deck'i göster — refresh sonrası boş kart yok.
-    await _warmFromDiskCache();
-    // 1b) Evlumba Design seeded tasarım havuzunu yükle (Koala DB).
+    // 1) Evlumba Design seeded havuzunu ÖNCE yükle (Koala DB) — warm deck'in
+    //    de evlumba interleave alabilmesi için pool hazır olmalı.
     await _loadSeedPool();
+    // 1b) Disk cache'den anında deck'i göster — refresh sonrası boş kart yok.
+    await _warmFromDiskCache();
     // 2) Backend ready'ye paralelden bekle, fresh fetch ile cache'i yenile.
     final ready = await EvlumbaLiveService.waitForReady(
         timeout: const Duration(seconds: 6));
@@ -394,6 +434,8 @@ class _StyleDiscoveryLiveScreenState
       _prefetchCurrentDesigner();
       _persistDeckCache();
       _scheduleDemoIdleTimer();
+      // Kategori chip'lerini gerçek tasarım verilerinden doldur (arka planda).
+      unawaited(_loadCategories());
     } catch (e) {
       debugPrint('StyleDiscoveryLive: bootstrap failed → $e');
       if (mounted) setState(() => _loading = false);
@@ -588,10 +630,12 @@ class _StyleDiscoveryLiveScreenState
       // batch'le birlikte SENKRON cache'le. Sol-alt blok ilk frame'de dolu
       // gelir, skeleton→hydrated geçişi (geç yükleme) kalkar.
       _hydrateDesignersFromBatch(filtered);
-      // Evlumba Design seeded kartlarını batch'e harmanla (kaynak filtresi
-      // 'real' değilse). Sıralama öncesi blend yapıyoruz ki ranker hem real
-      // hem seed kartları tek havuzda puanlasın.
-      _blendSeedCards(filtered);
+      // Yalnızca Evlumba-only modda batch'i seed'lerle doldur. Mixed feed'de
+      // evlumba enjeksiyonu artık tek elden `_applyPinnedSeedSlots`
+      // (düzenli kadanslı interleave) ile yapılır.
+      if (_sourceFilter == 'evlumba') {
+        _blendSeedCards(filtered);
+      }
       // Feed ranker: taste-profile + variety + discovery + addiction slot.
       // currentDeckTail ile pencere sürekliliğini koruyor.
       final ranked = await SwipeFeedService.rankBatch(
@@ -767,6 +811,54 @@ class _StyleDiscoveryLiveScreenState
     }
   }
 
+  /// Kategori chip listesini TÜM tasarımların gerçek `project_type`
+  /// değerlerinden dinamik doldurur: gerçek designer_projects (Evlumba
+  /// marketplace) + Evlumba seed havuzu. Sıralama tasarım sayısına göre azalan
+  /// — en çok tasarımı olan kategori başta, en az olan ("Balkon" gibi) sonda.
+  /// "Hepsi" her zaman ilk sırada.
+  Future<void> _loadCategories() async {
+    if (_categoriesLoaded) return;
+    _categoriesLoaded = true;
+    final counts = <String, int>{};
+    // 1) Gerçek tasarımcı projeleri (Evlumba marketplace) — project_type kolonu.
+    try {
+      if (EvlumbaLiveService.isReady) {
+        final rows = await EvlumbaLiveService.client
+            .from('designer_projects')
+            .select('project_type')
+            .eq('is_published', true)
+            .limit(2000);
+        for (final r in List<Map<String, dynamic>>.from(rows)) {
+          final pt = (r['project_type'] ?? '').toString().trim();
+          if (pt.isEmpty) continue;
+          counts[pt] = (counts[pt] ?? 0) + 1;
+        }
+      }
+    } catch (e) {
+      debugPrint('StyleDiscoveryLive: category load (real) failed → $e');
+    }
+    // 2) Evlumba seed havuzu — project_type zaten TR'ye map'li (_mapSeedCard).
+    for (final s in _seedPool) {
+      final pt = (s['project_type'] ?? '').toString().trim();
+      if (pt.isEmpty) continue;
+      counts[pt] = (counts[pt] ?? 0) + 1;
+    }
+    if (counts.isEmpty) return;
+    final sorted = counts.keys.toList()
+      ..sort((a, b) {
+        final c = counts[b]!.compareTo(counts[a]!);
+        return c != 0 ? c : a.compareTo(b); // eşitlikte alfabetik — stabil
+      });
+    final opts = <({String key, String label, IconData icon})>[
+      (key: '', label: 'Hepsi', icon: LucideIcons.layoutGrid),
+    ];
+    for (final k in sorted) {
+      opts.add((key: k, label: k, icon: _iconForCategory(k)));
+    }
+    if (mounted) setState(() => _categoryOptions = opts);
+    debugPrint('StyleDiscoveryLive: categories=${sorted.length} → $sorted');
+  }
+
   /// Havuzdan, kategoriye uyan ve henüz eklenmemiş seeded kartları
   /// batch'e harmanlar.
   /// 2026-05-28 FIX 3c: cold-start kullanıcılar (0 like) için kota 8'e
@@ -798,46 +890,63 @@ class _StyleDiscoveryLiveScreenState
         '[swipe-blend] cold=$coldStart evlumbaInBatch=$added (target=$maxBlend)');
   }
 
-  /// 2026-05-28 FIX 3c: Pinned slot guarantee — _deck'in her 7. slot'unda
-  /// (slot index % 7 == 0, slot 0 hariç) bir Evlumba seed kartı bulundur.
-  /// Mevcut deck pozisyonunda Evlumba yoksa, pool'dan görülmemiş bir kart
-  /// alıp o slot'a yerleştir. Pool'da uygun kart kalmadıysa skip.
-  /// Çağrı yeri: _blendSeedCards sonrası ranker bittikten sonra deck'e
-  /// eklenmeden hemen önce — şimdilik defansif olarak deck'i post-process
-  /// ediyoruz (in-place).
+  /// Evlumba seed kartlarını deck'e DÜZENLİ aralıklarla serpiştirir (in-place).
+  /// Global pozisyon `_seedSlotCounter` ile takip edilir: ilk evlumba
+  /// `_seedFirstSlot` (3. kart ≈ anında), sonra her `_seedEvery` kartta bir.
+  /// Gerçek tasarımcı kartları KORUNUR — seed araya eklenir, üzerine yazılmaz.
+  /// Sayaç tüm batch'ler boyunca sürekli artar → seans boyunca düzenli kadans.
+  /// `!isSeed` guard'ı sayesinde evlumba-only modda (tüm kartlar seed) hiç
+  /// ekleme yapmaz; mixed feed'de tek seed enjeksiyon kaynağıdır.
   void _applyPinnedSeedSlots(List<Map<String, dynamic>> deckTail) {
     if (_seedPool.isEmpty) return;
     if (_sourceFilter == 'real') return;
-    // Bu çağrı yalnızca _deck'e eklenecek tail batch üzerinde çalışır.
-    // Slot index = global _deck.length + i (yeni kartların pozisyonu).
-    final baseIdx = _deck.length;
-    for (var i = 0; i < deckTail.length; i++) {
-      final globalSlot = baseIdx + i;
-      if (globalSlot == 0) continue;
-      if (globalSlot % 7 != 0) continue;
-      final current = deckTail[i];
-      final isAlreadySeed =
-          (current['designer_id'] ?? '').toString() == 'evlumba-design' ||
-              (current['source'] ?? '').toString() == 'gemini-seed';
-      if (isAlreadySeed) continue;
-      // Pool'dan görülmemiş bir Evlumba bul.
-      Map<String, dynamic>? pick;
-      for (final s in _seedPool) {
-        final sid = s['id']?.toString() ?? '';
-        if (sid.isEmpty) continue;
-        if (_seenIds.contains(sid)) continue;
-        // deckTail içinde zaten varsa skip.
-        final alreadyInTail = deckTail
-            .any((c) => (c['id']?.toString() ?? '') == sid);
-        if (alreadyInTail) continue;
-        pick = s;
-        break;
+    final cat = _selectedCategory?.trim().toLowerCase();
+    final out = <Map<String, dynamic>>[];
+    for (final card in deckTail) {
+      final isSeed =
+          (card['designer_id'] ?? '').toString() == 'evlumba-design' ||
+              (card['source'] ?? '').toString() == 'gemini-seed' ||
+              card['_seed'] == true;
+      final atSeedSlot = _seedSlotCounter == _seedFirstSlot ||
+          (_seedSlotCounter > _seedFirstSlot &&
+              (_seedSlotCounter - _seedFirstSlot) % _seedEvery == 0);
+      if (atSeedSlot && !isSeed) {
+        final seed = _nextSeedCard(cat);
+        if (seed != null) {
+          out.add(seed);
+          _seedSlotCounter++;
+          debugPrint('[swipe-blend] interleaved Evlumba at slot=$_seedSlotCounter');
+        }
       }
-      if (pick == null) break; // pool tükendi
-      _seenIds.add(pick['id']!.toString());
-      deckTail[i] = pick;
-      debugPrint('[swipe-blend] pinned Evlumba at slot=$globalSlot');
+      out.add(card);
+      _seedSlotCounter++;
     }
+    deckTail
+      ..clear()
+      ..addAll(out);
+  }
+
+  /// Kuyruktan sıradaki (kategoriye uyan) evlumba seed kartını döndürür.
+  /// Kuyruk tükenince yeniden karıştırılıp baştan başlar → asla bitmez.
+  Map<String, dynamic>? _nextSeedCard(String? cat) {
+    if (_seedPool.isEmpty) return null;
+    for (var tries = 0; tries <= _seedPool.length; tries++) {
+      if (_seedQueue.isEmpty || _seedQueueIdx >= _seedQueue.length) {
+        _seedQueue
+          ..clear()
+          ..addAll(_seedPool);
+        _seedQueue.shuffle(_rng);
+        _seedQueueIdx = 0;
+      }
+      final s = _seedQueue[_seedQueueIdx++];
+      if (cat != null &&
+          cat.isNotEmpty &&
+          (s['project_type'] ?? '').toString().toLowerCase() != cat) {
+        continue; // kategoriye uymuyor — sıradakine bak
+      }
+      return s;
+    }
+    return null; // bu kategoride seed yok
   }
 
   void _precacheNext() {
@@ -1865,6 +1974,10 @@ class _StyleDiscoveryLiveScreenState
       _dragDy = 0;
       _loading = true;
     });
+    // Yeni kategori feed'inde evlumba kadansı baştan başlasın (3. kart).
+    _seedSlotCounter = 0;
+    _seedQueue.clear();
+    _seedQueueIdx = 0;
     await _bootstrap();
   }
 
@@ -2033,6 +2146,14 @@ class _StyleDiscoveryLiveScreenState
   }
 
   Widget _noMoreCards() {
+    // Bu ekran asla kalıcı bir "durak" olmamalı — deck boşaldıysa hemen yeni
+    // batch çek. _fetchBatch wrap-around ile (offset+seenIds reset) kartları
+    // sonsuza kadar geri getirir, böylece kullanıcı her zaman kaydırabilir.
+    if (!_fetchingMore) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _currentCard == null) _fetchBatch();
+      });
+    }
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),

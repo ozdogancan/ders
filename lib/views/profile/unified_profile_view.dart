@@ -242,7 +242,9 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
   /// FIX 4 (2026-05-28): own profile renders premium 2-col grid (large
   /// tiles, portrait aspect), other profiles keep the compact 3-col grid.
   bool get _isOwnGrid => widget.ownerEditable && _isSelf;
-  int get _gridCols => _isOwnGrid ? 2 : 3;
+  // Tüm profillerde (popup dahil) tasarım grid'i 2 kolon, kişinin kendi
+  // profilindeki premium görünümle aynı.
+  int get _gridCols => 2;
 
   Future<void> _loadAll() async {
     // PART B — `koala_profile_bundle` ile counts + reviews tek RPC'de.
@@ -794,20 +796,16 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
     if (_loadedDesigns.isEmpty) {
       return [SliverToBoxAdapter(child: _emptyDesignsState())];
     }
-    // FIX 4 (2026-05-28): own profile premium grid (2-col, portrait, 12px
-    // gaps, 16h padding); other profiles keep compact 3-col 2px-gap grid.
-    final isOwn = _isOwnGrid;
+    // Tüm profillerde premium grid: 2-col, portrait, 12px gaps, 16h padding.
     final out = <Widget>[
       SliverPadding(
-        padding: isOwn
-            ? const EdgeInsets.symmetric(horizontal: 16)
-            : EdgeInsets.zero,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
         sliver: SliverGrid(
           gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: _gridCols,
-            mainAxisSpacing: isOwn ? 12 : 2,
-            crossAxisSpacing: isOwn ? 12 : 2,
-            childAspectRatio: isOwn ? 0.78 : 1.0,
+            mainAxisSpacing: 12,
+            crossAxisSpacing: 12,
+            childAspectRatio: 0.78,
           ),
           delegate: SliverChildBuilderDelegate(
             (ctx, i) => _designTile(i),
@@ -885,22 +883,8 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
       child: Container(
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 22),
-      decoration: BoxDecoration(
-        // 2026-05-28 FIX 1b: Hero gradient — gerçekten görünür mor blok.
-        // accentMuted (#A78BFA) yumuşatılmış solid blok → accentSoft → bg'ye
-        // şeffaflık. Popup'ın rounded top'una "mor giydirme" hissi.
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            KoalaColors.accentMuted.withValues(alpha: 0.65),
-            KoalaColors.accentMuted.withValues(alpha: 0.30),
-            KoalaColors.accentSoft.withValues(alpha: 0.85),
-            KoalaColors.bg.withValues(alpha: 0.0),
-          ],
-          stops: const [0.0, 0.45, 0.80, 1.0],
-        ),
-      ),
+      // Mor/lavender hero gradient kaldırıldı — düz bg, temiz görünüm.
+      decoration: const BoxDecoration(color: KoalaColors.bg),
       child: Column(
         children: [
           _avatar(isEvlumba),
@@ -2062,19 +2046,13 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
   Widget _designTile(int i) {
           final p = _loadedDesigns[i];
           final cover = _coverOf(p);
-          final title = (p['title'] ?? '').toString();
           final id = (p['id'] ?? p['item_id'] ?? '').toString();
-          final isAi = p['is_ai'] == true;
-          final isOwner = widget.ownerEditable && _isSelf;
-          // FIX 4 (2026-05-28): own profile renders a simplified tile —
-          // larger radius, only the category overlay (no AI/Gizli badges).
-          final isOwnTile = isOwner;
-          // 2026-05-28 FIX 3: public/private surfacing removed from UI.
-          // is_public column still exists in DB but is no longer toggleable.
+          // Tüm profillerde premium tile görünümü (radius 14 + kategori
+          // overlay) — popup da kişinin kendi profili gibi görünsün.
           final isViewed = widget.viewedDesignId != null &&
               widget.viewedDesignId!.isNotEmpty &&
               widget.viewedDesignId == id;
-          final categoryLabel = isOwnTile ? _categoryLabel(p) : '';
+          final categoryLabel = _categoryLabel(p);
           return GestureDetector(
             onTap: () {
               HapticFeedback.selectionClick();
@@ -2088,7 +2066,7 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
                 : null,
             behavior: HitTestBehavior.opaque,
             child: ClipRRect(
-              borderRadius: BorderRadius.circular(isOwnTile ? 14 : 2),
+              borderRadius: BorderRadius.circular(14),
               child: Stack(
                 fit: StackFit.expand,
                 children: [
@@ -2153,7 +2131,7 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
                   ],
                   // OWN profile: only category text overlay (bottom-left,
                   // white 13px w700, no AI/Gizli badges).
-                  if (isOwnTile && categoryLabel.isNotEmpty)
+                  if (categoryLabel.isNotEmpty)
                     Positioned(
                       left: 12,
                       right: 12,
@@ -2167,54 +2145,6 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
                           fontSize: 13,
                           fontWeight: FontWeight.w700,
                           letterSpacing: -0.1,
-                        ),
-                      ),
-                    ),
-                  if (!isOwnTile && title.isNotEmpty)
-                    Positioned(
-                      left: 10,
-                      right: 10,
-                      bottom: 10,
-                      child: Text(
-                        title,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: -0.1,
-                        ),
-                      ),
-                    ),
-                  // 2026-05-28 FIX 3: Gizli rozet removed (no more
-                  // public/private surfacing in profile UI).
-                  // SPEC 12: AI rozeti — sağ üst köşede minik etiket.
-                  if (!isOwnTile && isAi)
-                    Positioned(
-                      top: 4,
-                      right: 4,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 4, vertical: 1.5),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.95),
-                          borderRadius: BorderRadius.circular(4),
-                          border: Border.all(
-                            color: KoalaColors.accentDeep
-                                .withValues(alpha: 0.5),
-                            width: 0.8,
-                          ),
-                        ),
-                        child: const Text(
-                          'AI',
-                          style: TextStyle(
-                            fontSize: 8,
-                            fontWeight: FontWeight.w800,
-                            color: KoalaColors.accentDeep,
-                            letterSpacing: 0.3,
-                            height: 1.0,
-                          ),
                         ),
                       ),
                     ),
