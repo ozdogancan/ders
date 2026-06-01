@@ -35414,7 +35414,7 @@ case 1:return A.j(q,r)}})
 return A.k($async$aAQ,r)},
 m3(a,b,c,d){var s=0,r=A.l(t.G),q,p,o
 var $async$m3=A.h(function(e,f){if(e===1)return A.i(f,r)
-for(;;)switch(s){case 0:o=A.km().aO("designer_projects").c8(0,"*, designer_project_images(image_url, sort_order), profiles:designer_id(id, full_name, avatar_url, city, profession)").aP("is_published",!0)
+for(;;)switch(s){case 0:o=A.km().aO("designer_projects").c8(0,u.g).aP("is_published",!0)
 if(c!=null&&c.length!==0)o=A.f5(o.fE(o.f3("project_type","ilike."+c)),o.$ti.c)
 s=3
 return A.c((d!=null&&d.length!==0?o.tV("title.ilike.%"+d+"%,description.ilike.%"+d+"%"):o).h0(0,"created_at",!1).qT(b,b+a-1),$async$m3)
@@ -153630,7 +153630,7 @@ h=h?B.ayJ:k
 m=A.a([new A.N(B.a0p,r,k),q,B.a3,p,B.as,o,B.aU,B.aUz,new A.xx(n,k),B.aU,B.aUx,new A.xx(A.a([new A.ik(B.anu,"Dil","T\xfcrk\xe7e",k,l.gaP6(),!1,k),new A.ik(B.anL,"Sat\u0131n Al\u0131mlar\u0131 Geri Y\xfckle",k,h,m,!1,k)],s),k),B.aU],s)
 if(f)B.c.H(m,A.a([B.aUB,new A.xx(A.a([new A.ik(B.anf,"Aboneli\u011fi Y\xf6net",k,k,l.gaLL(),!1,k)],s),k),B.aU],s))
 m.push(B.aUy)
-h=B.c.gU("1.0.152+156".split("+"))
+h=B.c.gU("1.0.153+157".split("+"))
 m.push(new A.xx(A.a([new A.ik(B.uC,"Bizi De\u011ferlendirin",k,k,l.gaRn(),!1,k),new A.ik(B.bC,"Geri Bildirim",k,k,l.gaP3(),!1,k),new A.ik(B.f8,"Uygulamam\u0131z\u0131 Payla\u015f",k,k,l.gaUq(),!1,k),new A.ik(B.IH,"Gizlilik Politikas\u0131",k,k,new A.bny(a),!1,k),new A.ik(B.uv,"Kullan\u0131m \u015eartlar\u0131",k,k,new A.bnz(a),!1,k),new A.ik(B.anp,"KVKK Ayd\u0131nlatma Metni",k,k,new A.bnA(l),!1,k),new A.ik(B.IA,"Versiyon",h,k,k,!1,k)],s),k))
 if(!l.gCP()){h=l.as
 r=!h
@@ -156434,7 +156434,7 @@ o.oD()
 o.Wx()
 p=m.length-o.k2
 if(p<=6)o.nu()
-if(p<=2)o.aeB()},
+if(p<=2&&o.go)o.aeB()},
 aeB(){var s,r,q,p=this,o=p.k3,n=o.length
 if(n===0)return
 n=p.y
