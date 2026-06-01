@@ -27,6 +27,7 @@ import 'chat/widgets/quote_card.dart';
 import 'designer_profile_screen.dart';
 import 'profile/unified_profile_view.dart';
 import 'designer/designer_design_swipe.dart';
+import '../widgets/verified_badge.dart';
 
 /// Evlumba Design = Koala'nın resmî tasarım stüdyosu kanalı. n8n köprüsü
 /// üzerinden Telegram'a yansıtılır. Chat detayı bu kanal için premium görünür:
@@ -1860,13 +1861,13 @@ class _ConversationDetailScreenState extends ConsumerState<ConversationDetailScr
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
-                          if (_isEvlumba) ...[
-                            const SizedBox(width: 4),
-                            const Icon(
-                              LucideIcons.badgeCheck,
-                              size: 15,
-                              color: Color(0xFF1DA1F2),
-                            ),
+                          // Onaylı rozeti — Evlumba + gerçek tasarımcılar (UUID).
+                          // Ev sahipleri rozet almaz. İsimden sonra, branded.
+                          if (_isEvlumba ||
+                              isVerifiedDesignerId(
+                                  (widget.designerId ?? '').toString())) ...[
+                            const SizedBox(width: 5),
+                            const VerifiedBadge(size: 15),
                           ],
                         ],
                       ),

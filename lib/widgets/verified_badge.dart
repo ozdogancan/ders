@@ -43,13 +43,17 @@ class VerifiedBadge extends StatelessWidget {
   }
 }
 
-/// Evlumba marketplace'ten gelen tüm tasarımcılar + 'evlumba-design' sentetik
-/// stüdyo — verified kabul edilir.
+/// Evlumba marketplace tasarımcıları + 'evlumba-design' sentetik stüdyo
+/// verified kabul edilir. EV SAHİPLERİ (normal Koala kullanıcısı) verified
+/// DEĞİL — onların id'si Firebase uid (UUID değil), tasarımcılarınki ise
+/// Evlumba designer_projects.designer_id = UUID. Bu yüzden UUID formatı
+/// kontrol edilir: UUID → tasarımcı (verified), Firebase uid → ev sahibi (hayır).
+final RegExp _kUuidRe = RegExp(
+  r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
+);
+
 bool isVerifiedDesignerId(String designerId) {
   if (designerId.isEmpty) return false;
-  // evlumba-design synthetic studio
   if (designerId == 'evlumba-design') return true;
-  // Diğer designer_id'ler UUID şeklinde (Evlumba designer_projects.designer_id).
-  // Hepsi marketplace üyesi — onaylı kabul edilir.
-  return true;
+  return _kUuidRe.hasMatch(designerId);
 }

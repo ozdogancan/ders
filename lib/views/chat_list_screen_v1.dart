@@ -7,6 +7,7 @@ import 'main_shell.dart';
 import 'style_discovery_live_screen.dart';
 import '../widgets/koala_bottom_nav.dart';
 import '../widgets/free_consult_sheet.dart';
+import '../widgets/verified_badge.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' hide User;
@@ -2344,18 +2345,14 @@ class _ChatListScreenV1State extends ConsumerState<ChatListScreenV1> {
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                      if (isEvlumba) ...[
-                        const SizedBox(width: 4),
-                        // Mini "verified" — Twitter mavi tik (Evlumba Design
-                        // resmî kanal). Baseline'a oturt; ufak shift için
-                        // Padding ile dengele.
+                      // Onaylı rozeti — Evlumba + tüm gerçek tasarımcılar
+                      // (UUID id). Ev sahipleri (Firebase uid) ROZET ALMAZ.
+                      // İsimden hemen sonra, tek tutarlı branded badge.
+                      if (isEvlumba || isVerifiedDesignerId(designerId)) ...[
+                        const SizedBox(width: 5),
                         const Padding(
                           padding: EdgeInsets.only(bottom: 1),
-                          child: Icon(
-                            LucideIcons.badgeCheck,
-                            size: 14,
-                            color: Color(0xFF1DA1F2),
-                          ),
+                          child: VerifiedBadge(size: 15),
                         ),
                       ],
                       if (projectTitle.isNotEmpty) ...[
