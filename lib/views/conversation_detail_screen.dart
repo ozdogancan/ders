@@ -987,6 +987,21 @@ class _ConversationDetailScreenState extends ConsumerState<ConversationDetailScr
                 child: UnifiedProfileView(
                   scrollController: scrollController,
                   profileId: did,
+                  // İlk frame'de doğru isim/rol/avatar — "Profil/Ev Sahibi"
+                  // yanlış etiketini önler. Evlumba'da sentetik stüdyo kaydı +
+                  // seedPool (portföy) geçilir.
+                  seedProfile: _isEvlumba
+                      ? {
+                          'id': did,
+                          'full_name': 'Evlumba Design',
+                          'business_name': 'Evlumba Design',
+                          'profession': 'Tasarım Stüdyosu',
+                          'avatar_url':
+                              widget.designerAvatarUrl ?? _kEvlumbaAvatarUrl,
+                          'is_verified': true,
+                        }
+                      : _designerDetail,
+                  seedPool: _isEvlumba ? _designerProjects : null,
                   onTapDesign: (items, index) {
                     Navigator.of(ctx).push(
                       MaterialPageRoute(

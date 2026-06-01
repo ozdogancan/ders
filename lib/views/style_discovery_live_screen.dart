@@ -2180,26 +2180,18 @@ class _StyleDiscoveryLiveScreenState
   /// AppBar'ın hemen altında — net, her zaman görünür yatay kategori bar'ı.
   /// Kullanıcı AppBar süzgeç ikonunu gözden kaçırırsa bile buradan seçebilir.
   Widget _buildCategoryBar() {
-    // Seçili kategori HER ZAMAN en başta görünsün (kullanıcı isteği). Hepsi
-    // seçiliyse zaten ilk. Aksi halde seçili pill'i listenin önüne taşı.
-    final opts = List.of(_categoryOptions);
-    final sel = _selectedCategory ?? '';
-    if (sel.isNotEmpty) {
-      final idx = opts.indexWhere((e) => e.key == sel);
-      if (idx > 0) {
-        final item = opts.removeAt(idx);
-        opts.insert(0, item);
-      }
-    }
+    // Sıralama sabit (Hepsi + popülerlik). Seçili pill yerinde vurgulanır —
+    // başa taşıma davranışı kullanıcı isteğiyle kaldırıldı. Seçim, aynı session
+    // içinde (sekme geçişlerinde) korunur (_selectedCategory bellekte + prefs).
     return SizedBox(
       height: 64,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
-        itemCount: opts.length,
+        itemCount: _categoryOptions.length,
         separatorBuilder: (_, __) => const SizedBox(width: 10),
         itemBuilder: (_, i) {
-          final e = opts[i];
+          final e = _categoryOptions[i];
           final active = (_selectedCategory ?? '') == e.key;
           return _CategoryChip(
             label: e.label,

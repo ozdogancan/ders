@@ -701,6 +701,10 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
     final n =
         ((d?['full_name'] ?? d?['business_name'] ?? '') as String).trim();
     if (n.isNotEmpty) return n;
+    // Evlumba resmî stüdyo — profil koala_user_profiles'ta yok, isim sabit.
+    if (widget.profileId == KoalaSeedService.evlumbaDesignerId) {
+      return 'Evlumba Design';
+    }
     // FIX 1 (2026-05-28): own profile fallback — auth displayName → email prefix.
     if (_isSelf) {
       final auth = FirebaseAuth.instance.currentUser;
@@ -751,7 +755,13 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
     final prof =
         ((d?['profession'] ?? d?['specialty'] ?? '') as String).trim();
     if (prof.isNotEmpty) return prof;
+    if (widget.profileId == KoalaSeedService.evlumbaDesignerId) {
+      return 'Tasarım Stüdyosu';
+    }
     if (_profile?.isPro == true) return 'Profesyonel Tasarımcı';
+    // "Ev Sahibi" etiketi YALNIZCA kullanıcının KENDİ profili için. Başka
+    // birinin (tasarımcı) profilini açarken yanlışlıkla "Ev Sahibi" yazma.
+    if (!_isSelf) return _designerRow != null ? 'Tasarımcı' : '';
     return 'Ev Sahibi';
   }
 
