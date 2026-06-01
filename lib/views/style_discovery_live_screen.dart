@@ -1472,10 +1472,10 @@ class _StyleDiscoveryLiveScreenState
     if (remaining <= _prefetchThreshold) {
       _fetchBatch();
     }
-    // Deck tehlikeli derecede azaldıysa (ağ fetch'i yetişemeyebilir) RAM'deki
-    // seed havuzundan ANINDA doldur — kullanıcı asla boş kart / "biraz
-    // dinlenelim" görmez. Ağ batch'i sonra gelip gerçek tasarımlarla zenginleştirir.
-    if (remaining <= 2) {
+    // Deck tehlikeli derecede azaldı VE ağ fetch'i hâlâ uçuşta (yetişemiyor)
+    // → RAM seed havuzundan ANINDA doldur, kullanıcı boş kart görmesin. Fetch
+    // bittiyse (gerçek tasarımlar eklendiyse) tetiklenmez → feed seed'le boğulmaz.
+    if (remaining <= 2 && _fetchingMore) {
       _topUpWithSeeds();
     }
   }

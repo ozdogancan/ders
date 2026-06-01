@@ -539,10 +539,14 @@ class EvlumbaLiveService {
     String? query,
     String? designerId,
   }) async {
+    // NOT: `profiles:designer_id(...)` embed'i KALDIRILDI — Evlumba DB'sinde
+    // designer_projects→profiles arası FK tanımlı olmadığı için PostgREST
+    // PGRST200 (400) atıyordu ve getProjects HER çağrıda patlayıp boş
+    // dönüyordu (feed sadece seed'le doluyordu). Tasarımcı bilgisi
+    // _prefetchDesignersForBatch → getDesignersByIds ile ayrı çekiliyor.
     var q = client
         .from('designer_projects')
-        .select('*, designer_project_images(image_url, sort_order), '
-            'profiles:designer_id(id, full_name, avatar_url, city, profession)')
+        .select('*, designer_project_images(image_url, sort_order)')
         .eq('is_published', true);
 
     if (designerId != null && designerId.isNotEmpty) {
@@ -570,8 +574,7 @@ class EvlumbaLiveService {
     try {
       final data = await client
           .from('designer_projects')
-          .select('*, designer_project_images(image_url, sort_order), '
-              'profiles:designer_id(id, full_name, avatar_url, city, profession)')
+          .select('*, designer_project_images(image_url, sort_order)')
           .eq('id', projectId)
           .maybeSingle();
       return data == null ? null : Map<String, dynamic>.from(data);
