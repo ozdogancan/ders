@@ -204,6 +204,10 @@ class _StyleDiscoveryLiveScreenState
   // Evlumba designer_projects feed'ine harmanlanır.
   final List<Map<String, dynamic>> _seedPool = [];
   bool _seedLoaded = false;
+  // Opt-in kullanıcıların yayınladığı tasarımlar (koala_swipe_user_designs RPC).
+  // Akıllı keşif: feed'e düşük oranda (~her 9 kartta bir) serpiştirilir.
+  final List<Map<String, dynamic>> _userDesignPool = [];
+  int _userDesignCursor = 0;
   // Evlumba seed kuyruğu — havuzdan karıştırılmış kopya, round-robin tüketilir;
   // tükenince yeniden karıştırılıp baştan başlar. Böylece evlumba kartı seans
   // boyunca düzenli aralıklarla gelir ve "havuz bitti" diye kesilmez.
@@ -459,6 +463,8 @@ class _StyleDiscoveryLiveScreenState
     // 1) Evlumba Design seeded havuzunu ÖNCE yükle (Koala DB) — warm deck'in
     //    de evlumba interleave alabilmesi için pool hazır olmalı.
     await _loadSeedPool();
+    // 1-) Opt-in kullanıcıların yayınladığı tasarımları da yükle (akıllı keşif).
+    unawaited(_loadUserDesignPool());
     // 1a) İLK KART evlumba design olsun — görseli precache edilip deck[0]'a
     //     konur. Splash bitince kullanıcı hiçbir şey beklemeden hazır evlumba
     //     kartını (sol-alt bloğuyla) görür, sonra normal akış devam eder.
@@ -705,6 +711,8 @@ class _StyleDiscoveryLiveScreenState
       if (_sourceFilter == 'evlumba') {
         _blendSeedCards(filtered);
       }
+      // Opt-in kullanıcı tasarımlarını düşük oranda harmanla (akıllı keşif).
+      _blendUserDesigns(filtered);
       // Feed ranker: taste-profile + variety + discovery + addiction slot.
       // currentDeckTail ile pencere sürekliliğini koruyor.
       final ranked = await SwipeFeedService.rankBatch(
@@ -1037,6 +1045,76 @@ class _StyleDiscoveryLiveScreenState
     }
     if (mounted) setState(() => _categoryOptions = opts);
     debugPrint('StyleDiscoveryLive: categories=${sorted.length} → $sorted');
+  }
+
+  /// Opt-in kullanıcıların yayınladığı tasarımları RPC ile çek, swipe kart
+  /// şekline çevir ve `_designerCache`'i (ev sahibi adı/avatarı) hydrate et.
+  Future<void> _loadUserDesignPool() async {
+    try {
+      final data = await Supabase.instance.client
+          .rpc('koala_swipe_user_designs', params: {'p_limit': 50, 'p_offset': 0});
+      if (data == null) return;
+      final rows = (data as List)
+          .whereType<Map>()
+          .map((e) => Map<String, dynamic>.from(e))
+          .toList();
+      final mapped = <Map<String, dynamic>>[];
+      for (final r in rows) {
+        final did = (r['designer_id'] ?? '').toString();
+        final cover = (r['cover_image_url'] ?? '').toString();
+        if (did.isEmpty || cover.isEmpty) continue;
+        mapped.add({
+          'id': r['id'],
+          'designer_id': did,
+          'title': (r['title'] ?? '').toString(),
+          'project_type': _prettyRoom((r['room_type'] ?? '').toString()),
+          'cover_image_url': cover,
+          'tags': r['tags'] ?? const <String>[],
+          'view_count': r['view_count'] ?? 0,
+          'created_at': r['created_at'],
+          '_user_share': true,
+        });
+        // Sol-alt blok için ev sahibi adını/avatarını cache'le (ağ turu yok).
+        if (!_designerCache.containsKey(did)) {
+          _designerCache[did] = {
+            'id': did,
+            'full_name': (r['designer_name'] ?? 'Koala Kullanıcısı').toString(),
+            'avatar_url': (r['designer_avatar'] ?? '').toString(),
+            'profession': 'Koala Kullanıcısı',
+            '_partial': true,
+          };
+        }
+      }
+      _userDesignPool
+        ..clear()
+        ..addAll(mapped);
+      debugPrint('StyleDiscoveryLive: user design pool ${_userDesignPool.length}');
+    } catch (e) {
+      debugPrint('StyleDiscoveryLive: user design pool load failed → $e');
+    }
+  }
+
+  /// Kullanıcı tasarımlarını batch'e DÜŞÜK oranda harmanlar (akıllı keşif:
+  /// Evlumba'yı boğmadan ~batch başına 1). Kategori filtresine uyar.
+  void _blendUserDesigns(List<Map<String, dynamic>> batch) {
+    if (_userDesignPool.isEmpty || _sourceFilter == 'evlumba') return;
+    final cat = _selectedCategory?.trim().toLowerCase();
+    var added = 0;
+    for (var i = 0; i < _userDesignPool.length && added < 1; i++) {
+      final idx = (_userDesignCursor + i) % _userDesignPool.length;
+      final c = _userDesignPool[idx];
+      final id = c['id']?.toString() ?? '';
+      if (id.isEmpty || _seenIds.contains(id)) continue;
+      if (cat != null &&
+          cat.isNotEmpty &&
+          (c['project_type'] ?? '').toString().toLowerCase() != cat) {
+        continue;
+      }
+      _seenIds.add(id);
+      batch.add(c);
+      added++;
+      _userDesignCursor = idx + 1;
+    }
   }
 
   /// Havuzdan, kategoriye uyan ve henüz eklenmemiş seeded kartları

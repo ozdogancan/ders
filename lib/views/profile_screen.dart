@@ -50,6 +50,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   bool _wiping = false;
   bool _deleting = false;
   bool _restoring = false;
+  // Yayınlanan tasarımlar herkese açık swipe'da görünsün mü (opt-in).
+  bool _showInSwipe = false;
+  bool _showInSwipeBusy = false;
 
   // Sürüm artık build-time --dart-define=APP_VERSION ile pubspec'ten gelir
   // (CI + build_web.ps1 + build_android.ps1 hepsi geçiriyor). Define yoksa
@@ -57,7 +60,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   static const String _appVersionRaw =
       String.fromEnvironment('APP_VERSION', defaultValue: '');
   static String get _appVersion =>
-      _appVersionRaw.isEmpty ? '1.0.163' : _appVersionRaw.split('+').first;
+      _appVersionRaw.isEmpty ? '1.0.164' : _appVersionRaw.split('+').first;
   static const String _supportEmail = 'info@evlumba.com';
   static const String _feedbackEmail = 'info@evlumba.com';
   static const String _kvkkUrl = 'https://www.koalatutor.com/kvkk';
@@ -91,6 +94,37 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     _displayName = _user?.displayName ?? '';
     _email = _user?.email ?? '';
     _photoUrl = _user?.photoURL;
+    _loadShowInSwipe();
+  }
+
+  Future<void> _loadShowInSwipe() async {
+    final uid = _user?.uid;
+    if (uid == null || uid.isEmpty) return;
+    try {
+      final row = await Supabase.instance.client
+          .from('koala_user_profiles')
+          .select('show_designs_in_swipe')
+          .eq('uid', uid)
+          .maybeSingle();
+      if (!mounted) return;
+      setState(() => _showInSwipe = row?['show_designs_in_swipe'] == true);
+    } catch (_) {/* sessiz — varsayılan kapalı */}
+  }
+
+  Future<void> _toggleShowInSwipe(bool on) async {
+    if (_showInSwipeBusy) return;
+    setState(() {
+      _showInSwipe = on; // optimistic
+      _showInSwipeBusy = true;
+    });
+    try {
+      await Supabase.instance.client
+          .rpc('koala_set_show_in_swipe', params: {'p_on': on});
+    } catch (_) {
+      if (mounted) setState(() => _showInSwipe = !on); // geri al
+    } finally {
+      if (mounted) setState(() => _showInSwipeBusy = false);
+    }
   }
 
   bool get _isAnonymous => _user?.isAnonymous ?? true;
@@ -799,6 +833,18 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             // ─── Genel
             const _SectionHeader('GENEL'),
             _SettingsCard(rows: [
+              // Opt-in: yayınladığın tasarımlar Tarzını Keşfet (swipe) akışında
+              // başkalarına gösterilsin mi. Varsayılan kapalı.
+              if (!_isAnonymous)
+                _SettingsTile(
+                  icon: LucideIcons.sparkles,
+                  label: 'Tasarımlarım keşfette görünsün',
+                  trailingWidget: Switch.adaptive(
+                    value: _showInSwipe,
+                    onChanged: _showInSwipeBusy ? null : _toggleShowInSwipe,
+                    activeTrackColor: KoalaColors.accentDeep,
+                  ),
+                ),
               _SettingsTile(
                 icon: LucideIcons.languages,
                 label: 'Dil',
