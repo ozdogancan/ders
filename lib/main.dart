@@ -176,6 +176,10 @@ class _BootstrapAppState extends State<_BootstrapApp> {
   String? _lastAuthUid;
 
   Future<void> _initializeBackends() async {
+    final _bootSw = Stopwatch()..start();
+    void _bt(String step) =>
+        debugPrint('[boot] $step @${_bootSw.elapsedMilliseconds}ms');
+    _bt('init-start');
     try {
       // Timeout — web'de Firebase JS SDK bazen asılabiliyor; SplashScreen'in
       // sonsuza kalmaması için 12sn sınır. Hata/timeout → catch loglar, app
@@ -183,6 +187,7 @@ class _BootstrapAppState extends State<_BootstrapApp> {
       await Firebase.initializeApp(
         options: DefaultFirebaseOptions.currentPlatform,
       ).timeout(const Duration(seconds: 12));
+      _bt('firebase-done');
       // Crashlytics collection: sadece mobil release build'de aç. Debug'da
       // false tutarak geliştirme sırasında fake crash flood'u engelle.
       if (!kIsWeb) {
@@ -265,6 +270,7 @@ class _BootstrapAppState extends State<_BootstrapApp> {
         debugPrint('Supabase init skipped: $error');
       }
     }
+    _bt('supabase-done');
 
     // Connectivity monitoring
     ConnectivityService.init();
@@ -278,6 +284,7 @@ class _BootstrapAppState extends State<_BootstrapApp> {
     } catch (e) {
       debugPrint('initRouterState skipped: $e');
     }
+    _bt('router-done');
 
     // Evlumba DB (read-only source)
     if (Env.hasEvlumbaConfig) {
@@ -301,6 +308,7 @@ class _BootstrapAppState extends State<_BootstrapApp> {
     if (_supabaseReady) {
       unawaited(EvlumbaLiveService.prefetchForHome());
     }
+    _bt('init-end');
   }
 
   @override
@@ -319,6 +327,7 @@ class _BootstrapAppState extends State<_BootstrapApp> {
         }
         if (!_didTrackStartup) {
           _didTrackStartup = true;
+          debugPrint('[boot] futurebuilder-done → render KoalaApp');
           Analytics.instance.init(
             platform: _platformName(),
             appVersion: '1.0.0',
