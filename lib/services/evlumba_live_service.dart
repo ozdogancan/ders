@@ -691,6 +691,27 @@ class EvlumbaLiveService {
     }
   }
 
+  /// Tasarımcının toplam proje sayısı (exact count). Profil header'ı için.
+  /// Bağlantı yoksa / hata olursa 0 döner.
+  static Future<int> designerProjectsCount(String designerId) async {
+    if (designerId.isEmpty) return 0;
+    try {
+      if (!isReady) {
+        await waitForReady(timeout: const Duration(seconds: 4));
+      }
+      if (!isReady) return 0;
+      final res = await client
+          .from('designer_projects')
+          .select()
+          .eq('designer_id', designerId)
+          .count();
+      return res.count;
+    } catch (e) {
+      debugPrint('EvlumbaLive.designerProjectsCount($designerId) failed: $e');
+      return 0;
+    }
+  }
+
   // ═══════════════════════════════════════
   // REVIEWS
   // ═══════════════════════════════════════

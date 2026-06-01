@@ -173,6 +173,7 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
         _loadedDesigns
           ..clear()
           ..addAll(fresh);
+        _reorderViewedFirst();
         _designsCursor = page.cursor;
         _hasMoreDesigns = page.hasMore;
         _loadingInitialDesigns = false;
@@ -186,6 +187,19 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
         _loadingInitialDesigns = false;
         _hasMoreDesigns = false;
       });
+    }
+  }
+
+  /// Swipe'tan açıldıysa, görüntülenen tasarımı grid'in başına taşır —
+  /// kullanıcı geldiği kartı ilk sırada görür ("Bunu görüntülediniz").
+  void _reorderViewedFirst() {
+    final vid = widget.viewedDesignId;
+    if (vid == null || vid.isEmpty) return;
+    final i = _loadedDesigns.indexWhere((m) =>
+        (m['id'] ?? m['item_id'] ?? '').toString() == vid);
+    if (i > 0) {
+      final item = _loadedDesigns.removeAt(i);
+      _loadedDesigns.insert(0, item);
     }
   }
 
@@ -219,6 +233,7 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
       }
       setState(() {
         _loadedDesigns.addAll(fresh);
+        _reorderViewedFirst();
         _designsCursor = page.cursor;
         _hasMoreDesigns = page.hasMore;
         _loadingMoreDesigns = false;
@@ -348,9 +363,13 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
           ownerUid: widget.profileId,
           publicOnly: true,
         ),
+        // Evlumba marketplace tasarımcılarının projeleri ayrı DB'de —
+        // Koala SharedDesignService 0 döner. Evlumba sayısını da ekle.
+        EvlumbaLiveService.designerProjectsCount(widget.profileId),
       ]);
       if (mounted) {
-        setState(() => _designTotalCount = (results[0]) + (results[1]));
+        setState(() =>
+            _designTotalCount = results[0] + results[1] + results[2]);
       }
     } catch (e) {
       debugPrint('[unified_profile] design total count failed: $e');
@@ -1005,11 +1024,19 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
   // taşındı. Yanıt süresi `koala_designer_stats` henüz şemada yok →
   // defansif olarak "—" gösterilir; Evlumba için sabit "24s".
   Widget _stats() {
-    // Server-side exact total varsa onu kullan; yoksa "+" eki ile gözlenen.
+    // Server-side exact total varsa onu kullan; ama yüklenen karttan küçükse
+    // (örn. Evlumba tasarımcısı, count başka DB'de 0 döndü) gözlenen sayıya
+    // düş — "0 tasarım ama 2 kart" çelişkisini engeller.
     final seen = _loadedDesigns.length;
-    final designValue = _designTotalCount != null
-        ? '${_designTotalCount!}'
-        : ((_hasMoreDesigns && seen > 0) ? '$seen+' : '$seen');
+    final total = _designTotalCount;
+    final String designValue;
+    if (total != null && total >= seen && total > 0) {
+      designValue = '$total';
+    } else if (seen > 0) {
+      designValue = _hasMoreDesigns ? '$seen+' : '$seen';
+    } else {
+      designValue = '0';
+    }
     final ratingValue = _reviews.count > 0
         ? '${_reviews.avg.toStringAsFixed(1)}★'
         : '0';

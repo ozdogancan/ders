@@ -289,6 +289,7 @@ class SwipeFeedService {
     required List<Map<String, dynamic>> candidates,
     List<Map<String, dynamic>> currentDeckTail = const [],
     int totalLikesAllTime = -1,
+    bool bypassRecency = false,
   }) async {
     if (candidates.isEmpty) return const [];
     final profile = await getProfile(
@@ -296,12 +297,13 @@ class SwipeFeedService {
     // Caller -1 verirse profile'ın kendi sampleCount'unu kullan.
     if (totalLikesAllTime < 0) totalLikesAllTime = profile.sampleCount;
 
-    // 1) Recently-seen dedup (son 200 kart).
+    // 1) Recently-seen dedup (son 200 kart). [bypassRecency]=true ise atlanır —
+    //    tüm taze kartlar tükendi, kullanıcının durmaması için tekrar göster.
     final dedup = <Map<String, dynamic>>[];
     for (final c in candidates) {
       final id = (c['id'] ?? '').toString();
       if (id.isEmpty) continue;
-      if (await _isRecentlySeen(id)) continue;
+      if (!bypassRecency && await _isRecentlySeen(id)) continue;
       dedup.add(c);
     }
     if (dedup.isEmpty) return const [];

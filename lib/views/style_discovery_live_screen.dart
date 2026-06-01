@@ -601,6 +601,11 @@ class _StyleDiscoveryLiveScreenState
       // Kaynak filtresi 'evlumba' iken Evlumba projelerini hiç çekme —
       // sadece seeded havuzdan harmanla.
       final List<Map<String, dynamic>> batch;
+      // Bir tur tamamlandıysa (tüm taze kartlar bitti) wrap-around yapıldı mı?
+      // Öyleyse rankBatch'in 200'lük recency dedup'ını bypass et — yoksa
+      // recycled kartların hepsi "yakında görüldü" diye elenir ve deck boş
+      // kalır ("biraz dinlenelim" durağı). Kullanıcı sonsuza dek kaydırabilmeli.
+      var wrapped = false;
       if (_sourceFilter == 'evlumba') {
         batch = <Map<String, dynamic>>[];
       } else {
@@ -612,6 +617,7 @@ class _StyleDiscoveryLiveScreenState
         _offset += _batchSize;
         // Wrap-around: bir tur tamamlandıysa başa dön ve seenIds temizle
         if (batch.isEmpty) {
+          wrapped = true;
           _offset = 0;
           _seenIds.clear();
           final retry = await EvlumbaLiveService.getProjects(
@@ -650,6 +656,7 @@ class _StyleDiscoveryLiveScreenState
         currentDeckTail: _deck.length <= 10
             ? List<Map<String, dynamic>>.from(_deck)
             : _deck.sublist(_deck.length - 10),
+        bypassRecency: wrapped,
       );
       // 2026-05-28 FIX 3a: enforce category filter POST-rank. Ranker may
       // include cards whose project_type drifts from the active filter
@@ -675,6 +682,13 @@ class _StyleDiscoveryLiveScreenState
       }
       debugPrint(
           'StyleDiscoveryLive: batch=${batch.length} filtered=${filtered.length} ranked=${ranked.length} final=${finalRanked.length} deck=${_deck.length + finalRanked.length} offset=$_offset');
+      // Garantili recycle: ranker hiçbir şey döndürmedi ve deck tükeniyor →
+      // tüm seen state sıfırlanıp recency-bypass ile baştan çekilir. Kullanıcı
+      // asla "biraz dinlenelim" durağında takılı kalmaz, hep kaydırabilir.
+      if (finalRanked.isEmpty && (_deck.length - _index) <= 1) {
+        await _recycleDeck();
+        return;
+      }
       if (!mounted) return;
       _applyPinnedSeedSlots(finalRanked);
       setState(() => _deck.addAll(finalRanked));
@@ -686,6 +700,45 @@ class _StyleDiscoveryLiveScreenState
       debugPrint('StyleDiscoveryLive: fetchBatch failed → $e');
     } finally {
       _fetchingMore = false;
+    }
+  }
+
+  /// Tüm taze kartlar tükendiğinde deck'i baştan doldurur: seen state sıfırla,
+  /// offset 0'dan çek, recency-bypass'la sırala (gerekirse ham batch'i ekle).
+  /// "Biraz dinlenelim" durağının asla kalıcı olmamasının garantisi.
+  Future<void> _recycleDeck() async {
+    try {
+      _offset = 0;
+      _seenIds.clear();
+      final raw = await EvlumbaLiveService.getProjects(
+        limit: _batchSize,
+        offset: 0,
+        projectType: _selectedCategory,
+      );
+      _offset = _batchSize;
+      final fresh = <Map<String, dynamic>>[];
+      for (final p in raw) {
+        final id = p['id']?.toString() ?? '';
+        if (id.isEmpty || _coverOf(p).isEmpty) continue;
+        _seenIds.add(id);
+        fresh.add(p);
+      }
+      if (fresh.isEmpty) return;
+      fresh.shuffle(_rng);
+      _hydrateDesignersFromBatch(fresh);
+      final ranked = await SwipeFeedService.rankBatch(
+        candidates: fresh,
+        currentDeckTail: const [],
+        bypassRecency: true,
+      );
+      final out = ranked.isNotEmpty ? ranked : fresh;
+      if (!mounted) return;
+      _applyPinnedSeedSlots(out);
+      setState(() => _deck.addAll(out));
+      _precacheNext();
+      unawaited(_prefetchDesignersForBatch(out));
+    } catch (e) {
+      debugPrint('StyleDiscoveryLive: recycleDeck failed → $e');
     }
   }
 
