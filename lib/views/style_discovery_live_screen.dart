@@ -812,21 +812,26 @@ class _StyleDiscoveryLiveScreenState
     if (seed == null) return;
     final id = seed['id']?.toString() ?? '';
     if (id.isEmpty || _seenIds.contains(id)) return;
-    // Görseli ısıt — kart görünür görünmez tam dolu olsun, yükleme beklenmesin.
-    final url = _coverOf(seed);
-    if (url.isNotEmpty && mounted) {
-      try {
-        await precacheImage(CachedNetworkImageProvider(url), context);
-      } catch (_) {}
-    }
     if (!mounted) return;
     _seenIds.add(id);
     _firstEvlumbaPlaced = true;
     _seedSlotCounter = 1; // slot 0 dolduruldu; sonraki evlumba slot 5'te
+    // Kartı ÖNCE göster — loading'i kapat. Görsel ısıtmayı ASLA await ETME:
+    // flaky ağda `await precacheImage` bootstrap'i bloklayıp splash/loading'de
+    // takılmaya yol açıyordu. CachedNetworkImage zaten kendi placeholder'ıyla
+    // yükler; precache'i arka planda timeout'lu yaparız (best-effort).
     setState(() {
       _deck.insert(0, seed);
       _loading = false;
     });
+    final url = _coverOf(seed);
+    if (url.isNotEmpty && mounted) {
+      unawaited(
+        precacheImage(CachedNetworkImageProvider(url), context)
+            .timeout(const Duration(seconds: 4), onTimeout: () {})
+            .catchError((_) {}),
+      );
+    }
   }
 
   /// getProjects join'inden gelen gömülü `profiles` objesini doğrudan
@@ -939,13 +944,17 @@ class _StyleDiscoveryLiveScreenState
       return;
     }
     try {
+      // Timeout — yavaş/asılı ağ bootstrap'i (dolayısıyla splash/loading'i)
+      // bloklamasın. Süre dolarsa boş havuzla devam, fetchBatch gerçek
+      // tasarımları zaten getirir.
       final data = await Supabase.instance.client
           .from('koala_cards')
           .select('id, title, description, room_type, style, cdn_url, '
               'original_url, created_at')
           .eq('source', 'gemini-seed')
           .eq('is_published', true)
-          .limit(300);
+          .limit(300)
+          .timeout(const Duration(seconds: 6));
       _seedPool
         ..clear()
         ..addAll(List<Map<String, dynamic>>.from(data).map(_mapSeedCard));
