@@ -918,7 +918,8 @@ class _ShareUploadScreenState extends State<ShareUploadScreen>
     );
   }
 
-  // OK state — görsel preview + "Analiz tamamlandı" kartı + Yayınla butonu.
+  // OK state — yayınla-öncesi SWIPE-KART önizlemesi ("keşfette böyle
+  // görünecek") + AI kategorize bilgisi + Yayınla butonu.
   Widget _reviewOk() {
     final hasRoom = _detectedRoomLabel.isNotEmpty;
     final hasStyle = _detectedStyleLabel.isNotEmpty;
@@ -933,94 +934,57 @@ class _ShareUploadScreenState extends State<ShareUploadScreen>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Preview — 280h, rounded 16.
-            ClipRRect(
-              borderRadius: BorderRadius.circular(16),
-              child: SizedBox(
-                height: 280,
-                width: double.infinity,
-                child: _bytes == null
-                    ? Container(color: KoalaColors.surfaceAlt)
-                    : Image.memory(_bytes!, fit: BoxFit.cover),
+            // "Keşfette böyle görünecek" başlığı.
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(LucideIcons.sparkles,
+                    size: 15, color: KoalaColors.accentDeep),
+                const SizedBox(width: 7),
+                Text(
+                  'Keşfette böyle görünecek',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: KoalaColors.textSec,
+                    letterSpacing: 0.1,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: KoalaSpacing.md),
+            // Swipe deck kartının birebir önizlemesi (3:4).
+            Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 320),
+                child: AspectRatio(
+                  aspectRatio: 3 / 4,
+                  child: _deckPreviewCard(),
+                ),
               ),
             ),
             const SizedBox(height: KoalaSpacing.lg),
-            // Analiz tamamlandı kartı.
-            Container(
-              padding: const EdgeInsets.all(KoalaSpacing.lg),
-              decoration: BoxDecoration(
-                color: KoalaColors.surface,
-                borderRadius: BorderRadius.circular(KoalaRadius.lg),
-                border: Border.all(
-                  color: KoalaColors.accent.withValues(alpha: 0.35),
-                  width: 1,
-                ),
-                boxShadow: KoalaShadows.card,
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(7),
-                        decoration: BoxDecoration(
-                          color: KoalaColors.accent.withValues(alpha: 0.14),
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(
-                          LucideIcons.sparkles,
-                          size: 16,
-                          color: KoalaColors.accentDeep,
-                        ),
+            // AI kategorize bilgisi — kompakt, kart altında.
+            if (hasRoom || hasStyle)
+              Center(
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  alignment: WrapAlignment.center,
+                  children: [
+                    if (hasRoom)
+                      _analysisChip(
+                        icon: LucideIcons.layoutGrid,
+                        label: _detectedRoomLabel,
                       ),
-                      const SizedBox(width: 10),
-                      const Expanded(
-                        child: Text(
-                          'Analiz tamamlandı',
-                          style: TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w800,
-                            color: KoalaColors.text,
-                            letterSpacing: -0.2,
-                          ),
-                        ),
+                    if (hasStyle)
+                      _analysisChip(
+                        icon: LucideIcons.palette,
+                        label: _detectedStyleLabel,
                       ),
-                    ],
-                  ),
-                  if (hasRoom || hasStyle) ...[
-                    const SizedBox(height: KoalaSpacing.md),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        if (hasRoom)
-                          _analysisChip(
-                            icon: LucideIcons.layoutGrid,
-                            label: 'Kategori: $_detectedRoomLabel',
-                          ),
-                        if (hasStyle)
-                          _analysisChip(
-                            icon: LucideIcons.palette,
-                            label: 'Tarz: $_detectedStyleLabel',
-                          ),
-                      ],
-                    ),
                   ],
-                  const SizedBox(height: KoalaSpacing.md),
-                  Text(
-                    hasRoom || hasStyle
-                        ? 'Tasarımını kategorize ettik. Doğru görünüyorsa yayınla.'
-                        : 'Fotoğraf onaylandı — yayınlamaya hazır.',
-                    style: const TextStyle(
-                      fontSize: 13,
-                      color: KoalaColors.textSec,
-                      height: 1.45,
-                    ),
-                  ),
-                ],
+                ),
               ),
-            ),
             const SizedBox(height: KoalaSpacing.xl),
             // Yayınla — premium purple gradient.
             Container(
@@ -1101,6 +1065,151 @@ class _ShareUploadScreenState extends State<ShareUploadScreen>
               fontWeight: FontWeight.w700,
               color: KoalaColors.accentDeep,
               letterSpacing: -0.1,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ─── Yayınla-öncesi deck-kart önizlemesi ───
+  // style_discovery_live_screen'deki kartın birebir görsel kopyası: rounded
+  // 24, foto cover, üç-duraklı alt gradient, sol-altta avatar + ad +
+  // "Koala Kullanıcısı" altyazı. Kullanıcı kartının deck'te nasıl
+  // görüneceğini gerçek görür (başlık metni kartta yok — sadece bu blok).
+  Widget _deckPreviewCard() {
+    final user = FirebaseAuth.instance.currentUser;
+    final name = (user?.displayName ?? '').trim();
+    final displayName = name.isEmpty ? 'Koala Kullanıcısı' : name;
+    final avatar = (user?.photoURL ?? '').trim();
+    final initials = displayName.isEmpty
+        ? '?'
+        : displayName.trim().split(RegExp(r'\s+')).take(2).map((w) {
+            return w.isEmpty ? '' : w[0].toUpperCase();
+          }).join();
+
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(24),
+        color: KoalaColors.surfaceAlt,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.12),
+            blurRadius: 24,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          if (_bytes != null)
+            Image.memory(_bytes!, fit: BoxFit.cover)
+          else
+            const Center(
+              child: Icon(LucideIcons.image,
+                  color: KoalaColors.textTer, size: 48),
+            ),
+          // Aynı üç-duraklı gradient (deck kartıyla birebir).
+          Positioned.fill(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  stops: const [0.0, 0.2, 0.7, 1.0],
+                  colors: [
+                    Colors.black.withValues(alpha: 0.12),
+                    Colors.transparent,
+                    Colors.transparent,
+                    Colors.black.withValues(alpha: 0.78),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          // Sol-alt: ev sahibi bilgisi (deck _DesignerBlock ile aynı düzen).
+          Positioned(
+            bottom: 0,
+            left: 0,
+            right: 0,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 14, 18),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: KoalaColors.accentDeep,
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: 0.5),
+                        width: 1.5,
+                      ),
+                      image: avatar.isEmpty
+                          ? null
+                          : DecorationImage(
+                              image: CachedNetworkImageProvider(avatar),
+                              fit: BoxFit.cover,
+                            ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.25),
+                          blurRadius: 8,
+                          offset: const Offset(0, 3),
+                        ),
+                      ],
+                    ),
+                    alignment: Alignment.center,
+                    child: avatar.isEmpty
+                        ? Text(
+                            initials,
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w800,
+                              color: Colors.white,
+                            ),
+                          )
+                        : null,
+                  ),
+                  const SizedBox(width: 10),
+                  Flexible(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          displayName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w800,
+                            color: Colors.white,
+                            letterSpacing: -0.1,
+                            height: 1.15,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'Koala Kullanıcısı',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w500,
+                            color: Colors.white.withValues(alpha: 0.82),
+                            letterSpacing: 0.1,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ],
