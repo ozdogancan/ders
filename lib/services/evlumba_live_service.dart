@@ -91,7 +91,7 @@ class EvlumbaLiveService {
           final data = await sb
               .from('koala_cards')
               .select('id, title, description, room_type, style, cdn_url, '
-                  'original_url, aspect, created_at')
+                  'original_url, created_at')
               .eq('source', 'gemini-seed')
               .eq('is_published', true)
               .limit(300);
@@ -541,7 +541,8 @@ class EvlumbaLiveService {
   }) async {
     var q = client
         .from('designer_projects')
-        .select('*, designer_project_images(image_url, sort_order)')
+        .select('*, designer_project_images(image_url, sort_order), '
+            'profiles:designer_id(id, full_name, avatar_url, city, profession)')
         .eq('is_published', true);
 
     if (designerId != null && designerId.isNotEmpty) {

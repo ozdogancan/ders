@@ -18,7 +18,7 @@ export const dynamic = 'force-dynamic';
  *
  * Quality gate: quality_score < 0.6 üretimler atılır.
  *
- * Auth: `Authorization: Bearer <CRON_SECRET>`. Tetik: Vercel cron, günde iki.
+ * Auth: `Authorization: Bearer <CRON_SECRET>`. Tetik: Vercel cron, günde bir (08:00 UTC).
  * Manuel test: `?count=2` ile batch boyutu küçültülebilir.
  */
 
@@ -28,7 +28,7 @@ const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 
 const IMAGE_MODEL = 'gemini-3.1-flash-image-preview';
 const BUCKET = 'koala-seed';
-const TARGET_COUNT = 20;     // gunluk hedef kart (cron 2x calistirilirsa ~10 per run)
+const TARGET_COUNT = 8;      // gunluk hedef kart — tek tetik (Vercel cron 08:00 UTC)
 const QUALITY_THRESHOLD = 0.6;
 
 // Bir evin sahip oldugu oda tipleri -> kapsanacak stiller.

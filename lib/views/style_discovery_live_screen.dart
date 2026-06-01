@@ -584,6 +584,10 @@ class _StyleDiscoveryLiveScreenState
         _seenIds.add(id);
         filtered.add(p);
       }
+      // getProjects artık profiles join'li geliyor — designer bilgisini
+      // batch'le birlikte SENKRON cache'le. Sol-alt blok ilk frame'de dolu
+      // gelir, skeleton→hydrated geçişi (geç yükleme) kalkar.
+      _hydrateDesignersFromBatch(filtered);
       // Evlumba Design seeded kartlarını batch'e harmanla (kaynak filtresi
       // 'real' değilse). Sıralama öncesi blend yapıyoruz ki ranker hem real
       // hem seed kartları tek havuzda puanlasın.
@@ -634,6 +638,26 @@ class _StyleDiscoveryLiveScreenState
     }
   }
 
+  /// getProjects join'inden gelen gömülü `profiles` objesini doğrudan
+  /// `_designerCache`'e yazar — ağ turu YOK, sol-alt blok anında dolu gelir.
+  /// project_count gibi eksik alanları sonradan _prefetchDesignersForBatch
+  /// tamamlar; ad+avatar+meslek ilk frame'de hazır olur.
+  void _hydrateDesignersFromBatch(List<Map<String, dynamic>> batch) {
+    for (final p in batch) {
+      final prof = p['profiles'];
+      if (prof is! Map) continue;
+      final id = (prof['id'] ?? p['designer_id'] ?? '').toString();
+      if (id.isEmpty || id == 'evlumba-design') continue;
+      // Zaten tam (prefetch'lenmiş) bir kayıt varsa ezme.
+      if (_designerCache[id]?['_partial'] != true &&
+          _designerCache.containsKey(id)) {
+        continue;
+      }
+      // _partial: join subset'i (is_pro/plan yok) — prefetch sonra zenginleştirir.
+      _designerCache[id] = Map<String, dynamic>.from(prof)..['_partial'] = true;
+    }
+  }
+
   /// Batch içindeki tüm distinct designer_id'leri tek bir Supabase IN query
   /// ile çek ve `_designerCache`'i hydrate et. Per-card lazy fetch yerine
   /// batch fetch — chip skeleton'dan gerçek state'e tek frame'de geçer.
@@ -646,7 +670,11 @@ class _StyleDiscoveryLiveScreenState
         final did = (p['designer_id'] ?? '').toString();
         if (did.isEmpty) continue;
         if (did == 'evlumba-design') continue; // sentetik, zaten cache'te.
-        if (_designerCache.containsKey(did)) continue;
+        // _partial kayıtlar (join subset'i) yine de zenginleştirilsin.
+        if (_designerCache.containsKey(did) &&
+            _designerCache[did]?['_partial'] != true) {
+          continue;
+        }
         if (_designerInFlight.contains(did)) continue;
         ids.add(did);
       }
@@ -681,7 +709,7 @@ class _StyleDiscoveryLiveScreenState
 
   // koala_cards room_type -> designer_projects project_type (TR etiket).
   static const Map<String, String> _seedRoomTr = {
-    'salon': 'Salon', 'yatak_odasi': 'Yatak Odası', 'mutfak': 'Mutfak',
+    'salon': 'Oturma Odası', 'yatak_odasi': 'Yatak Odası', 'mutfak': 'Mutfak',
     'banyo': 'Banyo', 'cocuk_odasi': 'Çocuk Odası', 'ofis': 'Çalışma Odası',
     'antre': 'Antre', 'balkon': 'Balkon',
   };
@@ -697,8 +725,6 @@ class _StyleDiscoveryLiveScreenState
       'project_type': _seedRoomTr[rt] ?? rt,
       'cover_image_url': (r['cdn_url'] ?? r['original_url'] ?? '').toString(),
       'created_at': r['created_at'],
-      // '9_16' | '1_1' | '16_9' — _Card AspectRatio'yu buna göre kurar.
-      'aspect': (r['aspect'] ?? '').toString(),
       'tags': const <String>[],
       'color_palette': const <String>[],
       '_seed': true,
@@ -725,7 +751,7 @@ class _StyleDiscoveryLiveScreenState
       final data = await Supabase.instance.client
           .from('koala_cards')
           .select('id, title, description, room_type, style, cdn_url, '
-              'original_url, aspect, created_at')
+              'original_url, created_at')
           .eq('source', 'gemini-seed')
           .eq('is_published', true)
           .limit(300);
@@ -1396,15 +1422,13 @@ class _StyleDiscoveryLiveScreenState
               ),
             ),
             Expanded(
-              child: PrimaryScrollController(
-                controller: scrollController,
-                // 2026-05-28 FIX 1: ClipRRect ile sarmalama — sheet'in 28px
-                // rounded-top'unu UnifiedProfileView'un mor gradient'i ile
-                // birebir hizala.
-                child: ClipRRect(
-                  borderRadius: const BorderRadius.vertical(
-                      top: Radius.circular(28)),
-                  child: UnifiedProfileView(
+              child: ClipRRect(
+                borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(28)),
+                child: UnifiedProfileView(
+                  // Sheet controller'ı geçilir — liste tepedeyken aşağı çekince
+                  // sheet kapanır (drag-to-dismiss).
+                  scrollController: scrollController,
                   profileId: designerId,
                   viewedDesignId:
                       viewedDesignId.isEmpty ? null : viewedDesignId,
@@ -1437,7 +1461,6 @@ class _StyleDiscoveryLiveScreenState
                       ),
                     );
                   },
-                ),
                 ),
               ),
             ),
@@ -2169,25 +2192,6 @@ class _Card extends StatelessWidget {
     final idx = t.indexOf(RegExp(r'[.!?]'));
     if (idx > 0 && idx < t.length - 1) return t.substring(0, idx + 1);
     return t;
-  }
-
-  /// Sunucudan gelen `aspect` alanına göre kart oranı:
-  /// '9_16' → 9/16 (portrait, telefon swipe deck'te en iyi),
-  /// '1_1'  → 1.0  (kare),
-  /// '16_9' → 16/9 (landscape).
-  /// Eksik/bilinmeyen değer → 4/5 (mevcut varsayılan).
-  double _aspectRatio() {
-    final raw = (project['aspect'] ?? '').toString().trim();
-    switch (raw) {
-      case '9_16':
-        return 9 / 16;
-      case '1_1':
-        return 1.0;
-      case '16_9':
-        return 16 / 9;
-      default:
-        return 4 / 5;
-    }
   }
 
   @override

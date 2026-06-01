@@ -68,6 +68,11 @@ class UnifiedProfileView extends StatefulWidget {
   /// and the full list. If null, no-op.
   final void Function(List<Map<String, dynamic>> items, int index)? onTapDesign;
 
+  /// Optional external scroll controller. DraggableScrollableSheet içinde
+  /// açıldığında sheet'in scrollController'ı geçilir — böylece liste tepedeyken
+  /// aşağı çekince sheet kapanır (drag-to-dismiss). Null ise kendi controller'ı.
+  final ScrollController? scrollController;
+
   const UnifiedProfileView({
     super.key,
     required this.profileId,
@@ -79,6 +84,7 @@ class UnifiedProfileView extends StatefulWidget {
     this.onEditProfile,
     this.onOpenAiStudio,
     this.onTapDesign,
+    this.scrollController,
   });
 
   @override
@@ -110,9 +116,15 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
   // ─── Design grid state (CustomScrollView + SliverGrid) ─────────────────
   // KRİTİK MIMARI: GridView.shrinkWrap'i ListView'ün içine sarmak iç içe
   // viewport hatası verdiği için 2026-05-28'de proper Slivers'a geçildi.
-  final ScrollController _scrollCtrl = ScrollController();
+  // Dışarıdan (sheet) verilen controller varsa onu kullan — drag-to-dismiss.
+  late final ScrollController _scrollCtrl =
+      widget.scrollController ?? ScrollController();
   final List<Map<String, dynamic>> _loadedDesigns = <Map<String, dynamic>>[];
   dynamic _designsCursor;
+  // _loadProfile()'in paylaşılan future'ı — _designerRow set edilmeden grid
+  // fetch'i branch kararı veremez (designer'lar yanlışlıkla "civil kullanıcı"
+  // dalına düşüp boş dönüyordu). _loadInitialDesigns bunu bekler.
+  Future<void>? _profileReady;
   bool _loadingInitialDesigns = true;
   bool _loadingMoreDesigns = false;
   bool _hasMoreDesigns = true;
@@ -122,21 +134,30 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
     super.initState();
     _scrollCtrl.addListener(_onScroll);
     _restoreRole();
+    // seedProfile varsa _designerRow'u SENKRON kur — branch kararı (designer
+    // vs civil kullanıcı) ilk frame'de doğru olsun.
+    if (widget.seedProfile != null) {
+      _designerRow = Map<String, dynamic>.from(widget.seedProfile!);
+    }
+    // _loadProfile'ı bir kez başlat, future'ı paylaş. _loadAll ve
+    // _loadInitialDesigns ikisi de aynı future'ı bekler — çift fetch yok.
+    _profileReady = _loadProfile();
     _loadAll();
-    // Tasarım sayfasını _loadAll ile paralel başlat — header dolduktan
-    // sonra grid de hazır olsun.
     _loadInitialDesigns();
   }
 
   @override
   void dispose() {
     _scrollCtrl.removeListener(_onScroll);
-    _scrollCtrl.dispose();
+    // Sadece kendi oluşturduğumuz controller'ı dispose et — sheet'inki değil.
+    if (widget.scrollController == null) _scrollCtrl.dispose();
     super.dispose();
   }
 
   Future<void> _loadInitialDesigns() async {
     try {
+      // _designerRow çözülmeden branch seçilmesin (designer→boş grid bug'ı).
+      await _profileReady;
       final page = await _fetchDesignsPage(null);
       if (!mounted) return;
       final seen = <String>{};
@@ -230,7 +251,7 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
       final bundle = await UserProfileService.loadBundle(widget.profileId);
       if (bundle != null) {
         final results = await Future.wait([
-          _loadProfile(),
+          _profileReady ?? _loadProfile(),
           _preloadAiPresence(),
           FollowService.stateFor(widget.profileId),
         ], eagerError: false);
@@ -267,7 +288,7 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
     }
     // ─── Fallback: orijinal 5-parallel path ───
     final results = await Future.wait([
-      _loadProfile(),
+      _profileReady ?? _loadProfile(),
       _preloadAiPresence(),
       FollowService.counts(widget.profileId),
       FollowService.stateFor(widget.profileId),
@@ -723,33 +744,12 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
     final bottomPad = MediaQuery.viewPaddingOf(context).bottom;
     debugPrint(
         '[profile-grid] sliver build items=${_loadedDesigns.length} loadingInit=$_loadingInitialDesigns loadingMore=$_loadingMoreDesigns hasMore=$_hasMoreDesigns');
-    // 2026-05-28 FIX 5: pull-down overscroll'da hero'nun mor gradient'i
-    // boş/beyaza kesilmesin diye CustomScrollView'i top-aligned soft purple
-    // gradient'li bir Container'ın içine al + BouncingScrollPhysics ver.
-    // Container hero'nun stop'larıyla aynı tonu kullanır → overscroll'da
-    // gradient'in mantıken yukarıya uzandığı hissi.
-    // 2026-05-28 FIX 1: Daha güçlü mor gradient + popup'ın rounded-top'una
-    // yapışsın diye ClipRRect ile saralım. Stops [0.0, 0.50] → renk aşağıya
-    // daha uzun uzanır, eğreti durmaz.
+    // 2026-06-01: Mor (purple) gradient kaldırıldı (kullanıcı direktifi) —
+    // popup düz `bg` zemin. Rounded-top için ClipRRect korunuyor.
     return ClipRRect(
       borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
       child: DecoratedBox(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            // 2026-05-28 FIX 1b: VISIBLE purple band on the rounded top.
-            // accentSoft (#F3F0FF) is near-white; even at α0.95 it reads pale.
-            // Mix to accentMuted (#A78BFA) for a clearly purple top, fade to
-            // accentSoft at mid, then bg.
-            KoalaColors.accentMuted.withValues(alpha: 0.55),
-            KoalaColors.accentSoft,
-            KoalaColors.bg,
-          ],
-          stops: const [0.0, 0.35, 0.75],
-        ),
-      ),
+      decoration: const BoxDecoration(color: KoalaColors.bg),
       child: CustomScrollView(
         controller: _scrollCtrl,
         physics: const BouncingScrollPhysics(
@@ -1371,23 +1371,38 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
             ),
           ),
           const SizedBox(width: 10),
-          // Message button — subtle accent-soft circular, brand-tinted icon.
+          // Mesaj butonu — dolu gradient CTA: belirgin, marka moru, beyaz ikon.
           Consumer(builder: (ctx, ref, _) {
-            return SizedBox(
-              width: 44,
-              height: 44,
-              child: Material(
-                color: KoalaColors.accentDeep.withValues(alpha: 0.10),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(22),
-                  side: const BorderSide(color: Colors.white, width: 1),
+            return Container(
+              width: 46,
+              height: 46,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: const LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    KoalaColors.accentDeep,
+                    KoalaColors.accentDeepDark,
+                  ],
                 ),
+                boxShadow: [
+                  BoxShadow(
+                    color: KoalaColors.accentDeep.withValues(alpha: 0.35),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Material(
+                color: Colors.transparent,
+                shape: const CircleBorder(),
                 child: InkWell(
-                  borderRadius: BorderRadius.circular(22),
+                  customBorder: const CircleBorder(),
                   onTap: () => _onMessageTap(ref),
                   child: const Center(
                     child: Icon(LucideIcons.messageCircle,
-                        size: 20, color: KoalaColors.accentDeep),
+                        size: 21, color: Colors.white),
                   ),
                 ),
               ),
@@ -1484,40 +1499,8 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
               ),
             ),
             const SizedBox(height: 12),
-            if (_about.isNotEmpty)
-              ListTile(
-                leading: const Icon(LucideIcons.info,
-                    color: KoalaColors.accentDeep),
-                title: const Text('Hakkında', style: KoalaText.bodyMedium),
-                onTap: () {
-                  Navigator.of(ctx).pop();
-                  _showAboutSheet();
-                },
-              ),
-            ListTile(
-              leading: const Icon(LucideIcons.users,
-                  color: KoalaColors.accentDeep),
-              title: Text(
-                'Takipçileri gör (${_counts.followers})',
-                style: KoalaText.bodyMedium,
-              ),
-              onTap: () {
-                Navigator.of(ctx).pop();
-                _openFollowList(FollowListMode.followers);
-              },
-            ),
-            ListTile(
-              leading: const Icon(LucideIcons.userCheck,
-                  color: KoalaColors.accentDeep),
-              title: Text(
-                'Takip ettiklerini gör (${_counts.following})',
-                style: KoalaText.bodyMedium,
-              ),
-              onTap: () {
-                Navigator.of(ctx).pop();
-                _openFollowList(FollowListMode.following);
-              },
-            ),
+            // 2026-06-01: "Hakkında" + "Takipçileri/Takip ettiklerini gör"
+            // menüden kaldırıldı (kullanıcı direktifi).
             if (_follow.following)
               ListTile(
                 leading: Icon(

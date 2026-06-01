@@ -15,10 +15,6 @@
     {
       "path": "/api/cron/seed-designs",
       "schedule": "0 8 * * *"
-    },
-    {
-      "path": "/api/cron/seed-designs",
-      "schedule": "0 20 * * *"
     }
   ]
 }
