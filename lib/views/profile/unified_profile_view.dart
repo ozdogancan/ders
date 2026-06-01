@@ -129,6 +129,34 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
   bool _loadingMoreDesigns = false;
   bool _hasMoreDesigns = true;
 
+  // ─── Kategori filtresi (popup grid) ────────────────────────────────────
+  // null = "Tümü". Yüklenmiş tasarımlardan türetilen kompakt pill row ile
+  // grid client-side filtrelenir. Sayfalama devam ettikçe yeni kategoriler
+  // pill row'a eklenir.
+  String? _categoryFilter;
+
+  /// Yüklü tasarımlardan benzersiz kategori etiketleri (görünme sırasıyla).
+  List<String> get _availableCategories {
+    final seen = <String>{};
+    final out = <String>[];
+    for (final p in _loadedDesigns) {
+      final label = _categoryLabel(p);
+      if (label.isEmpty || seen.contains(label)) continue;
+      seen.add(label);
+      out.add(label);
+    }
+    return out;
+  }
+
+  /// Aktif filtreye göre grid'de gösterilecek tasarımlar.
+  List<Map<String, dynamic>> get _visibleDesigns {
+    final f = _categoryFilter;
+    if (f == null) return _loadedDesigns;
+    return _loadedDesigns
+        .where((p) => _categoryLabel(p) == f)
+        .toList(growable: false);
+  }
+
   @override
   void initState() {
     super.initState();
@@ -837,8 +865,11 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
     if (_loadedDesigns.isEmpty) {
       return [SliverToBoxAdapter(child: _emptyDesignsState())];
     }
+    final visible = _visibleDesigns;
     // Tüm profillerde premium grid: 2-col, portrait, 12px gaps, 16h padding.
     final out = <Widget>[
+      if (_availableCategories.length >= 2)
+        SliverToBoxAdapter(child: _categoryFilterRow()),
       SliverPadding(
         padding: const EdgeInsets.symmetric(horizontal: 16),
         sliver: SliverGrid(
@@ -849,8 +880,8 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
             childAspectRatio: 0.78,
           ),
           delegate: SliverChildBuilderDelegate(
-            (ctx, i) => _designTile(i),
-            childCount: _loadedDesigns.length,
+            (ctx, i) => _designTile(visible, i),
+            childCount: visible.length,
           ),
         ),
       ),
@@ -2089,11 +2120,71 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
     );
   }
 
+  /// Kompakt kategori filtre pill row'u — grid üstünde yatay kayan şerit.
+  /// "Tümü" + yüklü tasarımlardan türeyen benzersiz kategoriler. Seçim
+  /// client-side filtreler; aktif pill mor dolu, diğerleri çerçeveli.
+  Widget _categoryFilterRow() {
+    final cats = _availableCategories;
+    final hPad = _isOwnGrid ? 16.0 : 20.0;
+    Widget pill(String label, String? value) {
+      final active = _categoryFilter == value;
+      return Padding(
+        padding: const EdgeInsets.only(right: 8),
+        child: GestureDetector(
+          onTap: () {
+            HapticFeedback.selectionClick();
+            setState(() => _categoryFilter = value);
+          },
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 140),
+            padding:
+                const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            decoration: BoxDecoration(
+              color: active
+                  ? KoalaColors.accentDeep
+                  : Colors.transparent,
+              borderRadius: BorderRadius.circular(999),
+              border: Border.all(
+                color: active
+                    ? KoalaColors.accentDeep
+                    : KoalaColors.borderSolid,
+                width: 1,
+              ),
+            ),
+            child: Text(
+              label,
+              style: TextStyle(
+                fontFamily: 'Manrope',
+                fontSize: 12.5,
+                fontWeight: FontWeight.w700,
+                color: active ? Colors.white : KoalaColors.textSec,
+                letterSpacing: -0.1,
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return SizedBox(
+      height: 48,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        padding: EdgeInsets.fromLTRB(hPad, 0, hPad, 0),
+        physics: const BouncingScrollPhysics(),
+        children: [
+          pill('Tümü', null),
+          for (final c in cats) pill(c, c),
+        ],
+      ),
+    );
+  }
+
   /// Tek bir tasarım tile'ı — SliverGrid'in `SliverChildBuilderDelegate`
-  /// callback'inden çağrılır. `_loadedDesigns[i]` üzerinden indeks bazlı
-  /// çalışır; tap callback'inde tüm liste + index forward edilir.
-  Widget _designTile(int i) {
-          final p = _loadedDesigns[i];
+  /// callback'inden çağrılır. Görünür (filtreli) liste + indeks geçilir;
+  /// tap callback'inde aynı liste + index forward edilir.
+  Widget _designTile(List<Map<String, dynamic>> list, int i) {
+          final p = list[i];
           final cover = _coverOf(p);
           final id = (p['id'] ?? p['item_id'] ?? '').toString();
           // Tüm profillerde premium tile görünümü (radius 14 + kategori
@@ -2105,7 +2196,7 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
           return GestureDetector(
             onTap: () {
               HapticFeedback.selectionClick();
-              widget.onTapDesign?.call(_loadedDesigns, i);
+              widget.onTapDesign?.call(list, i);
             },
             onLongPress: (widget.ownerEditable && _isSelf)
                 ? () {
