@@ -180,7 +180,14 @@ class _StyleDiscoveryLiveScreenState
   // İlk evlumba `_seedFirstSlot`, sonrası her `_seedEvery` kartta bir.
   int _seedSlotCounter = 0;
   static const int _seedFirstSlot = 2; // 3. kart evlumba olur (neredeyse anında)
-  static const int _seedEvery = 4; // sonra her 4 kartta bir
+  static const int _seedEvery = 6; // sonra ~her 6 kartta bir (~%16, spam değil)
+  // Akıllı seed seçimi için lokal beğeni sinyali — kullanıcının beğendiği
+  // oda tipleri ve stiller. _nextSeedCard, en alakalı evlumba kartını seçer.
+  final Map<String, int> _likedRoomTally = {};
+  final Map<String, int> _likedStyleTally = {};
+  // Son gösterilen evlumba seed id'leri — kısa vadede tekrarı engeller.
+  final List<String> _recentSeedIds = [];
+  static const int _recentSeedCap = 24;
 
   double _dragDx = 0;
   double _dragDy = 0;
@@ -926,27 +933,72 @@ class _StyleDiscoveryLiveScreenState
       ..addAll(out);
   }
 
-  /// Kuyruktan sıradaki (kategoriye uyan) evlumba seed kartını döndürür.
-  /// Kuyruk tükenince yeniden karıştırılıp baştan başlar → asla bitmez.
+  /// AKILLI evlumba seed seçimi.
+  /// - Beğeni sinyali varsa: kullanıcının beğendiği oda tipi/stile en çok uyan,
+  ///   son `_recentSeedCap` kartta gösterilmemiş seed'i seçer (taste-matched).
+  /// - Beğeni sinyali yoksa (cold start): karıştırılmış recycling kuyruğundan
+  ///   round-robin verir. Kuyruk tükenince yeniden karışır → asla bitmez.
+  /// Aktif kategori filtresi varsa yalnızca o kategorideki seed'ler aday olur.
   Map<String, dynamic>? _nextSeedCard(String? cat) {
     if (_seedPool.isEmpty) return null;
-    for (var tries = 0; tries <= _seedPool.length; tries++) {
-      if (_seedQueue.isEmpty || _seedQueueIdx >= _seedQueue.length) {
-        _seedQueue
-          ..clear()
-          ..addAll(_seedPool);
-        _seedQueue.shuffle(_rng);
-        _seedQueueIdx = 0;
-      }
-      final s = _seedQueue[_seedQueueIdx++];
-      if (cat != null &&
-          cat.isNotEmpty &&
-          (s['project_type'] ?? '').toString().toLowerCase() != cat) {
-        continue; // kategoriye uymuyor — sıradakine bak
-      }
-      return s;
+    List<Map<String, dynamic>> pool = _seedPool;
+    if (cat != null && cat.isNotEmpty) {
+      pool = _seedPool
+          .where((s) => (s['project_type'] ?? '').toString().toLowerCase() == cat)
+          .toList();
     }
-    return null; // bu kategoride seed yok
+    if (pool.isEmpty) return null;
+
+    final hasTaste = _likedRoomTally.isNotEmpty || _likedStyleTally.isNotEmpty;
+    Map<String, dynamic>? pick;
+    if (hasTaste) {
+      // Taste-matched: en yüksek skorlu, yakında gösterilmemiş seed.
+      var bestScore = -1.0;
+      for (final s in pool) {
+        final id = s['id']?.toString() ?? '';
+        if (id.isEmpty || _recentSeedIds.contains(id)) continue;
+        final room = (s['project_type'] ?? '').toString().toLowerCase().trim();
+        var sc = (_likedRoomTally[room] ?? 0) * 2.0;
+        for (final st in TasteProfileService.stylesOf(s)) {
+          sc += (_likedStyleTally[st] ?? 0) * 1.0;
+        }
+        sc += _rng.nextDouble() * 0.5; // eşitlik bozucu jitter
+        if (sc > bestScore) {
+          bestScore = sc;
+          pick = s;
+        }
+      }
+    }
+    // Cold start veya tüm uygunlar yakında gösterildi → shuffle kuyruğu.
+    if (pick == null) {
+      for (var tries = 0; tries <= pool.length; tries++) {
+        if (_seedQueue.isEmpty || _seedQueueIdx >= _seedQueue.length) {
+          _seedQueue
+            ..clear()
+            ..addAll(_seedPool);
+          _seedQueue.shuffle(_rng);
+          _seedQueueIdx = 0;
+        }
+        final s = _seedQueue[_seedQueueIdx++];
+        if (cat != null &&
+            cat.isNotEmpty &&
+            (s['project_type'] ?? '').toString().toLowerCase() != cat) {
+          continue;
+        }
+        pick = s;
+        break;
+      }
+    }
+    if (pick != null) {
+      final id = pick['id']?.toString() ?? '';
+      if (id.isNotEmpty) {
+        _recentSeedIds.add(id);
+        while (_recentSeedIds.length > _recentSeedCap) {
+          _recentSeedIds.removeAt(0);
+        }
+      }
+    }
+    return pick;
   }
 
   void _precacheNext() {
@@ -1098,6 +1150,12 @@ class _StyleDiscoveryLiveScreenState
 
     if (liked) {
       _likeCount++;
+      // Akıllı evlumba seçimi için lokal beğeni sinyalini güncelle.
+      final room = (card['project_type'] ?? '').toString().toLowerCase().trim();
+      if (room.isNotEmpty) _likedRoomTally[room] = (_likedRoomTally[room] ?? 0) + 1;
+      for (final st in TasteProfileService.stylesOf(card)) {
+        _likedStyleTally[st] = (_likedStyleTally[st] ?? 0) + 1;
+      }
       // NOTE: TasteSummarySheet (her 10 beğenide tarz özeti) kullanıcı isteği
       // üzerine geçici olarak devre dışı bırakıldı. İleride yeniden açmak için
       // aşağıdaki bloğu uncomment et:
