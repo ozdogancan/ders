@@ -289,15 +289,22 @@ class _DesignPage extends StatelessWidget {
       child: coverUrl.isEmpty
           ? const Icon(LucideIcons.imageOff,
               color: Colors.white24, size: 56)
-          : CachedNetworkImage(
-              imageUrl: coverUrl,
-              fit: BoxFit.contain,
-              fadeInDuration: const Duration(milliseconds: 220),
-              placeholder: (_, _) => const SizedBox.shrink(),
-              errorWidget: (_, _, _) => const Icon(
-                LucideIcons.imageOff,
-                color: Colors.white24,
-                size: 56,
+          // Pinch-to-zoom: parmakla yakınlaş/uzaklaş + kaydır. Scale 1'de
+          // PageView yatay geçişi normal çalışır; yakınlaşınca pan devreye girer.
+          : InteractiveViewer(
+              minScale: 1.0,
+              maxScale: 4.0,
+              clipBehavior: Clip.none,
+              child: CachedNetworkImage(
+                imageUrl: coverUrl,
+                fit: BoxFit.contain,
+                fadeInDuration: const Duration(milliseconds: 220),
+                placeholder: (_, _) => const SizedBox.shrink(),
+                errorWidget: (_, _, _) => const Icon(
+                  LucideIcons.imageOff,
+                  color: Colors.white24,
+                  size: 56,
+                ),
               ),
             ),
     );

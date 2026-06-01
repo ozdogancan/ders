@@ -99,34 +99,67 @@ class _StyleDiscoveryLiveScreenState
   ];
   bool _categoriesLoaded = false;
 
-  // TR project_type etiketine uygun ikon — bilinmeyen kategoriler için grid.
+  // TR project_type etiketine uygun ikon — mantıklı, tanınır ikonlar.
+  // snake_case / İngilizce / aksanlı varyantlar normalize edilip eşlenir.
   static IconData _iconForCategory(String label) {
-    switch (label.trim().toLowerCase()) {
+    final k = label
+        .trim()
+        .toLowerCase()
+        .replaceAll('_', ' ')
+        .replaceAll('i̇', 'i');
+    switch (k) {
       case 'oturma odası':
+      case 'oturma odasi':
       case 'salon':
+      case 'living room':
         return LucideIcons.sofa;
       case 'yatak odası':
+      case 'yatak odasi':
+      case 'bedroom':
         return LucideIcons.bed;
       case 'mutfak':
+      case 'kitchen':
         return LucideIcons.chefHat;
       case 'banyo':
+      case 'bathroom':
         return LucideIcons.bath;
       case 'antre':
+      case 'hol':
+      case 'koridor':
+      case 'hallway':
         return LucideIcons.doorOpen;
       case 'çocuk odası':
+      case 'cocuk odasi':
+      case 'kids room':
         return LucideIcons.baby;
       case 'çalışma odası':
+      case 'calisma odasi':
       case 'ofis':
-        return LucideIcons.briefcase;
+      case 'office':
+        return LucideIcons.monitor;
       case 'yemek odası':
+      case 'yemek odasi':
+      case 'dining room':
         return LucideIcons.utensils;
       case 'balkon':
-      case 'teras':
+      case 'balcony':
         return LucideIcons.flower2;
+      case 'teras':
+      case 'terrace':
+        return LucideIcons.sun;
       case 'bahçe':
+      case 'bahce':
+      case 'garden':
         return LucideIcons.trees;
       case 'giyinme odası':
+      case 'giyinme odasi':
+      case 'walk in closet':
         return LucideIcons.shirt;
+      case 'konut':
+      case 'daire':
+      case 'ev':
+      case 'home':
+        return LucideIcons.home;
       default:
         return LucideIcons.layoutGrid;
     }
@@ -179,8 +212,11 @@ class _StyleDiscoveryLiveScreenState
   // Deck'e eklenen toplam kart sayacı (interleave kadansı için global pozisyon).
   // İlk evlumba `_seedFirstSlot`, sonrası her `_seedEvery` kartta bir.
   int _seedSlotCounter = 0;
-  static const int _seedFirstSlot = 2; // 3. kart evlumba olur (neredeyse anında)
-  static const int _seedEvery = 6; // sonra ~her 6 kartta bir (~%16, spam değil)
+  // İlk evlumba kartı bootstrap'ta deck[0]'a elle yerleştirilir (precache'li,
+  // anında). Sonraki evlumba'lar interleave ile: slot 5, 11, 17... (~her 6).
+  static const int _seedFirstSlot = 5;
+  static const int _seedEvery = 6; // ~her 6 kartta bir (~%16, spam değil)
+  bool _firstEvlumbaPlaced = false;
   // Akıllı seed seçimi için lokal beğeni sinyali — kullanıcının beğendiği
   // oda tipleri ve stiller. _nextSeedCard, en alakalı evlumba kartını seçer.
   final Map<String, int> _likedRoomTally = {};
@@ -407,6 +443,10 @@ class _StyleDiscoveryLiveScreenState
     // 1) Evlumba Design seeded havuzunu ÖNCE yükle (Koala DB) — warm deck'in
     //    de evlumba interleave alabilmesi için pool hazır olmalı.
     await _loadSeedPool();
+    // 1a) İLK KART evlumba design olsun — görseli precache edilip deck[0]'a
+    //     konur. Splash bitince kullanıcı hiçbir şey beklemeden hazır evlumba
+    //     kartını (sol-alt bloğuyla) görür, sonra normal akış devam eder.
+    await _placeFirstEvlumbaCard();
     // 1b) Disk cache'den anında deck'i göster — refresh sonrası boş kart yok.
     await _warmFromDiskCache();
     // 2) Backend ready'ye paralelden bekle, fresh fetch ile cache'i yenile.
@@ -723,7 +763,25 @@ class _StyleDiscoveryLiveScreenState
         _seenIds.add(id);
         fresh.add(p);
       }
-      if (fresh.isEmpty) return;
+      // Gerçek tasarım gelmediyse (Evlumba DB boş/erişilemez) deck'i SEED
+      // havuzundan doldur — 363 seed var, kullanıcı asla durmaz. Kategori
+      // filtresi varsa ona uyan seed'ler.
+      if (fresh.isEmpty) {
+        final cat = _selectedCategory?.trim().toLowerCase();
+        final pool = (cat == null || cat.isEmpty)
+            ? _seedPool
+            : _seedPool
+                .where((s) =>
+                    (s['project_type'] ?? '').toString().toLowerCase() == cat)
+                .toList();
+        if (pool.isEmpty) return;
+        final seeds = List<Map<String, dynamic>>.from(pool)..shuffle(_rng);
+        final batch = seeds.take(_batchSize).toList();
+        if (!mounted) return;
+        setState(() => _deck.addAll(batch));
+        _precacheNext();
+        return;
+      }
       fresh.shuffle(_rng);
       _hydrateDesignersFromBatch(fresh);
       final ranked = await SwipeFeedService.rankBatch(
@@ -740,6 +798,35 @@ class _StyleDiscoveryLiveScreenState
     } catch (e) {
       debugPrint('StyleDiscoveryLive: recycleDeck failed → $e');
     }
+  }
+
+  /// İlk kartı evlumba design yapar: havuzdan bir seed seçer, görselini
+  /// precache eder (splash sırasında ısınır), deck[0]'a koyar ve loading'i
+  /// kapatır. Böylece kullanıcı splash sonrası HİÇBİR yükleme beklemeden hazır
+  /// evlumba kartını sol-alt bloğuyla görür. Kategori filtresi varsa atlanır.
+  Future<void> _placeFirstEvlumbaCard() async {
+    if (_firstEvlumbaPlaced) return;
+    if (_seedPool.isEmpty || _sourceFilter == 'real') return;
+    if (_selectedCategory != null && _selectedCategory!.isNotEmpty) return;
+    final seed = _nextSeedCard(null);
+    if (seed == null) return;
+    final id = seed['id']?.toString() ?? '';
+    if (id.isEmpty || _seenIds.contains(id)) return;
+    // Görseli ısıt — kart görünür görünmez tam dolu olsun, yükleme beklenmesin.
+    final url = _coverOf(seed);
+    if (url.isNotEmpty && mounted) {
+      try {
+        await precacheImage(CachedNetworkImageProvider(url), context);
+      } catch (_) {}
+    }
+    if (!mounted) return;
+    _seenIds.add(id);
+    _firstEvlumbaPlaced = true;
+    _seedSlotCounter = 1; // slot 0 dolduruldu; sonraki evlumba slot 5'te
+    setState(() {
+      _deck.insert(0, seed);
+      _loading = false;
+    });
   }
 
   /// getProjects join'inden gelen gömülü `profiles` objesini doğrudan
@@ -912,8 +999,12 @@ class _StyleDiscoveryLiveScreenState
     final opts = <({String key, String label, IconData icon})>[
       (key: '', label: 'Hepsi', icon: LucideIcons.layoutGrid),
     ];
+    // key = ham project_type (DB filtresi bununla eşleşir), label = pretty TR.
+    final seenLabels = <String>{'Hepsi'};
     for (final k in sorted) {
-      opts.add((key: k, label: k, icon: _iconForCategory(k)));
+      final label = _prettyRoom(k);
+      if (label.isEmpty || !seenLabels.add(label)) continue; // dup label atla
+      opts.add((key: k, label: label, icon: _iconForCategory(k)));
     }
     if (mounted) setState(() => _categoryOptions = opts);
     debugPrint('StyleDiscoveryLive: categories=${sorted.length} → $sorted');
@@ -1082,19 +1173,54 @@ class _StyleDiscoveryLiveScreenState
     return '';
   }
 
-  String _prettyCategory(String raw) {
-    final r = raw.trim().toLowerCase();
+  String _prettyCategory(String raw) => _prettyRoom(raw);
+
+  /// Oda tipini temiz TR etikete çevirir: İngilizce/snake_case/aksanlı tüm
+  /// varyantları ('yatak_odasi', 'bedroom', 'OFIS') tek forma map'ler;
+  /// bilinmeyenlerde alt çizgileri boşluğa çevirip her kelimeyi büyütür
+  /// (asla ham "Yatak_odasi" göstermez).
+  static String _prettyRoom(String raw) {
+    final r =
+        raw.trim().toLowerCase().replaceAll('_', ' ').replaceAll('i̇', 'i');
+    if (r.isEmpty) return '';
     const map = {
-      'living_room': 'Oturma Odası',
+      'living room': 'Oturma Odası',
+      'salon': 'Oturma Odası',
+      'oturma odasi': 'Oturma Odası',
       'bedroom': 'Yatak Odası',
+      'yatak odasi': 'Yatak Odası',
       'kitchen': 'Mutfak',
       'bathroom': 'Banyo',
-      'kids_room': 'Çocuk Odası',
+      'kids room': 'Çocuk Odası',
+      'cocuk odasi': 'Çocuk Odası',
       'office': 'Çalışma Odası',
-      'dining_room': 'Yemek Odası',
+      'ofis': 'Çalışma Odası',
+      'calisma odasi': 'Çalışma Odası',
+      'dining room': 'Yemek Odası',
+      'yemek odasi': 'Yemek Odası',
       'hallway': 'Antre',
+      'antre': 'Antre',
+      'hol': 'Hol',
+      'koridor': 'Koridor',
+      'balcony': 'Balkon',
+      'balkon': 'Balkon',
+      'terrace': 'Teras',
+      'teras': 'Teras',
+      'garden': 'Bahçe',
+      'bahce': 'Bahçe',
+      'walk in closet': 'Giyinme Odası',
+      'giyinme odasi': 'Giyinme Odası',
+      'home': 'Konut',
+      'konut': 'Konut',
+      'daire': 'Daire',
     };
-    return map[r] ?? raw;
+    final hit = map[r];
+    if (hit != null) return hit;
+    return r
+        .split(' ')
+        .where((w) => w.isNotEmpty)
+        .map((w) => '${w[0].toUpperCase()}${w.substring(1)}')
+        .join(' ');
   }
 
   void _onPanUpdate(DragUpdateDetails d) {
@@ -1614,8 +1740,10 @@ class _StyleDiscoveryLiveScreenState
     HapticFeedback.selectionClick();
     final designerId = (card['designer_id'] ?? '').toString();
     if (designerId.isEmpty) return;
-    await _loadDesigner(designerId);
-    if (!mounted) return;
+    // Profili AWAIT etmeden aç — sheet anında gelsin. seedProfile (cache'teki
+    // ad/avatar) ilk frame'i doldurur, UnifiedProfileView gerisini arka planda
+    // yükler. evlumba-design zaten cache'te → sıfır gecikme.
+    unawaited(_loadDesigner(designerId));
     final viewedDesignId = (card['id'] ?? '').toString();
     await showModalBottomSheet<void>(
       context: context,

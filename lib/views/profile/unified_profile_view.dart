@@ -513,6 +513,18 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
 
       // Other user — Evlumba synthetic
       if (widget.profileId == KoalaSeedService.evlumbaDesignerId) {
+        // Swipe ekranı seed havuzunu geçtiyse doğrudan onu kullan — ağ turu
+        // YOK (anında açılır) + kart id'leri swipe'taki ile birebir aynı, bu
+        // sayede "Bunu görüntülediniz" + ilk-sıra reorder evlumba'da da çalışır.
+        final sp = widget.seedPool;
+        if (sp != null && sp.isNotEmpty && cursor == null) {
+          debugPrint('[profile-grid] evlumba from seedPool (${sp.length})');
+          return (
+            items: List<Map<String, dynamic>>.from(sp),
+            hasMore: false,
+            cursor: null,
+          );
+        }
         debugPrint('[profile-grid] fetch evlumba cursor=$cursor');
         final page = await KoalaSeedService.evlumbaCardsPaged(
           limit: 18,
@@ -2433,37 +2445,61 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
   /// own-profile tile overlay. Prefer explicit `category`, fall back to
   /// `room_type` (translated TR), then first style tag.
   String _categoryLabel(Map<String, dynamic> p) {
-    String cap(String s) {
-      if (s.isEmpty) return s;
-      return s
-          .split(' ')
-          .map((w) => w.isEmpty ? w : '${w[0].toUpperCase()}${w.substring(1)}')
-          .join(' ');
-    }
-    String trRoom(String key) {
+    // Oda tipini temiz TR etikete çevirir — İngilizce/snake_case/aksanlı tüm
+    // varyantları map'ler; bilinmeyende alt çizgileri boşluğa çevirip her
+    // kelimeyi büyütür. Asla ham "Yatak_odasi" göstermez.
+    String pretty(String raw) {
+      final r =
+          raw.trim().toLowerCase().replaceAll('_', ' ').replaceAll('i̇', 'i');
+      if (r.isEmpty) return '';
       const map = {
-        'living_room': 'Salon',
+        'living room': 'Oturma Odası',
+        'salon': 'Oturma Odası',
+        'oturma odasi': 'Oturma Odası',
         'bedroom': 'Yatak Odası',
+        'yatak odasi': 'Yatak Odası',
         'kitchen': 'Mutfak',
         'bathroom': 'Banyo',
-        'dining_room': 'Yemek Odası',
-        'office': 'Çalışma',
-        'kids_room': 'Çocuk Odası',
+        'kids room': 'Çocuk Odası',
+        'cocuk odasi': 'Çocuk Odası',
+        'office': 'Çalışma Odası',
+        'ofis': 'Çalışma Odası',
+        'calisma odasi': 'Çalışma Odası',
+        'dining room': 'Yemek Odası',
+        'yemek odasi': 'Yemek Odası',
+        'hallway': 'Antre',
+        'antre': 'Antre',
         'hall': 'Hol',
+        'hol': 'Hol',
+        'balcony': 'Balkon',
+        'balkon': 'Balkon',
+        'terrace': 'Teras',
+        'teras': 'Teras',
+        'garden': 'Bahçe',
+        'bahce': 'Bahçe',
+        'walk in closet': 'Giyinme Odası',
+        'giyinme odasi': 'Giyinme Odası',
       };
-      return map[key] ?? cap(key.replaceAll('_', ' '));
+      final hit = map[r];
+      if (hit != null) return hit;
+      return r
+          .split(' ')
+          .where((w) => w.isNotEmpty)
+          .map((w) => '${w[0].toUpperCase()}${w.substring(1)}')
+          .join(' ');
     }
+
     final cat = (p['category'] ?? '').toString().trim();
-    if (cat.isNotEmpty) return cap(cat);
+    if (cat.isNotEmpty) return pretty(cat);
     final room = (p['room_type'] ?? p['roomType'] ?? '').toString().trim();
-    if (room.isNotEmpty) return trRoom(room);
+    if (room.isNotEmpty) return pretty(room);
     final tags = p['tags'];
     if (tags is List && tags.isNotEmpty) {
       final t = tags.first.toString().trim();
-      if (t.isNotEmpty) return cap(t);
+      if (t.isNotEmpty) return pretty(t);
     }
     final style = (p['style'] ?? '').toString().trim();
-    if (style.isNotEmpty) return cap(style);
+    if (style.isNotEmpty) return pretty(style);
     return '';
   }
 
