@@ -2723,7 +2723,7 @@ class _Card extends StatelessWidget {
             const Positioned(
               top: 12,
               left: 12,
-              child: KoalaAiBadge(size: 24),
+              child: KoalaAiBadge(size: 34),
             ),
 
           // Alt overlay: tasarımcı bilgisi (sol-alt).

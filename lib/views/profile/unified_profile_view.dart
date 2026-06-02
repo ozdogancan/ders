@@ -934,14 +934,13 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
       SliverPadding(
         padding: const EdgeInsets.symmetric(horizontal: 16),
         sliver: SliverGrid(
-          // 2026-06-02: tile'lar 0.78 (uzun portre) idi → 2 satır çok yer
-          // kaplıyor, header altında sadece 1 satır görünüyordu. 1.0 (kare) ile
-          // daha kompakt, aynı ekranda daha fazla tasarım görünür.
+          // 2026-06-02: Tile ebatı ORİJİNALE döndürüldü (kullanıcı isteği —
+          // popup görsel boyutu değişmesin). 0.78 portre.
           gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: _gridCols,
             mainAxisSpacing: 12,
             crossAxisSpacing: 12,
-            childAspectRatio: 1.0,
+            childAspectRatio: 0.78,
           ),
           delegate: SliverChildBuilderDelegate(
             (ctx, i) => _designTile(visible, i),
@@ -2613,7 +2612,7 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
                     const Positioned(
                       top: 8,
                       right: 8,
-                      child: KoalaAiBadge(size: 22),
+                      child: KoalaAiBadge(size: 30),
                     ),
                 ],
               ),
@@ -2931,6 +2930,15 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
     }
     final style = (p['style'] ?? '').toString().trim();
     if (style.isNotEmpty) return pretty(style);
+    // 2026-06-02: AI tasarımlarda oda tipi alanı boş olabilir; başlıktan türet
+    // ("Yeni Yemek Odası" → "Yemek Odası"). Böylece AI tile'larında da sol-altta
+    // kategori görünür.
+    final title = (p['title'] ?? '').toString().trim();
+    if (title.isNotEmpty) {
+      final stripped =
+          title.replaceFirst(RegExp(r'^\s*[Yy]eni\s+'), '').trim();
+      if (stripped.isNotEmpty) return pretty(stripped);
+    }
     return '';
   }
 

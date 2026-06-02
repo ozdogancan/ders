@@ -353,7 +353,7 @@ class _UserDesignSwipeScreenState extends State<UserDesignSwipeScreen> {
                             ),
                             if (_aiGenerated) ...[
                               const SizedBox(width: 8),
-                              const KoalaAiBadge(size: 22),
+                              const KoalaAiBadge(size: 28),
                             ],
                           ],
                         ),

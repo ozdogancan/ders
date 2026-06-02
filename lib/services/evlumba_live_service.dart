@@ -94,7 +94,7 @@ class EvlumbaLiveService {
                   'original_url, created_at')
               .eq('source', 'gemini-seed')
               .eq('is_published', true)
-              .limit(300);
+              .limit(600); // 2026-06-02: 300→600, Evlumba 371+ tasarımın tamamı
           prefetchedSeedPool = List<Map<String, dynamic>>.from(data);
           debugPrint(
               'EvlumbaLive.prefetch: seed pool primed (${prefetchedSeedPool!.length})');

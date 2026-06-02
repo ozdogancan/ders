@@ -4,6 +4,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show Supabase, CountOption;
 
+import 'swipe_feed_service.dart';
+
 class FollowState {
   final bool following;
   final bool muted;
@@ -45,7 +47,13 @@ class FollowService {
         'koala_follow_toggle',
         params: {'p_user_id': uid, 'p_designer_id': designerId},
       );
-      if (res is Map) return FollowState.fromJson(Map<String, dynamic>.from(res));
+      if (res is Map) {
+        final st = FollowState.fromJson(Map<String, dynamic>.from(res));
+        // 2026-06-02: Feed ağırlığını anında güncelle (takipten çıkınca boost
+        // kalksın). Lazy import yerine doğrudan statik çağrı.
+        SwipeFeedService.onFollowChanged(designerId, st.following);
+        return st;
+      }
       return FollowState.empty;
     } catch (e) {
       debugPrint('[follow] toggle failed: $e');

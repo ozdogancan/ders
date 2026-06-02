@@ -20,13 +20,15 @@ const sb = createClient(readEnv('SUPABASE_URL'), readEnv('SUPABASE_SERVICE_ROLE_
 });
 const MODEL = process.env.HERO_MODEL || 'gemini-3-pro-image-preview';
 
-const prompt = `A minimal, modern app-style ICON emblem for "Koala AI".
-Design: a cute, simplified koala face combined with a subtle AI sparkle/star
-accent. Flat vector look, clean geometric shapes, soft rounded square badge.
-Single tasteful soft gradient using calm violet→indigo tones on a clean
-background, gentle and premium. Centered, lots of padding, perfectly symmetric.
-Simple and elegant — NOT busy, NO text, NO letters, NO clutter, NO photo.
-Looks great at tiny sizes (like a 24px badge). High contrast, crisp edges.`;
+const prompt = `A polished, modern circular app ICON badge for "Koala AI".
+Design: a friendly, bold, simplified koala face — large rounded ears, soft
+features — with a small bright AI SPARKLE (4-point star) accent at the top-right.
+Filled circular badge with a smooth premium gradient (calm violet → indigo),
+the koala in clean white/light so it reads CLEARLY and is highly visible.
+Bold, confident shapes with strong contrast — must be instantly recognizable
+and look great even at small sizes. Flat vector, crisp edges, centered,
+balanced padding. NO text, NO letters, NO clutter, NO photorealism. Premium,
+cute, distinctive.`;
 
 const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${apiKey}`;
 const res = await fetch(url, {
@@ -43,8 +45,8 @@ const part = (j?.candidates?.[0]?.content?.parts ?? []).find((p) => p.inlineData
 if (!part) { console.error('no image', JSON.stringify(j).slice(0, 400)); process.exit(1); }
 const raw = Buffer.from(part.inlineData.data, 'base64');
 // Kare, 144px (retina için), webp q82 — küçük ama net.
-const webp = await sharp(raw).resize(144, 144, { fit: 'cover' }).webp({ quality: 82 }).toBuffer();
-const key = 'icons/ai-badge-v1.webp';
+const webp = await sharp(raw).resize(192, 192, { fit: 'cover' }).webp({ quality: 88 }).toBuffer();
+const key = 'icons/ai-badge-v2.webp';
 const { error } = await sb.storage.from('koala-seed').upload(key, webp, {
   contentType: 'image/webp', upsert: true, cacheControl: '31536000',
 });

@@ -5,12 +5,12 @@ import 'package:flutter/material.dart';
 /// ile üretilen Koala-AI amblemini gösterir. AI ile oluşturulan tasarımlarda
 /// (profil grid, detay görüntüleyici, keşfet swipe) tutarlı kullanılır.
 class KoalaAiBadge extends StatelessWidget {
-  const KoalaAiBadge({super.key, this.size = 22});
+  const KoalaAiBadge({super.key, this.size = 30});
 
   final double size;
 
   static const String _url =
-      'https://xgefjepaqnghaotqybpi.supabase.co/storage/v1/object/public/koala-seed/icons/ai-badge-v1.webp';
+      'https://xgefjepaqnghaotqybpi.supabase.co/storage/v1/object/public/koala-seed/icons/ai-badge-v2.webp';
 
   @override
   Widget build(BuildContext context) {

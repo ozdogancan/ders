@@ -89,6 +89,17 @@ class SwipeFeedService {
   static const double _followBoost = 3.0; // takip edilen yazar
   static const double _proBoost = 2.0; // profesyonel tasarımcı yazar
 
+  /// 2026-06-02: Takip/çık anında feed ağırlığı GÜNCELLENSİN — takipten
+  /// çıkınca boost kalkar, takip edince eklenir (session cache'i tazele).
+  static void onFollowChanged(String designerId, bool following) {
+    if (designerId.isEmpty) return;
+    if (following) {
+      _followedIds.add(designerId);
+    } else {
+      _followedIds.remove(designerId);
+    }
+  }
+
   /// Pro-yazar + takip listesi set'lerini bir kez (session) yükle. Ranking
   /// öncesi getProfile'dan çağrılır → skorlama anında hazır.
   static Future<void> _ensureSocialBoosts() async {

@@ -3,9 +3,11 @@ import 'dart:async';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
+import 'package:cached_network_image/cached_network_image.dart';
+
 import '../core/theme/koala_tokens.dart';
 import 'auth_common.dart';
-import 'phone_auth_screen.dart';
+import 'evlumba_login_screen.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
 class AuthEntryScreen extends StatefulWidget {
@@ -148,21 +150,19 @@ class _AuthEntryScreenState extends State<AuthEntryScreen>
     });
   }
 
-  Future<void> _openPhoneAuth() async {
+  // 2026-06-02: Telefon ile giriş kaldırıldı, yerine Evlumba ile giriş.
+  // Evlumba hesabıyla girebilen kullanıcı otomatik profesyoneldir.
+  Future<void> _openEvlumba() async {
     if (_loadingAction != null) return;
     if (!mounted) return;
 
-    final phoneResult = await Navigator.of(context).push<bool>(
+    final result = await Navigator.of(context).push<bool>(
       buildAuthRoute<bool>(
-        PhoneAuthScreen(
-          mode: widget.mode,
-          returnOnSuccess: widget.returnOnSuccess,
-        ),
+        EvlumbaLoginScreen(returnOnSuccess: widget.returnOnSuccess),
         begin: const Offset(0.1, 0),
       ),
     );
-    // Telefon auth başarılıysa ve returnOnSuccess aktifse → AuthEntryScreen'i de kapat
-    if (phoneResult == true && widget.returnOnSuccess && mounted) {
+    if (result == true && widget.returnOnSuccess && mounted) {
       Navigator.of(context).pop(true);
     }
   }
@@ -314,15 +314,11 @@ class _AuthEntryScreenState extends State<AuthEntryScreen>
                               const _OrDivider(),
                               const SizedBox(height: 16),
 
-                              // Telefon
+                              // Evlumba ile giriş (telefonun yerine).
                               AuthActionButton(
-                                label: 'Telefon ile devam et',
-                                leading: const Icon(
-                                  LucideIcons.smartphone,
-                                  color: KoalaColors.brand,
-                                  size: 20,
-                                ),
-                                onPressed: _openPhoneAuth,
+                                label: 'Evlumba ile devam et',
+                                leading: const _EvlumbaIcon(),
+                                onPressed: _openEvlumba,
                                 loading: false,
                               ),
                             ],
@@ -367,6 +363,25 @@ class _GoogleIcon extends StatelessWidget {
         fontSize: 20,
         fontWeight: FontWeight.w700,
         color: Color(0xFFEA4335),
+      ),
+    );
+  }
+}
+
+class _EvlumbaIcon extends StatelessWidget {
+  const _EvlumbaIcon();
+
+  @override
+  Widget build(BuildContext context) {
+    // 2026-06-02: Logo çok küçük kalmıştı → 28px + boşluksuz cover.
+    return SizedBox(
+      width: 28,
+      height: 28,
+      child: CachedNetworkImage(
+        imageUrl: EvlumbaLoginScreen.logoUrl,
+        fit: BoxFit.contain,
+        errorWidget: (_, __, ___) =>
+            const Icon(LucideIcons.building2, size: 24, color: KoalaColors.brand),
       ),
     );
   }
