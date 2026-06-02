@@ -824,9 +824,15 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
       return 'İç Mimari Stüdyosu';
     }
     // 2026-06-02: Pro kullanıcı için başvuruda girilen mesleği göster
-    // (örn. "İç Mimar"); yoksa jenerik "Profesyonel Tasarımcı".
+    // (örn. "İç Mimar"); yoksa jenerik "Profesyonel Tasarımcı". Deneyim yılı
+    // gibi parantez/virgül/tire içindeki ekleri ("(3 yıl deneyim)") gösterme —
+    // sadece meslek adı kalsın.
     if (_profile?.isPro == true) {
-      final p = (_profile?.profession ?? '').trim();
+      var p = (_profile?.profession ?? '').trim();
+      if (p.isNotEmpty) {
+        p = p.replaceAll(RegExp(r'\s*\(.*?\)'), '');
+        p = p.split(RegExp(r'\s*[,\-–—]\s*')).first.trim();
+      }
       return p.isNotEmpty ? p : 'Profesyonel Tasarımcı';
     }
     // "Ev Sahibi" etiketi YALNIZCA kullanıcının KENDİ profili için. Başka
