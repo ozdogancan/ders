@@ -1,6 +1,11 @@
+import 'dart:async';
+
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+import '../config/env.dart';
 
 import '../../views/home_screen.dart';
 import '../../views/main_shell.dart';
@@ -29,10 +34,42 @@ import '../../views/my_designs/my_designs_screen.dart';
 /// Onboarding tamamlandı mı? AuthGate ve goToHome tarafından set ediliyor.
 bool onboardingComplete = false;
 
-/// Uygulama başlarken SharedPreferences'dan yükle.
+// ─── Auth durumu (router redirect'i için) ───────────────────────────────
+// 2026-06-02: Login duvarı GoRouter'a taşındı. Eskiden router yalnızca
+// `onboardingComplete`'e bakıyordu → REQUIRE_LOGIN=true olsa bile giriş
+// yapmamış (currentUser=null) kullanıcı MainShell'e düşüp "misafir" gibi
+// geziyordu. Artık redirect auth'u da kontrol ediyor.
+//
+// Web'de Firebase oturumu ASENKRON restore eder; ilk authStateChanges olayı
+// gelene kadar currentUser geçici null'dır. Bu yüzden:
+//   • `_authReady` ilk olayda true olur (restore tamamlandı sinyali).
+//   • `authRefresh` her auth değişiminde GoRouter redirect'ini yeniden tetikler
+//     (refreshListenable). Böylece login/logout anında doğru ekrana gidilir.
+final ValueNotifier<int> authRefresh = ValueNotifier<int>(0);
+bool _authReady = false;
+bool _isAuthed = false;
+StreamSubscription<User?>? _authSub;
+
+/// Uygulama başlarken SharedPreferences'dan yükle + auth restore'unu bekle.
 Future<void> initRouterState() async {
   final prefs = await SharedPreferences.getInstance();
   onboardingComplete = prefs.getBool('onboarding_done') ?? false;
+  await _bindAuthForRouter();
+}
+
+Future<void> _bindAuthForRouter() async {
+  final firstEvent = Completer<void>();
+  _authSub ??= FirebaseAuth.instance.authStateChanges().listen((user) {
+    _authReady = true;
+    // Anonim oturum "giriş yapmış" sayılmaz (REQUIRE_LOGIN=true ile zaten
+    // anonim açılmıyor; eski cihazda kalmışsa login duvarına alınır).
+    _isAuthed = user != null && !user.isAnonymous;
+    authRefresh.value++;
+    if (!firstEvent.isCompleted) firstEvent.complete();
+  });
+  // İlk auth olayını (session restore) bekle ama boot'u asla asma.
+  await firstEvent.future
+      .timeout(const Duration(seconds: 3), onTimeout: () {});
 }
 
 /// Koala app router — Hub-style, ShellRoute yok.
@@ -40,13 +77,22 @@ Future<void> initRouterState() async {
 final GoRouter appRouter = GoRouter(
   initialLocation: '/',
   debugLogDiagnostics: false,
+  refreshListenable: authRefresh,
   redirect: (context, state) {
     final loc = state.matchedLocation;
-    debugPrint('[GoRouter] redirect: loc=$loc, onboardingComplete=$onboardingComplete');
+    debugPrint(
+        '[GoRouter] redirect: loc=$loc, onboardingComplete=$onboardingComplete, authReady=$_authReady, authed=$_isAuthed');
     // Auth ve onboarding sayfalarına her zaman izin ver
     if (loc == '/auth' || loc == '/onboarding' || loc == '/test-photo') return null;
     // Onboarding tamamlanmadıysa ve ana sayfa/alt sayfalardaysa → / 'a (OnboardingScreen)
     if (!onboardingComplete && loc != '/') return '/';
+    // 2026-06-02: Login duvarı. REQUIRE_LOGIN=true iken onboarding'i geçmiş
+    // ama giriş yapmamış/anonim kullanıcı → /auth. Auth henüz restore
+    // edilmediyse (ilk frame) yönlendirme yapma; authRefresh ile redirect
+    // restore tamamlanınca tekrar çalışır → gerçek kullanıcı login'e fırlamaz.
+    if (Env.requireLogin && onboardingComplete && _authReady && !_isAuthed) {
+      return '/auth';
+    }
     return null;
   },
   routes: [
