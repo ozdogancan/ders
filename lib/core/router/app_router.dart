@@ -28,6 +28,7 @@ import '../../views/mekan/swipe_screen.dart' as mekan_swipe;
 import '../../views/designer_profile_screen.dart';
 import '../../views/auth_common.dart';
 import '../../views/auth_entry_screen.dart';
+import '../../views/evlumba_login_screen.dart';
 import '../../views/admin/admin_shell.dart';
 import '../../views/my_designs/my_designs_screen.dart';
 
@@ -83,7 +84,10 @@ final GoRouter appRouter = GoRouter(
     debugPrint(
         '[GoRouter] redirect: loc=$loc, onboardingComplete=$onboardingComplete, authReady=$_authReady, authed=$_isAuthed');
     // Auth ve onboarding sayfalarına her zaman izin ver
-    if (loc == '/auth' || loc == '/onboarding' || loc == '/test-photo') return null;
+    if (loc == '/auth' ||
+        loc == '/onboarding' ||
+        loc == '/test-photo' ||
+        loc == '/evlumba-magic') return null;
     // Onboarding tamamlanmadıysa ve ana sayfa/alt sayfalardaysa → / 'a (OnboardingScreen)
     if (!onboardingComplete && loc != '/') return '/';
     // 2026-06-02: Login duvarı. REQUIRE_LOGIN=true iken onboarding'i geçmiş
@@ -109,6 +113,14 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: '/auth',
       builder: (context, state) => const AuthEntryScreen(mode: AuthFlowMode.login),
+    ),
+
+    // ─── Evlumba magic link hedefi (e-postadaki bağlantı) ───
+    GoRoute(
+      path: '/evlumba-magic',
+      builder: (context, state) => EvlumbaMagicScreen(
+        token: state.uri.queryParameters['token'] ?? '',
+      ),
     ),
 
     // ─── Ana sekmeler (push ile açılır, geri butonu ile dönülür) ───

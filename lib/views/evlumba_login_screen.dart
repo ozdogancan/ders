@@ -102,6 +102,68 @@ class _EvlumbaLoginScreenState extends State<EvlumbaLoginScreen> {
     }
   }
 
+  Future<void> _sendMagicLink() async {
+    if (_busy) return;
+    final email = _emailCtrl.text.trim().toLowerCase();
+    if (!email.contains('@')) {
+      _setError('Önce Evlumba e-postanı yaz.');
+      return;
+    }
+    FocusScope.of(context).unfocus();
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      final res = await http
+          .post(
+            Uri.parse('${Env.koalaApiUrl}/api/auth/evlumba/magic/start'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({'email': email}),
+          )
+          .timeout(const Duration(seconds: 25));
+      if (!mounted) return;
+      setState(() => _busy = false);
+      if (res.statusCode == 200) {
+        final j = jsonDecode(res.body) as Map<String, dynamic>;
+        final masked = (j['masked_email'] ?? email).toString();
+        showDialog<void>(
+          context: context,
+          builder: (_) => AlertDialog(
+            backgroundColor: KoalaColors.surface,
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(18)),
+            title: const Text('Giriş bağlantısı gönderildi 📬',
+                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18)),
+            content: Text(
+              '$masked adresine bir giriş bağlantısı gönderdik. '
+              'E-postandaki "Giriş yap" butonuna dokun — şifre gerekmez. '
+              'Bağlantı 15 dakika geçerli.',
+              style: const TextStyle(
+                  fontSize: 14, height: 1.5, color: KoalaColors.textSec),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('Tamam',
+                    style: TextStyle(
+                        color: KoalaColors.accentDeep,
+                        fontWeight: FontWeight.w700)),
+              ),
+            ],
+          ),
+        );
+      } else {
+        _setError('Bağlantı gönderilemedi. Lütfen tekrar dene.');
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _busy = false);
+        _setError('Bağlantı sorunu. Lütfen tekrar dene.');
+      }
+    }
+  }
+
   Future<void> _forgot() async {
     final email = _emailCtrl.text.trim().toLowerCase();
     if (!email.contains('@')) {
@@ -279,6 +341,32 @@ class _EvlumbaLoginScreenState extends State<EvlumbaLoginScreen> {
                         ),
                 ),
               ),
+              const SizedBox(height: 12),
+              // Şifresiz: magic link gönder.
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: _busy ? null : _sendMagicLink,
+                  icon: const Icon(LucideIcons.mail,
+                      size: 18, color: KoalaColors.accentDeep),
+                  label: const Text(
+                    'Şifresiz giriş — e-postama bağlantı gönder',
+                    style: TextStyle(
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w700,
+                      color: KoalaColors.accentDeep,
+                    ),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 13),
+                    side: const BorderSide(
+                        color: KoalaColors.borderSolid, width: 1),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(KoalaRadius.pill),
+                    ),
+                  ),
+                ),
+              ),
             ],
           ),
         ),
@@ -314,4 +402,108 @@ class _EvlumbaLoginScreenState extends State<EvlumbaLoginScreen> {
         contentPadding:
             const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
       );
+}
+
+/// Magic link hedef ekranı — e-postadaki bağlantı /evlumba-magic?token=...
+/// açar; token'ı verify eder, custom token ile giriş yapar, ana sayfaya gider.
+class EvlumbaMagicScreen extends StatefulWidget {
+  const EvlumbaMagicScreen({super.key, required this.token});
+  final String token;
+
+  @override
+  State<EvlumbaMagicScreen> createState() => _EvlumbaMagicScreenState();
+}
+
+class _EvlumbaMagicScreenState extends State<EvlumbaMagicScreen> {
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _verify());
+  }
+
+  Future<void> _verify() async {
+    if (widget.token.isEmpty) {
+      setState(() => _error = 'Geçersiz bağlantı.');
+      return;
+    }
+    try {
+      final res = await http
+          .post(
+            Uri.parse('${Env.koalaApiUrl}/api/auth/evlumba/magic/verify'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({'token': widget.token}),
+          )
+          .timeout(const Duration(seconds: 25));
+      if (res.statusCode != 200) {
+        setState(() => _error =
+            'Bağlantı geçersiz veya süresi dolmuş. Yeni bir bağlantı iste.');
+        return;
+      }
+      final j = jsonDecode(res.body) as Map<String, dynamic>;
+      final token = (j['custom_token'] ?? '').toString();
+      if (token.isEmpty) {
+        setState(() => _error = 'Giriş yapılamadı. Tekrar dene.');
+        return;
+      }
+      await FirebaseAuth.instance.signInWithCustomToken(token);
+      if (!mounted) return;
+      await AuthCoordinator.goToHome(context);
+    } catch (_) {
+      if (mounted) setState(() => _error = 'Bağlantı sorunu. Tekrar dene.');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: KoalaColors.bg,
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(28),
+          child: _error == null
+              ? const Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    CircularProgressIndicator(
+                        color: KoalaColors.accentDeep, strokeWidth: 2.4),
+                    SizedBox(height: 18),
+                    Text('Giriş yapılıyor…',
+                        style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                            color: KoalaColors.textSec)),
+                  ],
+                )
+              : Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(LucideIcons.alertCircle,
+                        size: 44, color: Color(0xFFC25A1A)),
+                    const SizedBox(height: 14),
+                    Text(_error!,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                            fontSize: 15,
+                            color: KoalaColors.text,
+                            height: 1.45)),
+                    const SizedBox(height: 18),
+                    ElevatedButton(
+                      onPressed: () => AuthCoordinator.goToHome(context),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: KoalaColors.accentDeep,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                            borderRadius:
+                                BorderRadius.circular(KoalaRadius.pill)),
+                      ),
+                      child: const Text('Giriş ekranına dön'),
+                    ),
+                  ],
+                ),
+        ),
+      ),
+    );
+  }
 }

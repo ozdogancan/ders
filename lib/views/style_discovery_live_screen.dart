@@ -323,15 +323,10 @@ class _StyleDiscoveryLiveScreenState
   }
 
   Future<void> _loadSavedCategory() async {
-    // Seçili kategori session'lar/sekme geçişleri arası KALICI olsun: prefs'ten
-    // geri yükle. Boş/'' ise "Hepsi" (null).
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final saved = (prefs.getString(_prefsCategoryKey) ?? '').trim();
-      _selectedCategory = saved.isEmpty ? null : saved;
-    } catch (_) {
-      _selectedCategory = null;
-    }
+    // 2026-06-02: Cold start'ta HER ZAMAN "Hepsi" (kullanıcı isteği). Eskiden
+    // prefs'ten son kategori geri yükleniyordu → "Antre"den açılıyordu. Seçim
+    // session içinde (sekme geçişleri) bellekte zaten korunur (IndexedStack).
+    _selectedCategory = null;
   }
 
   Future<void> _refreshQuota() async {
@@ -996,11 +991,48 @@ class _StyleDiscoveryLiveScreenState
   /// marketplace) + Evlumba seed havuzu. Sıralama tasarım sayısına göre azalan
   /// — en çok tasarımı olan kategori başta, en az olan ("Balkon" gibi) sonda.
   /// "Hepsi" her zaman ilk sırada.
+  /// counts → pill listesi (Hepsi ilk, tasarım sayısına göre azalan). minCount
+  /// altındaki kategoriler atlanır (seçince boş swipe olmasın).
+  List<({String key, String label, IconData icon})> _buildCategoryOpts(
+      Map<String, int> counts, int minCount) {
+    final sorted = counts.keys.toList()
+      ..sort((a, b) {
+        final c = counts[b]!.compareTo(counts[a]!);
+        return c != 0 ? c : a.compareTo(b);
+      });
+    final opts = <({String key, String label, IconData icon})>[
+      (key: '', label: 'Hepsi', icon: LucideIcons.layoutGrid),
+    ];
+    final seenLabels = <String>{'Hepsi'};
+    for (final k in sorted) {
+      if ((counts[k] ?? 0) < minCount) continue;
+      final label = _prettyRoom(k);
+      if (label.isEmpty || !seenLabels.add(label)) continue;
+      opts.add((key: k, label: label, icon: _iconForCategory(k)));
+    }
+    return opts;
+  }
+
   Future<void> _loadCategories() async {
     if (_categoriesLoaded) return;
     _categoriesLoaded = true;
-    final counts = <String, int>{};
-    // 1) Gerçek tasarımcı projeleri (Evlumba marketplace) — project_type kolonu.
+
+    // 2026-06-02: HIZLI GEÇİŞ — bellekteki seed havuzundan pill'leri ANINDA
+    // göster (network bekleme yok). Kullanıcı "Hepsi sonra diğerleri" beklemesin.
+    final seedCounts = <String, int>{};
+    for (final s in _seedPool) {
+      final pt = (s['project_type'] ?? '').toString().trim();
+      if (pt.isNotEmpty) seedCounts[pt] = (seedCounts[pt] ?? 0) + 1;
+    }
+    if (seedCounts.isNotEmpty) {
+      final fast = _buildCategoryOpts(seedCounts, 1);
+      if (fast.length > 1 && mounted) {
+        setState(() => _categoryOptions = fast);
+      }
+    }
+
+    // TAM GEÇİŞ — gerçek tasarımcı projeleri (network) + seed → rafine.
+    final counts = Map<String, int>.from(seedCounts);
     try {
       if (EvlumbaLiveService.isReady) {
         final rows = await EvlumbaLiveService.client
@@ -1017,34 +1049,9 @@ class _StyleDiscoveryLiveScreenState
     } catch (e) {
       debugPrint('StyleDiscoveryLive: category load (real) failed → $e');
     }
-    // 2) Evlumba seed havuzu — project_type zaten TR'ye map'li (_mapSeedCard).
-    for (final s in _seedPool) {
-      final pt = (s['project_type'] ?? '').toString().trim();
-      if (pt.isEmpty) continue;
-      counts[pt] = (counts[pt] ?? 0) + 1;
-    }
     if (counts.isEmpty) return;
-    final sorted = counts.keys.toList()
-      ..sort((a, b) {
-        final c = counts[b]!.compareTo(counts[a]!);
-        return c != 0 ? c : a.compareTo(b); // eşitlikte alfabetik — stabil
-      });
-    final opts = <({String key, String label, IconData icon})>[
-      (key: '', label: 'Hepsi', icon: LucideIcons.layoutGrid),
-    ];
-    // key = ham project_type (DB filtresi bununla eşleşir), label = pretty TR.
-    // Çok az tasarımı olan kategoriler (örn. tek "Konut") pill OLMAZ — seçince
-    // boş swipe'a sebep oluyordu. Min eşik altındakiler atlanır.
-    const minCount = 5;
-    final seenLabels = <String>{'Hepsi'};
-    for (final k in sorted) {
-      if ((counts[k] ?? 0) < minCount) continue;
-      final label = _prettyRoom(k);
-      if (label.isEmpty || !seenLabels.add(label)) continue; // dup label atla
-      opts.add((key: k, label: label, icon: _iconForCategory(k)));
-    }
-    if (mounted) setState(() => _categoryOptions = opts);
-    debugPrint('StyleDiscoveryLive: categories=${sorted.length} → $sorted');
+    final full = _buildCategoryOpts(counts, 5);
+    if (mounted) setState(() => _categoryOptions = full);
   }
 
   /// Opt-in kullanıcıların yayınladığı tasarımları RPC ile çek, swipe kart
@@ -1997,6 +2004,11 @@ class _StyleDiscoveryLiveScreenState
   }
 
   Future<void> _maybeShowDemo() async {
+    // 2026-06-02: Otomatik swipe TANITIM animasyonu KALDIRILDI (kullanıcı
+    // isteği — "ilk kart direkt gelmeli, önce kart gösterip swipe animasyonuyla
+    // getirme olmasın"). İlk kart yerinde durur, kullanıcı kendi kaydırır.
+    return;
+    // ignore: dead_code
     if (_demoShownInSession || _demoRunning) return;
     if (!mounted || _deck.isEmpty) return;
     try {

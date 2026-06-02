@@ -1019,13 +1019,15 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
       borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
       child: Container(
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(20, 16, 20, 22),
+      // 2026-06-02: Header'ı sıkılaştır — tasarım grid'i fold'a daha yakın
+      // gelsin (kullanıcı: "1 tasarım görünüyor"). Tile ebadına dokunulmadı.
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
       // Mor/lavender hero gradient kaldırıldı — düz bg, temiz görünüm.
       decoration: const BoxDecoration(color: KoalaColors.bg),
       child: Column(
         children: [
           _avatar(isEvlumba),
-          const SizedBox(height: 14),
+          const SizedBox(height: 10),
           Row(
             mainAxisSize: MainAxisSize.min,
             mainAxisAlignment: MainAxisAlignment.center,
@@ -1080,8 +1082,8 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
     final hasUrl = url.isNotEmpty;
     final canEdit = widget.ownerEditable && _isSelf;
     final inner = Container(
-      width: 96,
-      height: 96,
+      width: 80,
+      height: 80,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
         gradient: isEvlumba
@@ -1371,6 +1373,13 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
   // 2026-05-28: Takipçi/Takip stat row'dan kaldırıldı; bu erişim ⋯ menüye
   // taşındı. Yanıt süresi `koala_designer_stats` henüz şemada yok →
   // defansif olarak "—" gösterilir; Evlumba için sabit "24s".
+  /// 1234 → "1.2B", 980 → "980". Görüntülenme gibi sayıları kısalt.
+  String _compactNum(int n) {
+    if (n >= 1000000) return '${(n / 1000000).toStringAsFixed(1)}M';
+    if (n >= 1000) return '${(n / 1000).toStringAsFixed(1)}B';
+    return '$n';
+  }
+
   Widget _stats() {
     // Server-side exact total varsa onu kullan; ama yüklenen karttan küçükse
     // (örn. Evlumba tasarımcısı, count başka DB'de 0 döndü) gözlenen sayıya
@@ -1406,6 +1415,16 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
             value: designValue,
             onTap: _scrollToDesigns,
           ),
+          // 2026-06-02: Owner-only "Görüntülenme" — kişinin kendi paylaşım
+          // performansını gördüğü mini dashboard metriği.
+          if (_isSelf && widget.ownerEditable) ...[
+            _statDiv(),
+            _stat(
+              label: 'Görüntülenme',
+              value: _compactNum(_totalDesignViews ?? 0),
+              onTap: _scrollToDesigns,
+            ),
+          ],
           _statDiv(),
           _stat(
             label: 'Değerlendirme',
@@ -2387,7 +2406,7 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
           : '${_loadedDesigns.length} adet';
     }
     return Padding(
-      padding: EdgeInsets.fromLTRB(hPad, 6, hPad, 10),
+      padding: EdgeInsets.fromLTRB(hPad, 2, hPad, 6),
       child: Row(
         children: [
           Text(
@@ -2400,24 +2419,6 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
             ),
           ),
           const Spacer(),
-          // 2026-06-02: Owner-only görüntülenme — sade, küçük (kaos yok).
-          if (_isSelf &&
-              _totalDesignViews != null &&
-              _totalDesignViews! > 0) ...[
-            const Icon(LucideIcons.eye,
-                size: 13, color: KoalaColors.textTer),
-            const SizedBox(width: 4),
-            Text(
-              '$_totalDesignViews',
-              style: const TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: KoalaColors.textTer,
-                letterSpacing: -0.1,
-              ),
-            ),
-            const SizedBox(width: 10),
-          ],
           if (countLabel != null)
             Text(
               countLabel,
