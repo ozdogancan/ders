@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:http/http.dart' as http;
 // sign_in_with_apple kaldırıldı — Apple sign-in devre dışı
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' hide AuthState, User;
@@ -156,12 +157,33 @@ class AuthCoordinator {
 
   static Future<void> goToHome(BuildContext context) async {
     if (!context.mounted) return;
+    // 2026-06-02: Koala pro istisna (override) uygula — best-effort. Token'daki
+    // doğrulanmış e-posta koala_pro_overrides'ta varsa profil pro yapılır
+    // (Evlumba'ya dokunmadan; e-posta taşıma vb. istisnalar için).
+    await applyProOverride();
+    if (!context.mounted) return;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('onboarding_done', true);
     if (!context.mounted) return;
     onboardingComplete = true;
     // GoRouter üzerinden ana sayfaya git — stack tamamen sıfırlanır
     GoRouter.of(context).go('/');
+  }
+
+  /// Pro override endpoint'ini çağır (best-effort, girişi bloklamaz).
+  static Future<void> applyProOverride() async {
+    try {
+      final u = FirebaseAuth.instance.currentUser;
+      if (u == null) return;
+      final tok = await u.getIdToken();
+      if (tok == null) return;
+      await http
+          .post(
+            Uri.parse('${Env.koalaApiUrl}/api/auth/apply-override'),
+            headers: {'Authorization': 'Bearer $tok'},
+          )
+          .timeout(const Duration(seconds: 8));
+    } catch (_) {/* sessiz — istisna yoksa zaten no-op */}
   }
 
   static Future<void> openLegalUrl(BuildContext context, String rawUrl) async {
