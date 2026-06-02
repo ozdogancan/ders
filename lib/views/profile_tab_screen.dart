@@ -1578,6 +1578,7 @@ class _ProfileEditorSheetState extends State<_ProfileEditorSheet> {
   late final TextEditingController _aboutCtrl;
   late final TextEditingController _igCtrl;
   late final TextEditingController _webCtrl;
+  late final TextEditingController _phoneCtrl;
   bool _saving = false;
 
   @override
@@ -1589,6 +1590,7 @@ class _ProfileEditorSheetState extends State<_ProfileEditorSheet> {
     _aboutCtrl = TextEditingController(text: p?.about ?? '');
     _igCtrl = TextEditingController(text: (c['instagram'] ?? '').toString());
     _webCtrl = TextEditingController(text: (c['website'] ?? '').toString());
+    _phoneCtrl = TextEditingController(text: (c['phone'] ?? '').toString());
   }
 
   @override
@@ -1597,6 +1599,7 @@ class _ProfileEditorSheetState extends State<_ProfileEditorSheet> {
     _aboutCtrl.dispose();
     _igCtrl.dispose();
     _webCtrl.dispose();
+    _phoneCtrl.dispose();
     super.dispose();
   }
 
@@ -1608,6 +1611,7 @@ class _ProfileEditorSheetState extends State<_ProfileEditorSheet> {
     final contact = {
       if (_igCtrl.text.trim().isNotEmpty) 'instagram': _igCtrl.text.trim(),
       if (_webCtrl.text.trim().isNotEmpty) 'website': _webCtrl.text.trim(),
+      if (_phoneCtrl.text.trim().isNotEmpty) 'phone': _phoneCtrl.text.trim(),
     };
     debugPrint(
         '[profile_editor] save uid=${FirebaseAuth.instance.currentUser?.uid} '
@@ -1660,6 +1664,11 @@ class _ProfileEditorSheetState extends State<_ProfileEditorSheet> {
                   label: 'Instagram', hint: '@kullaniciadi veya link'),
               const SizedBox(height: 12),
               _field(_webCtrl, label: 'Web', hint: 'https://...'),
+              const SizedBox(height: 12),
+              _field(_phoneCtrl,
+                  label: 'Telefon',
+                  hint: '5XX XXX XX XX',
+                  keyboardType: TextInputType.phone),
               const SizedBox(height: 18),
               SizedBox(
                 width: double.infinity,
@@ -1685,7 +1694,10 @@ class _ProfileEditorSheetState extends State<_ProfileEditorSheet> {
   }
 
   Widget _field(TextEditingController c,
-      {required String label, String? hint, int maxLines = 1}) {
+      {required String label,
+      String? hint,
+      int maxLines = 1,
+      TextInputType? keyboardType}) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1696,6 +1708,7 @@ class _ProfileEditorSheetState extends State<_ProfileEditorSheet> {
         TextField(
           controller: c,
           maxLines: maxLines,
+          keyboardType: keyboardType,
           style: KoalaText.body,
           decoration: InputDecoration(
             hintText: hint,

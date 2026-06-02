@@ -95,28 +95,24 @@ class MainShellState extends ConsumerState<MainShell> {
   }
 
   Future<void> _resolveGate() async {
-    Future.delayed(const Duration(seconds: 5), () {
-      if (!mounted) return;
-      if (_gate != _GateState.passed) {
-        setState(() => _gate = _GateState.passed);
-      }
-    });
-    // 2026-05-26: Kullanıcı kararı — app-launch paywall'ı KALDIRILDI.
-    // Açılışta otomatik Pro popup'ı çıkmasın; paywall yalnız belirli
-    // aksiyonlarda (paylas FAB, wizard finish, vs.) gösterilsin.
-    try {
-      await ref.read(proStatusProvider.future).timeout(
-            const Duration(seconds: 2),
-            onTimeout: () => ProStatus.free,
-          );
-    } catch (_) {/* sessiz */}
-    if (!mounted) return;
-    setState(() => _gate = _GateState.passed);
+    // 2026-06-02: Gate ARTIK proStatus'u BEKLEMİYOR. Eskiden shell, proStatus
+    // future'ı (≤2s) ya da 5s fallback gelene kadar SplashScreen arkasında
+    // tutuluyordu → kategori pill'leri ve içerik splash bitince hemen gelmiyordu.
+    // App-launch paywall zaten kaldırıldı ve swipe ekranı proStatusProvider'ı
+    // reaktif izliyor; bu yüzden render'ı bloklamaya gerek yok. Shell'i hemen
+    // göster, ısınmaları (prewarm) ve proStatus'u arka planda yap.
+    if (mounted && _gate != _GateState.passed) {
+      setState(() => _gate = _GateState.passed);
+    }
+    // proStatus'u arka planda ısıt (render'ı bloklamadan).
+    unawaited(
+      ref.read(proStatusProvider.future).catchError((_) => ProStatus.free),
+    );
     // App içine girer girmez Evlumba conv id ve free-consult bayrağını
     // arka planda ısıt — kullanıcı Mesajlar/Sor'dan tıkladığında 0ms.
     unawaited(prewarmEvlumbaConversation());
 
-    // PART F — bundle prewarm (gate geçildi, uid hazır olmalı).
+    // PART F — bundle prewarm (uid hazır olmalı).
     // Hem profil hem chat sekmesi tek-render olsun.
     try {
       final uid = FirebaseAuth.instance.currentUser?.uid;

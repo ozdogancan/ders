@@ -45,13 +45,15 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   String? _photoUrl;
   String _displayName = '';
   String _email = '';
+  String _phone = '';
   int _adminTapCount = 0;
 
   bool _wiping = false;
   bool _deleting = false;
   bool _restoring = false;
-  // Yayınlanan tasarımlar herkese açık swipe'da görünsün mü (opt-in).
-  bool _showInSwipe = false;
+  // 2026-06-02: Yayınlanan tasarımlar herkese açık swipe'da görünsün mü.
+  // Kullanıcı isteği: VARSAYILAN AÇIK. Satır yoksa/null ise true gösterilir.
+  bool _showInSwipe = true;
   bool _showInSwipeBusy = false;
 
   // Sürüm artık build-time --dart-define=APP_VERSION ile pubspec'ten gelir
@@ -63,7 +65,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       _appVersionRaw.isEmpty ? '1.0.171' : _appVersionRaw.split('+').first;
   static const String _supportEmail = 'info@evlumba.com';
   static const String _feedbackEmail = 'info@evlumba.com';
-  static const String _kvkkUrl = 'https://www.koalatutor.com/kvkk';
   static const String _shareUrl = 'https://www.evlumba.com';
   // Google Play abonelik yönetim sayfası — uygulama içinden abonelik iptali
   // Google politikası gereği mümkün değil; kullanıcı buraya yönlendirilir.
@@ -103,12 +104,20 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     try {
       final row = await Supabase.instance.client
           .from('koala_user_profiles')
-          .select('show_designs_in_swipe')
+          .select('show_designs_in_swipe, contact_info')
           .eq('uid', uid)
           .maybeSingle();
       if (!mounted) return;
-      setState(() => _showInSwipe = row?['show_designs_in_swipe'] == true);
-    } catch (_) {/* sessiz — varsayılan kapalı */}
+      setState(() {
+        // 2026-06-02: VARSAYILAN AÇIK. Satır yoksa veya değer null ise true.
+        final v = row?['show_designs_in_swipe'];
+        _showInSwipe = v == null ? true : v == true;
+        // Telefon — önce profil contact_info.phone, yoksa Firebase phoneNumber.
+        final contact = row?['contact_info'];
+        final cPhone = contact is Map ? (contact['phone'] ?? '').toString() : '';
+        _phone = cPhone.isNotEmpty ? cPhone : (_user?.phoneNumber ?? '');
+      });
+    } catch (_) {/* sessiz — varsayılan açık */}
   }
 
   Future<void> _toggleShowInSwipe(bool on) async {
@@ -805,6 +814,12 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   label: 'E-posta',
                   trailing: _email,
                 ),
+              if (!_isAnonymous && _phone.isNotEmpty)
+                _SettingsTile(
+                  icon: LucideIcons.phone,
+                  label: 'Telefon',
+                  trailing: _phone,
+                ),
               if (!_isAnonymous)
                 _SettingsTile(
                   icon: LucideIcons.logOut,
@@ -913,7 +928,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               _SettingsTile(
                 icon: LucideIcons.gavel,
                 label: 'KVKK Aydınlatma Metni',
-                onTap: () => _openExternal(_kvkkUrl),
+                onTap: () => showLegalSheet(context, LegalDoc.kvkk),
               ),
               _SettingsTile(
                 icon: LucideIcons.info,

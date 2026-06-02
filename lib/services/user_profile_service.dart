@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart' show Supabase;
 import 'dart:convert';
+import 'dart:math';
 
 import '../core/config/env.dart';
 
@@ -175,6 +176,68 @@ class UserProfileService {
       debugPrint('[user_profile] get failed: $e');
       return null;
     }
+  }
+
+  /// 2026-06-02: Telefon ile giriş sonrası koala_user_profiles satırını
+  /// GARANTİ et. Gerçek profil bu tabloda tutuluyor (eski `public.users`
+  /// kullanılmıyordu). Yapılanlar:
+  ///   • Telefon numarasını contact_info.phone alanına yazar (DB'de saklanır,
+  ///     profilden düzenlenebilir).
+  ///   • display_name boşsa otomatik, makul ve (best-effort) benzersiz bir ad
+  ///     atar ("Koala 1234"). Mevcut ad/about/contact/avatar korunur.
+  /// Hata durumunda sessiz — Firebase auth zaten geçerli, login bloke olmaz.
+  static Future<void> bootstrapAfterPhoneAuth(String? phone) async {
+    final uid = _uid;
+    if (uid == null) return;
+    try {
+      final current = await get();
+      final existingName = (current?.displayName ?? '').trim();
+      final contact = Map<String, dynamic>.from(current?.contact ?? const {});
+      final p = (phone ?? '').trim();
+      if (p.isNotEmpty) contact['phone'] = p;
+
+      final name =
+          existingName.isNotEmpty ? existingName : await _generateUniqueName();
+
+      await Supabase.instance.client.rpc(
+        'koala_user_profile_upsert',
+        params: {
+          'p_uid': uid,
+          'p_display_name': name,
+          'p_about': current?.about,
+          'p_contact': contact,
+          'p_avatar_url': null,
+          'p_set_avatar': false,
+        },
+      );
+    } catch (e) {
+      debugPrint('[user_profile] bootstrapAfterPhoneAuth failed: $e');
+    }
+  }
+
+  /// "Koala 1234" formatında, koala_user_profiles içinde çakışmayan bir ad
+  /// üret. Birkaç deneme sonrası uid kuyruğuna düşer (çakışma ~imkânsız).
+  static Future<String> _generateUniqueName() async {
+    final rnd = Random();
+    for (var i = 0; i < 6; i++) {
+      final candidate = 'Koala ${1000 + rnd.nextInt(9000)}';
+      try {
+        final hit = await Supabase.instance.client
+            .from('koala_user_profiles')
+            .select('uid')
+            .eq('display_name', candidate)
+            .limit(1)
+            .maybeSingle();
+        if (hit == null) return candidate;
+      } catch (_) {
+        return candidate;
+      }
+    }
+    final tail = (_uid ?? '').replaceAll(RegExp(r'[^0-9a-zA-Z]'), '');
+    final suffix = tail.isEmpty
+        ? rnd.nextInt(999999).toString()
+        : tail.substring(0, tail.length < 6 ? tail.length : 6);
+    return 'Koala $suffix';
   }
 
   static Future<bool> upsert({

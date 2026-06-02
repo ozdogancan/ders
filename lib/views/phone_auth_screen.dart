@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../core/theme/koala_tokens.dart';
+import '../services/user_profile_service.dart';
 import 'auth_common.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
@@ -204,6 +205,10 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
     } else {
       await AuthCoordinator.touchLogin(user);
     }
+    // 2026-06-02: Gerçek profil koala_user_profiles tablosunda. Telefon
+    // numarasını DB'ye yaz + ad yoksa otomatik benzersiz ad ata. Her iki
+    // modda da çağır: eski telefon kullanıcısı satırsızsa burada oluşur.
+    await UserProfileService.bootstrapAfterPhoneAuth(_submittedPhoneNumber);
     if (!mounted) return;
     if (widget.returnOnSuccess) {
       Navigator.of(context).pop(true); // AuthEntryScreen'e true dön

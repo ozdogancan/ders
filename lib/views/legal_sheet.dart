@@ -7,7 +7,7 @@ import '../core/theme/koala_tokens.dart';
 /// kaydırılabilir ve kolayca kapatılabilen (kapat butonu, aşağı sürükleme,
 /// dışına dokunma) bir alt-sayfa. Gizlilik Politikası ve Kullanım Şartları
 /// için kullanılır — kullanıcı dış tarayıcıya çıkmadan okur.
-enum LegalDoc { privacy, terms }
+enum LegalDoc { privacy, terms, kvkk }
 
 Future<void> showLegalSheet(BuildContext context, LegalDoc doc) {
   return showModalBottomSheet<void>(
@@ -27,7 +27,11 @@ class _LegalSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
-    final c = doc == LegalDoc.privacy ? _privacy : _terms;
+    final c = doc == LegalDoc.privacy
+        ? _privacy
+        : doc == LegalDoc.terms
+            ? _terms
+            : _kvkk;
 
     return Container(
       height: size.height * 0.9,
@@ -301,6 +305,81 @@ const _LegalContent _terms = _LegalContent(
       'Kullanım Şartları ile ilgili sorular için:',
       '• E-posta: info@evlumba.com',
       '• Geliştirici: Evlumba Software',
+    ]),
+  ],
+);
+
+// ─── KVKK Aydınlatma Metni ─────────────────────────────────────────────
+// 6698 sayılı Kişisel Verilerin Korunması Kanunu (KVKK) m.10 uyarınca
+// veri sorumlusunun aydınlatma yükümlülüğü kapsamında hazırlanmıştır.
+const _LegalContent _kvkk = _LegalContent(
+  title: 'KVKK Aydınlatma Metni',
+  updated: '2 Haziran 2026',
+  sections: [
+    _LegalSection('1. Veri Sorumlusu', [
+      'İşbu Aydınlatma Metni, 6698 sayılı Kişisel Verilerin Korunması Kanunu ("KVKK") m.10 kapsamında, veri sorumlusu sıfatıyla Evlumba Software ("Evlumba", "biz") tarafından, Koala uygulaması ("Uygulama") kullanıcılarını kişisel verilerinin işlenmesine ilişkin bilgilendirmek amacıyla hazırlanmıştır.',
+      '• Veri Sorumlusu: Evlumba Software',
+      '• İletişim: info@evlumba.com',
+    ]),
+    _LegalSection('2. İşlenen Kişisel Veriler', [
+      'Uygulamayı kullanımına bağlı olarak aşağıdaki kişisel veriler işlenebilir:',
+      '• Kimlik ve İletişim Verileri: ad-soyad/görünen ad, e-posta adresi, telefon numarası, profil fotoğrafı.',
+      '• Hesap ve Kimlik Doğrulama Verileri: Google/telefon ile giriş bilgileri, kullanıcı kimliği (UID).',
+      '• Görsel Veriler: analiz veya paylaşım için yüklediğin mekan ve ilham fotoğrafları.',
+      '• İşlem ve Kullanım Verileri: sohbet mesajları, beğeni/kaydetme, tasarım tercihleri, uygulama içi etkileşimler.',
+      '• İşlem Güvenliği ve Cihaz Verileri: cihaz türü, işletim sistemi, hata/çökme kayıtları, IP bazlı teknik kayıtlar.',
+      '• Abonelik Verileri: satın alma ve abonelik durumu (ödeme kartı bilgileri tarafımızca tutulmaz; Google Play üzerinden işlenir).',
+    ]),
+    _LegalSection('3. Kişisel Verilerin İşlenme Amaçları', [
+      'Kişisel verilerin aşağıdaki amaçlarla işlenir:',
+      '• Üyelik oluşturma, kimlik doğrulama ve hesabının yönetilmesi.',
+      '• İç mekan analizi, yapay zeka ile tasarım üretimi ve stil keşfi hizmetinin sunulması.',
+      '• Tasarımcılarla mesajlaşma ve destek süreçlerinin yürütülmesi.',
+      '• Abonelik ve satın alma işlemlerinin yönetilmesi.',
+      '• Uygulama performansının ölçülmesi, hata ayıklama ve hizmet kalitesinin artırılması.',
+      '• Yasal yükümlülüklerin yerine getirilmesi ve hukuki taleplerin yönetimi.',
+    ]),
+    _LegalSection('4. İşlemenin Hukuki Sebepleri', [
+      'Kişisel verilerin KVKK m.5 kapsamında şu hukuki sebeplere dayanılarak işlenir:',
+      '• Bir sözleşmenin kurulması veya ifası için veri işlemenin zorunlu olması (hizmetin sunulması).',
+      '• Veri sorumlusunun hukuki yükümlülüğünü yerine getirmesi.',
+      '• İlgili kişinin temel hak ve özgürlüklerine zarar vermemek kaydıyla, veri sorumlusunun meşru menfaati.',
+      '• Gerektiğinde açık rızanın alınması (örn. isteğe bağlı bildirimler).',
+    ]),
+    _LegalSection('5. Kişisel Verilerin Aktarılması', [
+      'Kişisel verilerin, hizmetin sunulması için gerekli olduğu ölçüde ve KVKK m.8 ve m.9\'a uygun olarak aşağıdaki taraflarla paylaşılabilir:',
+      '• Bulut altyapı ve veritabanı sağlayıcıları (Google Firebase, Supabase).',
+      '• Yapay zeka işleme hizmeti (Google Gemini).',
+      '• Ödeme/abonelik altyapısı (Google Play Billing).',
+      '• Yetkili kamu kurum ve kuruluşları (yasal zorunluluk halinde).',
+      'Bu sağlayıcıların bir kısmının sunucuları yurt dışında bulunabildiğinden, veriler gerekli güvenlik tedbirleri ve mevzuata uygunluk sağlanarak yurt dışına aktarılabilir.',
+    ]),
+    _LegalSection('6. Veri Toplama Yöntemi', [
+      'Kişisel veriler; uygulamaya kayıt, giriş, görsel yükleme, mesajlaşma ve uygulama içi etkileşimlerin gerçekleştirilmesi yoluyla, elektronik ortamda otomatik ve kısmen otomatik yöntemlerle toplanır.',
+    ]),
+    _LegalSection('7. Saklama Süresi', [
+      'Kişisel veriler, işleme amacının gerektirdiği süre boyunca ve ilgili mevzuatta öngörülen zamanaşımı/saklama süreleri kadar saklanır. Sürenin sonunda veriler silinir, yok edilir veya anonim hale getirilir.',
+      'Hesabını sildiğinde, mevzuatın saklamayı zorunlu kıldığı haller dışında verilerin silinir.',
+    ]),
+    _LegalSection('8. İlgili Kişinin Hakları (KVKK m.11)', [
+      'KVKK m.11 uyarınca aşağıdaki haklara sahipsin:',
+      '• Kişisel verilerinin işlenip işlenmediğini öğrenme.',
+      '• İşlenmişse buna ilişkin bilgi talep etme.',
+      '• İşlenme amacını ve amacına uygun kullanılıp kullanılmadığını öğrenme.',
+      '• Yurt içinde/dışında aktarıldığı üçüncü kişileri bilme.',
+      '• Eksik veya yanlış işlenmişse düzeltilmesini isteme.',
+      '• KVKK\'da öngörülen şartlarda silinmesini veya yok edilmesini isteme.',
+      '• Düzeltme/silme işlemlerinin aktarılan üçüncü kişilere bildirilmesini isteme.',
+      '• Münhasıran otomatik sistemlerle analiz sonucu aleyhine bir sonucun ortaya çıkmasına itiraz etme.',
+      '• Hukuka aykırı işleme nedeniyle zarara uğraman halinde zararın giderilmesini talep etme.',
+    ]),
+    _LegalSection('9. Başvuru Yöntemi', [
+      'Yukarıdaki haklarına ilişkin taleplerini info@evlumba.com adresine e-posta göndererek iletebilirsin. Başvurun, talebin niteliğine göre en kısa sürede ve en geç 30 gün içinde ücretsiz olarak sonuçlandırılır; işlemin ayrıca bir maliyet gerektirmesi halinde Kurul tarafından belirlenen tarife uygulanabilir.',
+      'Profil > Hesap Yönetimi bölümünden hesabını ve verilerini silmeyi de talep edebilirsin.',
+    ]),
+    _LegalSection('10. İletişim', [
+      '• Veri Sorumlusu: Evlumba Software',
+      '• E-posta: info@evlumba.com',
     ]),
   ],
 );
