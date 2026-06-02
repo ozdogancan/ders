@@ -37,7 +37,6 @@ import '../../services/shared_design_service.dart';
 import '../../services/user_profile_service.dart';
 import '../../widgets/free_consult_sheet.dart';
 import '../../widgets/verified_badge.dart';
-import '../pro/widgets/pro_badge.dart';
 import '../conversation_detail_screen.dart';
 import '../share/share_upload_screen.dart' show openShareUploadSheet;
 import 'follow_list_sheet.dart';
@@ -928,11 +927,14 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
       SliverPadding(
         padding: const EdgeInsets.symmetric(horizontal: 16),
         sliver: SliverGrid(
+          // 2026-06-02: tile'lar 0.78 (uzun portre) idi → 2 satır çok yer
+          // kaplıyor, header altında sadece 1 satır görünüyordu. 1.0 (kare) ile
+          // daha kompakt, aynı ekranda daha fazla tasarım görünür.
           gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: _gridCols,
             mainAxisSpacing: 12,
             crossAxisSpacing: 12,
-            childAspectRatio: 0.78,
+            childAspectRatio: 1.0,
           ),
           delegate: SliverChildBuilderDelegate(
             (ctx, i) => _designTile(visible, i),
@@ -1036,12 +1038,9 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
                 const SizedBox(width: 6),
                 const VerifiedBadge(size: 18),
               ],
-              // 2026-05-28 FIX 5: Pro badge — herhangi bir profil Pro ise
-              // (kendi ya da başkası) ismin yanında gradient pill göster.
-              if (_profile?.isPro == true) ...[
-                const SizedBox(width: 6),
-                const ProBadge(),
-              ],
+              // 2026-06-02: İsmin yanındaki "Pro" pill KALDIRILDI (kullanıcı
+              // isteği). Profesyonellik alt başlıktaki meslek + verified rozeti
+              // ile zaten belli; ayrıca "Pro" yazmaya gerek yok.
             ],
           ),
           const SizedBox(height: 4),
