@@ -21,6 +21,7 @@ import 'package:flutter/services.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
 import '../../core/theme/koala_tokens.dart';
+import '../../services/shared_design_service.dart';
 import '../../widgets/ask_and_apply_sheet.dart';
 import '../../widgets/koala_ai_badge.dart';
 import 'instagram_share_sheet.dart';
@@ -77,11 +78,28 @@ class _UserDesignSwipeScreenState extends State<UserDesignSwipeScreen> {
   late final PageController _ctrl;
   late int _index;
 
+  // 2026-06-02: Oturum başına tek görüntülenme — aynı tasarımı ileri-geri
+  // kaydırınca tekrar sayma.
+  final Set<String> _viewedIds = <String>{};
+
   @override
   void initState() {
     super.initState();
     _index = widget.initialIndex.clamp(0, widget.items.length - 1);
     _ctrl = PageController(initialPage: _index);
+    _countView(_index);
+  }
+
+  void _countView(int i) {
+    if (i < 0 || i >= widget.items.length) return;
+    final item = widget.items[i];
+    // Yalnız paylaşım tasarımları (AI değil) — Evlumba projesi id'si zaten
+    // RPC'de 0 satır eşler ama gereksiz çağrı yapma.
+    if (item['is_ai'] == true) return;
+    final id = (item['id'] ?? item['item_id'] ?? '').toString();
+    if (id.isEmpty || _viewedIds.contains(id)) return;
+    _viewedIds.add(id);
+    SharedDesignService.incrementView(id);
   }
 
   @override
@@ -224,6 +242,7 @@ class _UserDesignSwipeScreenState extends State<UserDesignSwipeScreen> {
               onPageChanged: (i) {
                 HapticFeedback.selectionClick();
                 setState(() => _index = i);
+                _countView(i);
               },
               itemBuilder: (_, i) => _DesignPage(item: widget.items[i]),
             ),

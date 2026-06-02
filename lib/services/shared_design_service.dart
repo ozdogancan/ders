@@ -147,6 +147,39 @@ class SharedDesignService {
     }
   }
 
+  // ─── Görüntülenme sayacı ───
+  /// Detay görüntüleyici bir paylaşım tasarımını gösterince çağrılır.
+  /// Var olmayan id (Evlumba projesi) zararsız (0 satır). Fire-and-forget.
+  static Future<void> incrementView(String id) async {
+    if (id.isEmpty) return;
+    try {
+      await Supabase.instance.client
+          .rpc('koala_increment_design_view', params: {'p_id': id});
+    } catch (_) {/* sessiz — vanity metrik */}
+  }
+
+  /// Bir kullanıcının yayınlanmış tasarımlarının toplam görüntülenmesi.
+  /// Profil "İstatistikler" (owner-only) için.
+  static Future<int> totalViews({String? ownerUid}) async {
+    final uid = ownerUid ?? _uid;
+    if (uid == null) return 0;
+    try {
+      final rows = await Supabase.instance.client
+          .from(_table)
+          .select('view_count')
+          .eq('user_id', uid)
+          .eq('status', 'published');
+      var sum = 0;
+      for (final r in List<Map<String, dynamic>>.from(rows)) {
+        sum += (r['view_count'] as num?)?.toInt() ?? 0;
+      }
+      return sum;
+    } catch (e) {
+      debugPrint('[SharedDesignService] totalViews failed: $e');
+      return 0;
+    }
+  }
+
   // ─── AI moderation gate (koala-api) ───
   static Future<ShareModerationResult> moderate({
     required String imageUrl,

@@ -99,6 +99,8 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
   /// Server-side toplam tasarım sayısı (count exact). Header için "N adet"
   /// göstermek için doğrudan kullanılır.
   int? _designTotalCount;
+  /// 2026-06-02: Owner-only — yayınlanan tasarımların toplam görüntülenmesi.
+  int? _totalDesignViews;
   /// AI tasarımları (owner-only) — ayrı sekmede yüklenir.
   bool _hasAnyAi = false;
   bool _loading = true;
@@ -396,9 +398,13 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
         final results = await Future.wait([
           SharedDesignService.totalCount(),
           SavedItemsService.totalCountForType(SavedItemType.project),
+          SharedDesignService.totalViews(),
         ]);
         if (mounted) {
-          setState(() => _designTotalCount = (results[0]) + (results[1]));
+          setState(() {
+            _designTotalCount = results[0] + results[1];
+            _totalDesignViews = results[2];
+          });
         }
         return;
       }
@@ -2395,6 +2401,24 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
             ),
           ),
           const Spacer(),
+          // 2026-06-02: Owner-only görüntülenme — sade, küçük (kaos yok).
+          if (_isSelf &&
+              _totalDesignViews != null &&
+              _totalDesignViews! > 0) ...[
+            const Icon(LucideIcons.eye,
+                size: 13, color: KoalaColors.textTer),
+            const SizedBox(width: 4),
+            Text(
+              '$_totalDesignViews',
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: KoalaColors.textTer,
+                letterSpacing: -0.1,
+              ),
+            ),
+            const SizedBox(width: 10),
+          ],
           if (countLabel != null)
             Text(
               countLabel,

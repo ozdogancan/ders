@@ -79,10 +79,52 @@ class SwipeFeedService {
   static final List<String> _recentStyleWindow = [];
   static const int _noveltyWindow = 5;
 
+  // ── Sosyal boost (2026-06-02) ──────────────────────────────────────────────
+  // Profesyonel tasarımcı (koala_user_profiles.mode='pro') yazarlara ve
+  // kullanıcının TAKİP ettiklerine feed'de pozitif ağırlık. NOT: buradaki
+  // "pro" PROFESYONEL TASARIMCI'dır — ücretli abone (billing isPro) DEĞİL.
+  static final Set<String> _proAuthorIds = {};
+  static final Set<String> _followedIds = {};
+  static bool _socialLoaded = false;
+  static const double _followBoost = 3.0; // takip edilen yazar
+  static const double _proBoost = 2.0; // profesyonel tasarımcı yazar
+
+  /// Pro-yazar + takip listesi set'lerini bir kez (session) yükle. Ranking
+  /// öncesi getProfile'dan çağrılır → skorlama anında hazır.
+  static Future<void> _ensureSocialBoosts() async {
+    if (_socialLoaded) return;
+    _socialLoaded = true;
+    try {
+      final sb = Supabase.instance.client;
+      final pros = await sb
+          .from('koala_user_profiles')
+          .select('uid')
+          .eq('mode', 'pro')
+          .limit(1000);
+      for (final r in List<Map<String, dynamic>>.from(pros)) {
+        final u = (r['uid'] ?? '').toString();
+        if (u.isNotEmpty) _proAuthorIds.add(u);
+      }
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      if (uid != null && uid.isNotEmpty) {
+        final fol = await sb
+            .from('koala_follows')
+            .select('designer_id')
+            .eq('user_id', uid)
+            .limit(1000);
+        for (final r in List<Map<String, dynamic>>.from(fol)) {
+          final d = (r['designer_id'] ?? '').toString();
+          if (d.isNotEmpty) _followedIds.add(d);
+        }
+      }
+    } catch (_) {/* sessiz — boost opsiyonel */}
+  }
+
   /// Mevcut taste profile snapshot'ını döndürür; gerekirse re-derive eder.
   /// Caller `currentLikeCount` parametresinden son like sayısını verirse
   /// gereksiz recompute'lardan kaçınılır.
   static Future<TasteProfile> getProfile({required int currentLikeCount}) async {
+    await _ensureSocialBoosts();
     if (_cachedProfile != null &&
         _profileLikeSnapshot >= 0 &&
         (currentLikeCount - _profileLikeSnapshot).abs() < _profileRefreshDelta) {
@@ -103,6 +145,9 @@ class SwipeFeedService {
     _designerRecentSkips.clear();
     _recentStyleWindow.clear();
     _hasEmbeddingCache.clear();
+    _proAuthorIds.clear();
+    _followedIds.clear();
+    _socialLoaded = false;
   }
 
   // ── Seen ring buffer ──────────────────────────────────────────────────────
@@ -540,7 +585,18 @@ class SwipeFeedService {
       }
     }
 
-    // (6) Küçük jitter — aynı skorlular için rotasyon, deterministic boredom
+    // (7) Sosyal boost (2026-06-02) — profesyonel tasarımcı yazarlar + takip
+    //     ettiklerin feed'de öne çıksın. authorId: kullanıcı paylaşımında
+    //     user_id, Evlumba projesinde designer_id. (Buradaki "pro" PROFESYONEL
+    //     tasarımcı; ücretli abone DEĞİL.)
+    final authorId =
+        (card['user_id'] ?? card['designer_id'] ?? '').toString();
+    if (authorId.isNotEmpty) {
+      if (_followedIds.contains(authorId)) s += _followBoost;
+      if (_proAuthorIds.contains(authorId)) s += _proBoost;
+    }
+
+    // (8) Küçük jitter — aynı skorlular için rotasyon, deterministic boredom
     //     önler.
     s += _rng.nextDouble() * 0.3;
     return s;
