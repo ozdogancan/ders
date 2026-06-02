@@ -83,6 +83,15 @@ class _ProfileTabScreenState extends ConsumerState<ProfileTabScreen>
     _restoreRole();
     _loadDesigns();
     _loadAggregate();
+    // 2026-06-02: Yeni tasarım yayınlanınca grid'i anında tazele.
+    SharedDesignService.publishedTick.addListener(_onDesignPublished);
+  }
+
+  void _onDesignPublished() {
+    if (!mounted) return;
+    _loadDesigns();
+    _loadAggregate();
+    setState(() => _editReloadTick++); // UnifiedProfileView fresh fetch.
   }
 
   /// PART B — `koala_profile_bundle` ile single-RPC aggregate.
@@ -123,6 +132,7 @@ class _ProfileTabScreenState extends ConsumerState<ProfileTabScreen>
 
   @override
   void dispose() {
+    SharedDesignService.publishedTick.removeListener(_onDesignPublished);
     _designsTab.dispose();
     super.dispose();
   }

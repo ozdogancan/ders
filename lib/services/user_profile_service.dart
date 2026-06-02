@@ -17,6 +17,9 @@ class KoalaUserProfile {
   final String mode; // 'homeowner' | 'pro'
   final bool verified;
   final String? avatarUrl;
+  /// 2026-06-02: Pro başvurusunda girilen meslek (örn. "İç Mimar"). Profil
+  /// alt başlığında jenerik "Profesyonel Tasarımcı" yerine bu gösterilir.
+  final String? profession;
 
   const KoalaUserProfile({
     required this.uid,
@@ -26,6 +29,7 @@ class KoalaUserProfile {
     this.mode = 'homeowner',
     this.verified = false,
     this.avatarUrl,
+    this.profession,
   });
 
   bool get isPro => mode == 'pro';
@@ -40,6 +44,7 @@ class KoalaUserProfile {
         mode: (r['mode'] ?? 'homeowner').toString(),
         verified: r['verified'] == true,
         avatarUrl: r['avatar_url']?.toString(),
+        profession: r['profession']?.toString(),
       );
 
   static const empty = KoalaUserProfile(uid: '');

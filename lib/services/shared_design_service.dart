@@ -111,6 +111,10 @@ class SharedDesignService {
 
   static const String _table = 'koala_user_shared_designs';
 
+  /// 2026-06-02: Yeni bir tasarım yayınlandığında artar. Profil sekmesi bunu
+  /// dinleyip grid'i anında tazeler ("Tasarımın yayında" → profilde görünür).
+  static final ValueNotifier<int> publishedTick = ValueNotifier<int>(0);
+
   // Storage bucket — `design-uploads` zaten upload-image API'sinde kullanılıyor.
   // Ayrı `shared-designs` bucket'ı yok; aynı bucket'a `shared/{uid}/` prefix
   // ile yüklüyoruz (path ayrımı izolasyon için yeterli).
@@ -207,6 +211,8 @@ class SharedDesignService {
           .insert(row)
           .select()
           .single();
+      // Profil sekmesi grid'ini tazelesin.
+      publishedTick.value++;
       return SharedDesign.fromRow(Map<String, dynamic>.from(inserted));
     } catch (e) {
       debugPrint('[SharedDesignService] publish failed: $e');

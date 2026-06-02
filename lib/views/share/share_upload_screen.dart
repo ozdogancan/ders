@@ -646,62 +646,27 @@ class _ShareUploadScreenState extends State<ShareUploadScreen>
   // KALDIRILDI (kullanıcı isteği), sadece bg'ye yumuşak geçiş bırakıldı.
   static const String _heroUrlV3 =
       'https://xgefjepaqnghaotqybpi.supabase.co/storage/v1/object/public/koala-seed/share/hero-v3.jpg';
-  static const String _heroUrlV2 =
-      'https://xgefjepaqnghaotqybpi.supabase.co/storage/v1/object/public/koala-seed/share/hero-v2.webp';
-  static const String _heroUrlV1 =
-      'https://xgefjepaqnghaotqybpi.supabase.co/storage/v1/object/public/koala-seed/share/hero-v1.webp';
 
   Widget _heroIllustration() {
     return Stack(
       fit: StackFit.expand,
       children: [
-        // Background image with cascading fallback: v3 → v1 → asset → gradient.
+        // 2026-06-02: ESKİ kod cascading placeholder kullanıyordu (v3'ten önce
+        // v1/asset gösterilip sonra v3'e geçiyordu) → ara görsel "görünüp
+        // kaybolan" bir flash (kullanıcının "chat baloncuğu" dediği) yaratıyordu.
+        // Artık placeholder DÜZ DEGRADE; ara görsel yok → flash yok.
         CachedNetworkImage(
           imageUrl: _heroUrlV3,
           fit: BoxFit.cover,
-          fadeInDuration: const Duration(milliseconds: 260),
-          placeholder: (_, __) => CachedNetworkImage(
-            imageUrl: _heroUrlV1,
-            fit: BoxFit.cover,
-            placeholder: (_, __) => Image.asset(
-              'assets/onboarding/step2.webp',
-              fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => Container(
-                decoration: const BoxDecoration(
-                  gradient: KoalaColors.accentGradientV,
-                ),
-              ),
-            ),
-            errorWidget: (_, __, ___) => Image.asset(
-              'assets/onboarding/step2.webp',
-              fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => Container(
-                decoration: const BoxDecoration(
-                  gradient: KoalaColors.accentGradientV,
-                ),
-              ),
-            ),
+          fadeInDuration: const Duration(milliseconds: 200),
+          placeholder: (_, __) => const DecoratedBox(
+            decoration: BoxDecoration(gradient: KoalaColors.accentGradientV),
           ),
-          errorWidget: (_, __, ___) => CachedNetworkImage(
-            imageUrl: _heroUrlV1,
+          errorWidget: (_, __, ___) => Image.asset(
+            'assets/onboarding/step2.webp',
             fit: BoxFit.cover,
-            placeholder: (_, __) => Image.asset(
-              'assets/onboarding/step2.webp',
-              fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => Container(
-                decoration: const BoxDecoration(
-                  gradient: KoalaColors.accentGradientV,
-                ),
-              ),
-            ),
-            errorWidget: (_, __, ___) => Image.asset(
-              'assets/onboarding/step2.webp',
-              fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => Container(
-                decoration: const BoxDecoration(
-                  gradient: KoalaColors.accentGradientV,
-                ),
-              ),
+            errorBuilder: (_, __, ___) => const DecoratedBox(
+              decoration: BoxDecoration(gradient: KoalaColors.accentGradientV),
             ),
           ),
         ),

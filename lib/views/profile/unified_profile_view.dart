@@ -114,6 +114,9 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
   // their public face. Persisted via SharedPreferences.
   static const String _kRoleSwitchPrefKey = 'profile_role_view';
   String _viewRole = 'homeowner';
+  // 2026-06-02: Kullanıcı rolü elle seçti mi? Seçmediyse Pro kullanıcı kendi
+  // profilinde VARSAYILAN olarak 'pro' görünümde açılır.
+  bool _roleExplicitlySet = false;
 
   // Profesyonel başvuru durumu (own profile). 'pending' iken tekrar başvuru
   // alınmaz — "Profesyonel başvurunuz incelenmekte" gösterilir.
@@ -432,6 +435,13 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
     } catch (_) {
       _profile = KoalaUserProfile(uid: widget.profileId);
     }
+    // 2026-06-02: Profesyonel kullanıcı kendi profilinde VARSAYILAN olarak
+    // "profesyonel" görünümde gelsin (elle başka seçim yapmadıysa).
+    if (widget.ownerEditable &&
+        _profile?.isPro == true &&
+        !_roleExplicitlySet) {
+      _viewRole = 'pro';
+    }
     // Designer row (profiles) — best-effort; richer fields than koala_user_profiles.
     try {
       final row = await Supabase.instance.client
@@ -664,12 +674,16 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
     try {
       final prefs = await SharedPreferences.getInstance();
       final r = prefs.getString(_kRoleSwitchPrefKey);
-      if (r != null && mounted) setState(() => _viewRole = r);
+      if (r != null) {
+        _roleExplicitlySet = true;
+        if (mounted) setState(() => _viewRole = r);
+      }
     } catch (_) {/* swallow */}
   }
 
   Future<void> _saveRole(String role) async {
     HapticFeedback.selectionClick();
+    _roleExplicitlySet = true;
     if (mounted) setState(() => _viewRole = role);
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -809,7 +823,12 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
     if (widget.profileId == KoalaSeedService.evlumbaDesignerId) {
       return 'İç Mimari Stüdyosu';
     }
-    if (_profile?.isPro == true) return 'Profesyonel Tasarımcı';
+    // 2026-06-02: Pro kullanıcı için başvuruda girilen mesleği göster
+    // (örn. "İç Mimar"); yoksa jenerik "Profesyonel Tasarımcı".
+    if (_profile?.isPro == true) {
+      final p = (_profile?.profession ?? '').trim();
+      return p.isNotEmpty ? p : 'Profesyonel Tasarımcı';
+    }
     // "Ev Sahibi" etiketi YALNIZCA kullanıcının KENDİ profili için. Başka
     // birinin (tasarımcı) profilini açarken yanlışlıkla "Ev Sahibi" yazma.
     if (!_isSelf) return _designerRow != null ? 'Tasarımcı' : '';
