@@ -29,10 +29,11 @@ interface TgCallbackQuery {
 
 async function tg(token: string, method: string, body: unknown): Promise<void> {
   try {
+    // 2026-06-02: Türkçe karakterler "?" gelmesin diye açık UTF-8 encode.
     await fetch(`https://api.telegram.org/bot${token}/${method}`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
+      headers: { 'Content-Type': 'application/json; charset=utf-8' },
+      body: new TextEncoder().encode(JSON.stringify(body)),
     });
   } catch (e) {
     console.warn(`[tg/webhook] ${method} failed:`, e instanceof Error ? e.message : String(e));

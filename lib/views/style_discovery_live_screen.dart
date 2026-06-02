@@ -344,7 +344,12 @@ class _StyleDiscoveryLiveScreenState
       }
       // Free kullanıcı kotayı az önce doldurduysa paywall'ı bir kez otomatik aç.
       // Kullanıcı kapatırsa _ProQuotaCard görünür kalır (deck-level gate).
-      if (justExhausted && _isFreeUser && !_quotaPaywallShown) {
+      // 2026-06-02: proStatus KESİN free demeden paywall açma (Pro kullanıcı
+      // açılışta proStatus yüklenirken yanlışlıkla paywall görmesin).
+      final proResolvedFree = ref
+          .read(proStatusProvider)
+          .maybeWhen(data: (s) => !s.isPro, orElse: () => false);
+      if (justExhausted && proResolvedFree && !_quotaPaywallShown) {
         _quotaPaywallShown = true;
         await _showPaywallSafe(trigger: 'swipe_quota_end');
       }
@@ -2057,8 +2062,13 @@ class _StyleDiscoveryLiveScreenState
   @override
   Widget build(BuildContext context) {
     final asyncPro = ref.watch(proStatusProvider);
-    _isFreeUser = !asyncPro.maybeWhen(
-        data: (s) => s.isPro, orElse: () => false);
+    // 2026-06-02 FIX: proStatus YÜKLENİRKEN kullanıcıyı "free" sayma. Gate artık
+    // proStatus'u beklemediği için (hızlı açılış), eski kod yüklenme anında
+    // _isFreeUser=true yapıyordu → Pro kullanıcıya açılışta kota paywall'ı
+    // gösteriliyordu. Yüklenirken/hata anında Pro varsay (paywall AÇMA); sadece
+    // proStatus KESİN olarak free dediğinde free işle.
+    _isFreeUser = asyncPro.maybeWhen(
+        data: (s) => !s.isPro, orElse: () => false);
     return Scaffold(
       backgroundColor: KoalaColors.bg,
       extendBody: true,

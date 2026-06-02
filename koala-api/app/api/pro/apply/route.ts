@@ -133,21 +133,25 @@ export async function POST(req: NextRequest) {
       // 2026-06-02: tıklanabilir Onayla/Reddet butonları. callback_data
       // /api/telegram/webhook tarafından işlenir → koala_pro_application_decide
       // RPC + push. callback_data ≤ 64 byte (prefix 15 + uuid 36 = 51).
+      // 2026-06-02: Türkçe karakterler Telegram'da "?" geliyordu. String body
+      // bazı runtime'larda Latin-1'e düşüyor; açıkça UTF-8 byte'a encode edip
+      // charset=utf-8 başlığıyla gönder → garanti UTF-8.
+      const tgPayload = JSON.stringify({
+        chat_id: tgChat,
+        text: lines,
+        reply_markup: {
+          inline_keyboard: [[
+            { text: '✅ Onayla', callback_data: `prodec:approve:${res.id}` },
+            { text: '❌ Reddet', callback_data: `prodec:reject:${res.id}` },
+          ]],
+        },
+      });
       await fetch(
         `https://api.telegram.org/bot${tgToken}/sendMessage`,
         {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            chat_id: tgChat,
-            text: lines,
-            reply_markup: {
-              inline_keyboard: [[
-                { text: '✅ Onayla', callback_data: `prodec:approve:${res.id}` },
-                { text: '❌ Reddet', callback_data: `prodec:reject:${res.id}` },
-              ]],
-            },
-          }),
+          headers: { 'Content-Type': 'application/json; charset=utf-8' },
+          body: new TextEncoder().encode(tgPayload),
         },
       );
     }
