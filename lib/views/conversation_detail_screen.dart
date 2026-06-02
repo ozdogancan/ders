@@ -16,7 +16,6 @@ import '../core/utils/format_utils.dart';
 import '../services/evlumba_live_service.dart';
 import '../services/global_message_listener.dart';
 import '../services/koala_seed_service.dart';
-import '../widgets/lazy_grid_view.dart';
 import '../services/messaging_service.dart';
 import '../services/saved_items_service.dart';
 import '../services/share_service.dart';
@@ -324,7 +323,12 @@ class _ConversationDetailScreenState extends ConsumerState<ConversationDetailScr
         if (mounted) {
           setState(() {
             _designerProjects = deduped;
-            _designerTotalCount = totalCount;
+            // 2026-06-02 FIX: Sayı GÖSTERİLEN (deduped) tasarım sayısına eşit
+            // olmalı. Ham exact-count tekrarlanan kapakları da sayıp "3" gibi
+            // yanlış değer veriyordu (grid 2 gösterirken). Tüm set çekildiyse
+            // (rows < limit) deduped.length doğru; aksi halde count'a düş.
+            _designerTotalCount =
+                rows.length < 400 ? deduped.length : (totalCount ?? deduped.length);
           });
         }
       } catch (e) {
@@ -382,7 +386,10 @@ class _ConversationDetailScreenState extends ConsumerState<ConversationDetailScr
           _designerDetail = detail;
           _designerProjects = deduped;
           _contextProject = matched;
-          _designerTotalCount = totalCount;
+          // 2026-06-02 FIX: GÖSTERİLEN (deduped) sayıya eşitle — tekrarlanan
+          // kapaklı satırlar yüzünden ham count fazla geliyordu (2 yerine 3).
+          _designerTotalCount =
+              projects.length < 60 ? deduped.length : (totalCount ?? deduped.length);
         });
       }
     } catch (_) {}
@@ -420,6 +427,48 @@ class _ConversationDetailScreenState extends ConsumerState<ConversationDetailScr
       out.add(p);
     }
     return out;
+  }
+
+  /// 2026-06-02: Bir proje map'inin temiz TR kategori etiketi (popup profildeki
+  /// gibi: "Oturma Odası", "Yatak Odası"...). project_type/category/room_type
+  /// sırasıyla denenir. "Tümünü gör" grid'inde proje adı yerine bu gösterilir.
+  String _projCategoryLabel(Map<String, dynamic> p) {
+    String pretty(String raw) {
+      final r =
+          raw.trim().toLowerCase().replaceAll('_', ' ').replaceAll('i̇', 'i');
+      if (r.isEmpty) return '';
+      const map = {
+        'living room': 'Oturma Odası', 'salon': 'Oturma Odası',
+        'oturma odasi': 'Oturma Odası',
+        'bedroom': 'Yatak Odası', 'yatak odasi': 'Yatak Odası',
+        'kitchen': 'Mutfak', 'mutfak': 'Mutfak',
+        'bathroom': 'Banyo', 'banyo': 'Banyo',
+        'kids room': 'Çocuk Odası', 'cocuk odasi': 'Çocuk Odası',
+        'office': 'Çalışma Odası', 'ofis': 'Çalışma Odası',
+        'calisma odasi': 'Çalışma Odası',
+        'dining room': 'Yemek Odası', 'yemek odasi': 'Yemek Odası',
+        'hallway': 'Antre', 'antre': 'Antre', 'hall': 'Hol', 'hol': 'Hol',
+        'balcony': 'Balkon', 'balkon': 'Balkon',
+        'terrace': 'Teras', 'teras': 'Teras', 'garden': 'Bahçe', 'bahce': 'Bahçe',
+        'walk in closet': 'Giyinme Odası', 'giyinme odasi': 'Giyinme Odası',
+      };
+      final hit = map[r];
+      if (hit != null) return hit;
+      return r
+          .split(' ')
+          .where((w) => w.isNotEmpty)
+          .map((w) => '${w[0].toUpperCase()}${w.substring(1)}')
+          .join(' ');
+    }
+
+    for (final k in ['project_type', 'category', 'room_type', 'roomType']) {
+      final v = (p[k] ?? '').toString().trim();
+      if (v.isNotEmpty) {
+        final pl = pretty(v);
+        if (pl.isNotEmpty) return pl;
+      }
+    }
+    return '';
   }
 
   Future<void> _loadMessages() async {
@@ -1122,7 +1171,6 @@ class _ConversationDetailScreenState extends ConsumerState<ConversationDetailScr
   void _openAllDesignsSheet() {
     final designerId = widget.designerId ?? '';
     if (designerId.isEmpty) return;
-    final loaded = <Map<String, dynamic>>[];
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -1138,167 +1186,215 @@ class _ConversationDetailScreenState extends ConsumerState<ConversationDetailScr
           minChildSize: 0.55,
           maxChildSize: 0.96,
           builder: (_, scrollController) {
-            return Column(
-              children: [
-                const SizedBox(height: 10),
-                Container(
-                  width: 42,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: KoalaColors.border,
-                    borderRadius: BorderRadius.circular(100),
-                  ),
-                ),
-                const SizedBox(height: 10),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  child: Row(
-                    children: [
-                      const Icon(LucideIcons.layers,
-                          size: 16, color: KoalaColors.textSec),
-                      const SizedBox(width: 8),
-                      const Text(
-                        'Tüm Tasarımlar',
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w800,
-                          color: KoalaColors.text,
-                          letterSpacing: -0.2,
-                        ),
+            // 2026-06-02: Popup profildeki gibi — kategori pill filtresi +
+            // tile'da proje adı yerine KATEGORİ etiketi. Bellekteki (deduped)
+            // _designerProjects kaynak; ayrı paginated fetch kaldırıldı (sayı
+            // ve içerik artık gösterilenle birebir tutarlı).
+            final all = List<Map<String, dynamic>>.from(_designerProjects);
+            final cats = <String>[];
+            for (final p in all) {
+              final c = _projCategoryLabel(p);
+              if (c.isNotEmpty && !cats.contains(c)) cats.add(c);
+            }
+            String? selectedCat;
+            return StatefulBuilder(
+              builder: (ctx, setSheet) {
+                final filtered = selectedCat == null
+                    ? all
+                    : all
+                        .where((p) => _projCategoryLabel(p) == selectedCat)
+                        .toList();
+                return Column(
+                  children: [
+                    const SizedBox(height: 10),
+                    Container(
+                      width: 42,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: KoalaColors.border,
+                        borderRadius: BorderRadius.circular(100),
                       ),
-                      const Spacer(),
-                      IconButton(
-                        icon: const Icon(LucideIcons.x, size: 20),
-                        color: KoalaColors.textSec,
-                        onPressed: () => Navigator.pop(sheetCtx),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: LazyGridView<Map<String, dynamic>>(
-                      crossAxisCount: 2,
-                      aspectRatio: 0.85,
-                      spacing: 8,
-                      bottomThreshold: 320,
-                      // Cover-URL bazlı kimlik: aynı görsele sahip farklı
-                      // proje row'ları (Evlumba'da aynı foto 2 oda etiketiyle)
-                      // grid'de tek karta iner — sayfalar arası da dedup.
-                      idOf: (p) {
-                        final c = EvlumbaLiveService.coverUrlOf(p);
-                        return c.isNotEmpty ? c : (p['id'] ?? '').toString();
-                      },
-                      fetch: (cursor) async {
-                        final page = _isEvlumba
-                            ? await KoalaSeedService.evlumbaCardsPaged(
-                                limit: 18,
-                                beforeCreatedAt: cursor as String?,
-                              )
-                            : await EvlumbaLiveService
-                                .getDesignerProjectsPaged(
-                                designerId,
-                                limit: 18,
-                                beforeCreatedAt: cursor as String?,
-                              );
-                        // tap navigasyonu için loaded biriktir
-                        for (final m in page.items) {
-                          final c = EvlumbaLiveService.coverUrlOf(m);
-                          final id =
-                              c.isNotEmpty ? c : (m['id'] ?? '').toString();
-                          if (id.isEmpty) continue;
-                          if (loaded.any((x) {
-                            final xc = EvlumbaLiveService.coverUrlOf(x);
-                            final xid =
-                                xc.isNotEmpty ? xc : (x['id'] ?? '').toString();
-                            return xid == id;
-                          })) {
-                            continue;
-                          }
-                          loaded.add(m);
-                        }
-                        return page;
-                      },
-                      itemBuilder: (_, p, i) {
-                        final cover = (p['cover_image_url'] ??
-                                p['cover_url'] ??
-                                p['image_url'] ??
-                                '')
-                            .toString();
-                        final title = (p['title'] ?? '').toString();
-                        return GestureDetector(
-                          onTap: () {
-                            Navigator.pop(sheetCtx);
-                            // Loaded içindeki gerçek index'i bul.
-                            final idx = loaded.indexWhere((x) =>
-                                ((x['id'] ?? '').toString() ==
-                                    (p['id'] ?? '').toString()));
-                            _openProjectViewer(p, idx < 0 ? 0 : idx);
-                          },
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(12),
-                            child: Stack(
-                              fit: StackFit.expand,
-                              children: [
-                                if (cover.isNotEmpty)
-                                  CachedNetworkImage(
-                                    imageUrl: cover,
-                                    fit: BoxFit.cover,
-                                    memCacheWidth: 400,
-                                    placeholder: (_, _) => Container(
-                                        color: KoalaColors.surfaceAlt),
-                                    errorWidget: (_, _, _) => Container(
-                                        color: KoalaColors.surfaceAlt),
-                                  )
-                                else
-                                  Container(color: KoalaColors.surfaceAlt),
-                                Positioned.fill(
-                                  child: DecoratedBox(
-                                    decoration: BoxDecoration(
-                                      gradient: LinearGradient(
-                                        begin: Alignment.topCenter,
-                                        end: Alignment.bottomCenter,
-                                        colors: [
-                                          Colors.transparent,
-                                          Colors.black.withValues(alpha: 0.55),
-                                        ],
-                                        stops: const [0.55, 1.0],
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                                if (title.isNotEmpty)
-                                  Positioned(
-                                    left: 10,
-                                    right: 10,
-                                    bottom: 10,
-                                    child: Text(
-                                      title,
-                                      maxLines: 2,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w700,
-                                        letterSpacing: -0.1,
-                                      ),
-                                    ),
-                                  ),
-                              ],
+                    ),
+                    const SizedBox(height: 10),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      child: Row(
+                        children: [
+                          const Icon(LucideIcons.layers,
+                              size: 16, color: KoalaColors.textSec),
+                          const SizedBox(width: 8),
+                          const Text(
+                            'Tüm Tasarımlar',
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w800,
+                              color: KoalaColors.text,
+                              letterSpacing: -0.2,
                             ),
                           ),
-                        );
-                      },
+                          const Spacer(),
+                          IconButton(
+                            icon: const Icon(LucideIcons.x, size: 20),
+                            color: KoalaColors.textSec,
+                            onPressed: () => Navigator.pop(sheetCtx),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                ),
-              ],
+                    // Kategori pill filtre satırı (≥2 kategori varsa).
+                    if (cats.length >= 2)
+                      SizedBox(
+                        height: 46,
+                        child: ListView(
+                          scrollDirection: Axis.horizontal,
+                          padding:
+                              const EdgeInsets.symmetric(horizontal: 16),
+                          children: [
+                            _allDesignsPill(
+                              label: 'Hepsi',
+                              active: selectedCat == null,
+                              onTap: () =>
+                                  setSheet(() => selectedCat = null),
+                            ),
+                            for (final c in cats)
+                              _allDesignsPill(
+                                label: c,
+                                active: selectedCat == c,
+                                onTap: () =>
+                                    setSheet(() => selectedCat = c),
+                              ),
+                          ],
+                        ),
+                      ),
+                    const SizedBox(height: 8),
+                    Expanded(
+                      child: GridView.builder(
+                        controller: scrollController,
+                        padding:
+                            const EdgeInsets.symmetric(horizontal: 16),
+                        gridDelegate:
+                            const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 2,
+                          mainAxisSpacing: 8,
+                          crossAxisSpacing: 8,
+                          childAspectRatio: 0.85,
+                        ),
+                        itemCount: filtered.length,
+                        itemBuilder: (_, i) {
+                          final p = filtered[i];
+                          final cover = (p['cover_image_url'] ??
+                                  p['cover_url'] ??
+                                  p['image_url'] ??
+                                  '')
+                              .toString();
+                          final catLabel = _projCategoryLabel(p);
+                          return GestureDetector(
+                            onTap: () {
+                              Navigator.pop(sheetCtx);
+                              final idx = _designerProjects.indexWhere((x) =>
+                                  (x['id'] ?? '').toString() ==
+                                  (p['id'] ?? '').toString());
+                              _openProjectViewer(p, idx < 0 ? 0 : idx);
+                            },
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(12),
+                              child: Stack(
+                                fit: StackFit.expand,
+                                children: [
+                                  if (cover.isNotEmpty)
+                                    CachedNetworkImage(
+                                      imageUrl: cover,
+                                      fit: BoxFit.cover,
+                                      memCacheWidth: 400,
+                                      placeholder: (_, __) => Container(
+                                          color: KoalaColors.surfaceAlt),
+                                      errorWidget: (_, __, ___) => Container(
+                                          color: KoalaColors.surfaceAlt),
+                                    )
+                                  else
+                                    Container(color: KoalaColors.surfaceAlt),
+                                  Positioned.fill(
+                                    child: DecoratedBox(
+                                      decoration: BoxDecoration(
+                                        gradient: LinearGradient(
+                                          begin: Alignment.topCenter,
+                                          end: Alignment.bottomCenter,
+                                          colors: [
+                                            Colors.transparent,
+                                            Colors.black
+                                                .withValues(alpha: 0.55),
+                                          ],
+                                          stops: const [0.55, 1.0],
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  if (catLabel.isNotEmpty)
+                                    Positioned(
+                                      left: 10,
+                                      right: 10,
+                                      bottom: 10,
+                                      child: Text(
+                                        catLabel,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w700,
+                                          letterSpacing: -0.1,
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                );
+              },
             );
           },
         );
       },
+    );
+  }
+
+  /// "Tümünü gör" sheet'indeki kategori filtre pill'i.
+  Widget _allDesignsPill({
+    required String label,
+    required bool active,
+    required VoidCallback onTap,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          alignment: Alignment.center,
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          decoration: BoxDecoration(
+            color: active ? KoalaColors.accentDeep : KoalaColors.surface,
+            borderRadius: BorderRadius.circular(100),
+            border: Border.all(
+              color: active ? KoalaColors.accentDeep : KoalaColors.border,
+              width: 1,
+            ),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              letterSpacing: -0.1,
+              color: active ? Colors.white : KoalaColors.text,
+            ),
+          ),
+        ),
+      ),
     );
   }
 

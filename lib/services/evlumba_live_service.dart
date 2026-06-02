@@ -755,12 +755,30 @@ class EvlumbaLiveService {
         await waitForReady(timeout: const Duration(seconds: 4));
       }
       if (!isReady) return 0;
+      // 2026-06-02 FIX: Ham satır sayısı, aynı kapak görselinin farklı
+      // project_type satırlarıyla tekrarı yüzünden gösterilen (dedupe'li)
+      // grid'den FAZLA geliyordu (ör. 2 tasarım → "3"). Profil/chat'te kapak
+      // bazında dedupe yapılıyor; sayı da BENZERSİZ kapak sayısı olmalı.
       final res = await client
           .from('designer_projects')
-          .select()
+          .select('cover_image_url, cover_url, image_url')
           .eq('designer_id', designerId)
-          .count();
-      return res.count;
+          .eq('is_published', true)
+          .limit(500);
+      final rows = List<Map<String, dynamic>>.from(res);
+      final covers = <String>{};
+      var noCover = 0;
+      for (final r in rows) {
+        final c = (r['cover_image_url'] ?? r['cover_url'] ?? r['image_url'] ?? '')
+            .toString()
+            .trim();
+        if (c.isEmpty) {
+          noCover++; // kapağı olmayanları ayrı say (dedupe edilmez)
+        } else {
+          covers.add(c);
+        }
+      }
+      return covers.length + noCover;
     } catch (e) {
       debugPrint('EvlumbaLive.designerProjectsCount($designerId) failed: $e');
       return 0;
