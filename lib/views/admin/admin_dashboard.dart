@@ -199,14 +199,26 @@ class _AdminDashboardState extends State<AdminDashboard> {
       _StatCard(
         icon: Icons.groups_rounded,
         color: KoalaColors.accent,
-        label: 'Toplam kullanıcı',
-        value: _v('summary', 'total_users'),
+        label: 'Tekil ziyaretçi',
+        value: _v('summary', 'unique_visitors'),
+      ),
+      _StatCard(
+        icon: Icons.badge_rounded,
+        color: KoalaColors.accentMuted,
+        label: 'Kayıtlı kullanıcı',
+        value: _v('summary', 'registered_users'),
       ),
       _StatCard(
         icon: Icons.workspace_premium_rounded,
         color: KoalaColors.star,
-        label: 'Profesyonel',
+        label: 'Profesyonel (tasarımcı)',
         value: _v('summary', 'professionals'),
+      ),
+      _StatCard(
+        icon: Icons.verified_rounded,
+        color: KoalaColors.accentDeep,
+        label: 'Pro üye',
+        value: _v('summary', 'registered_pros'),
       ),
       _StatCard(
         icon: Icons.home_rounded,
@@ -218,13 +230,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
         icon: Icons.image_rounded,
         color: KoalaColors.green,
         label: 'Toplam tasarım',
-        value: _v('summary', 'shared_designs'),
-      ),
-      _StatCard(
-        icon: Icons.verified_rounded,
-        color: KoalaColors.greenAlt,
-        label: 'Doğrulanmış',
-        value: _v('summary', 'verified'),
+        value: _v('summary', 'total_designs'),
       ),
       _StatCard(
         icon: Icons.how_to_reg_rounded,
@@ -240,7 +246,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
       ),
       _StatCard(
         icon: Icons.forum_rounded,
-        color: KoalaColors.accentMuted,
+        color: KoalaColors.like,
         label: 'Toplam mesaj',
         value: _v('summary', 'messages'),
       ),
