@@ -179,9 +179,10 @@ class _ShareUploadScreenState extends State<ShareUploadScreen>
       );
       if (f == null || !mounted) return;
       final bytes = await f.readAsBytes();
-      final optimized = _optimize(bytes);
+      // 2026-06-02: Önce işleniyor ekranını GÖSTER (donmuş bekleme yok), sonra
+      // ağır optimize'ı async yap. Optimize artık motorun decoder'ını kullanıyor
+      // → UI bloklamıyor.
       setState(() {
-        _bytes = optimized;
         _step = 1;
         _analyzing = true;
         _analyzeOk = false;
@@ -189,8 +190,13 @@ class _ShareUploadScreenState extends State<ShareUploadScreen>
         _detectedRoomRaw = '';
         _detectedStyleRaw = '';
         _rejectMsg = '';
+        _rejectReason = '';
         _uploadedUrl = null;
+        _bytes = null;
       });
+      final optimized = await _optimize(bytes);
+      if (!mounted) return;
+      setState(() => _bytes = optimized);
       // 2026-05-28 FIX 2: AI analyze → review/reject UI before publish.
       unawaited(_analyze());
     } catch (e) {
@@ -254,21 +260,65 @@ class _ShareUploadScreenState extends State<ShareUploadScreen>
     });
   }
 
-  // Decode + 1280 max edge + JPG q75. Memory koruma için tek pass.
-  Uint8List _optimize(Uint8List input) {
+  // 2026-06-02: 1280 max edge + JPG q75'e küçült. ESKİ kod `image` paketiyle
+  // ana thread'de TAM BOY decode ediyordu → web'de izolasyon yok, büyük telefon
+  // fotoğrafı (12MP) UI'ı 1-3sn donduruyordu. YENİ: önce header'dan boyutu oku
+  // (tam decode yok), sonra motorun decoder'ıyla doğrudan HEDEF boyutta async
+  // decode et (donma yok), küçük görseli JPEG'e çevir (hızlı). Cross-platform.
+  Future<Uint8List> _optimize(Uint8List input) async {
+    const maxEdge = 1280;
     try {
-      final decoded = img.decodeImage(input);
-      if (decoded == null) return input;
-      const maxEdge = 1280;
-      img.Image scaled = decoded;
-      if (decoded.width > maxEdge || decoded.height > maxEdge) {
-        scaled = decoded.width >= decoded.height
-            ? img.copyResize(decoded, width: maxEdge)
-            : img.copyResize(decoded, height: maxEdge);
+      final buffer = await ImmutableBuffer.fromUint8List(input);
+      final descriptor = await ImageDescriptor.encoded(buffer);
+      final w = descriptor.width;
+      final h = descriptor.height;
+      int tw = w;
+      int th = h;
+      if (w > maxEdge || h > maxEdge) {
+        if (w >= h) {
+          tw = maxEdge;
+          th = (h * maxEdge / w).round();
+        } else {
+          th = maxEdge;
+          tw = (w * maxEdge / h).round();
+        }
       }
-      return Uint8List.fromList(img.encodeJpg(scaled, quality: 75));
+      final codec =
+          await descriptor.instantiateCodec(targetWidth: tw, targetHeight: th);
+      final frame = await codec.getNextFrame();
+      final uiImage = frame.image;
+      final rgba =
+          await uiImage.toByteData(format: ImageByteFormat.rawRgba);
+      final outW = uiImage.width;
+      final outH = uiImage.height;
+      uiImage.dispose();
+      codec.dispose();
+      descriptor.dispose();
+      if (rgba == null) return input;
+      // Küçültülmüş RGBA → JPEG (artık küçük olduğu için encode hızlı).
+      final small = img.Image.fromBytes(
+        width: outW,
+        height: outH,
+        bytes: rgba.buffer,
+        numChannels: 4,
+        order: img.ChannelOrder.rgba,
+      );
+      return Uint8List.fromList(img.encodeJpg(small, quality: 75));
     } catch (_) {
-      return input;
+      // Son çare: eski yol (donmaya razı ama hiç olmazsa çalışsın).
+      try {
+        final decoded = img.decodeImage(input);
+        if (decoded == null) return input;
+        img.Image scaled = decoded;
+        if (decoded.width > maxEdge || decoded.height > maxEdge) {
+          scaled = decoded.width >= decoded.height
+              ? img.copyResize(decoded, width: maxEdge)
+              : img.copyResize(decoded, height: maxEdge);
+        }
+        return Uint8List.fromList(img.encodeJpg(scaled, quality: 75));
+      } catch (_) {
+        return input;
+      }
     }
   }
 
