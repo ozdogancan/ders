@@ -530,6 +530,52 @@ class EvlumbaLiveService {
   // PROJELER (designer_projects tablosu)
   // ═══════════════════════════════════════
 
+  /// Bir proje row'unun efektif kapak görseli URL'i.
+  /// cover_image_url → cover_url → image_url → designer_project_images[0]
+  /// (sort_order'a göre). data: URI'ları ve boşlar atlanır.
+  static String coverUrlOf(Map<String, dynamic> p) {
+    for (final k in ['cover_image_url', 'cover_url', 'image_url']) {
+      final v = (p[k] ?? '').toString().trim();
+      if (v.isNotEmpty && !v.startsWith('data:')) return v;
+    }
+    final imgs = p['designer_project_images'] as List?;
+    if (imgs != null && imgs.isNotEmpty) {
+      final sorted = imgs
+          .whereType<Map>()
+          .map((e) => Map<String, dynamic>.from(e))
+          .toList()
+        ..sort((a, b) => ((a['sort_order'] as num?)?.toInt() ?? 0)
+            .compareTo((b['sort_order'] as num?)?.toInt() ?? 0));
+      for (final im in sorted) {
+        final v = (im['image_url'] ?? '').toString().trim();
+        if (v.isNotEmpty && !v.startsWith('data:')) return v;
+      }
+    }
+    return '';
+  }
+
+  /// Aynı kapak görseline sahip yinelenen proje row'larını eler (ilk görüleni
+  /// tutar). Evlumba tarafında aynı foto bazen farklı oda/proje etiketiyle iki
+  /// kez giriliyor; bu helper profil + chat + swipe'ta "çoklayan" kartları
+  /// önler. cover URL üretilemeyen row'lar id'siyle, o da yoksa olduğu gibi
+  /// korunur (yanlışlıkla silme yok).
+  static List<Map<String, dynamic>> dedupeByCover(
+    List<Map<String, dynamic>> rows,
+  ) {
+    final seen = <String>{};
+    final out = <Map<String, dynamic>>[];
+    for (final r in rows) {
+      final url = coverUrlOf(r);
+      final key = url.isNotEmpty ? url : (r['id'] ?? '').toString();
+      if (key.isEmpty) {
+        out.add(r);
+        continue;
+      }
+      if (seen.add(key)) out.add(r);
+    }
+    return out;
+  }
+
   /// Yayınlanmış projeleri getir (feed / keşfet)
   static Future<List<Map<String, dynamic>>> getProjects({
     int limit = 20,
@@ -645,7 +691,7 @@ class EvlumbaLiveService {
         .eq('is_published', true)
         .order('created_at', ascending: false)
         .limit(limit);
-    return List<Map<String, dynamic>>.from(data);
+    return dedupeByCover(List<Map<String, dynamic>>.from(data));
   }
 
   /// Tasarımcının projeleri — paginated (cursor: created_at ISO string).
@@ -684,10 +730,13 @@ class EvlumbaLiveService {
       final rows = List<Map<String, dynamic>>.from(data);
       debugPrint(
           '[evlumba] getDesignerProjectsPaged($designerId) → ${rows.length} rows');
+      // Cursor/hasMore HAM satırlardan hesaplanır (sayfalama bozulmasın);
+      // sadece görüntülenecek items dedup'lanır. Aynı kapak görselli farklı
+      // proje row'ları (Evlumba'da aynı foto 2 oda etiketiyle) tek karta iner.
       final nextCursor =
           rows.isNotEmpty ? rows.last['created_at']?.toString() : null;
       return (
-        items: rows,
+        items: dedupeByCover(rows),
         hasMore: rows.length >= limit,
         cursor: nextCursor,
       );

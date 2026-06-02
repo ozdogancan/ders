@@ -67,6 +67,21 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     ),
   ];
 
+  bool _precached = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Tüm onboarding görsellerini önceden decode et ki sayfa geçişlerinde
+    // (ve ilk gösterimde) takılma/yavaş yükleme olmasın. Bir kez yeterli.
+    if (!_precached) {
+      _precached = true;
+      for (final p in _pages) {
+        precacheImage(AssetImage(p.image), context);
+      }
+    }
+  }
+
   @override
   void dispose() {
     _pc.dispose();

@@ -107,7 +107,16 @@ class _SwipeScreenState extends ConsumerState<SwipeScreen> {
         final url = _deck[i].coverUrl;
         if (url.isNotEmpty) {
           unawaited(
-            precacheImage(NetworkImage(url), context).catchError((_) {}),
+            precacheImage(
+              ResizeImage(
+                NetworkImage(url),
+                width: (MediaQuery.of(context).size.width *
+                        MediaQuery.of(context).devicePixelRatio)
+                    .clamp(360.0, 1600.0)
+                    .round(),
+              ),
+              context,
+            ).catchError((_) {}),
           );
         }
       }
@@ -615,16 +624,22 @@ class _SwipeCardView extends StatelessWidget {
               fit: StackFit.expand,
               children: [
                 card.coverUrl.isNotEmpty
-                    ? Image.network(
-                        card.coverUrl,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => Container(
-                          color: KoalaColors.surfaceAlt,
-                          alignment: Alignment.center,
-                          child: const Icon(
-                            LucideIcons.image,
-                            color: KoalaColors.textTer,
-                            size: 24,
+                    ? RepaintBoundary(
+                        child: Image.network(
+                          card.coverUrl,
+                          fit: BoxFit.cover,
+                          cacheWidth: (MediaQuery.of(context).size.width *
+                                  MediaQuery.of(context).devicePixelRatio)
+                              .clamp(360.0, 1600.0)
+                              .round(),
+                          errorBuilder: (_, __, ___) => Container(
+                            color: KoalaColors.surfaceAlt,
+                            alignment: Alignment.center,
+                            child: const Icon(
+                              LucideIcons.image,
+                              color: KoalaColors.textTer,
+                              size: 24,
+                            ),
                           ),
                         ),
                       )
@@ -804,6 +819,8 @@ class _MoodBoardImage extends StatelessWidget {
           ? Image.network(
               card.coverUrl,
               fit: BoxFit.cover,
+              cacheWidth:
+                  (110 * MediaQuery.of(context).devicePixelRatio * 2).round(),
               errorBuilder: (_, __, ___) => const Icon(
                 LucideIcons.image,
                 color: KoalaColors.textTer,

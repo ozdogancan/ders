@@ -20,10 +20,12 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart' show kIsWeb, Uint8List;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:supabase_flutter/supabase_flutter.dart' show Supabase;
+import 'package:supabase_flutter/supabase_flutter.dart' show Supabase, FileOptions;
 
 import '../../core/theme/koala_tokens.dart';
 import '../../services/designer_reviews_service.dart';
@@ -1039,6 +1041,7 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
   Widget _avatar(bool isEvlumba) {
     final url = _avatarUrl;
     final hasUrl = url.isNotEmpty;
+    final canEdit = widget.ownerEditable && _isSelf;
     final inner = Container(
       width: 96,
       height: 96,
@@ -1087,6 +1090,59 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
               ),
       ),
     );
+
+    // Own profile: avatar tappable → foto değiştir; sağ-alt kamera rozeti +
+    // upload sırasında spinner overlay. onLongPress (ayarlar) korunur.
+    if (canEdit) {
+      return GestureDetector(
+        onTap: _uploadingAvatar ? null : _openAvatarActions,
+        onLongPress: widget.onAvatarLongPress == null
+            ? null
+            : () {
+                HapticFeedback.mediumImpact();
+                widget.onAvatarLongPress!();
+              },
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            inner,
+            if (_uploadingAvatar)
+              Positioned.fill(
+                child: ClipOval(
+                  child: Container(
+                    color: Colors.black.withValues(alpha: 0.35),
+                    alignment: Alignment.center,
+                    child: const SizedBox(
+                      width: 24,
+                      height: 24,
+                      child: CircularProgressIndicator(
+                          color: Colors.white, strokeWidth: 2.4),
+                    ),
+                  ),
+                ),
+              )
+            else
+              Positioned(
+                right: -1,
+                bottom: -1,
+                child: Container(
+                  width: 30,
+                  height: 30,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: KoalaColors.accentDeep,
+                    border:
+                        Border.all(color: KoalaColors.bg, width: 2.5),
+                  ),
+                  child: const Icon(LucideIcons.camera,
+                      size: 14, color: Colors.white),
+                ),
+              ),
+          ],
+        ),
+      );
+    }
+
     if (widget.onAvatarLongPress == null) return inner;
     return GestureDetector(
       onLongPress: () {
@@ -1095,6 +1151,183 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
       },
       child: inner,
     );
+  }
+
+  // ─── Profil fotoğrafı upload/remove (own profile) ──────────────────────
+  bool _uploadingAvatar = false;
+
+  Future<void> _openAvatarActions() async {
+    if (_uploadingAvatar) return;
+    HapticFeedback.selectionClick();
+    final hasPhoto = _avatarUrl.isNotEmpty;
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: KoalaColors.bg,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) => SafeArea(
+        top: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 10),
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: KoalaColors.border,
+                borderRadius: BorderRadius.circular(100),
+              ),
+            ),
+            const SizedBox(height: 10),
+            if (!kIsWeb)
+              ListTile(
+                leading: const Icon(LucideIcons.camera,
+                    color: KoalaColors.accentDeep),
+                title: const Text('Fotoğraf çek'),
+                onTap: () => Navigator.pop(ctx, 'camera'),
+              ),
+            ListTile(
+              leading:
+                  const Icon(LucideIcons.image, color: KoalaColors.accentDeep),
+              title: const Text('Galeriden seç'),
+              onTap: () => Navigator.pop(ctx, 'gallery'),
+            ),
+            if (hasPhoto)
+              ListTile(
+                leading: const Icon(LucideIcons.trash2,
+                    color: KoalaColors.error),
+                title: const Text('Mevcut fotoğrafı kaldır',
+                    style: TextStyle(color: KoalaColors.error)),
+                onTap: () => Navigator.pop(ctx, 'remove'),
+              ),
+            ListTile(
+              leading: const Icon(LucideIcons.x, color: KoalaColors.textSec),
+              title: const Text('İptal'),
+              onTap: () => Navigator.pop(ctx),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+    if (action == null || !mounted) return;
+    switch (action) {
+      case 'camera':
+        await _pickAndUploadAvatar(ImageSource.camera);
+        break;
+      case 'gallery':
+        await _pickAndUploadAvatar(ImageSource.gallery);
+        break;
+      case 'remove':
+        await _confirmRemoveAvatar();
+        break;
+    }
+  }
+
+  Future<void> _pickAndUploadAvatar(ImageSource source) async {
+    try {
+      final picker = ImagePicker();
+      final picked = await picker.pickImage(
+        source: source,
+        maxWidth: 720,
+        imageQuality: 80,
+      );
+      if (picked == null || !mounted) return;
+      setState(() => _uploadingAvatar = true);
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      if (uid == null) throw StateError('not_authenticated');
+      final Uint8List bytes = await picked.readAsBytes();
+      final objectPath = '$uid/avatar.webp';
+      final storage = Supabase.instance.client.storage.from('avatars');
+      await storage.uploadBinary(
+        objectPath,
+        bytes,
+        fileOptions: const FileOptions(
+          upsert: true,
+          contentType: 'image/webp',
+        ),
+      );
+      final v = DateTime.now().millisecondsSinceEpoch;
+      final publicUrl = '${storage.getPublicUrl(objectPath)}?v=$v';
+      await Future.wait([
+        FirebaseAuth.instance.currentUser!.updatePhotoURL(publicUrl),
+        UserProfileService.setAvatarUrl(publicUrl),
+      ]);
+      if (!mounted) return;
+      HapticFeedback.lightImpact();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Profil fotoğrafın güncellendi'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } catch (e) {
+      debugPrint('[unified-avatar] upload failed: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Fotoğraf yüklenemedi')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _uploadingAvatar = false);
+    }
+  }
+
+  Future<void> _confirmRemoveAvatar() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Fotoğrafı kaldır'),
+        content:
+            const Text('Profil fotoğrafını kaldırmak istediğine emin misin?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Vazgeç'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: TextButton.styleFrom(foregroundColor: KoalaColors.error),
+            child: const Text('Kaldır'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    setState(() => _uploadingAvatar = true);
+    try {
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      if (uid != null) {
+        try {
+          await Supabase.instance.client.storage
+              .from('avatars')
+              .remove(['$uid/avatar.webp']);
+        } catch (_) {/* swallow */}
+      }
+      await Future.wait([
+        FirebaseAuth.instance.currentUser!.updatePhotoURL(null),
+        UserProfileService.setAvatarUrl(null),
+      ]);
+      if (!mounted) return;
+      HapticFeedback.lightImpact();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Profil fotoğrafı kaldırıldı.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } catch (e) {
+      debugPrint('[unified-avatar] remove failed: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Fotoğraf kaldırılamadı')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _uploadingAvatar = false);
+    }
   }
 
   // ─── Stats — 3 columns: Tasarım / Değerlendirme / Yanıt ──────────────
@@ -2162,12 +2395,11 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
           },
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 140),
-            padding:
-                const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            height: 34,
+            alignment: Alignment.center,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
             decoration: BoxDecoration(
-              color: active
-                  ? KoalaColors.accentDeep
-                  : Colors.transparent,
+              color: active ? KoalaColors.accentDeep : KoalaColors.surface,
               borderRadius: BorderRadius.circular(999),
               border: Border.all(
                 color: active
@@ -2178,10 +2410,12 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
             ),
             child: Text(
               label,
+              textAlign: TextAlign.center,
               style: TextStyle(
                 fontFamily: 'Manrope',
-                fontSize: 12.5,
+                fontSize: 13,
                 fontWeight: FontWeight.w700,
+                height: 1.0,
                 color: active ? Colors.white : KoalaColors.textSec,
                 letterSpacing: -0.1,
               ),
@@ -2191,16 +2425,20 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
       );
     }
 
-    return SizedBox(
-      height: 48,
-      child: ListView(
-        scrollDirection: Axis.horizontal,
-        padding: EdgeInsets.fromLTRB(hPad, 0, hPad, 0),
-        physics: const BouncingScrollPhysics(),
-        children: [
-          pill('Tümü', null),
-          for (final c in cats) pill(c, c),
-        ],
+    // Pill satırı + altına grid başlamadan önce nefes alacak boşluk.
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: SizedBox(
+        height: 34,
+        child: ListView(
+          scrollDirection: Axis.horizontal,
+          padding: EdgeInsets.fromLTRB(hPad, 0, hPad, 0),
+          physics: const BouncingScrollPhysics(),
+          children: [
+            pill('Tümü', null),
+            for (final c in cats) pill(c, c),
+          ],
+        ),
       ),
     );
   }

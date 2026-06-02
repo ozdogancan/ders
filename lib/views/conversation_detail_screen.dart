@@ -1184,12 +1184,13 @@ class _ConversationDetailScreenState extends ConsumerState<ConversationDetailScr
                       aspectRatio: 0.85,
                       spacing: 8,
                       bottomThreshold: 320,
-                      idOf: (p) =>
-                          (p['id'] ??
-                                  p['cover_image_url'] ??
-                                  p['image_url'] ??
-                                  '')
-                              .toString(),
+                      // Cover-URL bazlı kimlik: aynı görsele sahip farklı
+                      // proje row'ları (Evlumba'da aynı foto 2 oda etiketiyle)
+                      // grid'de tek karta iner — sayfalar arası da dedup.
+                      idOf: (p) {
+                        final c = EvlumbaLiveService.coverUrlOf(p);
+                        return c.isNotEmpty ? c : (p['id'] ?? '').toString();
+                      },
                       fetch: (cursor) async {
                         final page = _isEvlumba
                             ? await KoalaSeedService.evlumbaCardsPaged(
@@ -1204,19 +1205,16 @@ class _ConversationDetailScreenState extends ConsumerState<ConversationDetailScr
                               );
                         // tap navigasyonu için loaded biriktir
                         for (final m in page.items) {
-                          final id = (m['id'] ??
-                                  m['cover_image_url'] ??
-                                  m['image_url'] ??
-                                  '')
-                              .toString();
+                          final c = EvlumbaLiveService.coverUrlOf(m);
+                          final id =
+                              c.isNotEmpty ? c : (m['id'] ?? '').toString();
                           if (id.isEmpty) continue;
-                          if (loaded.any((x) =>
-                              (x['id'] ??
-                                      x['cover_image_url'] ??
-                                      x['image_url'] ??
-                                      '')
-                                  .toString() ==
-                              id)) {
+                          if (loaded.any((x) {
+                            final xc = EvlumbaLiveService.coverUrlOf(x);
+                            final xid =
+                                xc.isNotEmpty ? xc : (x['id'] ?? '').toString();
+                            return xid == id;
+                          })) {
                             continue;
                           }
                           loaded.add(m);

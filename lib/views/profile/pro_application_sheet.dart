@@ -9,16 +9,11 @@
 // UI: hero görsel her step için, soft fade to bg. Underline-only inputlar,
 // pill progress (3 dot), Devam/Geri/Gönder action bar, page slide+fade.
 
-import 'dart:convert';
-
 import 'package:firebase_auth/firebase_auth.dart' show FirebaseAuth;
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:http/http.dart' as http;
 import 'package:lucide_icons/lucide_icons.dart';
-import 'package:universal_html/html.dart' as html;
 
 import '../../core/theme/koala_tokens.dart';
 import '../../services/user_profile_service.dart';
@@ -111,7 +106,6 @@ class _ProApplicationSheetState extends ConsumerState<ProApplicationSheet>
 
   bool _submitting = false;
   bool _success = false;
-  bool _locating = false;
   String? _error;
 
   @override
@@ -392,15 +386,8 @@ class _ProApplicationSheetState extends ConsumerState<ProApplicationSheet>
           icon: LucideIcons.user,
         ),
         const SizedBox(height: 22),
-        // 2026-05-28 FIX 4: konum çek pill + 81 il picker.
-        Align(
-          alignment: Alignment.centerLeft,
-          child: _LocationPill(
-            busy: _locating,
-            onTap: _locating ? null : _fillCityFromLocation,
-          ),
-        ),
-        const SizedBox(height: 10),
+        // 2026-06-02: "Konumumdan çek" pill KALDIRILDI (kullanıcı isteği).
+        // Sadece 81 il seçici kaldı.
         _CityPickerField(
           controller: _city,
           onTap: _openCityPicker,
@@ -426,83 +413,9 @@ class _ProApplicationSheetState extends ConsumerState<ProApplicationSheet>
     }
   }
 
-  // ─── Konumdan il çek ─────────────────────────────────────────────
-  // geolocator paketi YOK. Web'de tarayıcının navigator.geolocation API'si
-  // (universal_html) + anahtarsız, CORS-açık BigDataCloud reverse-geocode ile
-  // ili buluyoruz. Web dışında / hata / izin reddinde manuel seçiciye düşer.
-  Future<void> _fillCityFromLocation() async {
-    HapticFeedback.selectionClick();
-    if (!kIsWeb) {
-      await _openCityPicker();
-      return;
-    }
-    setState(() => _locating = true);
-    try {
-      final pos = await html.window.navigator.geolocation.getCurrentPosition(
-        enableHighAccuracy: false,
-        timeout: const Duration(seconds: 12),
-      );
-      final lat = pos.coords?.latitude;
-      final lng = pos.coords?.longitude;
-      if (lat == null || lng == null) throw Exception('no-coords');
-      final province = await _reverseGeocodeProvince(
-        lat.toDouble(),
-        lng.toDouble(),
-      );
-      if (!mounted) return;
-      if (province != null) {
-        setState(() => _city.text = province);
-        HapticFeedback.mediumImpact();
-      } else {
-        await _openCityPicker();
-      }
-    } catch (_) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Konum alınamadı — listeden seçebilirsin.'),
-          behavior: SnackBarBehavior.floating,
-          duration: Duration(seconds: 2),
-        ),
-      );
-      await _openCityPicker();
-    } finally {
-      if (mounted) setState(() => _locating = false);
-    }
-  }
-
-  // BigDataCloud client reverse-geocode (anahtarsız) → Türkiye ili.
-  Future<String?> _reverseGeocodeProvince(double lat, double lng) async {
-    final uri = Uri.parse(
-      'https://api.bigdatacloud.net/data/reverse-geocode-client'
-      '?latitude=$lat&longitude=$lng&localityLanguage=tr',
-    );
-    final res = await http.get(uri).timeout(const Duration(seconds: 8));
-    if (res.statusCode != 200) return null;
-    final data = jsonDecode(res.body) as Map<String, dynamic>;
-    for (final key in ['principalSubdivision', 'city', 'locality']) {
-      final raw = (data[key] as String?)?.trim();
-      if (raw == null || raw.isEmpty) continue;
-      final norm = _normalizeTr(raw);
-      for (final p in _kTurkishProvinces) {
-        if (_normalizeTr(p) == norm) return p;
-      }
-    }
-    return null;
-  }
-
-  // Türkçe karakter-duyarsız normalize (İ/I/ı/ş/ğ/ü/ö/ç → ascii, lowercase).
-  String _normalizeTr(String s) {
-    const map = {
-      'İ': 'i', 'I': 'i', 'ı': 'i', 'Ş': 's', 'ş': 's', 'Ğ': 'g',
-      'ğ': 'g', 'Ü': 'u', 'ü': 'u', 'Ö': 'o', 'ö': 'o', 'Ç': 'c', 'ç': 'c',
-    };
-    final buf = StringBuffer();
-    for (final ch in s.split('')) {
-      buf.write(map[ch] ?? ch);
-    }
-    return buf.toString().toLowerCase().trim();
-  }
+  // 2026-06-02: konumdan il çekme (navigator.geolocation + BigDataCloud
+  // reverse-geocode) ve _normalizeTr KALDIRILDI — "Konumumdan çek" pill'i
+  // kaldırıldığı için artık kullanılmıyordu.
 
   Widget _buildStep2() {
     return Column(
@@ -1167,68 +1080,9 @@ class _GradientPrimaryButton extends StatelessWidget {
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// 2026-05-28 FIX 4 — Şehir seçici: tap'lı picker field + 81 il sheet +
-// "Konumumdan çek" pill. geolocator paketi eklenirse _LocationPill içinde
-// kullanılabilir; şimdilik snackbar bilgi mesajı + manuel seçim.
+// 2026-05-28 FIX 4 — Şehir seçici: tap'lı picker field + 81 il sheet.
+// 2026-06-02: "Konumumdan çek" pill (_LocationPill) KALDIRILDI.
 // ═══════════════════════════════════════════════════════════════════════
-
-class _LocationPill extends StatelessWidget {
-  final VoidCallback? onTap;
-  final bool busy;
-  const _LocationPill({required this.onTap, this.busy = false});
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      borderRadius: BorderRadius.circular(100),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(100),
-        child: Container(
-          padding:
-              const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-          decoration: BoxDecoration(
-            color: KoalaColors.accent.withValues(alpha: 0.10),
-            borderRadius: BorderRadius.circular(100),
-            border: Border.all(
-              color: KoalaColors.accentDeep.withValues(alpha: 0.30),
-              width: 0.8,
-            ),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (busy)
-                const SizedBox(
-                  width: 13,
-                  height: 13,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 1.8,
-                    color: KoalaColors.accentDeep,
-                  ),
-                )
-              else
-                const Icon(LucideIcons.mapPin,
-                    size: 13, color: KoalaColors.accentDeep),
-              const SizedBox(width: 6),
-              Text(
-                busy ? 'Konum alınıyor…' : 'Konumumdan çek',
-                style: const TextStyle(
-                  fontFamily: 'Manrope',
-                  fontSize: 12.5,
-                  fontWeight: FontWeight.w700,
-                  color: KoalaColors.accentDeep,
-                  letterSpacing: -0.1,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
 
 /// Tap-only field that visually matches `_UnderlineField` but opens the
 /// city picker sheet instead of accepting keyboard input.

@@ -112,8 +112,12 @@ export async function POST(req: NextRequest) {
     const tgToken = cfg.get('tg_bot_token');
     const tgChat = cfg.get('tg_chat_id');
     if (tgToken && tgChat) {
+      // NOT: parse_mode KULLANMA. Markdown modunda profession/reason içindeki
+      // alt çizgi/yıldız ve footer'daki `koala_pro_application_decide` gibi
+      // metinler Telegram'da "can't parse entities" (HTTP 400) hatası verip
+      // mesajı sessizce düşürüyordu (catch yutuyor). Düz metin = sağlam.
       const lines = [
-        '🎓 *Yeni Profesyonel Başvurusu*',
+        '🎓 Yeni Profesyonel Başvurusu',
         '',
         `👤 ${fullName}`,
         `🛠️ ${profession}${city ? `  ·  📍 ${city}` : ''}`,
@@ -124,8 +128,11 @@ export async function POST(req: NextRequest) {
         `🆔 App: ${res.id}`,
         `👤 UID: ${uid}`,
         '',
-        '_Karar: Supabase’dan koala_pro_application_decide RPC ile_',
+        'Aşağıdaki butonlarla karar ver 👇',
       ].filter(Boolean).join('\n');
+      // 2026-06-02: tıklanabilir Onayla/Reddet butonları. callback_data
+      // /api/telegram/webhook tarafından işlenir → koala_pro_application_decide
+      // RPC + push. callback_data ≤ 64 byte (prefix 15 + uuid 36 = 51).
       await fetch(
         `https://api.telegram.org/bot${tgToken}/sendMessage`,
         {
@@ -134,7 +141,12 @@ export async function POST(req: NextRequest) {
           body: JSON.stringify({
             chat_id: tgChat,
             text: lines,
-            parse_mode: 'Markdown',
+            reply_markup: {
+              inline_keyboard: [[
+                { text: '✅ Onayla', callback_data: `prodec:approve:${res.id}` },
+                { text: '❌ Reddet', callback_data: `prodec:reject:${res.id}` },
+              ]],
+            },
           }),
         },
       );

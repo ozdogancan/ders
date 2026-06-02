@@ -92,42 +92,15 @@ export async function POST(req: NextRequest) {
   try {
     const admin = koalaAdmin();
 
-    // 1) `users` satırını ensure et — koala_conversations.user_id bu tabloya
-    //    FK ile bağlı. Anonim Firebase sign-in yeni uid üretiyor ama bu uid
-    //    `users` tablosunda yoksa conversation INSERT foreign key constraint
-    //    ile patlar. Idempotent upsert.
-    {
-      const userRow: Record<string, unknown> = { id: firebaseUid };
-      const email =
-        typeof payload.email === 'string' && payload.email.trim().length > 0
-          ? payload.email.trim()
-          : null;
-      const displayName =
-        typeof payload.displayName === 'string' &&
-        payload.displayName.trim().length > 0
-          ? payload.displayName.trim()
-          : null;
-      const photoUrl =
-        typeof payload.photoUrl === 'string' &&
-        payload.photoUrl.trim().length > 0
-          ? payload.photoUrl.trim()
-          : null;
-      if (email) userRow.email = email;
-      if (displayName) userRow.display_name = displayName;
-      if (photoUrl) userRow.photo_url = photoUrl;
-      const { error: userErr } = await admin
-        .from('users')
-        .upsert(userRow, { onConflict: 'id', ignoreDuplicates: true });
-      if (userErr) {
-        console.error('[conv/ensure] users upsert error:', userErr);
-        return NextResponse.json(
-          { error: `users upsert: ${userErr.message}` },
-          { status: 500, headers: cors },
-        );
-      }
-    }
+    // NOT: Eskiden burada `users` tablosuna idempotent upsert vardı —
+    // koala_conversations.user_id'nin users(id) FK'sine bağlı olduğu
+    // varsayımıyla. Gerçekte koala_conversations.user_id `text` ve tabloda
+    // HİÇBİR FK yok; `users.id` ise uuid (Firebase uid'leriyle uyumsuz).
+    // Bu upsert hiçbir işe yaramıyordu ama PostgREST'te "display_name kolonu
+    // yok" / uuid cast hatasıyla sohbet başlatmayı tamamen bloke ediyordu.
+    // Kaldırıldı — conversation insert service_role ile, RLS/FK engeli yok.
 
-    // 2) Mevcut konuşma?
+    // Mevcut konuşma?
     const { data: existing, error: selErr } = await admin
       .from('koala_conversations')
       .select('*')

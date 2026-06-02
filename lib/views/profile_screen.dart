@@ -60,7 +60,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   static const String _appVersionRaw =
       String.fromEnvironment('APP_VERSION', defaultValue: '');
   static String get _appVersion =>
-      _appVersionRaw.isEmpty ? '1.0.170' : _appVersionRaw.split('+').first;
+      _appVersionRaw.isEmpty ? '1.0.171' : _appVersionRaw.split('+').first;
   static const String _supportEmail = 'info@evlumba.com';
   static const String _feedbackEmail = 'info@evlumba.com';
   static const String _kvkkUrl = 'https://www.koalatutor.com/kvkk';
@@ -1155,6 +1155,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                         ? Image.network(
                             _photoUrl!,
                             fit: BoxFit.cover,
+                            cacheWidth: (72 *
+                                    MediaQuery.of(context).devicePixelRatio)
+                                .round(),
                             errorBuilder: (_, __, ___) =>
                                 _initialAvatar(initial),
                           )

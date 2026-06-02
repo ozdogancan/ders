@@ -395,59 +395,10 @@ class AuthScene extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // 2026-06: Mor/morumsu arka plan glow'ları kaldırıldı — temiz, nötr arka plan.
     return Scaffold(
-      backgroundColor: KoalaColors.bgCool,
-      body: Stack(
-        children: <Widget>[
-          // Çok subtle arka plan glow'ları
-          Positioned(
-            top: -80,
-            left: -40,
-            child: _SubtleGlow(
-              size: 240,
-              color: KoalaColors.brand.withValues(alpha: 0.06),
-            ),
-          ),
-          Positioned(
-            top: 60,
-            right: -100,
-            child: _SubtleGlow(
-              size: 280,
-              color: KoalaColors.accentLight.withValues(alpha: 0.12),
-            ),
-          ),
-          Positioned(
-            bottom: -100,
-            left: 40,
-            child: _SubtleGlow(
-              size: 220,
-              color: KoalaColors.accentLight.withValues(alpha: 0.10),
-            ),
-          ),
-          SafeArea(child: child),
-        ],
-      ),
-    );
-  }
-}
-
-class _SubtleGlow extends StatelessWidget {
-  const _SubtleGlow({required this.size, required this.color});
-  final double size;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return IgnorePointer(
-      child: Container(
-        width: size,
-        height: size,
-        decoration: BoxDecoration(shape: BoxShape.circle, color: color),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 40, sigmaY: 40),
-          child: const SizedBox.expand(),
-        ),
-      ),
+      backgroundColor: KoalaColors.bg,
+      body: SafeArea(child: child),
     );
   }
 }

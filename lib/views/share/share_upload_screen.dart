@@ -574,6 +574,11 @@ class _ShareUploadScreenState extends State<ShareUploadScreen>
   // Gemini-generated hero (16:9). 2026-05-28 FIX 2: v2 (cinematic editorial)
   // is the primary; falls back to v1, then onboarding asset, then brand
   // gradient if nothing loads — so screen never breaks.
+  // 2026-06-02: v3 — Gemini (gemini-3-pro-image) ile üretilmiş sıcak nötr
+  // tonlu premium iç mekan; alt üçte biri kreme fade oluyor → mor overlay
+  // KALDIRILDI (kullanıcı isteği), sadece bg'ye yumuşak geçiş bırakıldı.
+  static const String _heroUrlV3 =
+      'https://xgefjepaqnghaotqybpi.supabase.co/storage/v1/object/public/koala-seed/share/hero-v3.jpg';
   static const String _heroUrlV2 =
       'https://xgefjepaqnghaotqybpi.supabase.co/storage/v1/object/public/koala-seed/share/hero-v2.webp';
   static const String _heroUrlV1 =
@@ -583,9 +588,9 @@ class _ShareUploadScreenState extends State<ShareUploadScreen>
     return Stack(
       fit: StackFit.expand,
       children: [
-        // Background image with cascading fallback: v2 → v1 → asset → gradient.
+        // Background image with cascading fallback: v3 → v1 → asset → gradient.
         CachedNetworkImage(
-          imageUrl: _heroUrlV2,
+          imageUrl: _heroUrlV3,
           fit: BoxFit.cover,
           fadeInDuration: const Duration(milliseconds: 260),
           placeholder: (_, __) => CachedNetworkImage(
@@ -633,18 +638,20 @@ class _ShareUploadScreenState extends State<ShareUploadScreen>
             ),
           ),
         ),
-        // Purple-ish overlay for legibility + brand cohesion.
+        // 2026-06-02: Mor overlay KALDIRILDI. Görselin kendisi alta doğru
+        // krem tonuna fade oluyor; burada sadece okunabilirlik için en altta
+        // bg'ye yumuşak, renksiz bir geçiş bırakıyoruz (mor tonu yok).
         Container(
           decoration: BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
               colors: [
-                KoalaColors.accent.withValues(alpha: 0.30),
-                KoalaColors.accentDark.withValues(alpha: 0.45),
+                Colors.transparent,
+                Colors.transparent,
                 KoalaColors.bg,
               ],
-              stops: const [0.0, 0.55, 1.0],
+              stops: const [0.0, 0.62, 1.0],
             ),
           ),
         ),
@@ -661,7 +668,7 @@ class _ShareUploadScreenState extends State<ShareUploadScreen>
                 child: const Icon(
                   LucideIcons.sparkles,
                   size: 28,
-                  color: Colors.white,
+                  color: KoalaColors.accentDeep,
                 ),
               );
             },

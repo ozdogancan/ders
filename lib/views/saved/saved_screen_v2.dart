@@ -711,6 +711,9 @@ class _DesignRailCardState extends State<_DesignRailCard> {
                     CachedNetworkImage(
                       imageUrl: imageUrl,
                       fit: BoxFit.cover,
+                      memCacheWidth:
+                          (260 * MediaQuery.of(context).devicePixelRatio)
+                              .round(),
                       fadeInDuration: const Duration(milliseconds: 280),
                       errorWidget: (_, _, _) => Container(
                         color: KoalaColors.surfaceAlt,
@@ -854,6 +857,9 @@ class _ProductRailCard extends StatelessWidget {
                   : CachedNetworkImage(
                       imageUrl: imageUrl,
                       fit: BoxFit.cover,
+                      memCacheWidth:
+                          (160 * MediaQuery.of(context).devicePixelRatio)
+                              .round(),
                       fadeInDuration: const Duration(milliseconds: 240),
                       errorWidget: (_, _, _) => Container(
                         color: KoalaColors.surfaceAlt,
@@ -974,6 +980,9 @@ class _DesignerRailCard extends StatelessWidget {
                   : CachedNetworkImage(
                       imageUrl: imageUrl,
                       fit: BoxFit.cover,
+                      memCacheWidth:
+                          (64 * MediaQuery.of(context).devicePixelRatio)
+                              .round(),
                       errorWidget: (_, _, _) => Container(
                         color: KoalaColors.surfaceAlt,
                         alignment: Alignment.center,

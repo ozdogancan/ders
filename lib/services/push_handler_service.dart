@@ -96,6 +96,10 @@ class PushHandlerService {
       case 'open_collection':
         _router!.push('/collections');
         break;
+      case 'open_profile':
+        // Pro başvuru kararı (onay/red) bildirimine tıklayınca profile git.
+        _router!.push('/profile');
+        break;
       default:
         // Bilinmeyen tip — notifications ekranına git
         _router!.push('/notifications');

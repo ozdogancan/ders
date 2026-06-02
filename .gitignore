@@ -59,3 +59,7 @@ android/app/koala-release.jks
 # Archived scripts (one-time migration/fix scripts)
 scripts/archive/
 .vercel
+
+# Node deps (web wrapper) + one-off image-gen artifacts
+node_modules/
+koala-api/scripts/*.png

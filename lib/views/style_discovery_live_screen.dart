@@ -238,14 +238,8 @@ class _StyleDiscoveryLiveScreenState
   // (now - _currentCardShownAt) hesaplanıp markShown'a iletilir.
   DateTime? _currentCardShownAt;
 
-  // Pro upsell card cadence: free user her 6 swipe'tan sonra (yani 7., 13.,
-  // 19. slotta) Pro upgrade kartı görür. Pro user'da hiç gösterilmez.
-  int _swipeCount = 0;
   // Her 10 beğenide tarz özeti popup'ı — session bazlı beğeni sayacı.
   int _likeCount = 0;
-  static const int _proSlotEvery = 6;
-  bool get _isProSlot => _isFreeUser && _swipeCount > 0 &&
-      _swipeCount % _proSlotEvery == 0;
   bool _isFreeUser = true;
   // Günlük swipe kotası UsageLimitService üzerinden takip ediliyor (10/gün).
   // Free + quota tükendiğinde deck'in NEXT kartı _ProQuotaCard ile değiştirilir
@@ -1362,39 +1356,13 @@ class _StyleDiscoveryLiveScreenState
     if (_paywallOpen) return;
     // İlk gerçek swipe demo'yu görmüş sayar — coachmark tetiklenebilir.
     _markSwipeDemoSeen();
-    // ── Pro upsell slot? ──
-    // Free user her 6 swipe'tan sonra normal kart yerine Pro upgrade kartı
-    // görüyor. Like → paywall + kart geri gelir; skip → bir sonraki karta geç.
-    if (_isProSlot) {
-      HapticFeedback.selectionClick();
-      if (liked) {
-        unawaited(Analytics.log('upsell_swipe_card_clicked', const {}));
-        await _showPaywallSafe(trigger: 'swipe_premium_styles');
-        // Kullanıcı paywall'ı kapattıysa kartı bulunduğu yere geri al;
-        // _swipeCount'u BUMP ETME — aynı slot kalsın.
-        if (mounted) {
-          setState(() {
-            _dragDx = 0;
-            _dragDy = 0;
-          });
-        }
-        return;
-      }
-      // Skip: slot'u tüket, sonraki karta geç.
-      unawaited(Analytics.log('upsell_swipe_card_skipped', const {}));
-      if (mounted) {
-        setState(() {
-          _swipeCount++;
-          _dragDx = 0;
-          _dragDy = 0;
-        });
-      }
-      return;
-    }
-    // Free kullanıcı günlük kotayı doldurmuşsa swipe çalıştırma — paywall.
+    // Free kullanıcı günlük kotayı doldurmuşsa swipe'ı SESSİZCE absorbe et.
+    // Paywall'ı burada AÇMA — limit dolduğu an _refreshQuota tek bir kez
+    // otomatik açtı. Her swipe denemesinde tekrar açmak "üstüste popup"
+    // sorununa yol açıyordu. Kullanıcı Pro popup'ını _ProQuotaCard'a basarak
+    // tekrar açabilir (debounce'lu).
     if (_isFreeUser && _quotaExhausted) {
       HapticFeedback.selectionClick();
-      await _showPaywallSafe(trigger: 'swipe_quota_end');
       if (mounted) {
         setState(() {
           _dragDx = 0;
@@ -1417,8 +1385,6 @@ class _StyleDiscoveryLiveScreenState
     });
     // Geri al yalnızca son kartı geri alabilir — tek adımlık geçmiş tut.
     if (_history.length > 1) _history.removeRange(0, _history.length - 1);
-    // Her gerçek swipe sayılır — Pro slot cadence'ı için.
-    _swipeCount++;
     // Günlük kota sayacı — sessizce arttır, paywall popup AÇMA. Deck-level
     // quota kartı (gating) görsel sınır olarak iş görüyor.
     unawaited(UsageLimitService.incrementSwipe().then((_) => _refreshQuota()));
@@ -2403,7 +2369,9 @@ class _StyleDiscoveryLiveScreenState
           onPanStart: (_) {},
           onTap: () {
             HapticFeedback.selectionClick();
-            showPaywall(context, trigger: 'swipe_quota_end');
+            // Debounce'lu — _showPaywallSafe açıkken tekrar açmaz, üstüste
+            // basınca çoklu popup olmaz.
+            _showPaywallSafe(trigger: 'swipe_quota_end');
           },
           child: const _ProQuotaCard(),
         ),
@@ -2463,18 +2431,9 @@ class _StyleDiscoveryLiveScreenState
                         child: GestureDetector(
                           onPanUpdate: _onPanUpdate,
                           onPanEnd: _onPanEnd,
-                          onTap: _isProSlot
-                              ? () {
-                                  HapticFeedback.selectionClick();
-                                  showPaywall(context,
-                                      trigger: 'swipe_premium_styles');
-                                }
-                              : () => _openDesignerSheet(current),
+                          onTap: () => _openDesignerSheet(current),
                           child: Stack(
                             children: [
-                              if (_isProSlot)
-                                const _ProUpsellCard()
-                              else
                               _Card(
                                 project: current,
                                 coverOf: _coverOf,
@@ -2567,7 +2526,6 @@ class _StyleDiscoveryLiveScreenState
         (_isFreeUser && _quotaExhausted);
     // Modern, uygulama aksentine bağlı, 3'lü denge: Pas — Beğen (primary) — Sor
     final askDisabled = disabled ||
-        _isProSlot ||
         ((_currentCard?['designer_id'] ?? '').toString().isEmpty) ||
         _askingInFlight;
     final undoDisabled = _history.isEmpty || _animatingExit;
@@ -3592,153 +3550,6 @@ class _CategoryChip extends StatelessWidget {
 
 // _TapHintOverlay kaldırıldı — direktif gereği hiçbir tutorial gösterilmiyor.
 
-/// Pro upsell kartı — swipe deck'inde her 6 swipe'tan sonra free user'a
-/// gösterilir. Skip → pas, Like → paywall. Aynı boyut/radius normal kartla.
-class _ProUpsellCard extends StatelessWidget {
-  const _ProUpsellCard();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(24),
-        gradient: const LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            Color(0xFF1A1325),
-            KoalaColors.text,
-          ],
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.18),
-            blurRadius: 28,
-            offset: const Offset(0, 10),
-          ),
-        ],
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          // Subtle gold radial highlight
-          DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: RadialGradient(
-                center: const Alignment(0, -0.4),
-                radius: 0.85,
-                colors: [
-                  const Color(0xFFB8862F).withValues(alpha: 0.20),
-                  Colors.transparent,
-                ],
-              ),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(28, 36, 28, 32),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Mini PRO badge
-                Container(
-                  height: 22,
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 9, vertical: 2),
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [Color(0xFFE0B96B), Color(0xFFB8862F)],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    borderRadius: BorderRadius.circular(99),
-                  ),
-                  child: const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(LucideIcons.crown,
-                          size: 12, color: Colors.white),
-                      SizedBox(width: 5),
-                      Text(
-                        'PRO',
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w800,
-                          color: Colors.white,
-                          letterSpacing: 0.8,
-                          height: 1.0,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const Spacer(),
-                const Text(
-                  'Premium stilleri keşfet',
-                  style: TextStyle(
-                    fontSize: 26,
-                    fontWeight: FontWeight.w800,
-                    color: Colors.white,
-                    letterSpacing: -0.5,
-                    height: 1.15,
-                  ),
-                ),
-                const SizedBox(height: 14),
-                Text(
-                  'Bohem-Lüks, Vintage Atelier, Japandi-Pro,\nBrutal-Modern ve 9 özel stil daha.',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                    color: Colors.white.withValues(alpha: 0.85),
-                    height: 1.45,
-                    letterSpacing: -0.1,
-                  ),
-                ),
-                const Spacer(),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 18, vertical: 12),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(99),
-                  ),
-                  child: const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(LucideIcons.crown,
-                          size: 14, color: Color(0xFFB8862F)),
-                      SizedBox(width: 8),
-                      Text(
-                        "Pro'ya Geç",
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w800,
-                          color: KoalaColors.text,
-                          letterSpacing: 0.1,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  'Beğen → Pro\'ya geç · Geç → atla',
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w500,
-                    color: Colors.white.withValues(alpha: 0.55),
-                    letterSpacing: 0.1,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 /// Realize tutorial popup'ının üst görseli. İki fotoğrafın AI ile birleşip
 /// tek bir mekan tasarımına dönüştüğünü gösterir: sol = beğendiğin tasarım,
 /// sağ = senin mekanın, ortada "+" → tek sonuç.
@@ -4069,22 +3880,19 @@ class _RealizeMiniCard extends StatelessWidget {
 class _ProQuotaCard extends StatelessWidget {
   const _ProQuotaCard();
 
+  static const String _bgUrl =
+      'https://xgefjepaqnghaotqybpi.supabase.co/storage/v1/object/public/koala-seed/share/quota-lock.jpg';
+
   @override
   Widget build(BuildContext context) {
+    final dpr = MediaQuery.of(context).devicePixelRatio;
     return Container(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(24),
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            Color(0xFF6C63FF),
-            Color(0xFF9B5CFF),
-          ],
-        ),
+        color: const Color(0xFF1A1410),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF6C63FF).withValues(alpha: 0.30),
+            color: Colors.black.withValues(alpha: 0.25),
             blurRadius: 32,
             offset: const Offset(0, 14),
           ),
@@ -4094,60 +3902,73 @@ class _ProQuotaCard extends StatelessWidget {
       child: Stack(
         fit: StackFit.expand,
         children: [
-          // Üst-merkez radial highlight — yumuşak parlama.
+          // Premium interior arka plan görseli.
+          CachedNetworkImage(
+            imageUrl: _bgUrl,
+            fit: BoxFit.cover,
+            memCacheWidth: (360 * dpr).round(),
+            fadeInDuration: const Duration(milliseconds: 250),
+            placeholder: (_, __) => const ColoredBox(color: Color(0xFF1A1410)),
+            errorWidget: (_, __, ___) =>
+                const ColoredBox(color: Color(0xFF1A1410)),
+          ),
+          // Alttan koyu scrim — metnin okunması için.
           DecoratedBox(
             decoration: BoxDecoration(
-              gradient: RadialGradient(
-                center: const Alignment(0, -0.7),
-                radius: 0.9,
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
                 colors: [
-                  Colors.white.withValues(alpha: 0.22),
-                  Colors.transparent,
+                  Colors.black.withValues(alpha: 0.05),
+                  Colors.black.withValues(alpha: 0.35),
+                  Colors.black.withValues(alpha: 0.82),
                 ],
+                stops: const [0.0, 0.45, 1.0],
               ),
             ),
           ),
+          // İçerik — alt hizalı, sade.
           Padding(
-            padding: const EdgeInsets.fromLTRB(28, 36, 28, 32),
+            padding: const EdgeInsets.fromLTRB(24, 24, 24, 28),
             child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.center,
+              mainAxisAlignment: MainAxisAlignment.end,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Icon(
-                  Icons.workspace_premium,
-                  size: 36,
-                  color: Colors.white,
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.lock_rounded,
+                      size: 20,
+                      color: Colors.white,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Günlük limit doldu',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white.withValues(alpha: 0.85),
+                        letterSpacing: 0.2,
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 18),
+                const SizedBox(height: 10),
                 const Text(
-                  'Günlük Limit Doldu',
-                  textAlign: TextAlign.center,
+                  'Sınırsız keşfet',
                   style: TextStyle(
-                    fontSize: 22,
+                    fontSize: 26,
                     fontWeight: FontWeight.w800,
                     color: Colors.white,
-                    letterSpacing: -0.3,
-                    height: 1.2,
+                    letterSpacing: -0.4,
+                    height: 1.1,
                   ),
                 ),
-                const SizedBox(height: 12),
-                Text(
-                  'Pro ile sınırsız keşif, sınırsız ilham seni bekliyor.',
-                  textAlign: TextAlign.center,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w500,
-                    color: Colors.white.withValues(alpha: 0.85),
-                    height: 1.45,
-                    letterSpacing: -0.1,
-                  ),
-                ),
-                const SizedBox(height: 22),
+                const SizedBox(height: 18),
                 Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 20, vertical: 14),
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 15),
+                  alignment: Alignment.center,
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(999),
@@ -4157,7 +3978,7 @@ class _ProQuotaCard extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.w800,
-                      color: Color(0xFF6C63FF),
+                      color: Color(0xFF1A1410),
                       letterSpacing: 0.1,
                     ),
                   ),

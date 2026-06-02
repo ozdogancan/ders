@@ -68,6 +68,11 @@ class _ProfileTabScreenState extends ConsumerState<ProfileTabScreen>
   // Reviews (yalnız pro/designer için doldurulur).
   DesignerReviewsResult _reviews = DesignerReviewsResult.empty;
 
+  // Profil düzenlendiğinde UnifiedProfileView'ı baştan yüklemeye zorlamak için
+  // key'e karışan sayaç. UnifiedProfileView profilini static _bundleCache'ten
+  // okuyor; edit sonrası cache invalidate + bu tick++ → fresh display_name.
+  int _editReloadTick = 0;
+
   @override
   void initState() {
     super.initState();
@@ -251,6 +256,7 @@ class _ProfileTabScreenState extends ConsumerState<ProfileTabScreen>
         child: SafeArea(
           bottom: false,
           child: UnifiedProfileView(
+            key: ValueKey('unified_profile_${uid}_$_editReloadTick'),
             profileId: uid,
             ownerEditable: true,
             viewedDesignId: null,
@@ -1111,6 +1117,33 @@ class _ProfileTabScreenState extends ConsumerState<ProfileTabScreen>
     HapticFeedback.selectionClick();
     final bundle = ref.read(userProfileProvider).asData?.value;
     final profile = bundle?.profile;
+
+    // Pre-fill: koala_user_profiles.display_name boşsa, ekranda görünen
+    // efektif adı (Firebase auth displayName → email prefix) editöre taşı ki
+    // "mevcut bilgiler gelsin" beklentisi karşılansın. Aksi halde alan boş
+    // gelir ama header auth fallback'inden bir isim gösterir → kafa karıştırır.
+    final stored = (profile?.displayName ?? '').trim();
+    String prefillName = stored;
+    if (prefillName.isEmpty) {
+      final auth = FirebaseAuth.instance.currentUser;
+      final authName = (auth?.displayName ?? '').trim();
+      if (authName.isNotEmpty) {
+        prefillName = authName;
+      } else {
+        final email = (auth?.email ?? '').trim();
+        if (email.contains('@')) prefillName = email.split('@').first.trim();
+      }
+    }
+    final initial = KoalaUserProfile(
+      uid: profile?.uid ?? (FirebaseAuth.instance.currentUser?.uid ?? ''),
+      displayName: prefillName,
+      about: profile?.about,
+      contact: profile?.contact ?? const {},
+      mode: profile?.mode ?? 'homeowner',
+      verified: profile?.verified ?? false,
+      avatarUrl: profile?.avatarUrl,
+    );
+
     final changed = await showModalBottomSheet<bool>(
       context: context,
       backgroundColor: KoalaColors.bg,
@@ -1118,9 +1151,17 @@ class _ProfileTabScreenState extends ConsumerState<ProfileTabScreen>
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
-      builder: (_) => _ProfileEditorSheet(initial: profile),
+      builder: (_) => _ProfileEditorSheet(initial: initial),
     );
-    if (changed == true) ref.invalidate(userProfileProvider);
+    if (changed == true) {
+      // Riverpod provider + UnifiedProfileView'ın static bundle cache'i ayrı
+      // kaynaklardan okuyor; ikisini de tazele yoksa header eski ada/fallback'e
+      // takılı kalır (kullanıcı "Can" kaydetti ama hâlâ Evlumba App görüyordu).
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      UserProfileService.invalidateBundleCache(uid);
+      ref.invalidate(userProfileProvider);
+      if (mounted) setState(() => _editReloadTick++);
+    }
   }
 }
 
