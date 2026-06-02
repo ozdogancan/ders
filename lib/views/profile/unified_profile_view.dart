@@ -205,28 +205,41 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
     try {
       // _designerRow çözülmeden branch seçilmesin (designer→boş grid bug'ı).
       await _profileReady;
-      final page = await _fetchDesignsPage(null);
-      if (!mounted) return;
+      // 2026-06-02 FIX: Owner'da yükleme fazlı (önce shared, sonra AI). Tek
+      // sayfa "1 tasarım, scroll'da diğerleri" yaratıyordu. İlk render'da
+      // YETERLİ MİKTAR (≥8) gelene kadar fazları birleştir — performans için
+      // en fazla 3 sayfa; sonrası lazy load (scroll).
       final seen = <String>{};
       final fresh = <Map<String, dynamic>>[];
-      for (final m in page.items) {
-        final id =
-            (m['id'] ?? m['item_id'] ?? m['cover_image_url'] ?? '').toString();
-        if (id.isEmpty || seen.contains(id)) continue;
-        seen.add(id);
-        fresh.add(m);
+      dynamic cursor;
+      bool hasMore = true;
+      var guard = 0;
+      while (hasMore && fresh.length < 8 && guard < 3) {
+        guard++;
+        final page = await _fetchDesignsPage(cursor);
+        for (final m in page.items) {
+          final id =
+              (m['id'] ?? m['item_id'] ?? m['cover_image_url'] ?? '').toString();
+          if (id.isEmpty || seen.contains(id)) continue;
+          seen.add(id);
+          fresh.add(m);
+        }
+        cursor = page.cursor;
+        hasMore = page.hasMore;
+        if (page.items.isEmpty) break;
       }
+      if (!mounted) return;
       setState(() {
         _loadedDesigns
           ..clear()
           ..addAll(fresh);
         _reorderViewedFirst();
-        _designsCursor = page.cursor;
-        _hasMoreDesigns = page.hasMore;
+        _designsCursor = cursor;
+        _hasMoreDesigns = hasMore;
         _loadingInitialDesigns = false;
       });
       debugPrint(
-          '[profile-grid] fetch initial returned ${page.items.length} hasMore=${page.hasMore}');
+          '[profile-grid] fetch initial accumulated ${fresh.length} hasMore=$hasMore');
     } catch (e) {
       debugPrint('[profile-grid] initial load failed: $e');
       if (!mounted) return;
@@ -306,7 +319,6 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
   bool get _isOwnGrid => widget.ownerEditable && _isSelf;
   // Tüm profillerde (popup dahil) tasarım grid'i 2 kolon, kişinin kendi
   // profilindeki premium görünümle aynı.
-  int get _gridCols => 2;
 
   Future<void> _loadAll() async {
     // PART B — `koala_profile_bundle` ile counts + reviews tek RPC'de.
@@ -928,10 +940,13 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
       SliverPadding(
         padding: const EdgeInsets.symmetric(horizontal: 16),
         sliver: SliverGrid(
-          // 2026-06-02: Tile ebatı ORİJİNALE döndürüldü (kullanıcı isteği —
-          // popup görsel boyutu değişmesin). 0.78 portre.
-          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: _gridCols,
+          // 2026-06-02 FIX: Sabit 2 sütun GENİŞ EKRANDA (masaüstü/web) her tile'ı
+          // ekranın yarısı yapıp devasa kılıyordu → ekrana 1 tasarım sığıyor,
+          // kalanı scroll'da geliyordu. RESPONSIVE: max tile genişliği ile —
+          // dar ekran (telefon) ~2 sütun, geniş ekran (masaüstü) çok sütun →
+          // tüm tasarımlar bir bakışta. Tile portre oranı (0.78) korunur.
+          gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+            maxCrossAxisExtent: 210,
             mainAxisSpacing: 12,
             crossAxisSpacing: 12,
             childAspectRatio: 0.78,
