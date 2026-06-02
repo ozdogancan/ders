@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart' hide User;
 import '../../core/config/env.dart';
 import '../../core/theme/koala_tokens.dart';
 import '../../widgets/koala_widgets.dart';
+import '../auth_common.dart';
 import 'admin_dashboard.dart';
 import 'admin_users_screen.dart';
 import 'admin_messages_screen.dart';
@@ -22,9 +23,16 @@ class AdminShell extends StatefulWidget {
 }
 
 class _AdminShellState extends State<AdminShell> {
+  // 2026-06-02: admin.koalatutor.com portalı — sadece bu e-posta süper admin.
+  static const String _superAdminEmail = 'info@evlumba.com';
+
   int _currentIndex = 0;
   bool _checking = true;
   bool _isAdmin = false;
+  bool _loggingIn = false;
+  String? _loginError;
+
+  bool get _loggedIn => FirebaseAuth.instance.currentUser != null;
 
   @override
   void initState() {
@@ -33,12 +41,22 @@ class _AdminShellState extends State<AdminShell> {
   }
 
   Future<void> _checkAdmin() async {
-    final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid == null || !Env.hasSupabaseConfig) {
+    final user = FirebaseAuth.instance.currentUser;
+    final uid = user?.uid;
+    final email = (user?.email ?? '').toLowerCase();
+    if (uid == null) {
       setState(() { _checking = false; _isAdmin = false; });
       return;
     }
-
+    // Süper admin: info@evlumba.com her zaman yetkili.
+    if (email == _superAdminEmail) {
+      setState(() { _checking = false; _isAdmin = true; });
+      return;
+    }
+    if (!Env.hasSupabaseConfig) {
+      setState(() { _checking = false; _isAdmin = false; });
+      return;
+    }
     try {
       final res = await Supabase.instance.client
           .from('koala_admins')
@@ -51,6 +69,91 @@ class _AdminShellState extends State<AdminShell> {
     }
   }
 
+  /// admin.koalatutor.com'da Google ile giriş — yalnız info@evlumba.com kabul.
+  Future<void> _loginAsAdmin() async {
+    if (_loggingIn) return;
+    setState(() { _loggingIn = true; _loginError = null; });
+    try {
+      final cred = await AuthCoordinator.signInWithGoogle();
+      final email = (cred.user?.email ?? '').toLowerCase();
+      if (email != _superAdminEmail) {
+        await FirebaseAuth.instance.signOut();
+        setState(() {
+          _loggingIn = false;
+          _loginError = 'Bu portala yalnızca $_superAdminEmail giriş yapabilir.';
+        });
+        return;
+      }
+      setState(() { _loggingIn = false; _checking = true; });
+      await _checkAdmin();
+    } catch (e) {
+      setState(() {
+        _loggingIn = false;
+        _loginError = 'Giriş yapılamadı. Tekrar dene.';
+      });
+    }
+  }
+
+  Widget _adminLoginScreen() {
+    return Scaffold(
+      backgroundColor: KoalaColors.bg,
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(28),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.shield_rounded,
+                  size: 56, color: KoalaColors.accentDeep),
+              const SizedBox(height: 16),
+              const Text('Koala Admin', style: KoalaText.h2),
+              const SizedBox(height: 6),
+              const Text(
+                'Yönetim paneline yalnızca yetkili hesap girebilir.',
+                textAlign: TextAlign.center,
+                style: KoalaText.bodySec,
+              ),
+              const SizedBox(height: 24),
+              if (_loginError != null) ...[
+                Text(
+                  _loginError!,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                      color: Color(0xFFC2410C),
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 14),
+              ],
+              SizedBox(
+                width: 280,
+                child: ElevatedButton.icon(
+                  onPressed: _loggingIn ? null : _loginAsAdmin,
+                  icon: _loggingIn
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                              strokeWidth: 2, color: Colors.white))
+                      : const Icon(Icons.login_rounded, size: 18),
+                  label: Text(_loggingIn ? 'Giriş yapılıyor…' : 'Google ile giriş yap'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: KoalaColors.accentDeep,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
+                    elevation: 0,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_checking) {
@@ -58,6 +161,11 @@ class _AdminShellState extends State<AdminShell> {
         backgroundColor: KoalaColors.bg,
         body: const LoadingState(),
       );
+    }
+
+    // Giriş yapılmamışsa → admin giriş ekranı (yalnız info@evlumba.com).
+    if (!_loggedIn) {
+      return _adminLoginScreen();
     }
 
     if (!_isAdmin) {

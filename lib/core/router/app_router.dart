@@ -51,6 +51,12 @@ bool _authReady = false;
 bool _isAuthed = false;
 StreamSubscription<User?>? _authSub;
 
+// 2026-06-02: admin.koalatutor.com → ayrı admin portalı. Bu host'ta uygulama
+// doğrudan /admin'e gider (onboarding/keşfet yok); AdminShell kendi girişini
+// (yalnız info@evlumba.com) yönetir.
+final bool isAdminHost =
+    kIsWeb && Uri.base.host.toLowerCase().startsWith('admin.');
+
 /// Uygulama başlarken SharedPreferences'dan yükle + auth restore'unu bekle.
 Future<void> initRouterState() async {
   final prefs = await SharedPreferences.getInstance();
@@ -76,11 +82,15 @@ Future<void> _bindAuthForRouter() async {
 /// Koala app router — Hub-style, ShellRoute yok.
 /// Home ekranı hub, diğer ekranlar push ile açılır.
 final GoRouter appRouter = GoRouter(
-  initialLocation: '/',
+  initialLocation: isAdminHost ? '/admin' : '/',
   debugLogDiagnostics: false,
   refreshListenable: authRefresh,
   redirect: (context, state) {
     final loc = state.matchedLocation;
+    // admin.koalatutor.com → her zaman /admin (onboarding/auth gate'i atla).
+    if (isAdminHost) {
+      return loc == '/admin' ? null : '/admin';
+    }
     debugPrint(
         '[GoRouter] redirect: loc=$loc, onboardingComplete=$onboardingComplete, authReady=$_authReady, authed=$_isAuthed');
     // Auth ve onboarding sayfalarına her zaman izin ver
