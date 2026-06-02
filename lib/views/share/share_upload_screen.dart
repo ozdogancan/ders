@@ -89,6 +89,10 @@ class _ShareUploadScreenState extends State<ShareUploadScreen>
   String _detectedRoomRaw = ''; // e.g. 'salon', 'yatak_odasi'
   String _detectedStyleRaw = ''; // e.g. 'modern'
   String _rejectMsg = '';
+  // 2026-06-02 (Task D): reddin teknik mi (yükleme/AI/ağ hatası) yoksa içerik
+  // mi (not_a_room/inappropriate) olduğunu ayırt etmek için saklanan reason.
+  // Teknik hatalarda sert "Bu fotoğraf uygun değil" başlığı GÖSTERİLMEZ.
+  String _rejectReason = '';
   String? _uploadedUrl;
 
   // Publishing sub-state.
@@ -220,6 +224,7 @@ class _ShareUploadScreenState extends State<ShareUploadScreen>
       setState(() {
         _analyzing = false;
         _analyzeReject = true;
+        _rejectReason = 'upload_failed';
         _rejectMsg = 'Fotoğraf yüklenemedi — bağlantını kontrol et.';
       });
       return;
@@ -232,6 +237,7 @@ class _ShareUploadScreenState extends State<ShareUploadScreen>
       setState(() {
         _analyzing = false;
         _analyzeReject = true;
+        _rejectReason = mod.reason ?? 'unknown';
         _rejectMsg = _humanReason(mod.reason ?? 'unknown');
         _uploadedUrl = url; // not used; we re-upload on retry anyway.
       });
@@ -368,6 +374,7 @@ class _ShareUploadScreenState extends State<ShareUploadScreen>
       _detectedRoomRaw = '';
       _detectedStyleRaw = '';
       _rejectMsg = '';
+      _rejectReason = '';
       _uploadedUrl = null;
     });
   }
@@ -439,24 +446,34 @@ class _ShareUploadScreenState extends State<ShareUploadScreen>
       ),
     );
     if (!widget.inSheet) return scaffold;
-    // Modal sheet — sadece ince drag handle. Mor gradient overlay KALDIRILDI
-    // (kullanıcı isteği). Handle bg üstünde görünür olsun diye border tonu.
-    return Column(
-      mainAxisSize: MainAxisSize.min,
+    // 2026-06-02: Görsel popup'ın üst (yuvarlatılmış) şekline EN ÜSTTEN dayansın
+    // diye drag handle artık içeriği aşağı itmiyor; scaffold tepeye yapışıyor ve
+    // ince handle görselin üzerine OVERLAY ediliyor (kullanıcı isteği).
+    return Stack(
       children: [
-        const SizedBox(height: 10),
-        Center(
-          child: Container(
-            width: 42,
-            height: 4,
-            decoration: BoxDecoration(
-              color: KoalaColors.border,
-              borderRadius: BorderRadius.circular(100),
+        Positioned.fill(child: scaffold),
+        Positioned(
+          top: 10,
+          left: 0,
+          right: 0,
+          child: Center(
+            child: Container(
+              width: 42,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.85),
+                borderRadius: BorderRadius.circular(100),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Color(0x33000000),
+                    blurRadius: 4,
+                    offset: Offset(0, 1),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
-        const SizedBox(height: 6),
-        Expanded(child: scaffold),
       ],
     );
   }
@@ -655,25 +672,7 @@ class _ShareUploadScreenState extends State<ShareUploadScreen>
             ),
           ),
         ),
-        // Sparkle accent — top-right.
-        Positioned(
-          top: 48,
-          right: 28,
-          child: AnimatedBuilder(
-            animation: _sparkleCtl,
-            builder: (_, __) {
-              final t = _sparkleCtl.value;
-              return Opacity(
-                opacity: 0.6 + 0.4 * (0.5 + 0.5 * (t * 2 - 1).abs()),
-                child: const Icon(
-                  LucideIcons.sparkles,
-                  size: 28,
-                  color: KoalaColors.accentDeep,
-                ),
-              );
-            },
-          ),
-        ),
+        // 2026-06-02: Mor "ışıltı"/sparkle aksanı KALDIRILDI (kullanıcı isteği).
       ],
     );
   }
@@ -837,6 +836,26 @@ class _ShareUploadScreenState extends State<ShareUploadScreen>
 
   // Reject state — premium-warm: turuncu daire + sad-koala ikon + açıklama.
   Widget _reviewReject() {
+    // 2026-06-02 (Task D): Teknik hatalarda (yükleme/AI/ağ/rate-limit) sert
+    // "Bu fotoğraf uygun değil" başlığını GÖSTERME — bu kullanıcının
+    // fotoğrafının kötü olduğu izlenimini veriyordu. Sadece gerçek içerik
+    // reddinde (not_a_room / inappropriate) o başlık kullanılır.
+    const technicalReasons = {
+      'upload_failed',
+      'analysis_failed',
+      'network',
+      'rate_limited',
+      'unknown',
+    };
+    final isTechnical = technicalReasons.contains(_rejectReason) ||
+        _rejectReason.startsWith('http_');
+    final title = isTechnical
+        ? 'Bir sorun oluştu'
+        : (_rejectReason == 'inappropriate'
+            ? 'Bu içerik paylaşılamaz'
+            : 'Bu fotoğraf uygun değil');
+    final iconData =
+        isTechnical ? LucideIcons.refreshCw : LucideIcons.imageOff;
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.all(KoalaSpacing.xl),
@@ -854,16 +873,16 @@ class _ShareUploadScreenState extends State<ShareUploadScreen>
                   width: 1.2,
                 ),
               ),
-              child: const Icon(
-                LucideIcons.imageOff,
+              child: Icon(
+                iconData,
                 size: 44,
-                color: Color(0xFFC25A1A),
+                color: const Color(0xFFC25A1A),
               ),
             ),
             const SizedBox(height: KoalaSpacing.xl),
-            const Text(
-              'Bu fotoğraf uygun değil',
-              style: TextStyle(
+            Text(
+              title,
+              style: const TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.w800,
                 color: KoalaColors.text,

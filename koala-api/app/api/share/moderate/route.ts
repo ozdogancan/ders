@@ -249,7 +249,13 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  if (!result.is_room) {
+  // 2026-06-02 FIX (Task D): "Bu fotoğraf uygun değil" yanlış reddi.
+  // is_room=false TEK BAŞINA reddetmek için yeterli değil — model emin
+  // olmadığında (düşük confidence) gerçek oturma odaları "not_a_room" diye
+  // yanlış reddediliyordu. Artık SADECE model yüksek güvenle (>= 0.65) "bu
+  // bir oda DEĞİL" dediğinde reddet; belirsizse kullanıcı lehine geç (ok).
+  const NOT_ROOM_REJECT_THRESHOLD = 0.65;
+  if (!result.is_room && result.confidence >= NOT_ROOM_REJECT_THRESHOLD) {
     return NextResponse.json(
       {
         ok: false,

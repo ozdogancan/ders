@@ -836,6 +836,12 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
       );
     }
     final bottomPad = MediaQuery.viewPaddingOf(context).bottom;
+    // 2026-06-02 FIX: Profil sekmesinde (sheet DEĞİL → scrollController == null)
+    // body, extendBody:true KoalaBottomNav'ın (yükseklik 64) arkasına uzuyor;
+    // son tasarım navbar'ın altında kalıyordu. Sekmede navbar yüksekliği kadar
+    // ek boşluk bırak. Popup/sheet kullanımında (scrollController != null) navbar
+    // olmadığı için ek boşluğa gerek yok.
+    final navReserve = widget.scrollController == null ? 64.0 : 0.0;
     debugPrint(
         '[profile-grid] sliver build items=${_loadedDesigns.length} loadingInit=$_loadingInitialDesigns loadingMore=$_loadingMoreDesigns hasMore=$_hasMoreDesigns');
     // 2026-06-01: Mor (purple) gradient kaldırıldı (kullanıcı direktifi) —
@@ -860,7 +866,8 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
           // doğrudan birleşik grid'te listeleniyor, tile'da küçük "AI" rozeti.
           SliverToBoxAdapter(child: _projectsHeader()),
           ..._buildDesignsSlivers(),
-          SliverToBoxAdapter(child: SizedBox(height: bottomPad + 32)),
+          SliverToBoxAdapter(
+              child: SizedBox(height: bottomPad + navReserve + 32)),
         ],
       ),
       ),
