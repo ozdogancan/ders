@@ -221,12 +221,12 @@ class _AdminShellState extends State<AdminShell> {
             ),
             child: Row(
               children: [
-                _Tab(icon: Icons.dashboard_rounded, label: 'Panel', active: _currentIndex == 0, onTap: () => setState(() => _currentIndex = 0)),
+                _Tab(icon: Icons.dashboard_rounded, label: 'Özet', active: _currentIndex == 0, onTap: () => setState(() => _currentIndex = 0)),
                 _Tab(icon: Icons.people_rounded, label: 'Kullanıcılar', active: _currentIndex == 1, onTap: () => setState(() => _currentIndex = 1)),
                 _Tab(icon: Icons.chat_rounded, label: 'Mesajlar', active: _currentIndex == 2, onTap: () => setState(() => _currentIndex = 2)),
-                _Tab(icon: Icons.timer_rounded, label: 'SLA', active: _currentIndex == 3, onTap: () => setState(() => _currentIndex = 3)),
-                _Tab(icon: Icons.campaign_rounded, label: 'Bildirim', active: _currentIndex == 4, onTap: () => setState(() => _currentIndex = 4)),
-                _Tab(icon: Icons.analytics_rounded, label: 'Analitik', active: _currentIndex == 5, onTap: () => setState(() => _currentIndex = 5)),
+                _Tab(icon: Icons.timer_rounded, label: 'Yanıt Süresi', active: _currentIndex == 3, onTap: () => setState(() => _currentIndex = 3)),
+                _Tab(icon: Icons.campaign_rounded, label: 'Duyuru', active: _currentIndex == 4, onTap: () => setState(() => _currentIndex = 4)),
+                _Tab(icon: Icons.analytics_rounded, label: 'İstatistik', active: _currentIndex == 5, onTap: () => setState(() => _currentIndex = 5)),
                 _Tab(icon: Icons.settings_rounded, label: 'Ayarlar', active: _currentIndex == 6, onTap: () => setState(() => _currentIndex = 6)),
               ],
             ),

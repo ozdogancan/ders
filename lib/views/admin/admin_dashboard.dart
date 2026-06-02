@@ -76,7 +76,10 @@ class _AdminDashboardState extends State<AdminDashboard> {
       ),
       body: _loading
           ? const LoadingState()
-          : RefreshIndicator(
+          : Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 920),
+                child: RefreshIndicator(
               onRefresh: _load,
               color: KoalaColors.accent,
               child: ListView(
@@ -85,6 +88,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                     ? [_errorBox(_error!)]
                     : [
                         _hero(),
+                        _summary(),
                         _users(),
                         _pro(),
                         _engagement(),
@@ -96,6 +100,8 @@ class _AdminDashboardState extends State<AdminDashboard> {
                         _quickAccess(),
                         const SizedBox(height: KoalaSpacing.xl),
                       ],
+              ),
+            ),
               ),
             ),
     );
@@ -186,6 +192,60 @@ class _AdminDashboardState extends State<AdminDashboard> {
 
   Widget _heroDivider() =>
       Container(width: 0.5, height: 38, color: Colors.white24);
+
+  // ─── Genel Özet (en çok merak edilen sayılar) ───
+  Widget _summary() {
+    return _section('Genel Özet', [
+      _StatCard(
+        icon: Icons.groups_rounded,
+        color: KoalaColors.accent,
+        label: 'Toplam kullanıcı',
+        value: _v('summary', 'total_users'),
+      ),
+      _StatCard(
+        icon: Icons.workspace_premium_rounded,
+        color: KoalaColors.star,
+        label: 'Profesyonel',
+        value: _v('summary', 'professionals'),
+      ),
+      _StatCard(
+        icon: Icons.home_rounded,
+        color: KoalaColors.blue,
+        label: 'Ev sahibi',
+        value: _v('summary', 'homeowners'),
+      ),
+      _StatCard(
+        icon: Icons.image_rounded,
+        color: KoalaColors.green,
+        label: 'Toplam tasarım',
+        value: _v('summary', 'shared_designs'),
+      ),
+      _StatCard(
+        icon: Icons.verified_rounded,
+        color: KoalaColors.greenAlt,
+        label: 'Doğrulanmış',
+        value: _v('summary', 'verified'),
+      ),
+      _StatCard(
+        icon: Icons.how_to_reg_rounded,
+        color: KoalaColors.warning,
+        label: 'Bekleyen başvuru',
+        value: _v('summary', 'pro_applications_pending'),
+      ),
+      _StatCard(
+        icon: Icons.favorite_rounded,
+        color: KoalaColors.pink,
+        label: 'Takip',
+        value: _v('summary', 'follows'),
+      ),
+      _StatCard(
+        icon: Icons.forum_rounded,
+        color: KoalaColors.accentMuted,
+        label: 'Toplam mesaj',
+        value: _v('summary', 'messages'),
+      ),
+    ]);
+  }
 
   // ─── Kullanıcılar ───
   Widget _users() {

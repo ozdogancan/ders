@@ -1,10 +1,14 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:lucide_icons/lucide_icons.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' hide User;
+
 import '../../core/theme/koala_tokens.dart';
 import '../../core/utils/format_utils.dart';
 import '../../widgets/koala_widgets.dart';
 
-/// Admin — Kullanıcı yönetimi
+/// Admin — Kullanıcılar. Gerçek veri kaynağı: koala_user_profiles (eski boş
+/// `users` tablosu DEĞİL). Profesyonel / Ev Sahibi / Admin filtresi + arama.
 class AdminUsersScreen extends StatefulWidget {
   const AdminUsersScreen({super.key});
 
@@ -12,12 +16,14 @@ class AdminUsersScreen extends StatefulWidget {
   State<AdminUsersScreen> createState() => _AdminUsersScreenState();
 }
 
+enum _UserFilter { all, pro, homeowner, admin }
+
 class _AdminUsersScreenState extends State<AdminUsersScreen> {
-  List<Map<String, dynamic>> _users = [];
+  List<Map<String, dynamic>> _all = [];
+  Set<String> _adminUids = {};
   bool _loading = true;
-  int _offset = 0;
-  final int _limit = 20;
-  String _searchQuery = '';
+  String _search = '';
+  _UserFilter _filter = _UserFilter.all;
   final _searchCtrl = TextEditingController();
 
   SupabaseClient get _db => Supabase.instance.client;
@@ -34,113 +40,70 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
     super.dispose();
   }
 
-  Future<void> _load({bool reset = true}) async {
-    if (reset) _offset = 0;
+  Future<void> _load() async {
     setState(() => _loading = true);
     try {
-      var query = _db.from('users').select();
-      if (_searchQuery.isNotEmpty) {
-        query = query.ilike('email', '%$_searchQuery%');
-      }
-      final data = await query
+      final rows = await _db
+          .from('koala_user_profiles')
+          .select(
+              'uid, display_name, mode, verified, profession, avatar_url, contact_info, created_at')
           .order('created_at', ascending: false)
-          .range(_offset, _offset + _limit - 1);
-      if (mounted) {
-        setState(() {
-          _users = reset ? List<Map<String, dynamic>>.from(data) : [..._users, ...List<Map<String, dynamic>>.from(data)];
-          _loading = false;
-        });
-      }
+          .limit(500);
+      Set<String> admins = {};
+      try {
+        final a = await _db.from('koala_admins').select('uid');
+        admins = List<Map<String, dynamic>>.from(a)
+            .map((r) => (r['uid'] ?? '').toString())
+            .where((s) => s.isNotEmpty)
+            .toSet();
+      } catch (_) {/* admin list opsiyonel */}
+      if (!mounted) return;
+      setState(() {
+        _all = List<Map<String, dynamic>>.from(rows);
+        _adminUids = admins;
+        _loading = false;
+      });
     } catch (e) {
       debugPrint('AdminUsers error: $e');
       if (mounted) setState(() => _loading = false);
     }
   }
 
-  Future<void> _changeRole(String userId, String newRole) async {
-    try {
-      await _db.from('users').update({'role': newRole}).eq('id', userId);
-      // Admin log
-      await _db.from('koala_admin_logs').insert({
-        'admin_user_id': _db.auth.currentUser?.id ?? '',
-        'action': 'user_role_change',
-        'target_type': 'user',
-        'target_id': userId,
-        'metadata': {'new_role': newRole},
-      });
-      _load();
-    } catch (e) {
-      debugPrint('Role change error: $e');
-    }
+  List<Map<String, dynamic>> get _filtered {
+    final q = _search.toLowerCase().trim();
+    return _all.where((u) {
+      final uid = (u['uid'] ?? '').toString();
+      final mode = (u['mode'] ?? 'homeowner').toString();
+      final isAdmin = _adminUids.contains(uid);
+      switch (_filter) {
+        case _UserFilter.pro:
+          if (mode != 'pro') return false;
+          break;
+        case _UserFilter.homeowner:
+          if (mode == 'pro') return false;
+          break;
+        case _UserFilter.admin:
+          if (!isAdmin) return false;
+          break;
+        case _UserFilter.all:
+          break;
+      }
+      if (q.isEmpty) return true;
+      final name = (u['display_name'] ?? '').toString().toLowerCase();
+      final prof = (u['profession'] ?? '').toString().toLowerCase();
+      final phone = u['contact_info'] is Map
+          ? (u['contact_info']['phone'] ?? '').toString().toLowerCase()
+          : '';
+      return name.contains(q) || prof.contains(q) || phone.contains(q);
+    }).toList();
   }
 
-  void _showUserDetail(Map<String, dynamic> user) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: KoalaColors.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(KoalaRadius.xl)),
-      ),
-      builder: (ctx) {
-        final role = user['role'] as String? ?? 'user';
-        return Padding(
-          padding: const EdgeInsets.all(KoalaSpacing.xl),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(user['display_name'] as String? ?? 'İsimsiz', style: KoalaText.h2),
-              const SizedBox(height: KoalaSpacing.sm),
-              Text(user['email'] as String? ?? '', style: KoalaText.bodySec),
-              const SizedBox(height: KoalaSpacing.lg),
-              _DetailRow('Rol', role),
-              _DetailRow('Kayıt', _formatDate(user['created_at'])),
-              _DetailRow('Son Giriş', _formatDate(user['last_login_at'])),
-              const SizedBox(height: KoalaSpacing.xl),
-              Row(
-                children: [
-                  Expanded(
-                    child: GestureDetector(
-                      onTap: () {
-                        Navigator.pop(ctx);
-                        _changeRole(user['id'] as String, role == 'admin' ? 'user' : 'admin');
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: KoalaSpacing.md),
-                        decoration: BoxDecoration(
-                          color: role == 'admin' ? KoalaColors.error.withOpacity(0.1) : KoalaColors.accentLight,
-                          borderRadius: BorderRadius.circular(KoalaRadius.md),
-                        ),
-                        child: Center(
-                          child: Text(
-                            role == 'admin' ? 'Admin\'i Kaldır' : 'Admin Yap',
-                            style: KoalaText.label.copyWith(
-                              color: role == 'admin' ? KoalaColors.error : KoalaColors.accent,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              SizedBox(height: MediaQuery.of(ctx).padding.bottom + KoalaSpacing.md),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  String _formatDate(dynamic val) {
-    if (val == null) return '-';
-    final dt = DateTime.tryParse(val.toString());
-    if (dt == null) return '-';
-    return formatDMYHM(dt);
-  }
+  int _countMode(String mode) =>
+      _all.where((u) => (u['mode'] ?? 'homeowner').toString() == mode).length;
 
   @override
   Widget build(BuildContext context) {
+    final list = _filtered;
     return Scaffold(
       backgroundColor: KoalaColors.bg,
       appBar: AppBar(
@@ -149,111 +112,232 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
         elevation: 0,
         title: const Text('Kullanıcılar', style: KoalaText.h2),
         automaticallyImplyLeading: false,
-      ),
-      body: Column(
-        children: [
-          // Search
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: KoalaSpacing.lg, vertical: KoalaSpacing.sm),
-            child: TextField(
-              controller: _searchCtrl,
-              style: KoalaText.body,
-              onSubmitted: (v) {
-                _searchQuery = v.trim();
-                _load();
-              },
-              decoration: InputDecoration(
-                hintText: 'E-posta ile ara...',
-                hintStyle: KoalaText.hint,
-                prefixIcon: const Icon(Icons.search_rounded, color: KoalaColors.textTer),
-                filled: true,
-                fillColor: KoalaColors.surface,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(KoalaRadius.md),
-                  borderSide: BorderSide(color: KoalaColors.border),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(KoalaRadius.md),
-                  borderSide: BorderSide(color: KoalaColors.border),
-                ),
-              ),
-            ),
-          ),
-
-          // List
-          Expanded(
-            child: _loading && _users.isEmpty
-                ? const LoadingState()
-                : RefreshIndicator(
-                    onRefresh: () => _load(),
-                    color: KoalaColors.accent,
-                    child: ListView.builder(
-                      padding: const EdgeInsets.symmetric(horizontal: KoalaSpacing.lg),
-                      itemCount: _users.length + 1,
-                      itemBuilder: (context, index) {
-                        if (index == _users.length) {
-                          return Padding(
-                            padding: const EdgeInsets.all(KoalaSpacing.lg),
-                            child: Center(
-                              child: GestureDetector(
-                                onTap: () { _offset += _limit; _load(reset: false); },
-                                child: Text('Daha fazla yükle', style: KoalaText.label.copyWith(color: KoalaColors.accent)),
-                              ),
-                            ),
-                          );
-                        }
-                        final u = _users[index];
-                        final role = u['role'] as String? ?? 'user';
-                        return GestureDetector(
-                          onTap: () => _showUserDetail(u),
-                          child: Container(
-                            margin: const EdgeInsets.only(bottom: KoalaSpacing.sm),
-                            padding: const EdgeInsets.all(KoalaSpacing.md),
-                            decoration: KoalaDeco.card,
-                            child: Row(
-                              children: [
-                                Container(
-                                  width: 40, height: 40,
-                                  decoration: BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    color: role == 'admin' ? KoalaColors.accent.withOpacity(0.15) : KoalaColors.surfaceAlt,
-                                  ),
-                                  child: Icon(
-                                    role == 'admin' ? Icons.admin_panel_settings_rounded : Icons.person_rounded,
-                                    size: 20,
-                                    color: role == 'admin' ? KoalaColors.accent : KoalaColors.textSec,
-                                  ),
-                                ),
-                                const SizedBox(width: KoalaSpacing.md),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(u['display_name'] as String? ?? 'İsimsiz', style: KoalaText.label),
-                                      Text(u['email'] as String? ?? '', style: KoalaText.bodySmall),
-                                    ],
-                                  ),
-                                ),
-                                if (role == 'admin')
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                    decoration: BoxDecoration(
-                                      color: KoalaColors.accentLight,
-                                      borderRadius: BorderRadius.circular(KoalaRadius.pill),
-                                    ),
-                                    child: Text('Admin', style: KoalaText.labelSmall.copyWith(color: KoalaColors.accent)),
-                                  ),
-                              ],
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
+        actions: [
+          IconButton(
+            icon: const Icon(LucideIcons.refreshCw,
+                size: 18, color: KoalaColors.textSec),
+            onPressed: _loading ? null : _load,
           ),
         ],
       ),
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 920),
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                    KoalaSpacing.lg, KoalaSpacing.sm, KoalaSpacing.lg, 0),
+                child: TextField(
+                  controller: _searchCtrl,
+                  style: KoalaText.body,
+                  onChanged: (v) => setState(() => _search = v),
+                  decoration: InputDecoration(
+                    hintText: 'İsim, meslek veya telefon ile ara…',
+                    hintStyle: KoalaText.hint,
+                    prefixIcon: const Icon(Icons.search_rounded,
+                        color: KoalaColors.textTer),
+                    filled: true,
+                    fillColor: KoalaColors.surface,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(KoalaRadius.md),
+                      borderSide: BorderSide(color: KoalaColors.border),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(KoalaRadius.md),
+                      borderSide: BorderSide(color: KoalaColors.border),
+                    ),
+                  ),
+                ),
+              ),
+              // Filtre çipleri
+              SizedBox(
+                height: 48,
+                child: ListView(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: KoalaSpacing.lg, vertical: 8),
+                  children: [
+                    _chip('Tümü (${_all.length})', _UserFilter.all),
+                    _chip('Profesyonel (${_countMode('pro')})', _UserFilter.pro),
+                    _chip('Ev Sahibi (${_all.length - _countMode('pro')})',
+                        _UserFilter.homeowner),
+                    _chip('Admin (${_adminUids.length})', _UserFilter.admin),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: _loading
+                    ? const LoadingState()
+                    : list.isEmpty
+                        ? Center(
+                            child: Text('Kullanıcı bulunamadı',
+                                style: KoalaText.bodySec))
+                        : RefreshIndicator(
+                            onRefresh: _load,
+                            color: KoalaColors.accent,
+                            child: ListView.builder(
+                              padding: const EdgeInsets.fromLTRB(
+                                  KoalaSpacing.lg, 4, KoalaSpacing.lg, 24),
+                              itemCount: list.length,
+                              itemBuilder: (_, i) => _userCard(list[i]),
+                            ),
+                          ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
+  }
+
+  Widget _chip(String label, _UserFilter f) {
+    final active = _filter == f;
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: GestureDetector(
+        onTap: () => setState(() => _filter = f),
+        child: Container(
+          alignment: Alignment.center,
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          decoration: BoxDecoration(
+            color: active ? KoalaColors.accentDeep : KoalaColors.surface,
+            borderRadius: BorderRadius.circular(100),
+            border: Border.all(
+                color: active ? KoalaColors.accentDeep : KoalaColors.border,
+                width: 1),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              color: active ? Colors.white : KoalaColors.text,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _userCard(Map<String, dynamic> u) {
+    final uid = (u['uid'] ?? '').toString();
+    final name = (u['display_name'] ?? '').toString().trim();
+    final mode = (u['mode'] ?? 'homeowner').toString();
+    final isPro = mode == 'pro';
+    final isAdmin = _adminUids.contains(uid);
+    final prof = (u['profession'] ?? '').toString().trim();
+    final avatar = (u['avatar_url'] ?? '').toString();
+    return GestureDetector(
+      onTap: () => _showDetail(u),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: KoalaSpacing.sm),
+        padding: const EdgeInsets.all(KoalaSpacing.md),
+        decoration: KoalaDeco.card,
+        child: Row(
+          children: [
+            ClipOval(
+              child: SizedBox(
+                width: 42,
+                height: 42,
+                child: avatar.isNotEmpty
+                    ? CachedNetworkImage(
+                        imageUrl: avatar,
+                        fit: BoxFit.cover,
+                        errorWidget: (_, __, ___) => Container(
+                          color: KoalaColors.surfaceAlt,
+                          child: const Icon(Icons.person_rounded,
+                              color: KoalaColors.textSec),
+                        ),
+                      )
+                    : Container(
+                        color: KoalaColors.surfaceAlt,
+                        child: const Icon(Icons.person_rounded,
+                            color: KoalaColors.textSec),
+                      ),
+              ),
+            ),
+            const SizedBox(width: KoalaSpacing.md),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(name.isEmpty ? 'İsimsiz' : name, style: KoalaText.label),
+                  Text(
+                    isPro ? (prof.isEmpty ? 'Profesyonel' : prof) : 'Ev Sahibi',
+                    style: KoalaText.bodySmall,
+                  ),
+                ],
+              ),
+            ),
+            if (isAdmin) _badge('Admin', KoalaColors.accent),
+            if (isPro) ...[
+              const SizedBox(width: 6),
+              _badge('Pro', const Color(0xFF16A34A)),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _badge(String t, Color c) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+        decoration: BoxDecoration(
+          color: c.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(100),
+        ),
+        child: Text(t,
+            style: KoalaText.labelSmall.copyWith(
+                color: c, fontWeight: FontWeight.w700)),
+      );
+
+  void _showDetail(Map<String, dynamic> u) {
+    final phone = u['contact_info'] is Map
+        ? (u['contact_info']['phone'] ?? '').toString()
+        : '';
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: KoalaColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius:
+            BorderRadius.vertical(top: Radius.circular(KoalaRadius.xl)),
+      ),
+      builder: (ctx) => Padding(
+        padding: EdgeInsets.fromLTRB(KoalaSpacing.xl, KoalaSpacing.xl,
+            KoalaSpacing.xl, MediaQuery.of(ctx).padding.bottom + KoalaSpacing.lg),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text((u['display_name'] ?? 'İsimsiz').toString(), style: KoalaText.h2),
+            const SizedBox(height: KoalaSpacing.lg),
+            _DetailRow('Tür',
+                (u['mode'] ?? 'homeowner') == 'pro' ? 'Profesyonel' : 'Ev Sahibi'),
+            _DetailRow('Meslek', (u['profession'] ?? '-').toString()),
+            _DetailRow('Doğrulanmış', u['verified'] == true ? 'Evet' : 'Hayır'),
+            _DetailRow('Admin',
+                _adminUids.contains((u['uid'] ?? '').toString()) ? 'Evet' : 'Hayır'),
+            if (phone.isNotEmpty) _DetailRow('Telefon', phone),
+            _DetailRow('Kayıt', _formatDate(u['created_at'])),
+            _DetailRow('UID', (u['uid'] ?? '').toString()),
+            const SizedBox(height: KoalaSpacing.sm),
+            Text(
+              'Profesyonel yapma / kaldırma, banlama ve silme yakında bu '
+              'ekrana eklenecek.',
+              style: KoalaText.bodySmall.copyWith(color: KoalaColors.textTer),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _formatDate(dynamic val) {
+    if (val == null) return '-';
+    final dt = DateTime.tryParse(val.toString());
+    if (dt == null) return '-';
+    return formatDMYHM(dt);
   }
 }
 
@@ -266,9 +350,12 @@ class _DetailRow extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(bottom: KoalaSpacing.sm),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('$label: ', style: KoalaText.bodySec),
-          Text(value, style: KoalaText.bodyMedium),
+          SizedBox(
+              width: 110,
+              child: Text(label, style: KoalaText.bodySec)),
+          Expanded(child: Text(value, style: KoalaText.bodyMedium)),
         ],
       ),
     );
