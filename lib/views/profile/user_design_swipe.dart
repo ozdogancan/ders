@@ -22,6 +22,7 @@ import 'package:lucide_icons/lucide_icons.dart';
 
 import '../../core/theme/koala_tokens.dart';
 import '../../widgets/ask_and_apply_sheet.dart';
+import '../../widgets/koala_ai_badge.dart';
 import 'instagram_share_sheet.dart';
 
 class UserDesignSwipeScreen extends StatefulWidget {
@@ -99,8 +100,57 @@ class _UserDesignSwipeScreenState extends State<UserDesignSwipeScreen> {
   String get _designId =>
       (_current['id'] ?? _current['item_id'] ?? '').toString();
   String get _imageUrl => (_current['image_url'] ?? '').toString();
-  String get _title => (_current['title'] ?? 'Tasarım').toString();
+  // 2026-06-02: Başlıktan "Yeni " önekini at (kullanıcı isteği — "Yeni Yemek
+  // Odası" yerine sadece "Yemek Odası").
+  String get _title {
+    var t = (_current['title'] ?? 'Tasarım').toString().trim();
+    t = t.replaceFirst(RegExp(r'^\s*[Yy]eni\s+'), '');
+    return t.isEmpty ? 'Tasarım' : t;
+  }
+
   String get _subtitle => (_current['subtitle'] ?? '').toString();
+
+  bool get _aiGenerated => _current['is_ai'] == true;
+
+  /// Sol-altta gösterilecek "Kategori · Tarz" satırı — hem AI hem paylaşım
+  /// tasarımları için tutarlı. Oda tipini ve tarzı item alanlarından türetir.
+  String get _metaLine {
+    String pretty(String raw) {
+      final r = raw.trim().toLowerCase().replaceAll('_', ' ').replaceAll('i̇', 'i');
+      if (r.isEmpty) return '';
+      const map = {
+        'living room': 'Oturma Odası', 'salon': 'Oturma Odası', 'oturma odasi': 'Oturma Odası',
+        'bedroom': 'Yatak Odası', 'yatak odasi': 'Yatak Odası',
+        'kitchen': 'Mutfak', 'mutfak': 'Mutfak',
+        'bathroom': 'Banyo', 'banyo': 'Banyo',
+        'kids room': 'Çocuk Odası', 'cocuk odasi': 'Çocuk Odası',
+        'office': 'Çalışma Odası', 'ofis': 'Çalışma Odası', 'calisma odasi': 'Çalışma Odası',
+        'dining room': 'Yemek Odası', 'yemek odasi': 'Yemek Odası',
+        'hallway': 'Antre', 'antre': 'Antre', 'hall': 'Hol', 'hol': 'Hol',
+        'balcony': 'Balkon', 'balkon': 'Balkon',
+        'modern': 'Modern', 'minimal': 'Minimal', 'skandinav': 'Skandinav',
+        'klasik': 'Klasik', 'bohem': 'Bohem', 'endustriyel': 'Endüstriyel',
+        'luks': 'Lüks', 'japandi': 'Japandi',
+      };
+      final hit = map[r];
+      if (hit != null) return hit;
+      return r.split(' ').where((w) => w.isNotEmpty)
+          .map((w) => '${w[0].toUpperCase()}${w.substring(1)}').join(' ');
+    }
+
+    final p = _current;
+    final cat = pretty([
+      (p['project_type'] ?? '').toString(),
+      (p['category'] ?? '').toString(),
+      (p['room_type'] ?? p['roomType'] ?? '').toString(),
+    ].firstWhere((s) => s.trim().isNotEmpty, orElse: () => ''));
+    String style = pretty((p['style'] ?? '').toString());
+    if (style.isEmpty) {
+      final tags = p['tags'];
+      if (tags is List && tags.isNotEmpty) style = pretty(tags.first.toString());
+    }
+    return [cat, style].where((s) => s.isNotEmpty).join(' · ');
+  }
 
   ({String? designerId, String? designerName, String? designerAvatar, String? category})
       get _designerInfo {
@@ -257,29 +307,43 @@ class _UserDesignSwipeScreenState extends State<UserDesignSwipeScreen> {
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      // Başlık + (varsa) Koala AI rozeti.
                       if (_title.isNotEmpty)
-                        Text(
-                          _title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 17,
-                            fontWeight: FontWeight.w800,
-                            color: Colors.white,
-                            letterSpacing: -0.3,
-                            shadows: [
-                              Shadow(
-                                color: Color(0x99000000),
-                                blurRadius: 6,
-                                offset: Offset(0, 1),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            Flexible(
+                              child: Text(
+                                _title,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontSize: 17,
+                                  fontWeight: FontWeight.w800,
+                                  color: Colors.white,
+                                  letterSpacing: -0.3,
+                                  shadows: [
+                                    Shadow(
+                                      color: Color(0x99000000),
+                                      blurRadius: 6,
+                                      offset: Offset(0, 1),
+                                    ),
+                                  ],
+                                ),
                               ),
+                            ),
+                            if (_aiGenerated) ...[
+                              const SizedBox(width: 8),
+                              const KoalaAiBadge(size: 22),
                             ],
-                          ),
+                          ],
                         ),
-                      if (_subtitle.isNotEmpty) ...[
+                      // 2026-06-02: Kategori · Tarz — hem AI hem paylaşım için
+                      // (eskiden non-AI'da görünmüyordu). subtitle yoksa meta.
+                      if (_metaLine.isNotEmpty || _subtitle.isNotEmpty) ...[
                         const SizedBox(height: 4),
                         Text(
-                          _subtitle,
+                          _metaLine.isNotEmpty ? _metaLine : _subtitle,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(

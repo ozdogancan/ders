@@ -36,6 +36,7 @@ import '../../services/saved_items_service.dart';
 import '../../services/shared_design_service.dart';
 import '../../services/user_profile_service.dart';
 import '../../widgets/free_consult_sheet.dart';
+import '../../widgets/koala_ai_badge.dart';
 import '../../widgets/verified_badge.dart';
 import '../conversation_detail_screen.dart';
 import '../share/share_upload_screen.dart' show openShareUploadSheet;
@@ -2486,6 +2487,7 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
           final isViewed = widget.viewedDesignId != null &&
               widget.viewedDesignId!.isNotEmpty &&
               widget.viewedDesignId == id;
+          final isAiTile = p['is_ai'] == true;
           final categoryLabel = _categoryLabel(p);
           return GestureDetector(
             onTap: () {
@@ -2581,6 +2583,13 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
                           letterSpacing: -0.1,
                         ),
                       ),
+                    ),
+                  // 2026-06-02: Koala AI ile üretildiyse sağ üstte küçük rozet.
+                  if (isAiTile)
+                    const Positioned(
+                      top: 8,
+                      right: 8,
+                      child: KoalaAiBadge(size: 22),
                     ),
                 ],
               ),

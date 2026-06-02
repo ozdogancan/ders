@@ -30,6 +30,7 @@ import '../core/theme/koala_tokens.dart';
 import '../helpers/paywall_router.dart';
 import '../providers/pro_status_provider.dart';
 import '../widgets/free_consult_sheet.dart';
+import '../widgets/koala_ai_badge.dart';
 import '../widgets/koala_bottom_nav.dart';
 import '../widgets/taste_summary_sheet.dart';
 import 'main_shell.dart';
@@ -2716,6 +2717,14 @@ class _Card extends StatelessWidget {
               ),
             ),
           ),
+
+          // 2026-06-02: Koala AI ile üretilen kart ise sol üstte küçük rozet.
+          if (project['is_ai'] == true)
+            const Positioned(
+              top: 12,
+              left: 12,
+              child: KoalaAiBadge(size: 24),
+            ),
 
           // Alt overlay: tasarımcı bilgisi (sol-alt).
           // 2026-05-28 FIX 3: AnimatedSwitcher kaldırıldı — kart açılır
