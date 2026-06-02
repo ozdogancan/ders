@@ -95,8 +95,19 @@ class _StyleDiscoveryLiveScreenState
   // designer_projects + Evlumba seed) gerçek project_type'larından dinamik
   // doldurulur. Sıra: en çok tasarımı olan kategori başta, en az olan sonda
   // ("Hepsi" hep ilk). Yükleme bitene kadar yalnızca "Hepsi" görünür.
+  // 2026-06-02: Standart kategoriler const default'ta → splash biter bitmez
+  // ANINDA görünür (0 bekleme). _loadCategories sonra gerçek sayıya göre
+  // yeniden sıralar/rafine eder (key'ler ham project_type'a güncellenir).
   List<({String key, String label, IconData icon})> _categoryOptions = const [
     (key: '', label: 'Hepsi', icon: LucideIcons.layoutGrid),
+    (key: 'Oturma Odası', label: 'Oturma Odası', icon: LucideIcons.sofa),
+    (key: 'Yatak Odası', label: 'Yatak Odası', icon: LucideIcons.bed),
+    (key: 'Banyo', label: 'Banyo', icon: LucideIcons.bath),
+    (key: 'Mutfak', label: 'Mutfak', icon: LucideIcons.chefHat),
+    (key: 'Antre', label: 'Antre', icon: LucideIcons.doorOpen),
+    (key: 'Ofis', label: 'Ofis', icon: LucideIcons.monitor),
+    (key: 'Çocuk Odası', label: 'Çocuk Odası', icon: LucideIcons.baby),
+    (key: 'Balkon', label: 'Balkon', icon: LucideIcons.flower2),
   ];
   bool _categoriesLoaded = false;
 

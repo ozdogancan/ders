@@ -10,6 +10,7 @@
 // pill progress (3 dot), Devam/Geri/Gönder action bar, page slide+fade.
 
 import 'package:firebase_auth/firebase_auth.dart' show FirebaseAuth;
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -106,6 +107,8 @@ class _ProApplicationSheetState extends ConsumerState<ProApplicationSheet>
 
   bool _submitting = false;
   bool _success = false;
+  // 2026-06-02: Başvuru, profesyonel koşullarının kabulüyle yapılır.
+  bool _termsAccepted = false;
   String? _error;
 
   @override
@@ -600,7 +603,26 @@ class _ProApplicationSheetState extends ConsumerState<ProApplicationSheet>
           icon: LucideIcons.messageCircle,
           maxLines: 3,
         ),
+        const SizedBox(height: 26),
+        // 2026-06-02: Profesyonel koşullarının kabulü — başvuru bununla yapılır.
+        _TermsCheckbox(
+          checked: _termsAccepted,
+          onChanged: (v) => setState(() => _termsAccepted = v),
+          onTapTerms: _showProTerms,
+        ),
       ],
+    );
+  }
+
+  Future<void> _showProTerms() async {
+    HapticFeedback.selectionClick();
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
+      barrierColor: Colors.black.withValues(alpha: 0.45),
+      builder: (_) => const _ProTermsSheet(),
     );
   }
 
@@ -724,7 +746,10 @@ class _ProApplicationSheetState extends ConsumerState<ProApplicationSheet>
                               ? 'Gönderiliyor…'
                               : 'Başvuruyu gönder',
                           icon: LucideIcons.sparkles,
-                          onPressed: _submitting ? null : _submit,
+                          // Koşullar kabul edilmeden gönderilemez.
+                          onPressed: (_submitting || !_termsAccepted)
+                              ? null
+                              : _submit,
                         )
                       : _SolidPrimaryButton(
                           label: 'Devam et',
@@ -1361,6 +1386,238 @@ class _CityPickerSheetState extends State<_CityPickerSheet> {
                   size: 18, color: KoalaColors.accentDeep),
           ],
         ),
+      ),
+    );
+  }
+}
+
+// ─── Koşul kabul checkbox'ı ────────────────────────────────────────────
+class _TermsCheckbox extends StatelessWidget {
+  const _TermsCheckbox({
+    required this.checked,
+    required this.onChanged,
+    required this.onTapTerms,
+  });
+  final bool checked;
+  final ValueChanged<bool> onChanged;
+  final VoidCallback onTapTerms;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        GestureDetector(
+          onTap: () => onChanged(!checked),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 140),
+            width: 24,
+            height: 24,
+            margin: const EdgeInsets.only(top: 2),
+            decoration: BoxDecoration(
+              color: checked ? KoalaColors.accentDeep : Colors.transparent,
+              borderRadius: BorderRadius.circular(7),
+              border: Border.all(
+                color: checked ? KoalaColors.accentDeep : KoalaColors.borderSolid,
+                width: 1.5,
+              ),
+            ),
+            child: checked
+                ? const Icon(LucideIcons.check, size: 16, color: Colors.white)
+                : null,
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Padding(
+            padding: const EdgeInsets.only(top: 1),
+            child: Text.rich(
+              TextSpan(
+                style: const TextStyle(
+                  fontFamily: 'Manrope',
+                  fontSize: 13.5,
+                  height: 1.5,
+                  color: KoalaColors.textMed,
+                ),
+                children: [
+                  const TextSpan(text: 'Profesyonel olmak için '),
+                  TextSpan(
+                    text: 'tüm koşulları',
+                    style: const TextStyle(
+                      color: KoalaColors.accentDeep,
+                      fontWeight: FontWeight.w800,
+                      decoration: TextDecoration.underline,
+                    ),
+                    recognizer: TapGestureRecognizer()..onTap = onTapTerms,
+                  ),
+                  const TextSpan(text: ' okudum ve kabul ediyorum.'),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ─── Profesyonel koşulları popup'ı ─────────────────────────────────────
+class _ProTermsSheet extends StatelessWidget {
+  const _ProTermsSheet();
+
+  static const List<(String, List<String>)> _sections = [
+    (
+      'Kimlik & doğruluk',
+      [
+        'Paylaştığın ad, meslek ve iletişim bilgileri doğru ve güncel olmalı.',
+        'Yalnızca gerçekten sana ait veya paylaşmaya yetkili olduğun işleri yükle.',
+      ],
+    ),
+    (
+      'İçerik kalitesi',
+      [
+        'Tasarımlar gerçek iç mekan/tasarım işlerin olmalı; alakasız, düşük kaliteli veya yanıltıcı görsel yükleme.',
+        'Telif hakkı sana ait olmayan görselleri paylaşma.',
+      ],
+    ),
+    (
+      'Topluluk & iletişim',
+      [
+        'Müşterilerle saygılı ve zamanında iletişim kur.',
+        'Spam, taciz, nefret söylemi veya uygunsuz içerik yasaktır.',
+        'Platform dışına yönlendirme veya kullanıcıları kandırma girişimi yasaktır.',
+      ],
+    ),
+    (
+      'Sorumluluk',
+      [
+        'Verdiğin tasarım/danışmanlık hizmetlerinin sorumluluğu sana aittir.',
+        'Koşulların ihlali halinde profesyonel statün askıya alınabilir veya kaldırılabilir.',
+      ],
+    ),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final size = MediaQuery.of(context).size;
+    return Container(
+      height: size.height * 0.82,
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      child: Column(
+        children: [
+          Container(
+            margin: const EdgeInsets.only(top: 10, bottom: 4),
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+              color: const Color(0xFFD9D9E3),
+              borderRadius: BorderRadius.circular(99),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 8, 12, 8),
+            child: Row(
+              children: [
+                const Expanded(
+                  child: Text(
+                    'Profesyonel Koşulları',
+                    style: TextStyle(
+                      fontFamily: 'Manrope',
+                      fontSize: 20,
+                      fontWeight: FontWeight.w800,
+                      color: KoalaColors.text,
+                      letterSpacing: -0.3,
+                    ),
+                  ),
+                ),
+                GestureDetector(
+                  onTap: () => Navigator.of(context).pop(),
+                  child: Container(
+                    width: 34,
+                    height: 34,
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFF3F4F6),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(LucideIcons.x,
+                        size: 18, color: KoalaColors.text),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const Divider(height: 1, color: Color(0xFFEDEDF2)),
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
+              children: [
+                const Text(
+                  'Koala\'da profesyonel olarak yer almak için aşağıdaki '
+                  'koşulları kabul etmen gerekir:',
+                  style: TextStyle(
+                    fontFamily: 'Manrope',
+                    fontSize: 14,
+                    height: 1.5,
+                    fontWeight: FontWeight.w500,
+                    color: KoalaColors.textMed,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                for (final s in _sections) ...[
+                  Text(
+                    s.$1,
+                    style: const TextStyle(
+                      fontFamily: 'Manrope',
+                      fontSize: 15.5,
+                      fontWeight: FontWeight.w800,
+                      color: KoalaColors.text,
+                      letterSpacing: -0.2,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  for (final b in s.$2)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 7, left: 2),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Padding(
+                            padding: EdgeInsets.only(top: 7, right: 9),
+                            child: SizedBox(
+                              width: 5,
+                              height: 5,
+                              child: DecoratedBox(
+                                decoration: BoxDecoration(
+                                  color: Color(0xFF6C63FF),
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                            ),
+                          ),
+                          Expanded(
+                            child: Text(
+                              b,
+                              style: const TextStyle(
+                                fontFamily: 'Manrope',
+                                fontSize: 13.5,
+                                height: 1.55,
+                                fontWeight: FontWeight.w500,
+                                color: KoalaColors.textMed,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  const SizedBox(height: 18),
+                ],
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
