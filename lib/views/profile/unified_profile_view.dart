@@ -1075,17 +1075,15 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
             style: KoalaText.bodySec,
             textAlign: TextAlign.center,
           ),
-          // FIX 2 (2026-05-28): Own profile — Pro CTA pill OR role switch.
-          if (widget.ownerEditable && _isSelf) ...[
+          // 2026-06-03: Pro kullanıcıda "Ev Sahibi / Profesyonel" rol toggle'ı
+          // KALDIRILDI (#5) — gereksiz; ünvan zaten üstteki _role satırında
+          // görünüyor. Yalnız non-pro'da "Profesyonel ol" CTA / "incelenmekte"
+          // rozeti gösterilir.
+          if (widget.ownerEditable && _isSelf && _profile?.isPro != true) ...[
             const SizedBox(height: 10),
-            _profile?.isPro == true
-                ? _RoleSegmentedSwitch(
-                    current: _viewRole,
-                    onChange: _saveRole,
-                  )
-                : (_proApp.isPending
-                    ? const _ProPendingPill()
-                    : _ProUpsellPill(onTap: _openProApplication)),
+            _proApp.isPending
+                ? const _ProPendingPill()
+                : _ProUpsellPill(onTap: _openProApplication),
           ],
         ],
       ),

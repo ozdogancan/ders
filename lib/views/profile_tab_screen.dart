@@ -24,6 +24,8 @@ import '../services/shared_design_service.dart';
 import '../services/user_profile_service.dart';
 import '../widgets/ask_and_apply_sheet.dart';
 import '../widgets/verified_badge.dart';
+import '../widgets/koala_bottom_nav.dart' show KoalaTab;
+import 'main_shell.dart' show MainShell;
 import 'mekan/wizard/mekan_wizard_screen.dart';
 import 'profile/follow_list_sheet.dart';
 import 'profile/pro_application_sheet.dart';
@@ -85,6 +87,22 @@ class _ProfileTabScreenState extends ConsumerState<ProfileTabScreen>
     _loadAggregate();
     // 2026-06-02: Yeni tasarım yayınlanınca grid'i anında tazele.
     SharedDesignService.publishedTick.addListener(_onDesignPublished);
+    // 2026-06-03 (#4): Profil sekmesi her odaklandığında profili TAZELE.
+    // Admin bir kullanıcıyı "profesyonel" onayladığında server-side değişir,
+    // uygulamada anlık sinyal yoktur; sekmeye dönünce fresh fetch ile Pro
+    // durumu / ünvan manuel refresh beklemeden yansır.
+    MainShell.activeTab.addListener(_onProfileTabFocus);
+  }
+
+  void _onProfileTabFocus() {
+    // IndexedStack index 3 == ProfileTabScreen == KoalaTab.projeler.
+    if (!mounted || MainShell.activeTab.value != KoalaTab.projeler) return;
+    ref.invalidate(userProfileProvider);
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid != null) UserProfileService.invalidateBundleCache(uid);
+    _loadAggregate();
+    // UnifiedProfileView'ın static getMany fetch'ini zorla (key remount).
+    if (mounted) setState(() => _editReloadTick++);
   }
 
   void _onDesignPublished() {
@@ -133,6 +151,7 @@ class _ProfileTabScreenState extends ConsumerState<ProfileTabScreen>
   @override
   void dispose() {
     SharedDesignService.publishedTick.removeListener(_onDesignPublished);
+    MainShell.activeTab.removeListener(_onProfileTabFocus);
     _designsTab.dispose();
     super.dispose();
   }

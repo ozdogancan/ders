@@ -50,7 +50,6 @@ import '../services/taste_profile_service.dart';
 import '../services/swipe_feed_service.dart';
 import '../services/usage_limit_service.dart';
 import '../widgets/verified_badge.dart';
-import 'pro/widgets/pro_badge.dart';
 
 class StyleDiscoveryLiveScreen extends ConsumerStatefulWidget {
   const StyleDiscoveryLiveScreen({super.key});
@@ -194,7 +193,6 @@ class _StyleDiscoveryLiveScreenState
 
   // Paywall yarış engelleyici — paywall açıkken yeni swipe / yeni paywall yok.
   bool _paywallOpen = false;
-  bool _quotaPaywallShown = false;
 
   final List<Map<String, dynamic>> _deck = [];
   final Set<String> _seenIds = <String>{};
@@ -345,21 +343,13 @@ class _StyleDiscoveryLiveScreenState
       final can = await UsageLimitService.canSwipe();
       if (!mounted) return;
       final next = !can;
-      final justExhausted = next && !_quotaExhausted;
       if (next != _quotaExhausted) {
         setState(() => _quotaExhausted = next);
       }
-      // Free kullanıcı kotayı az önce doldurduysa paywall'ı bir kez otomatik aç.
-      // Kullanıcı kapatırsa _ProQuotaCard görünür kalır (deck-level gate).
-      // 2026-06-02: proStatus KESİN free demeden paywall açma (Pro kullanıcı
-      // açılışta proStatus yüklenirken yanlışlıkla paywall görmesin).
-      final proResolvedFree = ref
-          .read(proStatusProvider)
-          .maybeWhen(data: (s) => !s.isPro, orElse: () => false);
-      if (justExhausted && proResolvedFree && !_quotaPaywallShown) {
-        _quotaPaywallShown = true;
-        await _showPaywallSafe(trigger: 'swipe_quota_end');
-      }
+      // 2026-06-03: Limit dolunca paywall OTOMATİK AÇILMAZ. Deck'in mevcut
+      // kartı _ProQuotaCard ile değiştirilir (deck-level gate); paywall
+      // YALNIZCA kullanıcı bu kilitli karta dokununca açılır. Böylece
+      // free kullanıcıya üstüste / rastgele popup çıkmaz ("zırt pırt" fix).
     } catch (_) {/* sessiz — UI hint */}
   }
 
@@ -408,7 +398,10 @@ class _StyleDiscoveryLiveScreenState
     // free users never enter the picker / MekanFlow / waiting screen.
     final pro = ref.read(proStatusProvider).value?.isPro ?? false;
     if (!pro) {
-      await showPaywall(context, trigger: 'realize_to_my_room');
+      // 2026-06-03: Restyle Pro-only; ama kart tap'inde paywall AÇMA.
+      // Paywall yalnızca swipe limiti bitince çıkan kilitli karta basınca
+      // açılır. Free kullanıcı kart tap'inde tasarımcı profilini görsün.
+      await _openDesignerSheet(project);
       return;
     }
     if (!mounted) return;
@@ -649,6 +642,11 @@ class _StyleDiscoveryLiveScreenState
               _seenIds.add(id);
               filtered.add(p);
             }
+            // Tek tasarımcı feed'i boğmasın (#8) — server path'te de cap.
+            final cappedSrv = _capPerDesigner(filtered, maxPerDesigner: 2);
+            filtered
+              ..clear()
+              ..addAll(cappedSrv);
             if (filtered.isNotEmpty) {
               _offset += serverRanked.length;
               if (!mounted) return;
@@ -707,6 +705,12 @@ class _StyleDiscoveryLiveScreenState
         _seenIds.add(id);
         filtered.add(p);
       }
+      // Tek tasarımcı (örn. evlumba-design) feed'i boğmasın — batch başına
+      // designer başına max 2 kart. Çeşitlilik garantisi (#8).
+      final capped = _capPerDesigner(filtered, maxPerDesigner: 2);
+      filtered
+        ..clear()
+        ..addAll(capped);
       // getProjects artık profiles join'li geliyor — designer bilgisini
       // batch'le birlikte SENKRON cache'le. Sol-alt blok ilk frame'de dolu
       // gelir, skeleton→hydrated geçişi (geç yükleme) kalkar.
@@ -771,6 +775,32 @@ class _StyleDiscoveryLiveScreenState
     } finally {
       _fetchingMore = false;
     }
+  }
+
+  /// 2026-06-03: Tek bir tasarımcının (özellikle 'evlumba-design' ~379 proje)
+  /// feed'i boğmasını engeller. Batch başına her designer_id'den en fazla
+  /// [maxPerDesigner] kart tutulur; fazlalıklar _seenIds'ten DÜŞÜLÜR ki sonraki
+  /// batch'lerde tekrar aday olsunlar. Kalanlar karıştırılır (ardışık
+  /// aynı-tasarımcı kümelenmesini kır).
+  List<Map<String, dynamic>> _capPerDesigner(
+    List<Map<String, dynamic>> batch, {
+    int maxPerDesigner = 2,
+  }) {
+    final perDesigner = <String, int>{};
+    final kept = <Map<String, dynamic>>[];
+    for (final p in batch) {
+      final did = (p['designer_id'] ?? '').toString();
+      final n = perDesigner[did] ?? 0;
+      if (did.isNotEmpty && n >= maxPerDesigner) {
+        final id = p['id']?.toString() ?? '';
+        if (id.isNotEmpty) _seenIds.remove(id);
+        continue;
+      }
+      perDesigner[did] = n + 1;
+      kept.add(p);
+    }
+    kept.shuffle(_rng);
+    return kept;
   }
 
   /// Tüm taze kartlar tükendiğinde deck'i baştan doldurur: seen state sıfırla,
@@ -1671,146 +1701,60 @@ class _StyleDiscoveryLiveScreenState
     // sahibi. Seeded (designer_id='evlumba-design') kartlarda sahip zaten
     // Evlumba Design olduğu için 3. seçenek gizlenir → 2 seçenek kalır.
     final isEvlumbaDesign = designerId == 'evlumba-design';
-    Widget askOption({
-      required Widget leading,
-      required String title,
-      required String subtitle,
-      required VoidCallback onTap,
-    }) {
-      return Padding(
-        padding: const EdgeInsets.symmetric(vertical: 5),
-        child: Material(
-          color: KoalaColors.surface,
-          borderRadius: BorderRadius.circular(18),
-          child: InkWell(
-            borderRadius: BorderRadius.circular(18),
-            onTap: onTap,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(12, 12, 14, 12),
-              child: Row(
-                children: [
-                  SizedBox(width: 48, height: 48, child: leading),
-                  const SizedBox(width: 13),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(title, style: KoalaText.h4),
-                        const SizedBox(height: 2),
-                        Text(subtitle, style: KoalaText.bodySmall),
-                      ],
-                    ),
-                  ),
-                  const Icon(Icons.chevron_right_rounded,
-                      color: KoalaColors.textMuted, size: 20),
-                ],
-              ),
-            ),
-          ),
-        ),
-      );
-    }
 
     _askingInFlight = true;
     HapticFeedback.selectionClick();
-    await showModalBottomSheet<void>(
+    // 2026-06-03 (#7): Compose-first popup. Hedef seç + mesajını yaz. Bir şey
+    // YAZMADAN hiçbir yere navigate ETME — kullanıcı yazıp "Gönder"e basınca
+    // ilgili sohbete (AI / Evlumba / tasarımcı) mesajla birlikte gidilir.
+    final result = await showModalBottomSheet<_AskComposeResult>(
       context: context,
       backgroundColor: KoalaColors.bg,
       barrierColor: Colors.black54,
-      isScrollControlled: false,
+      isScrollControlled: true, // klavye için tam yükseklik
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
-      builder: (ctx) => SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(
-                child: Container(
-                  width: 36,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: KoalaColors.border,
-                    borderRadius: BorderRadius.circular(100),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 14),
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 2),
-                child: Text('Kime soralım?', style: KoalaText.h2),
-              ),
-              const SizedBox(height: 6),
-              askOption(
-                leading: const _AskLeading(
-                  icon: Icons.auto_awesome_rounded,
-                  gradient: true,
-                ),
-                title: "Koala AI'ya sor",
-                subtitle: 'Yapay zekâ asistanından anında fikir al',
-                onTap: () {
-                  Navigator.of(ctx).pop();
-                  // Kart görselini Koala AI sohbetine "kullanıcı fotoyu eklemiş
-                  // gibi" iliştir — input üstünde preview olarak görünür.
-                  // Composer BOŞ bırakılır (default metin yok): kullanıcı kendi
-                  // sorusunu yazar; boş gönderirse AI görseli genel analiz eder.
-                  context.push('/chat/ai', extra: {
-                    if (coverUrl.isNotEmpty) 'pendingImageUrl': coverUrl,
-                  });
-                },
-              ),
-              askOption(
-                leading: const _AskLeading(
-                  imageUrl: _evlumbaDesignAvatarUrl,
-                  icon: Icons.home_work_rounded,
-                ),
-                title: "Evlumba Design'a sor",
-                subtitle: 'Evlumba stüdyosundan profesyonel destek al',
-                onTap: () {
-                  Navigator.of(ctx).pop();
-                  // Tek-konuşma + free-consult gate.
-                  enterEvlumbaConversation(
-                    context,
-                    ref,
-                    projectTitle: displayTitle,
-                    pendingDesign: pendingDesign('evlumba-design'),
-                  );
-                },
-              ),
-              if (!isEvlumbaDesign)
-                askOption(
-                  leading: _AskLeading(
-                    imageUrl:
-                        designerAvatar.isNotEmpty ? designerAvatar : null,
-                    icon: Icons.person_rounded,
-                  ),
-                  title: 'Tasarımcısına sor',
-                  subtitle: designerName.isNotEmpty
-                      ? '$designerName ile doğrudan konuş'
-                      : 'Bu tasarımı yapan tasarımcıyla konuş',
-                  onTap: () {
-                    Navigator.of(ctx).pop();
-                    context.push('/chat/dm/new', extra: {
-                      'designerId': designerId,
-                      if (designerName.isNotEmpty)
-                        'designerName': designerName,
-                      if (designerAvatar.isNotEmpty)
-                        'designerAvatarUrl': designerAvatar,
-                      'projectTitle': displayTitle,
-                      'pendingDesign': pendingDesign(designerId),
-                    });
-                  },
-                ),
-            ],
-          ),
-        ),
+      builder: (ctx) => _AskComposeSheet(
+        isEvlumbaDesign: isEvlumbaDesign,
+        designerName: designerName,
+        designerAvatar: designerAvatar,
       ),
     );
     if (mounted) _askingInFlight = false;
+    if (result == null || !mounted) return;
+    final text = result.text.trim();
+    if (text.isEmpty) return;
+    switch (result.target) {
+      case _AskTarget.ai:
+        // Kart görseli "kullanıcı fotoyu eklemiş gibi" iliştirilir; yazdığı
+        // soru composer'a ön-dolu gelir (görselle birlikte gönderir).
+        context.push('/chat/ai', extra: {
+          'initialText': text,
+          if (coverUrl.isNotEmpty) 'pendingImageUrl': coverUrl,
+        });
+        break;
+      case _AskTarget.evlumba:
+        await enterEvlumbaConversation(
+          context,
+          ref,
+          projectTitle: displayTitle,
+          pendingDesign: pendingDesign('evlumba-design'),
+          initialDraft: text,
+        );
+        break;
+      case _AskTarget.designer:
+        context.push('/chat/dm/new', extra: {
+          'designerId': designerId,
+          if (designerName.isNotEmpty) 'designerName': designerName,
+          if (designerAvatar.isNotEmpty) 'designerAvatarUrl': designerAvatar,
+          'projectTitle': displayTitle,
+          'pendingDesign': pendingDesign(designerId),
+          'initialDraft': text,
+          'autoSend': true,
+        });
+        break;
+    }
   }
 
   /// İlk cümle — chat preview'da ipucu olarak göstermek için.
@@ -2840,12 +2784,14 @@ class _DesignerBlock extends StatelessWidget {
     final designerId =
         (designer['id'] ?? designer['designer_id'] ?? '').toString();
     final initials = _initials(name);
-    final isVerified = verified || isVerifiedDesignerId(designerId);
-    // 2026-05-28 FIX 5: Pro işareti — designer payload'unda is_pro flag'i
-    // varsa kartta da gradient PRO pill göster.
+    // 2026-06-03 (SS1): Profesyoneller kartta YEŞİL TİK alır, "PRO" pill DEĞİL.
+    // Profesyonel = approved professional (is_pro/plan=pro) VEYA verified seed
+    // designer VEYA Evlumba tasarımı (user-share olmayan). PRO pill kartta
+    // kaldırıldı — yeşil tik tek ve net profesyonellik göstergesi.
     final isPro = (designer['is_pro'] == true) ||
         (designer['isPro'] == true) ||
         ((designer['plan'] ?? '').toString().toLowerCase() == 'pro');
+    final isVerified = verified || isVerifiedDesignerId(designerId) || isPro;
 
     final subtitle = projectCount != null && projectCount > 0
         ? '$profession · $projectCount proje'
@@ -2916,10 +2862,6 @@ class _DesignerBlock extends StatelessWidget {
                   if (isVerified) ...[
                     const SizedBox(width: 5),
                     const VerifiedBadge(size: 13),
-                  ],
-                  if (isPro) ...[
-                    const SizedBox(width: 5),
-                    const ProBadge(compact: true),
                   ],
                 ],
               ),
@@ -4295,6 +4237,230 @@ class _AskLeading extends StatelessWidget {
                 color: gradient ? Colors.white : KoalaColors.accentDeep,
               ),
             ),
+    );
+  }
+}
+
+/// "Sor" compose popup'ının dönüş tipi: seçilen hedef + yazılan metin.
+enum _AskTarget { ai, evlumba, designer }
+
+class _AskComposeResult {
+  final _AskTarget target;
+  final String text;
+  const _AskComposeResult(this.target, this.text);
+}
+
+/// 2026-06-03 (#7): "Sor" compose-first popup. Hedef seçilir, mesaj yazılır,
+/// "Gönder"e basılınca `_AskComposeResult` döner. Bir şey yazılmadan Gönder
+/// pasiftir → kullanıcı yazmazsa hiçbir sohbete navigate edilmez (sadece
+/// kapatılır). Klavye için isScrollControlled + viewInsets padding.
+class _AskComposeSheet extends StatefulWidget {
+  final bool isEvlumbaDesign;
+  final String designerName;
+  final String designerAvatar;
+  const _AskComposeSheet({
+    required this.isEvlumbaDesign,
+    required this.designerName,
+    required this.designerAvatar,
+  });
+
+  @override
+  State<_AskComposeSheet> createState() => _AskComposeSheetState();
+}
+
+class _AskComposeSheetState extends State<_AskComposeSheet> {
+  late _AskTarget _target;
+  final _ctrl = TextEditingController();
+  final _focus = FocusNode();
+
+  @override
+  void initState() {
+    super.initState();
+    // Evlumba-design kartında sahip zaten Evlumba; aksi halde kartın sahibi
+    // tasarımcı varsayılan hedef.
+    _target = widget.isEvlumbaDesign ? _AskTarget.evlumba : _AskTarget.designer;
+    _ctrl.addListener(() => setState(() {}));
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    _focus.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final t = _ctrl.text.trim();
+    if (t.isEmpty) return;
+    Navigator.of(context).pop(_AskComposeResult(_target, t));
+  }
+
+  Widget _option({
+    required _AskTarget value,
+    required Widget leading,
+    required String title,
+    required String subtitle,
+  }) {
+    final selected = _target == value;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Material(
+        color: selected ? KoalaColors.accentSoft : KoalaColors.surface,
+        borderRadius: BorderRadius.circular(18),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(18),
+          onTap: () => setState(() => _target = value),
+          child: Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(
+                color: selected ? KoalaColors.accent : Colors.transparent,
+                width: 1.4,
+              ),
+            ),
+            padding: const EdgeInsets.fromLTRB(12, 11, 14, 11),
+            child: Row(
+              children: [
+                SizedBox(width: 44, height: 44, child: leading),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(title, style: KoalaText.h4),
+                      const SizedBox(height: 2),
+                      Text(subtitle, style: KoalaText.bodySmall),
+                    ],
+                  ),
+                ),
+                Icon(
+                  selected
+                      ? Icons.radio_button_checked_rounded
+                      : Icons.radio_button_unchecked_rounded,
+                  color:
+                      selected ? KoalaColors.accent : KoalaColors.textMuted,
+                  size: 20,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final canSend = _ctrl.text.trim().isNotEmpty;
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(16, 12, 16, 16 + bottomInset),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 36,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: KoalaColors.border,
+                  borderRadius: BorderRadius.circular(100),
+                ),
+              ),
+            ),
+            const SizedBox(height: 14),
+            const Text('Kime soralım?', style: KoalaText.h2),
+            const SizedBox(height: 8),
+            _option(
+              value: _AskTarget.ai,
+              leading: const _AskLeading(
+                icon: Icons.auto_awesome_rounded,
+                gradient: true,
+              ),
+              title: "Koala AI'ya sor",
+              subtitle: 'Yapay zekâ asistanından anında fikir al',
+            ),
+            _option(
+              value: _AskTarget.evlumba,
+              leading: const _AskLeading(
+                imageUrl: _evlumbaDesignAvatarUrl,
+                icon: Icons.home_work_rounded,
+              ),
+              title: "Evlumba Design'a sor",
+              subtitle: 'Evlumba stüdyosundan profesyonel destek al',
+            ),
+            if (!widget.isEvlumbaDesign)
+              _option(
+                value: _AskTarget.designer,
+                leading: _AskLeading(
+                  imageUrl: widget.designerAvatar.isNotEmpty
+                      ? widget.designerAvatar
+                      : null,
+                  icon: Icons.person_rounded,
+                ),
+                title: 'Tasarımcısına sor',
+                subtitle: widget.designerName.isNotEmpty
+                    ? '${widget.designerName} ile doğrudan konuş'
+                    : 'Bu tasarımı yapan tasarımcıyla konuş',
+              ),
+            const SizedBox(height: 14),
+            // Mesaj alanı — yazmadan Gönder pasif.
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Expanded(
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: KoalaColors.surface,
+                      borderRadius: BorderRadius.circular(18),
+                      border: Border.all(
+                          color: KoalaColors.borderSolid, width: 0.8),
+                    ),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
+                    child: TextField(
+                      controller: _ctrl,
+                      focusNode: _focus,
+                      autofocus: true,
+                      minLines: 1,
+                      maxLines: 4,
+                      textInputAction: TextInputAction.send,
+                      onSubmitted: (_) => _submit(),
+                      style: KoalaText.body,
+                      decoration: const InputDecoration(
+                        hintText: 'Mesajını yaz…',
+                        border: InputBorder.none,
+                        isCollapsed: true,
+                        contentPadding: EdgeInsets.symmetric(vertical: 12),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Material(
+                  color: canSend
+                      ? KoalaColors.accent
+                      : KoalaColors.border,
+                  shape: const CircleBorder(),
+                  child: InkWell(
+                    customBorder: const CircleBorder(),
+                    onTap: canSend ? _submit : null,
+                    child: const SizedBox(
+                      width: 48,
+                      height: 48,
+                      child: Icon(Icons.send_rounded,
+                          color: Colors.white, size: 22),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

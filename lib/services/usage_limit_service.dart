@@ -12,7 +12,9 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 class UsageLimits {
   static const int dailySwipeLimit = 10;
   static const int dailyKoalaAiLimit = 3;
-  static const int evlumbaFreeRepliesPerConversation = 1;
+  // 2026-06-03 (#3): İlk ücretsiz danışma gerçek bir sohbet olabilsin diye
+  // 1 → 3. Tek bir "selam" mesajı tüm ücretsiz danışmayı tüketmesin.
+  static const int evlumbaFreeRepliesPerConversation = 3;
 }
 
 class UsageLimitService {

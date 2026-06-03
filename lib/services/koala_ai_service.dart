@@ -1082,9 +1082,18 @@ class KoalaAIService {
             (p) => (p as Map).containsKey('text'), orElse: () => {'text': ''})['text'] as String? ?? ''
         : '';
 
-    // Fix B: Casual-chat escape — kısa selamlama/dolgu sözcükleri için tool çağırma
+    // Fix B: Casual-chat escape — kısa selamlama/dolgu sözcükleri için tool çağırma.
+    // 2026-06-03 (#6): designKeywords LİSTESİ ürün/proje regex'leriyle HİZALANDI.
+    // Eskiden "lamba", "avize", "halı", "perde" gibi ürün isimleri burada YOKTU →
+    // "lamba arıyorum rustik" (3 kelime) yanlışlıkla "kısa-tasarım-dışı" sayılıp
+    // selamlama path'ine düşüyordu ("merhaba" döngüsü). Artık tüm ürün/dekor/oda
+    // isimleri tasarım-niyeti sayılıyor; kısa ürün istekleri search'e gider.
     final designKeywords = RegExp(
-      r'\b(oda|salon|banyo|mutfak|mobilya|renk|ürün|tasarım|tasarımcı|mimar|uzman|stil|boya|duvar|zemin|koltuk|kanepe|masa|sandalye|yatak|dolap|fotoğraf|foto|resim)\b',
+      r'\b(oda|salon|oturma|banyo|mutfak|ofis|antre|balkon|mobilya|dekor|dekorasyon|'
+      r'renk|ürün|tasarım|tasarımcı|mimar|uzman|stil|boya|duvar|zemin|proje|ilham|örnek|'
+      r'koltuk|kanepe|sehpa|masa|sandalye|aydınlatma|lamba|avize|abajur|halı|kilim|perde|'
+      r'yatak|dolap|gardırop|komodin|raf|kitaplık|vitrin|puf|berjer|saksı|ayna|tablo|ottoman|'
+      r'fotoğraf|foto|resim)\b',
       caseSensitive: false,
     );
     final isCasualGreeting = RegExp(

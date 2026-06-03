@@ -60,6 +60,7 @@ class ConversationDetailScreen extends ConsumerStatefulWidget {
     this.projectTitle,
     this.unreadOnEntry,
     this.initialDraft,
+    this.autoSend = false,
     this.pendingDesign,
   }) : assert(conversationId != null || designerId != null,
             'conversationId veya designerId verilmeli (lazy chat için)');
@@ -75,6 +76,11 @@ class ConversationDetailScreen extends ConsumerStatefulWidget {
   /// Lazy chat girişinde input'a ön-doldurulacak taslak metin (örn:
   /// "Merhaba, [proje adı] hakkında bilgi almak istiyorum").
   final String? initialDraft;
+
+  /// true ise lazy mod + initialDraft dolu iken ekran açılır açılmaz mesaj
+  /// OTOMATİK gönderilir (swipe "Sor" compose akışı: kullanıcı popup'ta yazıp
+  /// gönderdi → konuşma yaratılıp ilk mesaj atılır, hazır sohbete düşer).
+  final bool autoSend;
 
   /// ShareSheet'ten design paylaşımı için ön-dolmuş tasarım. Map keys:
   /// `id`, `title`, `imageUrl`, `designerId`. Input üstünde preview çıkar;
@@ -198,6 +204,13 @@ class _ConversationDetailScreenState extends ConsumerState<ConversationDetailScr
       final draft = widget.initialDraft;
       if (draft != null && draft.isNotEmpty) {
         _textController.text = draft;
+        // Compose-first akışı: kullanıcı popup'ta zaten yazıp gönderdi →
+        // ekran açılınca otomatik gönder (conv yaratılır + ilk mesaj atılır).
+        if (widget.autoSend) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) _sendMessage();
+          });
+        }
       }
     }
 
@@ -215,6 +228,17 @@ class _ConversationDetailScreenState extends ConsumerState<ConversationDetailScr
         _pendingDesignTagline = tagline.isEmpty ? null : tagline;
         final cat = (pd['category'] ?? '').toString().trim();
         _pendingDesignCategory = cat.isEmpty ? null : cat;
+        // 2026-06-03 (SS2): Sohbetin üstündeki tasarım ön-izlemesi HER ZAMAN
+        // görünsün. Eskiden yalnız projectTitle bir tasarımcı projesine
+        // eşleşince context chip çıkıyordu → Evlumba/Sor girişlerinde tasarım
+        // hiç görünmüyordu. pendingDesign'dan context'i doğrudan kur.
+        _contextProject = {
+          'id': id,
+          'title': _pendingDesignTitle,
+          'image_url': url,
+          'cover_image_url': url,
+          if (_pendingDesignCategory != null) 'category': _pendingDesignCategory,
+        };
       }
     }
   }
@@ -385,7 +409,9 @@ class _ConversationDetailScreenState extends ConsumerState<ConversationDetailScr
         setState(() {
           _designerDetail = detail;
           _designerProjects = deduped;
-          _contextProject = matched;
+          // Eşleşen gerçek proje varsa onu kullan (tıklanınca viewer açılır);
+          // yoksa pendingDesign'dan kurduğumuz context'i KORU (SS2).
+          _contextProject = matched ?? _contextProject;
           // 2026-06-02 FIX: GÖSTERİLEN (deduped) sayıya eşitle — tekrarlanan
           // kapaklı satırlar yüzünden ham count fazla geliyordu (2 yerine 3).
           _designerTotalCount =
@@ -664,6 +690,96 @@ class _ConversationDetailScreenState extends ConsumerState<ConversationDetailScr
   /// Send button: text + opsiyonel _pendingPhoto'yu birlikte gönderir.
   /// _pendingPhoto varsa: optimize → Storage upload → image type message
   /// (caption = text). Sadece text varsa: text type message.
+  /// 2026-06-03 (#3): Ücretsiz danışma/mesaj limiti dolduğunda NET açıklama.
+  /// true → kullanıcı "Pro'ya Geç" dedi; null/false → vazgeçti.
+  Future<bool?> _showConsultLimitSheet() async {
+    final n = UsageLimits.evlumbaFreeRepliesPerConversation;
+    final title = _isEvlumba
+        ? 'Ücretsiz danışma tamamlandı'
+        : 'Mesaj limitine ulaştın';
+    final body = _isEvlumba
+        ? 'Evlumba Design stüdyosuyla ilk $n mesajlık ücretsiz danışman '
+            'tamamlandı. Sohbete devam etmek ve sınırsız mesajlaşmak için '
+            'Koala Pro’ya geçebilirsin.'
+        : 'Bu tasarımcıyla ücretsiz $n mesaj hakkını kullandın. Sınırsız '
+            'mesajlaşmak için Koala Pro’ya geçebilirsin.';
+    return showModalBottomSheet<bool>(
+      context: context,
+      backgroundColor: KoalaColors.bg,
+      barrierColor: Colors.black54,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) => SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 14, 20, 18),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 36,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: KoalaColors.border,
+                  borderRadius: BorderRadius.circular(100),
+                ),
+              ),
+              const SizedBox(height: 18),
+              Container(
+                width: 56,
+                height: 56,
+                decoration: const BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: LinearGradient(
+                    colors: [KoalaColors.accentDeep, KoalaColors.accent],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                ),
+                child: const Icon(LucideIcons.sparkles,
+                    color: Colors.white, size: 26),
+              ),
+              const SizedBox(height: 16),
+              Text(title, style: KoalaText.h3, textAlign: TextAlign.center),
+              const SizedBox(height: 8),
+              Text(body,
+                  style: KoalaText.bodySec, textAlign: TextAlign.center),
+              const SizedBox(height: 22),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () => Navigator.of(ctx).pop(true),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: KoalaColors.accent,
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(vertical: 15),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(KoalaRadius.md),
+                    ),
+                  ),
+                  child: const Text('Koala Pro’ya Geç',
+                      style:
+                          TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+                ),
+              ),
+              const SizedBox(height: 8),
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(false),
+                child: const Text('Şimdi değil',
+                    style: TextStyle(
+                        fontSize: 13,
+                        color: KoalaColors.textTer,
+                        fontWeight: FontWeight.w600)),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Future<void> _sendMessage() async {
     if (_sending) return;
     final text = _textController.text.trim();
@@ -701,14 +817,22 @@ class _ConversationDetailScreenState extends ConsumerState<ConversationDetailScr
     final cid = _activeConvId!;
 
     // Pro paywall gate — free tier allows evlumbaFreeRepliesPerConversation
-    // replies per conversation lifetime.
+    // replies per conversation lifetime. 2026-06-03 (#3): limit dolunca SESSİZ
+    // paywall yerine NET bir açıklama göster — kullanıcı neden gönderemediğini
+    // anlasın ("pro mu kota mı?" karmaşası bitsin).
     final pro = ref.read(proStatusProvider).value?.isPro ?? false;
     if (!pro) {
       if (!await UsageLimitService.canSendEvlumbaReply(cid)) {
         if (!mounted) return;
         setState(() => _sending = false);
         if (!context.mounted) return;
-        await showPaywall(context, trigger: 'evlumba_dm_limit');
+        final goPro = await _showConsultLimitSheet();
+        if (goPro == true && context.mounted) {
+          await showPaywall(
+            context,
+            trigger: _isEvlumba ? 'evlumba_dm_limit' : 'designer_dm_quota',
+          );
+        }
         return;
       }
       await UsageLimitService.incrementEvlumbaReply(cid);

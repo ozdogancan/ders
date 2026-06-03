@@ -68,6 +68,7 @@ Future<void> enterEvlumbaConversation(
   WidgetRef ref, {
   String? projectTitle,
   Map<String, dynamic>? pendingDesign,
+  String? initialDraft,
 }) async {
   final pro = ref.read(proStatusProvider).value?.isPro ?? false;
 
@@ -77,7 +78,8 @@ Future<void> enterEvlumbaConversation(
     final needsPopup = !pro && (_cachedFreeConsultUsed == false);
     if (!needsPopup) {
       _pushToConv(context, convId,
-          projectTitle: projectTitle, pendingDesign: pendingDesign);
+          projectTitle: projectTitle, pendingDesign: pendingDesign,
+          initialDraft: initialDraft);
       return;
     }
     // Cache var ama popup gerek → popup'ı göster, ardından push.
@@ -90,7 +92,8 @@ Future<void> enterEvlumbaConversation(
     );
     if (go != true || !context.mounted) return;
     _pushToConv(context, convId,
-        projectTitle: projectTitle, pendingDesign: pendingDesign);
+        projectTitle: projectTitle, pendingDesign: pendingDesign,
+          initialDraft: initialDraft);
     return;
   }
 
@@ -123,7 +126,8 @@ Future<void> enterEvlumbaConversation(
   if (pro) {
     if (!context.mounted) return;
     _pushToConv(context, convId,
-        projectTitle: projectTitle, pendingDesign: pendingDesign);
+        projectTitle: projectTitle, pendingDesign: pendingDesign,
+          initialDraft: initialDraft);
     return;
   }
 
@@ -143,7 +147,8 @@ Future<void> enterEvlumbaConversation(
     if (go != true || !context.mounted) return;
   }
   _pushToConv(context, convId,
-      projectTitle: projectTitle, pendingDesign: pendingDesign);
+      projectTitle: projectTitle, pendingDesign: pendingDesign,
+          initialDraft: initialDraft);
 }
 
 void _pushToConv(
@@ -151,7 +156,9 @@ void _pushToConv(
   String convId, {
   String? projectTitle,
   Map<String, dynamic>? pendingDesign,
+  String? initialDraft,
 }) {
+  final hasDraft = initialDraft != null && initialDraft.trim().isNotEmpty;
   final extra = <String, dynamic>{
     'designerId': _kEvlumbaDesignerId,
     'designerName': 'Evlumba Design',
@@ -159,6 +166,9 @@ void _pushToConv(
     if (projectTitle != null && projectTitle.isNotEmpty)
       'projectTitle': projectTitle,
     if (pendingDesign != null) 'pendingDesign': pendingDesign,
+    if (hasDraft) 'initialDraft': initialDraft,
+    // Compose-first: kullanıcı zaten yazıp gönderdi → otomatik gönder.
+    if (hasDraft) 'autoSend': true,
   };
   context.push('/chat/dm/$convId', extra: extra);
 }

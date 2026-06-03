@@ -238,6 +238,8 @@ final GoRouter appRouter = GoRouter(
           designerAvatarUrl: extra?['designerAvatarUrl'] as String?,
           projectTitle: extra?['projectTitle'] as String?,
           unreadOnEntry: extra?['unreadOnEntry'] as int?,
+          initialDraft: extra?['initialDraft'] as String?,
+          autoSend: extra?['autoSend'] as bool? ?? false,
           pendingDesign: extra?['pendingDesign'] as Map<String, dynamic>?,
         );
       },
