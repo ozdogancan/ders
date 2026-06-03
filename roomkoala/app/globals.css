@@ -1,0 +1,63 @@
+@import "tailwindcss";
+
+/* ── Koala marka paleti (uygulamayla birebir) ── */
+@theme {
+  --color-cream: #f6f1eb;
+  --color-cream-deep: #efe6d9;
+  --color-surface: #ffffff;
+  --color-ink: #1a1a1a;
+  --color-ink-soft: #4a4a4a;
+  --color-muted: #8e8e93;
+  --color-accent: #7c6ef2;
+  --color-accent-deep: #6c5ce7;
+  --color-accent-soft: #f3f0ff;
+  --color-line: #e9e2d8;
+
+  --font-sans: var(--font-manrope), ui-sans-serif, system-ui, -apple-system,
+    "Segoe UI", Roboto, sans-serif;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background: var(--color-cream);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+.bg-radial-accent {
+  background-image: radial-gradient(
+    60% 60% at 50% 0%,
+    rgba(124, 110, 242, 0.18) 0%,
+    rgba(124, 110, 242, 0) 70%
+  );
+}
+
+.text-balance {
+  text-wrap: balance;
+}
+
+@keyframes marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+.animate-marquee {
+  animation: marquee var(--marquee-duration, 40s) linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-marquee {
+    animation: none;
+  }
+  html {
+    scroll-behavior: auto;
+  }
+}

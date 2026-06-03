@@ -8,6 +8,7 @@ on:
     paths-ignore:
       - 'build/web/**'
       - 'koala-api/**'
+      - 'roomkoala/**'
       - '.github/**'
       - '**.md'
       - 'android/**'
