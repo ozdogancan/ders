@@ -1,0 +1,77 @@
+# Codemagic CI — Koala iOS (App Store / TestFlight)
+# Windows'tan Mac olmadan iOS build almak için. Repoyu codemagic.io'ya bağla,
+# aşağıdaki ortam değişkenlerini ve App Store Connect entegrasyonunu gir.
+#
+# ÖN KOŞULLAR (Codemagic UI → app settings):
+#   1. Integrations → App Store Connect → API key ekle (Gökhan'ın hesabından
+#      oluşturulan .p8 + Key ID + Issuer ID). Entegrasyon adını aşağıda
+#      `app_store_connect` altında `auth: integration` ile eşleştir.
+#   2. Environment variables (group: "koala_ios") — tümü "Secure":
+#        REVENUECAT_IOS_KEY        = appl_xxxxxxxx
+#        SUPABASE_ANON_KEY         = sb_publishable_...
+#        EVLUMBA_SUPABASE_ANON_KEY = eyJ...
+#   3. ios/Runner/GoogleService-Info.plist repoda OLMALI (Firebase iOS app'ten
+#      indir). Yoksa Firebase init + build BAŞARISIZ olur.
+#   4. Apple Developer'da App ID com.egitim_ai_tutor.app + Push Notifications
+#      capability tanımlı olmalı; bundle id App Store Connect'te kayıtlı app'e
+#      bağlı olmalı.
+
+workflows:
+  ios-appstore:
+    name: Koala iOS — App Store
+    instance_type: mac_mini_m2
+    max_build_duration: 60
+    integrations:
+      app_store_connect: koala_appstore_api   # Codemagic UI'daki entegrasyon adı
+    environment:
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.egitim_ai_tutor.app
+      groups:
+        - koala_ios            # REVENUECAT_IOS_KEY, SUPABASE_ANON_KEY, EVLUMBA_SUPABASE_ANON_KEY
+      vars:
+        APP_VERSION: "1.0.172+176"
+        KOALA_API_URL: "https://koala-api-olive.vercel.app"
+        SUPABASE_URL: "https://xgefjepaqnghaotqybpi.supabase.co"
+        EVLUMBA_SUPABASE_URL: "https://vgtgcjnrsladdharzkwn.supabase.co"
+        BUNDLE_ID: "com.egitim_ai_tutor.app"
+      flutter: stable
+      xcode: latest
+      cocoapods: default
+    scripts:
+      - name: Flutter pub get
+        script: flutter pub get
+      - name: Set up provisioning (automatic via ASC API key)
+        script: |
+          # App Store Connect API key ile imzalama profilini çek.
+          xcode-project use-profiles
+      - name: Pod install
+        script: |
+          find . -name "Podfile" -execdir pod install \;
+      - name: Build IPA (release, dart-defines)
+        script: |
+          flutter build ipa --release \
+            --export-options-plist=/Users/builder/export_options.plist \
+            --dart-define=APP_VERSION="$APP_VERSION" \
+            --dart-define=AI_PROVIDER=gemini \
+            --dart-define=KOALA_API_URL="$KOALA_API_URL" \
+            --dart-define=SUPABASE_URL="$SUPABASE_URL" \
+            --dart-define=SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY" \
+            --dart-define=EVLUMBA_SUPABASE_URL="$EVLUMBA_SUPABASE_URL" \
+            --dart-define=EVLUMBA_SUPABASE_ANON_KEY="$EVLUMBA_SUPABASE_ANON_KEY" \
+            --dart-define=REVENUECAT_IOS_KEY="$REVENUECAT_IOS_KEY" \
+            --dart-define=REQUIRE_LOGIN=true
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true     # önce TestFlight — gerçek cihazda test et
+        # submit_to_app_store: false   # TestFlight'ta doğrulayınca true yap
+      email:
+        recipients:
+          - canozdogan@outlook.com
+        notify:
+          success: true
+          failure: true

@@ -46,14 +46,18 @@
 		<key>UIApplicationSupportsIndirectInputEvents</key>
 		<true/>
 		<key>NSCameraUsageDescription</key>
-		<string>We need camera access so you can upload question photos.</string>
+		<string>Koala odanın fotoğrafını çekip tasarım önerileri üretmek için kameraya erişir.</string>
 		<key>NSPhotoLibraryUsageDescription</key>
-		<string>We need photo access to let you choose and crop question images.</string>
+		<string>Koala, oda fotoğrafını seçip kırpman ve tasarım üretmen için fotoğraflarına erişir.</string>
 		<key>NSPhotoLibraryAddUsageDescription</key>
-		<string>We need photo access to process cropped question images.</string>
+		<string>Oluşturulan tasarım görsellerini fotoğraflarına kaydetmek için erişim gerekir.</string>
 		<key>UIStatusBarHidden</key>
 		<true/>
 		<key>UIViewControllerBasedStatusBarAppearance</key>
+		<false/>
+		<!-- Export compliance: uygulama yalnız standart HTTPS/TLS kullanır,
+		     muaf şifreleme. App Store yüklemesinde "encryption" sorusunu atlatır. -->
+		<key>ITSAppUsesNonExemptEncryption</key>
 		<false/>
 	</dict>
 </plist>

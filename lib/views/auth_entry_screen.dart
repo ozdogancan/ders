@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart' show kIsWeb, defaultTargetPlatform, TargetPlatform;
 import 'package:flutter/material.dart';
 
 import 'package:cached_network_image/cached_network_image.dart';
@@ -95,7 +96,13 @@ class _AuthEntryScreenState extends State<AuthEntryScreen>
     );
   }
 
-  // _handleApple kaldırıldı — Apple sign-in devre dışı
+  Future<void> _handleApple() async {
+    await _runAuthAction(
+      action: AuthActionType.apple,
+      provider: 'apple',
+      runner: AuthCoordinator.signInWithApple,
+    );
+  }
 
   Future<void> _runAuthAction({
     required AuthActionType action,
@@ -309,6 +316,23 @@ class _AuthEntryScreenState extends State<AuthEntryScreen>
                                 loading: _loadingAction == AuthActionType.google,
                               ),
                               const SizedBox(height: 16),
+
+                              // Apple ile devam et — App Store 4.8 zorunlu;
+                              // yalnız iOS'ta gösterilir.
+                              if (!kIsWeb &&
+                                  defaultTargetPlatform == TargetPlatform.iOS) ...<Widget>[
+                                AuthActionButton(
+                                  label: 'Apple ile devam et',
+                                  leading: const Icon(Icons.apple,
+                                      color: Colors.black, size: 22),
+                                  onPressed: _loadingAction == null
+                                      ? _handleApple
+                                      : null,
+                                  loading:
+                                      _loadingAction == AuthActionType.apple,
+                                ),
+                                const SizedBox(height: 16),
+                              ],
 
                               // Ayırıcı
                               const _OrDivider(),

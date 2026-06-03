@@ -1,14 +1,18 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:math';
 import 'dart:ui';
 
+import 'package:crypto/crypto.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:http/http.dart' as http;
-// sign_in_with_apple kaldırıldı — Apple sign-in devre dışı
+import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:supabase_flutter/supabase_flutter.dart' hide AuthState, User;
+import 'package:supabase_flutter/supabase_flutter.dart'
+    hide AuthState, User, OAuthProvider;
 
 import 'package:go_router/go_router.dart';
 
@@ -26,7 +30,7 @@ const String _kPrivacyUrl = 'https://www.evlumba.com/privacy';
 
 enum AuthFlowMode { signup, login }
 
-enum AuthActionType { google, phone }
+enum AuthActionType { google, phone, apple }
 
 // ═══════════════════════════════════════════════════
 // AUTH COORDINATOR (business logic — unchanged)
@@ -78,7 +82,53 @@ class AuthCoordinator {
     return _auth.signInWithCredential(credential);
   }
 
-  // signInWithApple kaldırıldı — Apple sign-in devre dışı
+  /// Sign in with Apple — iOS App Store 4.8 için. Firebase OAuth + SHA256
+  /// nonce (replay koruması). Apple ismi yalnız İLK girişte döner; eksikse
+  /// displayName'i set ederiz.
+  static String _generateNonce([int length = 32]) {
+    const charset =
+        '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-._';
+    final random = Random.secure();
+    return List.generate(length, (_) => charset[random.nextInt(charset.length)])
+        .join();
+  }
+
+  static Future<UserCredential> signInWithApple() async {
+    final String rawNonce = _generateNonce();
+    final String hashedNonce =
+        sha256.convert(utf8.encode(rawNonce)).toString();
+
+    final AuthorizationCredentialAppleID appleCredential =
+        await SignInWithApple.getAppleIDCredential(
+      scopes: <AppleIDAuthorizationScopes>[
+        AppleIDAuthorizationScopes.email,
+        AppleIDAuthorizationScopes.fullName,
+      ],
+      nonce: hashedNonce,
+    );
+
+    final OAuthCredential credential = OAuthProvider('apple.com').credential(
+      idToken: appleCredential.identityToken,
+      rawNonce: rawNonce,
+    );
+
+    final UserCredential userCred =
+        await _auth.signInWithCredential(credential);
+
+    // Apple ismi sadece ilk girişte gelir — boşsa doldur.
+    final String fullName = <String?>[
+      appleCredential.givenName,
+      appleCredential.familyName
+    ].where((String? s) => s != null && s.isNotEmpty).join(' ').trim();
+    final User? user = userCred.user;
+    if (fullName.isNotEmpty &&
+        (user?.displayName == null || user!.displayName!.isEmpty)) {
+      try {
+        await user?.updateDisplayName(fullName);
+      } catch (_) {/* best-effort */}
+    }
+    return userCred;
+  }
 
   static Future<void> syncSignup(
     User user, {

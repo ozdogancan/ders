@@ -29,29 +29,43 @@ import '../core/config/env.dart';
 class BillingService {
   BillingService._();
 
-  // Replace via --dart-define=REVENUECAT_ANDROID_KEY=goog_xxxx at build time.
-  static const String _publicKey = String.fromEnvironment(
+  // Platforma göre anahtar — build time dart-define:
+  //   Android: --dart-define=REVENUECAT_ANDROID_KEY=goog_xxxx
+  //   iOS:     --dart-define=REVENUECAT_IOS_KEY=appl_xxxx
+  static const String _androidKey = String.fromEnvironment(
     'REVENUECAT_ANDROID_KEY',
     defaultValue: 'YOUR_REVENUECAT_PUBLIC_KEY',
   );
+  static const String _iosKey = String.fromEnvironment(
+    'REVENUECAT_IOS_KEY',
+    defaultValue: 'YOUR_REVENUECAT_PUBLIC_KEY',
+  );
+
+  /// Aktif platformun RevenueCat public anahtarı.
+  static String get _publicKey =>
+      defaultTargetPlatform == TargetPlatform.iOS ? _iosKey : _androidKey;
 
   static bool _initialized = false;
 
   /// Returns true if billing is supported on this platform/env.
   static bool get isSupported {
     if (kIsWeb) return false;
-    if (defaultTargetPlatform != TargetPlatform.android) return false;
+    if (defaultTargetPlatform != TargetPlatform.android &&
+        defaultTargetPlatform != TargetPlatform.iOS) {
+      return false;
+    }
     return true;
   }
 
   static Future<void> initialize() async {
     if (_initialized) return;
     if (!isSupported) {
-      debugPrint('[billing] skipping init (web or non-Android)');
+      debugPrint('[billing] skipping init (web or unsupported platform)');
       return;
     }
     if (_publicKey == 'YOUR_REVENUECAT_PUBLIC_KEY') {
-      debugPrint('[billing] REVENUECAT_ANDROID_KEY not configured — purchases disabled');
+      debugPrint('[billing] RevenueCat key not configured for '
+          '$defaultTargetPlatform — purchases disabled');
       return;
     }
     try {
