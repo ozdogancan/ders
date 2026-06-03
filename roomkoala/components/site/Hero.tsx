@@ -3,7 +3,7 @@
 import { motion } from "framer-motion";
 import { Sparkles, Star } from "lucide-react";
 import { PhoneMockup } from "./PhoneMockup";
-import { AppScreenSwipe } from "./AppScreenSwipe";
+import { InteractiveSwipeDeck } from "./InteractiveSwipeDeck";
 import { StoreButtons } from "./StoreButtons";
 
 export function Hero() {
@@ -79,28 +79,18 @@ export function Hero() {
             style={{ transform: "rotateX(4deg) rotateY(-8deg)" }}
           >
             <PhoneMockup>
-              <AppScreenSwipe />
+              <InteractiveSwipeDeck />
             </PhoneMockup>
           </motion.div>
 
+          {/* "Kaydır →" ipucu */}
           <motion.div
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: 0.55 }}
-            className="absolute -left-5 top-14 hidden rounded-2xl border border-line bg-surface/95 px-4 py-3 shadow-xl backdrop-blur sm:block"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 1 }}
+            className="absolute -bottom-3 left-1/2 -translate-x-1/2 rounded-full border border-line bg-surface/90 px-4 py-1.5 text-xs font-semibold text-ink-soft shadow-lg backdrop-blur"
           >
-            <p className="text-xs font-bold text-accent-deep">Koala AI</p>
-            <p className="text-sm font-semibold">Rustik · sıcak tonlar ✨</p>
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: 0.7 }}
-            className="absolute -right-4 bottom-24 hidden rounded-2xl border border-line bg-surface/95 px-4 py-3 shadow-xl backdrop-blur sm:block"
-          >
-            <p className="text-xs font-semibold text-muted">Evlumba Design 🤍</p>
-            <p className="text-sm font-bold">İç mimarın yanıtladı</p>
+            👆 Kartı kaydır, dene
           </motion.div>
         </motion.div>
       </div>
