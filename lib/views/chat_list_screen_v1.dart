@@ -563,7 +563,12 @@ class _ChatListScreenV1State extends ConsumerState<ChatListScreenV1> {
         _buildServicesGrid(),
         if (_aiChats.isNotEmpty) ...[
           const SizedBox(height: KoalaSpacing.sm),
-          _buildAiHistoryChip(),
+          // AI sohbetlerini SATIR olarak göster (eskiden sadece "N geçmiş
+          // sohbet" link'iydi, kullanıcı bulamıyordu). İlk 5'i listele,
+          // fazlası varsa altına "tümünü gör" link'i.
+          _buildSectionDivider('Koala AI sohbetlerin'),
+          ..._aiChats.take(5).map(_buildAiChatResultTile),
+          if (_aiChats.length > 5) _buildAiHistoryChip(),
         ],
         if (_conversations.isNotEmpty) ...[
           _buildSoftSeparator(),
