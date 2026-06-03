@@ -600,6 +600,50 @@ class EvlumbaLiveService {
     return out;
   }
 
+  /// Her projeyi, içindeki TÜM görsellere (designer_project_images) göre ayrı
+  /// kartlara açar. Evlumba'da bir projede birden çok tasarım görseli olabilir
+  /// (örn. Seher Mıdık "Oturma Odası" projesinde 2 görsel) — her görsel ayrı
+  /// bir tasarım kartı olur. Görseli olmayan proje cover'ıyla tek kart üretir.
+  /// URL bazında global dedupe (aynı foto iki projede tekrarsa bir kez).
+  static List<Map<String, dynamic>> expandProjectImages(
+    List<Map<String, dynamic>> rows,
+  ) {
+    final seen = <String>{};
+    final out = <Map<String, dynamic>>[];
+    for (final p in rows) {
+      final imgs = (p['designer_project_images'] as List?)
+              ?.whereType<Map>()
+              .map((e) => Map<String, dynamic>.from(e))
+              .toList() ??
+          <Map<String, dynamic>>[];
+      imgs.sort((a, b) => ((a['sort_order'] as num?)?.toInt() ?? 0)
+          .compareTo((b['sort_order'] as num?)?.toInt() ?? 0));
+      final urls = <String>[];
+      for (final im in imgs) {
+        final v = (im['image_url'] ?? '').toString().trim();
+        if (v.isNotEmpty && !v.startsWith('data:')) urls.add(v);
+      }
+      if (urls.isEmpty) {
+        final c = coverUrlOf(p);
+        if (c.isNotEmpty) urls.add(c);
+      }
+      var idx = 0;
+      for (final url in urls) {
+        if (!seen.add(url)) continue;
+        final card = Map<String, dynamic>.from(p)
+          ..remove('designer_project_images')
+          ..['id'] = '${p['id']}#$idx'
+          ..['_project_id'] = p['id']
+          ..['cover_image_url'] = url
+          ..['cover_url'] = url
+          ..['image_url'] = url;
+        out.add(card);
+        idx++;
+      }
+    }
+    return out;
+  }
+
   /// Yayınlanmış projeleri getir (feed / keşfet)
   static Future<List<Map<String, dynamic>>> getProjects({
     int limit = 20,
@@ -759,8 +803,9 @@ class EvlumbaLiveService {
       // proje row'ları (Evlumba'da aynı foto 2 oda etiketiyle) tek karta iner.
       final nextCursor =
           rows.isNotEmpty ? rows.last['created_at']?.toString() : null;
+      // Her proje görseli ayrı kart (galeri içindeki tüm tasarımlar görünsün).
       return (
-        items: dedupeByCover(rows),
+        items: expandProjectImages(rows),
         hasMore: rows.length >= limit,
         cursor: nextCursor,
       );
@@ -779,30 +824,39 @@ class EvlumbaLiveService {
         await waitForReady(timeout: const Duration(seconds: 4));
       }
       if (!isReady) return 0;
-      // 2026-06-02 FIX: Ham satır sayısı, aynı kapak görselinin farklı
-      // project_type satırlarıyla tekrarı yüzünden gösterilen (dedupe'li)
-      // grid'den FAZLA geliyordu (ör. 2 tasarım → "3"). Profil/chat'te kapak
-      // bazında dedupe yapılıyor; sayı da BENZERSİZ kapak sayısı olmalı.
+      // 2026-06-03: Sayım GÖRSEL bazında — her proje içindeki tüm
+      // designer_project_images ayrı tasarım sayılır (grid ile birebir).
+      // is_published filtresi YOK (grid de filtrelemiyor — Evlumba küratörlü).
       final res = await client
           .from('designer_projects')
-          .select('cover_image_url, cover_url, image_url')
+          .select('cover_image_url, cover_url, image_url, designer_project_images(image_url)')
           .eq('designer_id', designerId)
-          .eq('is_published', true)
           .limit(500);
       final rows = List<Map<String, dynamic>>.from(res);
-      final covers = <String>{};
-      var noCover = 0;
+      final urls = <String>{};
+      var noUrl = 0;
       for (final r in rows) {
-        final c = (r['cover_image_url'] ?? r['cover_url'] ?? r['image_url'] ?? '')
-            .toString()
-            .trim();
-        if (c.isEmpty) {
-          noCover++; // kapağı olmayanları ayrı say (dedupe edilmez)
+        final imgs = (r['designer_project_images'] as List?)
+                ?.whereType<Map>()
+                .map((e) => (e['image_url'] ?? '').toString().trim())
+                .where((v) => v.isNotEmpty && !v.startsWith('data:'))
+                .toList() ??
+            <String>[];
+        if (imgs.isEmpty) {
+          final c =
+              (r['cover_image_url'] ?? r['cover_url'] ?? r['image_url'] ?? '')
+                  .toString()
+                  .trim();
+          if (c.isEmpty || c.startsWith('data:')) {
+            noUrl++;
+          } else {
+            urls.add(c);
+          }
         } else {
-          covers.add(c);
+          urls.addAll(imgs);
         }
       }
-      return covers.length + noCover;
+      return urls.length + noUrl;
     } catch (e) {
       debugPrint('EvlumbaLive.designerProjectsCount($designerId) failed: $e');
       return 0;
