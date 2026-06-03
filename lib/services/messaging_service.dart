@@ -342,7 +342,7 @@ class MessagingService {
       // edilsin diye. 'archived' filter Dart tarafında yapılıyor.
       final res = await _db
           .from('koala_conversations')
-          .select('id, user_id, designer_id, title, last_message, last_message_at, unread_count_user, unread_count_designer, status')
+          .select('id, user_id, designer_id, designer_name, designer_avatar, title, last_message, last_message_at, unread_count_user, unread_count_designer, status')
           .or('user_id.eq.$uid,designer_id.eq.$uid')
           .order('last_message_at', ascending: false)
           .range(offset, offset + limit - 1);

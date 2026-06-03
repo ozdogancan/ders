@@ -950,13 +950,10 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
       SliverPadding(
         padding: const EdgeInsets.symmetric(horizontal: 16),
         sliver: SliverGrid(
-          // 2026-06-02 FIX: Sabit 2 sütun GENİŞ EKRANDA (masaüstü/web) her tile'ı
-          // ekranın yarısı yapıp devasa kılıyordu → ekrana 1 tasarım sığıyor,
-          // kalanı scroll'da geliyordu. RESPONSIVE: max tile genişliği ile —
-          // dar ekran (telefon) ~2 sütun, geniş ekran (masaüstü) çok sütun →
-          // tüm tasarımlar bir bakışta. Tile portre oranı (0.78) korunur.
-          gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-            maxCrossAxisExtent: 210,
+          // 2026-06-03: Kullanıcı tercihi — profil popup'ında tasarımlar HER ZAMAN
+          // 2 sütun. (Responsive max-extent geniş ekranda 3+ sütun yapıyordu.)
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 2,
             mainAxisSpacing: 12,
             crossAxisSpacing: 12,
             childAspectRatio: 0.78,
