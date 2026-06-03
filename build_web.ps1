@@ -85,6 +85,25 @@ if ($mainJs -match "AIzaSy") {
     Write-Host "WARNING: Gemini API key found in build output! Check dart-defines." -ForegroundColor Red
 }
 
+# ── Cache-bust: inject a UNIQUE BUILD_VERSION into the built index.html ──
+# If BUILD_VERSION stays constant across deploys, the head kill-switch
+# (prev === BUILD_VERSION) early-returns and never clears the service worker
+# or caches, so users get stuck on stale assets (the recurring splash hang).
+# A unique value per build (APP_VERSION + timestamp) guarantees the kill-switch
+# runs once per deploy for each user. ASCII-only to keep PS5.1 happy.
+$stamp = Get-Date -Format "yyyyMMddHHmmss"
+$uniqueVersion = "$APP_VERSION+$stamp"
+$indexPath = Join-Path $buildDir "index.html"
+if (Test-Path $indexPath) {
+    $html = Get-Content $indexPath -Raw
+    $html = [System.Text.RegularExpressions.Regex]::Replace($html, "var BUILD_VERSION = '[^']*';", "var BUILD_VERSION = '$uniqueVersion';")
+    $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+    [System.IO.File]::WriteAllText((Resolve-Path $indexPath).Path, $html, $utf8NoBom)
+    Write-Host "  BUILD_VERSION=$uniqueVersion injected (cache-bust)" -ForegroundColor DarkGray
+} else {
+    Write-Host "WARNING: index.html not found - BUILD_VERSION not injected" -ForegroundColor Yellow
+}
+
 Write-Host "`nBuild complete! Output: $buildDir" -ForegroundColor Green
 Write-Host "Deploy with: vercel --prod" -ForegroundColor Cyan
 Write-Host ""
