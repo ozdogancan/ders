@@ -27,6 +27,16 @@ interface TgCallbackQuery {
   data?: string;
 }
 
+interface TgMessage {
+  message_id: number;
+  text?: string;
+  caption?: string;
+  reply_to_message?: { text?: string; caption?: string };
+}
+
+const UUID_RE =
+  /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+
 async function tg(token: string, method: string, body: unknown): Promise<void> {
   try {
     // 2026-06-02: Türkçe karakterler "?" gelmesin diye açık UTF-8 encode.
@@ -47,7 +57,7 @@ export async function POST(req: NextRequest) {
   const { data: cfgRows } = await sb
     .from('koala_bridge_config')
     .select('key, value')
-    .in('key', ['tg_bot_token', 'tg_webhook_secret']);
+    .in('key', ['tg_bot_token', 'tg_webhook_secret', 'bridge_secret']);
   const cfg = new Map((cfgRows ?? []).map((r) => [r.key as string, r.value as string]));
   const tgToken = cfg.get('tg_bot_token');
   const webhookSecret = cfg.get('tg_webhook_secret');
@@ -61,15 +71,52 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: 'bot_token_missing' }, { status: 500 });
   }
 
-  let update: { callback_query?: TgCallbackQuery };
+  let update: { callback_query?: TgCallbackQuery; message?: TgMessage };
   try {
     update = await req.json();
   } catch {
     return NextResponse.json({ ok: true }); // yut, Telegram retry etmesin
   }
 
+  // ─── Mesaj YANITI köprüsü: Telegram → Koala ──────────────────────
+  // Webhook kurulu olduğu için getUpdates (n8n polling) çalışmıyor; admin'in
+  // gruptaki YANIT (reply) mesajını burada işleyip Koala sohbetine yazıyoruz.
+  // Köprü mesajı "konu: <conversation_id>" içeriyor → reply_to'dan UUID çıkar.
+  const msg = update.message;
+  if (msg && msg.reply_to_message) {
+    const repliedText =
+      msg.reply_to_message.text ?? msg.reply_to_message.caption ?? '';
+    const convMatch = repliedText.match(UUID_RE);
+    const content = (msg.text ?? msg.caption ?? '').trim();
+    const bridgeSecret = cfg.get('bridge_secret');
+    if (convMatch && content && bridgeSecret) {
+      try {
+        const { data: rpcRes, error: rpcErr } = await sb.rpc(
+          'koala_bridge_post_reply',
+          {
+            p_conversation_id: convMatch[0],
+            p_content: content,
+            p_secret: bridgeSecret,
+            p_tg_message_id: String(msg.message_id),
+          },
+        );
+        if (rpcErr) {
+          console.error('[tg/webhook] post_reply error:', rpcErr.message);
+        } else {
+          console.log('[tg/webhook] reply bridged → conv', convMatch[0], rpcRes);
+        }
+      } catch (e) {
+        console.error('[tg/webhook] post_reply exception:',
+          e instanceof Error ? e.message : String(e));
+      }
+    } else {
+      console.log('[tg/webhook] reply ignored (no uuid/content/secret)');
+    }
+    return NextResponse.json({ ok: true });
+  }
+
   const cq = update.callback_query;
-  // callback dışındaki update'leri (mesaj vs.) sessizce yok say.
+  // callback ve reply dışındaki update'leri sessizce yok say.
   if (!cq || !cq.data) return NextResponse.json({ ok: true });
 
   const m = cq.data.match(/^prodec:(approve|reject):(.+)$/);
