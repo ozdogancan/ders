@@ -2,16 +2,17 @@
 
 /* ── Koala marka paleti (uygulamayla birebir) ── */
 @theme {
-  --color-cream: #f6f1eb;
-  --color-cream-deep: #efe6d9;
+  /* Aydınlık & canlı (Stripe/Framer) yön — near-white zemin, canlı gradient */
+  --color-cream: #fbfbfe;
+  --color-cream-deep: #f4f2fe;
   --color-surface: #ffffff;
-  --color-ink: #1a1a1a;
-  --color-ink-soft: #4a4a4a;
-  --color-muted: #8e8e93;
+  --color-ink: #0f1020;
+  --color-ink-soft: #44465a;
+  --color-muted: #8b8da3;
   --color-accent: #7c6ef2;
   --color-accent-deep: #6c5ce7;
-  --color-accent-soft: #f3f0ff;
-  --color-line: #e9e2d8;
+  --color-accent-soft: #f1eeff;
+  --color-line: #eceaf6;
 
   --font-sans: var(--font-manrope), ui-sans-serif, system-ui, -apple-system,
     "Segoe UI", Roboto, sans-serif;
@@ -35,6 +36,31 @@ body {
     rgba(124, 110, 242, 0.18) 0%,
     rgba(124, 110, 242, 0) 70%
   );
+}
+
+/* Canlı mesh gradient (Stripe/Framer) — aydınlık zeminde doygun renkler */
+.mesh-vivid {
+  background-color: #fbfbfe;
+  background-image:
+    radial-gradient(at 12% 18%, rgba(124, 110, 242, 0.55) 0px, transparent 45%),
+    radial-gradient(at 85% 12%, rgba(244, 114, 182, 0.45) 0px, transparent 45%),
+    radial-gradient(at 78% 72%, rgba(56, 189, 248, 0.45) 0px, transparent 45%),
+    radial-gradient(at 22% 80%, rgba(251, 146, 110, 0.40) 0px, transparent 45%);
+}
+.mesh-soft {
+  background-color: #fbfbfe;
+  background-image:
+    radial-gradient(at 0% 0%, rgba(124, 110, 242, 0.18) 0px, transparent 40%),
+    radial-gradient(at 100% 0%, rgba(244, 114, 182, 0.16) 0px, transparent 40%);
+}
+
+@keyframes meshShift {
+  0%, 100% { background-position: 0% 0%, 100% 0%, 100% 100%, 0% 100%; }
+  50% { background-position: 8% 6%, 92% 8%, 90% 92%, 6% 94%; }
+}
+.mesh-animate {
+  background-size: 140% 140%, 140% 140%, 140% 140%, 140% 140%;
+  animation: meshShift 18s ease-in-out infinite;
 }
 
 .text-balance {

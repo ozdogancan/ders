@@ -9,20 +9,17 @@ import { StoreButtons } from "./StoreButtons";
 export function Hero() {
   return (
     <section className="relative overflow-hidden">
-      {/* Hareketli gradient blob arka plan */}
-      <div className="pointer-events-none absolute inset-0 -z-10">
-        <div className="animate-blob absolute -left-20 top-0 h-72 w-72 rounded-full bg-accent/30" />
-        <div className="animate-blob animation-delay-2000 absolute right-0 top-10 h-80 w-80 rounded-full bg-[#f0b6d8]/40" />
-        <div className="animate-blob animation-delay-4000 absolute bottom-0 left-1/3 h-72 w-72 rounded-full bg-[#b6d8f0]/40" />
-      </div>
+      {/* Canlı mesh gradient (Stripe/Framer) + alt beyaz geçiş */}
+      <div className="mesh-vivid mesh-animate pointer-events-none absolute inset-0 -z-10" />
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 -z-10 h-40 bg-gradient-to-t from-cream to-transparent" />
 
-      <div className="mx-auto grid max-w-6xl items-center gap-12 px-5 pb-16 pt-14 md:grid-cols-2 md:gap-8 md:pb-24 md:pt-20">
+      <div className="mx-auto grid max-w-6xl items-center gap-12 px-5 pb-20 pt-16 md:grid-cols-2 md:gap-8 md:pb-28 md:pt-24">
         <div>
           <motion.span
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5 }}
-            className="inline-flex items-center gap-2 rounded-full border border-line bg-surface/80 px-4 py-1.5 text-sm font-semibold text-accent-deep backdrop-blur"
+            className="inline-flex items-center gap-2 rounded-full border border-white/60 bg-white/70 px-4 py-1.5 text-sm font-semibold text-accent-deep shadow-sm backdrop-blur"
           >
             <Sparkles size={15} /> Yapay zekâ destekli iç mekân asistanın
           </motion.span>
@@ -31,10 +28,13 @@ export function Hero() {
             initial={{ opacity: 0, y: 18 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.05 }}
-            className="text-balance mt-5 text-4xl font-extrabold leading-[1.04] tracking-tight sm:text-5xl lg:text-[3.6rem]"
+            className="text-balance mt-6 text-5xl font-extrabold leading-[0.98] tracking-[-0.03em] sm:text-6xl lg:text-[4.4rem]"
           >
             Hayalindeki evi{" "}
-            <span className="text-accent-deep">saniyeler içinde</span> tasarla.
+            <span className="bg-gradient-to-r from-accent-deep via-[#a855f7] to-[#ec4899] bg-clip-text text-transparent">
+              saniyeler içinde
+            </span>{" "}
+            tasarla.
           </motion.h1>
 
           <motion.p
