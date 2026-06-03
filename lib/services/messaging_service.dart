@@ -530,7 +530,7 @@ class MessagingService {
       // 2. Conversation'i guncelle (son mesaj + unread count)
       final conv = await _db
           .from('koala_conversations')
-          .select('user_id, designer_id')
+          .select('user_id, designer_id, evlumba_designer_id')
           .eq('id', conversationId)
           .single();
 
@@ -592,11 +592,17 @@ class MessagingService {
       //    'evlumba-design' = Koala içi Evlumba stüdyo kanalı (gerçek bir
       //    Evlumba tasarımcısı değil) → Evlumba DB'ye mirror EDİLMEZ; bu
       //    mesajlar n8n Telegram köprüsünden ilerler.
+      // Köprü için Evlumba designer id'sini kullan (bağlı tasarımcılarda
+      // designer_id artık Koala uid'idir; gerçek Evlumba id evlumba_designer_id'de).
+      final bridgeDesignerId =
+          (conv['evlumba_designer_id'] as String?)?.trim().isNotEmpty == true
+              ? conv['evlumba_designer_id'] as String
+              : conv['designer_id'] as String;
       if (isUser &&
           (type == MessageType.text || type == MessageType.image) &&
-          (conv['designer_id'] as String?) != 'evlumba-design') {
+          bridgeDesignerId != 'evlumba-design') {
         unawaited(_bridgeToEvlumba(
-          designerId: conv['designer_id'] as String,
+          designerId: bridgeDesignerId,
           body: content,
           koalaConversationId: conversationId,
           attachmentUrl: type == MessageType.image ? attachmentUrl : null,

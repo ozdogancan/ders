@@ -92,6 +92,27 @@ export async function POST(req: NextRequest) {
   try {
     const admin = koalaAdmin();
 
+    // ─── Evlumba designer → Koala hesabı eşlemesi ────────────────
+    // Bazı Evlumba tasarımcılarının (örn. Muratcan) ayrı bir Koala pro
+    // hesabı var. Mesajın Koala'da doğru kişiye düşmesi + tasarımcının kendi
+    // sohbet listesinde görmesi için designer_id = Koala uid yapılır;
+    // Evlumba köprüsü için orijinal id `evlumba_designer_id`'de saklanır.
+    let effectiveDesignerId = designerId;
+    let evlumbaDesignerId: string | null = null;
+    try {
+      const { data: link } = await admin
+        .from('koala_designer_links')
+        .select('koala_uid')
+        .eq('evlumba_designer_id', designerId)
+        .maybeSingle();
+      if (link?.koala_uid) {
+        effectiveDesignerId = link.koala_uid as string;
+        evlumbaDesignerId = designerId;
+      }
+    } catch (e) {
+      console.error('[conv/ensure] designer link lookup failed:', e);
+    }
+
     // NOT: Eskiden burada `users` tablosuna idempotent upsert vardı —
     // koala_conversations.user_id'nin users(id) FK'sine bağlı olduğu
     // varsayımıyla. Gerçekte koala_conversations.user_id `text` ve tabloda
@@ -105,7 +126,7 @@ export async function POST(req: NextRequest) {
       .from('koala_conversations')
       .select('*')
       .eq('user_id', firebaseUid)
-      .eq('designer_id', designerId)
+      .eq('designer_id', effectiveDesignerId)
       .maybeSingle();
 
     if (selErr) {
@@ -124,7 +145,8 @@ export async function POST(req: NextRequest) {
       .from('koala_conversations')
       .insert({
         user_id: firebaseUid,
-        designer_id: designerId,
+        designer_id: effectiveDesignerId,
+        evlumba_designer_id: evlumbaDesignerId,
         title,
         status: 'active',
       })
