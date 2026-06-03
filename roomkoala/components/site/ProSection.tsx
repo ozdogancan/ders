@@ -2,12 +2,12 @@ import { Check, Crown } from "lucide-react";
 import { Reveal } from "./Reveal";
 import { LINKS } from "@/lib/utils";
 
+// Koddaki gerçek Pro avantajları (paywall_screen) — uydurma yok.
 const perks = [
-  "Sınırsız oda yeniden tasarlama",
-  "Sınırsız kaydır & keşfet",
-  "İç mimarlarla önceliklendirilmiş sohbet",
-  "Yüksek çözünürlüklü indirme",
-  "Reklamsız, kesintisiz deneyim",
+  "Sınırsız AI tasarım sohbeti",
+  "Fotoğrafından sınırsız mekan dönüşümü",
+  "Uzmanlardan öncelikli, hızlı yanıt",
+  "Sınırsız kaydır & keşfet (günlük limit yok)",
 ];
 
 export function ProSection() {

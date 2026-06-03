@@ -7,10 +7,8 @@ import { Menu, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const items = [
-  { href: "#ozellikler", label: "Özellikler" },
-  { href: "#nasil", label: "Nasıl çalışır" },
+  { href: "#kesfet", label: "Keşfet" },
   { href: "#pro", label: "Koala Pro" },
-  { href: "#sss", label: "SSS" },
   { href: "#indir", label: "İndir" },
 ];
 

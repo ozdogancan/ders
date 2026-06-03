@@ -2,14 +2,12 @@ import { Nav } from "@/components/site/Nav";
 import { Hero } from "@/components/site/Hero";
 import { Stats } from "@/components/site/Stats";
 import { SwipeShowcase } from "@/components/site/SwipeShowcase";
-import { ShowcaseMarquee } from "@/components/site/ShowcaseMarquee";
-import { Features } from "@/components/site/Features";
+import { KoalaAIChat } from "@/components/site/KoalaAIChat";
+import { RestyleTool } from "@/components/site/RestyleTool";
 import { Highlights } from "@/components/site/Highlights";
-import { HowItWorks } from "@/components/site/HowItWorks";
-import { BeforeAfter } from "@/components/site/BeforeAfter";
+import { ShowcaseMarquee } from "@/components/site/ShowcaseMarquee";
 import { ProSection } from "@/components/site/ProSection";
 import { DownloadCTA } from "@/components/site/DownloadCTA";
-import { FAQ } from "@/components/site/FAQ";
 import { Footer } from "@/components/site/Footer";
 
 export default function Home() {
@@ -20,13 +18,11 @@ export default function Home() {
         <Hero />
         <Stats />
         <SwipeShowcase />
-        <ShowcaseMarquee />
-        <Features />
+        <KoalaAIChat />
+        <RestyleTool />
         <Highlights />
-        <HowItWorks />
-        <BeforeAfter />
+        <ShowcaseMarquee />
         <ProSection />
-        <FAQ />
         <DownloadCTA />
       </main>
       <Footer />

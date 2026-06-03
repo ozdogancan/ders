@@ -1,10 +1,10 @@
 import Image from "next/image";
-import { MessagesSquare, BadgeCheck, Sparkles, ArrowRight } from "lucide-react";
+import { BadgeCheck, Sparkles, ArrowRight } from "lucide-react";
 import { Reveal } from "./Reveal";
 
 type Row = {
   eyebrow: string;
-  icon: typeof MessagesSquare;
+  icon: typeof BadgeCheck;
   title: string;
   desc: string;
   bullets: string[];
@@ -15,31 +15,17 @@ type Row = {
 
 const rows: Row[] = [
   {
-    eyebrow: "Koala AI Danışman",
-    icon: MessagesSquare,
-    title: "Aklındaki her soruya anında yanıt",
-    desc: "“Salonum için rustik bir aydınlatma arıyorum” yaz — Koala AI ürün, renk, bütçe ve düzen için somut öneriler versin. Tıpkı yanında bir danışman varmış gibi.",
-    bullets: [
-      "Ürün ve mağaza önerileri",
-      "Bütçene göre kalem kalem plan",
-      "Stil ve renk paleti tavsiyeleri",
-    ],
-    image: "/brand/onboarding/step2.webp",
-    imageAlt: "Koala AI sohbet ekranı",
-  },
-  {
-    eyebrow: "Evlumba Design",
+    eyebrow: "Evlumba Design · Premium",
     icon: BadgeCheck,
     title: "Gerçek iç mimarlarla hayalini gerçeğe çevir",
-    desc: "İlhamı aldın, sıra uygulamada. Evlumba stüdyosundaki sertifikalı iç mimarlara tek dokunuşla ulaş; projeni birlikte hayata geçirin. İlk danışma ücretsiz.",
+    desc: "İlhamı aldın, sıra uygulamada. Evlumba stüdyosundaki sertifikalı iç mimarlara uygulama içinden tek dokunuşla ulaş; projeni birlikte hayata geçirin.",
     bullets: [
-      "Sertifikalı, gerçek iç mimarlar",
-      "Uygulama içinden kolay mesajlaşma",
+      "Sertifikalı iç mimar kadrosu",
+      "1 saat içinde yanıt",
       "İlk danışma tamamen ücretsiz",
     ],
     image: "/brand/pro/hero_2.webp",
     imageAlt: "Evlumba Design ile tasarlanmış mekân",
-    reverse: true,
   },
 ];
 
