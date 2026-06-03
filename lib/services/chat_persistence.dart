@@ -97,10 +97,20 @@ class ChatPersistence {
   // ── Messages ──
 
   static Future<List<Map<String, dynamic>>> loadMessages(String chatId) async {
-    // Supabase'den dene
+    // Supabase'den dene — KOLON EŞLEME: Supabase 'content'/'image_url' tutar,
+    // UI ise 'text'/'imageUrl' okur. Eşlemezsek balonlar BOŞ görünür (sadece
+    // saat damgası). content → text, image_url → imageUrl çevir.
     try {
       final messages = await AIChatHistoryService.getMessages(chatId);
-      if (messages.isNotEmpty) return messages;
+      if (messages.isNotEmpty) {
+        return messages.map((m) => <String, dynamic>{
+              'role': m['role'],
+              'text': m['content'] ?? m['text'],
+              'cards': m['cards'],
+              'imageUrl': m['image_url'] ?? m['imageUrl'],
+              'created_at': m['created_at'],
+            }).toList();
+      }
     } catch (e) {
       debugPrint('ChatPersistence: Supabase messages load failed: $e');
     }
