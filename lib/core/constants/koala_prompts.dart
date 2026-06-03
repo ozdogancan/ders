@@ -417,15 +417,30 @@ SADECE JSON.
 
   /// Serbest sohbet — MİNİMAL prompt. Sistem talimatı zaten Koala'yı tanımlıyor.
   /// Dart tarafında algılanan tool hint'i burada iletilir.
-  static String freeChat(String userMessage, {String? toolHint}) {
+  static String freeChat(String userMessage,
+      {String? toolHint, String? designerNameHint}) {
     final hint = (toolHint != null && toolHint.isNotEmpty)
-        ? 'TOOL_HINT=$toolHint — bu tool çağrısını yapmak zorundasın, ürün/tasarımcı/proje adı UYDURMA.\n'
+        ? 'TOOL_HINT=$toolHint — bu tool çağrısını ŞİMDİ yapmak zorundasın, '
+            'ürün/tasarımcı/proje adı UYDURMA. Önce soru sorma, ARA ve kart döndür.\n'
+        : '';
+    final nameHint = (toolHint == 'search_designers' &&
+            designerNameHint != null &&
+            designerNameHint.isNotEmpty)
+        ? 'ALGILANAN_İSİM="$designerNameHint" — search_designers çağrısında '
+            'query="$designerNameHint" ver. Bu bir kişi/tasarımcı adı; '
+            'ASLA selamlama ya da kullanıcının kendini tanıtması sanma.\n'
         : '';
     return '''
 Kullanıcının son mesajı: "$userMessage"
-$hint
+$hint$nameHint
 Koala kimliğini sistem talimatı tanımlıyor. Şu kurallara uy:
 - 1-2 cümle doğal Türkçe yanıt ver. Klişe girişlerle başlama.
+- ÖZEL İSİM (büyük harfle başlayan kişi adı) gördüğünde bunu selamlama ya da
+  "kullanıcı kendini tanıtıyor" sanma; uzman/tasarımcı arama bağlamındaysa
+  search_designers'ı query=isim ile çağır.
+- Uzman/tasarımcı isteğinde ÖNCE şehir/stil SORMA — elindeki bilgiyle hemen
+  search_designers çağır, kartları göster. Sonuç boşsa O ZAMAN tek bir
+  netleştirici soru sor.
 - Selamlama/kısa sohbetse sadece message yaz, cards: [].
 - İç mekan konusu ve somut talepse uygun kartı üret (style_analysis, color_palette, product_grid, project_card, designer_card, budget_plan, quick_tips, question_chips).
 - Ürün/tasarımcı/proje adı UYDURMA — gerekirse ilgili fonksiyonu çağır.

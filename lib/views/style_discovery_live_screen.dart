@@ -1069,8 +1069,13 @@ class _StyleDiscoveryLiveScreenState
   /// şekline çevir ve `_designerCache`'i (ev sahibi adı/avatarı) hydrate et.
   Future<void> _loadUserDesignPool() async {
     try {
-      final data = await Supabase.instance.client
-          .rpc('koala_swipe_user_designs', params: {'p_limit': 50, 'p_offset': 0});
+      // Kendi yayınladığın tasarımı kendi swipe akışında görme — p_viewer ile
+      // sunucu tarafında ele (auth.uid() Firebase'de güvenilir değil).
+      final viewerUid = FirebaseAuth.instance.currentUser?.uid;
+      final data = await Supabase.instance.client.rpc(
+        'koala_swipe_user_designs',
+        params: {'p_limit': 50, 'p_offset': 0, 'p_viewer': viewerUid},
+      );
       if (data == null) return;
       final rows = (data as List)
           .whereType<Map>()
@@ -1092,13 +1097,24 @@ class _StyleDiscoveryLiveScreenState
           'created_at': r['created_at'],
           '_user_share': true,
         });
-        // Sol-alt blok için ev sahibi adını/avatarını cache'le (ağ turu yok).
+        // Sol-alt blok için ev sahibi adını/avatarını/mesleğini cache'le.
+        // Pro kullanıcı → mesleği (örn. "İç Mimar"); ev sahibi → "Ev Sahibi".
         if (!_designerCache.containsKey(did)) {
+          final mode = (r['designer_mode'] ?? 'homeowner').toString();
+          var prof = (r['designer_profession'] ?? '').toString().trim();
+          if (prof.isNotEmpty) {
+            prof = prof.replaceAll(RegExp(r'\s*\(.*?\)'), '');
+            prof = prof.split(RegExp(r'\s*[,\-–—]\s*')).first.trim();
+          }
+          final label = mode == 'pro'
+              ? (prof.isNotEmpty ? prof : 'Profesyonel Tasarımcı')
+              : 'Ev Sahibi';
           _designerCache[did] = {
             'id': did,
             'full_name': (r['designer_name'] ?? 'Koala Kullanıcısı').toString(),
             'avatar_url': (r['designer_avatar'] ?? '').toString(),
-            'profession': 'Koala Kullanıcısı',
+            'profession': label,
+            'is_pro': mode == 'pro',
             '_partial': true,
           };
         }

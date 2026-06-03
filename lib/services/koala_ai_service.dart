@@ -415,6 +415,34 @@ class KoalaAIService {
     return _productIntentRegex.hasMatch(text);
   }
 
+  /// "Muratcan uzmanını bul", "iç mimar Ahmet", "Muratcan Yeniaras" gibi
+  /// mesajlardan olası kişi/tasarımcı adını çıkar. Trigger kelimeleri ve
+  /// fiilleri at, kalan özel-isim (büyük harfle başlayan) kelimeleri döndür.
+  /// Bulamazsa null → Gemini query'siz oda/stil önerisine düşer.
+  String? _extractDesignerName(String text) {
+    // Tasarımcı/uzman/fiil/oda kelimeleri — isim adayı değil.
+    final stop = RegExp(
+        r'^(tasarımcı|tasarimci|iç|ic|mimar|mimari|dekoratör|dekorator|uzman|uzmanı|uzmani|uzmanını|uzmanini|designer|expert|bul|bulur|bula|bulabilir|ara|arar|öner|oner|misin|musun|bana|bir|en|iyi|lütfen|lutfen|göster|goster|salon|mutfak|banyo|ofis|yatak|oda|odası|odasi|çocuk|cocuk|için|icin|şehir|sehir|istanbul|ankara|izmir|modern|klasik|minimalist)$',
+        caseSensitive: false);
+    final words = text
+        .replaceAll(RegExp(r'[^\p{L}\s]', unicode: true), ' ')
+        .split(RegExp(r'\s+'))
+        .where((w) => w.trim().isNotEmpty)
+        .toList();
+    final name = <String>[];
+    for (final w in words) {
+      if (stop.hasMatch(w)) continue;
+      if (w.length < 2) continue;
+      // Özel isim adayı: ilk harf büyük.
+      final first = w.substring(0, 1);
+      if (first == first.toUpperCase() && first != first.toLowerCase()) {
+        name.add(w);
+      }
+    }
+    if (name.isEmpty) return null;
+    return name.take(3).join(' ');
+  }
+
   /// JSON response intents — these return structured JSON (responseMimeType).
   /// Casual chat returns plain text, NOT JSON.
   static const Set<KoalaIntent> _jsonIntents = {
@@ -493,14 +521,20 @@ class KoalaAIService {
           final txt = freeText ?? 'Merhaba';
           // Dart-side intent detection → TOOL_HINT
           String? toolHint;
+          String? designerName;
           if (_isProductRequest(txt)) {
             toolHint = 'search_products';
-          } else if (RegExp(r'(tasarımcı|iç\s*mimar|mimar|uzman)', caseSensitive: false).hasMatch(txt)) {
+          } else if (RegExp(
+                  r'(tasarımcı|iç\s*mimar|mimar|dekoratör|dekorat[oö]r|uzman|designer|expert)',
+                  caseSensitive: false)
+              .hasMatch(txt)) {
             toolHint = 'search_designers';
+            designerName = _extractDesignerName(txt);
           } else if (RegExp(r'(proje|ilham|örnek|göster)', caseSensitive: false).hasMatch(txt)) {
             toolHint = 'search_projects';
           }
-          prompt = KoalaPrompts.freeChat(txt, toolHint: toolHint);
+          prompt = KoalaPrompts.freeChat(txt,
+              toolHint: toolHint, designerNameHint: designerName);
         }
       case KoalaIntent.colorPaletteFromPhoto:
         prompt = KoalaPrompts.colorPaletteFromPhoto();

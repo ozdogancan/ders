@@ -95,6 +95,10 @@ class UnifiedProfileView extends StatefulWidget {
 
 class _UnifiedProfileViewState extends State<UnifiedProfileView> {
   KoalaUserProfile? _profile;
+  // Gerçek bir koala_user_profiles satırı var mı? (boş placeholder değil).
+  // Varsa profil koala kullanıcısıdır → grid/rol bu profili baz alır,
+  // swipe'tan geçen seedProfile (Evlumba denorm. alanları) ezilmez.
+  bool _hasRealProfile = false;
   Map<String, dynamic>? _designerRow; // From profiles table (designers)
   /// Server-side toplam tasarım sayısı (count exact). Header için "N adet"
   /// göstermek için doğrudan kullanılır.
@@ -441,6 +445,7 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
       final ups = await UserProfileService.getMany([widget.profileId]);
       if (ups.isNotEmpty) {
         _profile = ups.first;
+        _hasRealProfile = true;
       } else {
         _profile = KoalaUserProfile(uid: widget.profileId);
       }
@@ -604,8 +609,10 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
       }
 
       // Other user (not designer) — public shared_designs + public AI projects.
-      // _designerRow null ise civil kullanıcı profili.
-      if (_designerRow == null) {
+      // _designerRow null ise (ya da gerçek koala kullanıcı profili varsa,
+      // ki swipe'tan seedProfile geçtiğinde _designerRow dolu olur) civil
+      // kullanıcı kabul et — Evlumba designer_projects'e GİTME (boş grid bug'ı).
+      if (_designerRow == null || _hasRealProfile) {
         debugPrint(
             '[profile-grid] fetch other-user public cursor=$cursor uid=${widget.profileId}');
         // Tek fazlı: shared_designs (status=published) — AI public yoksa boş.
@@ -828,29 +835,32 @@ class _UnifiedProfileViewState extends State<UnifiedProfileView> {
   }
 
   String get _role {
+    // GERÇEK koala kullanıcı profili varsa o belirler — swipe'tan geçen
+    // seedProfile placeholder'ını ("Koala Kullanıcısı" vb.) ezme.
+    // Pro → başvuruda girilen meslek (örn. "İç Mimar"); deneyim yılı gibi
+    // parantez/virgül/tire ekleri gösterilmez. Pro değilse → "Ev Sahibi".
+    if (_hasRealProfile) {
+      if (_profile?.isPro == true) {
+        var p = (_profile?.profession ?? '').trim();
+        if (p.isNotEmpty) {
+          p = p.replaceAll(RegExp(r'\s*\(.*?\)'), '');
+          p = p.split(RegExp(r'\s*[,\-–—]\s*')).first.trim();
+        }
+        return p.isNotEmpty ? p : 'Profesyonel Tasarımcı';
+      }
+      return 'Ev Sahibi';
+    }
+    // koala_user_profiles satırı yok → Evlumba seed/live tasarımcı.
     final d = _designerRow;
-    final prof =
+    var prof =
         ((d?['profession'] ?? d?['specialty'] ?? '') as String).trim();
+    // "Koala Kullanıcısı" anlamsız placeholder — etiket olarak gösterme.
+    if (prof.toLowerCase() == 'koala kullanıcısı') prof = '';
     if (prof.isNotEmpty) return prof;
     if (widget.profileId == KoalaSeedService.evlumbaDesignerId) {
       return 'İç Mimari Stüdyosu';
     }
-    // 2026-06-02: Pro kullanıcı için başvuruda girilen mesleği göster
-    // (örn. "İç Mimar"); yoksa jenerik "Profesyonel Tasarımcı". Deneyim yılı
-    // gibi parantez/virgül/tire içindeki ekleri ("(3 yıl deneyim)") gösterme —
-    // sadece meslek adı kalsın.
-    if (_profile?.isPro == true) {
-      var p = (_profile?.profession ?? '').trim();
-      if (p.isNotEmpty) {
-        p = p.replaceAll(RegExp(r'\s*\(.*?\)'), '');
-        p = p.split(RegExp(r'\s*[,\-–—]\s*')).first.trim();
-      }
-      return p.isNotEmpty ? p : 'Profesyonel Tasarımcı';
-    }
-    // "Ev Sahibi" etiketi YALNIZCA kullanıcının KENDİ profili için. Başka
-    // birinin (tasarımcı) profilini açarken yanlışlıkla "Ev Sahibi" yazma.
-    if (!_isSelf) return _designerRow != null ? 'Tasarımcı' : '';
-    return 'Ev Sahibi';
+    return _designerRow != null ? 'Tasarımcı' : '';
   }
 
   String get _city => ((_designerRow?['city'] ?? '') as String).trim();
