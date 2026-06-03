@@ -1,12 +1,31 @@
 import type { MetadataRoute } from "next";
 
+const SITE = "https://roomkoala.com";
+
+// Koala'yı en iyi anlatan görseller — arama motorlarının (Google Images)
+// indekslemesi için image sitemap girdisi.
+const images = [
+  `${SITE}/brand/koala_hero.webp`,
+  `${SITE}/brand/showcase/before.webp`,
+  `${SITE}/brand/showcase/after.webp`,
+  `${SITE}/brand/pro/hero_1.webp`,
+  `${SITE}/brand/pro/hero_2.webp`,
+  `${SITE}/brand/pro/hero_3.webp`,
+  `${SITE}/brand/pro/hero_4.webp`,
+  `${SITE}/brand/onboarding/step1.webp`,
+  `${SITE}/brand/onboarding/step2.webp`,
+  `${SITE}/brand/onboarding/step3.webp`,
+  `${SITE}/brand/room_demo.jpg`,
+];
+
 export default function sitemap(): MetadataRoute.Sitemap {
   return [
     {
-      url: "https://roomkoala.com",
+      url: SITE,
       lastModified: new Date(),
       changeFrequency: "weekly",
       priority: 1,
+      images,
     },
   ];
 }

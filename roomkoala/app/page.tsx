@@ -1,6 +1,7 @@
 import { Nav } from "@/components/site/Nav";
 import { Hero } from "@/components/site/Hero";
 import { Stats } from "@/components/site/Stats";
+import { SwipeShowcase } from "@/components/site/SwipeShowcase";
 import { ShowcaseMarquee } from "@/components/site/ShowcaseMarquee";
 import { Features } from "@/components/site/Features";
 import { Highlights } from "@/components/site/Highlights";
@@ -18,6 +19,7 @@ export default function Home() {
       <main>
         <Hero />
         <Stats />
+        <SwipeShowcase />
         <ShowcaseMarquee />
         <Features />
         <Highlights />
