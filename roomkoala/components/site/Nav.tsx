@@ -11,6 +11,7 @@ const items = [
   { href: "#nasil", label: "Nasıl çalışır" },
   { href: "#pro", label: "Koala Pro" },
   { href: "#sss", label: "SSS" },
+  { href: "#indir", label: "İndir" },
 ];
 
 export function Nav() {

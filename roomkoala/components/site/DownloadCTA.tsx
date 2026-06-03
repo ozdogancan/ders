@@ -4,7 +4,7 @@ import { StoreButtons } from "./StoreButtons";
 
 export function DownloadCTA() {
   return (
-    <section className="mx-auto max-w-6xl px-5 pb-8">
+    <section id="indir" className="mx-auto max-w-6xl scroll-mt-20 px-5 pb-8">
       <Reveal>
         <div className="bg-radial-accent relative overflow-hidden rounded-[2rem] border border-line bg-surface px-6 py-14 text-center md:px-12 md:py-20">
           <Image

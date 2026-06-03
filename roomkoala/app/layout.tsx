@@ -41,20 +41,12 @@ export const metadata: Metadata = {
     siteName: "Koala",
     title: TITLE,
     description: DESC,
-    images: [
-      {
-        url: "/brand/koala_hero.webp",
-        width: 1200,
-        height: 630,
-        alt: "Koala — yapay zekâ ile oda tasarımı",
-      },
-    ],
+    // OG görseli app/opengraph-image.tsx ile otomatik üretilir (1200×630 PNG).
   },
   twitter: {
     card: "summary_large_image",
     title: TITLE,
     description: DESC,
-    images: ["/brand/koala_hero.webp"],
   },
   robots: {
     index: true,
@@ -98,6 +90,43 @@ const jsonLd = {
       name: "Koala",
       inLanguage: "tr-TR",
       publisher: { "@id": `${SITE}#org` },
+    },
+    {
+      "@type": "HowTo",
+      name: "Koala ile odanı nasıl yeniden tasarlarsın",
+      description:
+        "Üç adımda yapay zekâ ile evini yeniden tasarla: yükle, AI tasarlasın, beğen ve danış.",
+      step: [
+        {
+          "@type": "HowToStep",
+          position: 1,
+          name: "Odanı yükle ya da keşfet",
+          text: "Odanın fotoğrafını çek veya hazır tasarımları kaydırarak ilham topla.",
+        },
+        {
+          "@type": "HowToStep",
+          position: 2,
+          name: "Yapay zekâ tasarlasın",
+          text: "Stilini seç; Koala saniyeler içinde sana özel, gerçekçi bir yeniden tasarım üretsin.",
+        },
+        {
+          "@type": "HowToStep",
+          position: 3,
+          name: "Beğen, kaydet, danış",
+          text: "Beğendiklerini kaydet, ürünleri gör, takıldığın yerde gerçek iç mimara sor.",
+        },
+      ],
+    },
+    {
+      "@type": "BreadcrumbList",
+      itemListElement: [
+        {
+          "@type": "ListItem",
+          position: 1,
+          name: "Ana Sayfa",
+          item: SITE,
+        },
+      ],
     },
   ],
 };

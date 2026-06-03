@@ -1,6 +1,6 @@
 import { Check, Crown } from "lucide-react";
 import { Reveal } from "./Reveal";
-import { StoreButtons } from "./StoreButtons";
+import { LINKS } from "@/lib/utils";
 
 const perks = [
   "Sınırsız oda yeniden tasarlama",
@@ -28,7 +28,14 @@ export function ProSection() {
                 Daha fazla üret, daha çok keşfet, uzmanlara öncelikli ulaş.
                 Hayalindeki evi tasarlamanın en hızlı yolu.
               </p>
-              <StoreButtons className="mt-8 [&_a]:bg-white [&_a]:text-accent-deep [&_a]:shadow-none [&_span]:border-white/40 [&_span]:text-white/80" />
+              <a
+                href={LINKS.webApp}
+                target="_blank"
+                rel="noopener"
+                className="mt-8 inline-flex rounded-2xl bg-white px-7 py-3.5 font-bold text-accent-deep shadow-lg transition-transform hover:scale-[1.03]"
+              >
+                Pro&apos;yu uygulamada keşfet
+              </a>
             </div>
 
             <ul className="grid gap-3">

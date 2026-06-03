@@ -1,0 +1,31 @@
+# Koala — Yapay Zekâ ile Ev & Oda Tasarımı
+
+> Koala, evin için yapay zekâ destekli bir iç mekân tasarım asistanıdır. Kullanıcılar odalarının fotoğrafını yükleyip saniyeler içinde yeniden tasarlatabilir, binlerce iç mekân tasarımını kaydırarak (swipe) keşfedebilir, yapay zekâ danışmandan ürün/renk/bütçe önerisi alabilir ve Evlumba stüdyosundaki gerçek, sertifikalı iç mimarlara danışabilir. Türkiye merkezli, Türkçe önceliklidir. Evlumba (evlumba.com) tarafından geliştirilmiştir.
+
+## Temel özellikler
+- Kaydır & Keşfet: Binlerce gerçek iç mekân tasarımı arasında gezinerek ilham toplama; akış kullanıcının zevkine göre kişiselleşir.
+- Odanı Yeniden Tasarla: Bir oda fotoğrafından yapay zekâ ile yeni stilde gerçekçi tasarım üretme.
+- Koala AI Danışman: Sohbet temelli; ürün arama, renk paleti, bütçe planı ve düzen önerileri.
+- Gerçek İç Mimarlar: Evlumba stüdyosundaki sertifikalı iç mimarlarla uygulama içi mesajlaşma; ilk danışma ücretsiz.
+- Ürün & Bütçe: Bütçeye göre kalem kalem dağılım ve gerçek ürün önerileri.
+
+## Platformlar
+- Web: https://www.koalatutor.com (indirmeden, anında)
+- Android: Google Play'de yayında
+- iOS: App Store'da çok yakında
+
+## Fiyatlandırma
+- Ücretsiz başlangıç. Koala Pro aboneliği: sınırsız yeniden tasarlama, sınırsız keşif, önceliklendirilmiş iç mimar erişimi, yüksek çözünürlüklü indirme.
+
+## Sık sorulan sorular
+- Koala ücretsiz mi? Evet, ücretsiz kullanılabilir; Pro aboneliği isteğe bağlıdır.
+- Hangi platformlar? Web ve Android yayında; iOS yakında.
+- Gerçek iç mimara danışılır mı? Evet, Evlumba stüdyosu üzerinden; ilk danışma ücretsiz.
+
+## Bağlantılar
+- Ana site: https://roomkoala.com
+- Uygulama (web): https://www.koalatutor.com
+- Evlumba: https://www.evlumba.com
+
+## İletişim / marka
+Koala by Evlumba. Anahtar konular: yapay zeka ile oda tasarımı, ev dekorasyon uygulaması, yapay zeka iç mimar, odanı yeniden tasarla, iç mimar bul, AI interior design (Türkçe).
