@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart' hide User;
 
 import '../../core/theme/koala_tokens.dart';
 import '../../core/utils/format_utils.dart';
+import '../../services/evlumba_live_service.dart';
 import '../../widgets/koala_widgets.dart';
 
 /// Admin — Kullanıcılar. Gerçek veri kaynağı: koala_user_profiles (eski boş
@@ -57,9 +58,38 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
             .where((s) => s.isNotEmpty)
             .toSet();
       } catch (_) {/* admin list opsiyonel */}
+
+      // Evlumba tasarımcıları = profesyoneller (specialty = ünvan, örn İç Mimar).
+      // Koala'da hesabı olmayan ama platformda görünen profesyoneller burada da
+      // listelensin. Koala pro'larıyla çakışmasın diye uid 'evlumba:' prefix'li.
+      final merged = List<Map<String, dynamic>>.from(rows);
+      try {
+        final designers = await EvlumbaLiveService.getAllDesigners(limit: 1000);
+        for (final d in designers) {
+          final name = (d['full_name'] ?? d['business_name'] ?? '')
+              .toString()
+              .trim();
+          if (name.isEmpty) continue;
+          merged.add({
+            'uid': 'evlumba:${d['id']}',
+            'display_name': name,
+            'mode': 'pro',
+            'verified': d['is_verified'] == true,
+            'profession': (d['specialty'] ?? '').toString().trim(),
+            'avatar_url': (d['avatar_url'] ?? '').toString(),
+            'contact_info': const <String, dynamic>{},
+            'created_at': d['created_at'],
+            '_source': 'evlumba',
+            '_city': (d['city'] ?? '').toString(),
+          });
+        }
+      } catch (e) {
+        debugPrint('AdminUsers: evlumba designers merge failed: $e');
+      }
+
       if (!mounted) return;
       setState(() {
-        _all = List<Map<String, dynamic>>.from(rows);
+        _all = merged;
         _adminUids = admins;
         _loading = false;
       });

@@ -369,6 +369,30 @@ class EvlumbaLiveService {
 
   static final Random _rand = Random();
 
+  /// Admin paneli için TÜM Evlumba tasarımcılarını döndürür (puanlama/filtre yok).
+  /// specialty = ünvan (örn. "İç Mimar"). Hata/erişim yoksa boş liste.
+  static Future<List<Map<String, dynamic>>> getAllDesigners({
+    int limit = 500,
+  }) async {
+    try {
+      if (!isReady) {
+        await waitForReady(timeout: const Duration(seconds: 5));
+        if (!isReady) return [];
+      }
+      final data = await client
+          .from('profiles')
+          .select(
+              'id, full_name, business_name, specialty, city, avatar_url, is_verified, created_at')
+          .eq('role', 'designer')
+          .order('created_at', ascending: false)
+          .limit(limit);
+      return List<Map<String, dynamic>>.from(data);
+    } catch (e) {
+      debugPrint('EvlumbaLive.getAllDesigners failed: $e');
+      return [];
+    }
+  }
+
   /// Tek tasarımcı detay (role filtresi yok — proje sahibi zaten tasarımcı)
   static Future<Map<String, dynamic>?> getDesigner(String id) async {
     // perf: in-memory cache 5dk — designer profile değişmez sıklıkta, aynı id
