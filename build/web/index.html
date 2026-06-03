@@ -86,43 +86,41 @@
     (function () {
       var BUILD_VERSION = '1.0.171+175';
       window.__KOALA_BUILD_VERSION__ = BUILD_VERSION;
+      // 2026-06-03 KÖKLÜ ÇÖZÜM: Flutter service worker'ını TAMAMEN devre dışı bırak.
+      // Eski sürüm-bazlı kill-switch çalışmıyordu çünkü eski SW, yeni index.html'i
+      // hiç sunmadan eski main.dart.js'i cache'ten veriyordu → BUILD_VERSION hep
+      // eski kalıyor, kill-switch hiç tetiklenmiyordu (kullanıcılar eski sürümde
+      // takılı: splash/yavaşlık/eksik isim). Artık SW yok; tazelik tamamen CDN
+      // cache header'larıyla yönetilir (index.html + main.dart.js = no-cache,
+      // hash'li asset'ler immutable). Stale-cache tuzağı kalıcı olarak biter.
+      if (!('serviceWorker' in navigator)) return;
       try {
-        var KEY = 'koala_build_v';
-        var ONCE = 'koala_kill_done';
-        var prev = null;
-        try { prev = localStorage.getItem(KEY); } catch (_) {}
-        if (prev === BUILD_VERSION) return;
-        // Sonsuz reload koruması: aynı session içinde bir kez reload edildiyse
-        // daha tetikleme. Chrome mobile private mode ya da localStorage blok'u
-        // halinde localStorage.setItem sessizce başarısız olur ve script tekrar
-        // tekrar reload tetikleyebilir — sessionStorage flag'i ile bunu kır.
-        var alreadyDone = false;
-        try { alreadyDone = sessionStorage.getItem(ONCE) === '1'; } catch (_) {}
-        if (alreadyDone) {
-          // Persist edilemediyse de en azından aynı turda reload döngüsüne girme.
-          try { localStorage.setItem(KEY, BUILD_VERSION); } catch (_) {}
-          return;
-        }
-        try { sessionStorage.setItem(ONCE, '1'); } catch (_) {}
-        if ('serviceWorker' in navigator) {
-          navigator.serviceWorker.getRegistrations().then(function (regs) {
-            return Promise.all(regs.map(function (r) { return r.unregister(); }));
-          }).then(function () {
-            if ('caches' in window) {
-              return caches.keys().then(function (keys) {
-                return Promise.all(keys.map(function (k) { return caches.delete(k); }));
-              });
-            }
-          }).then(function () {
-            try { localStorage.setItem(KEY, BUILD_VERSION); } catch (_) {}
-            if (prev) location.reload();
-          }).catch(function () {
-            // SW/cache temizliği patlasa bile sayfayı boot et — beyaz ekran tutma.
-            try { localStorage.setItem(KEY, BUILD_VERSION); } catch (_) {}
-          });
-        } else {
-          try { localStorage.setItem(KEY, BUILD_VERSION); } catch (_) {}
-        }
+        // (1) Flutter bootstrap'in SW register etmesini SENKRON engelle (race yok).
+        try {
+          navigator.serviceWorker.register = function () {
+            return Promise.reject(new Error('koala: service worker disabled'));
+          };
+        } catch (_) {}
+        // (2) Mevcut (eski) SW'leri kaldır + tüm cache'leri sil.
+        var hadSW = false;
+        navigator.serviceWorker.getRegistrations().then(function (regs) {
+          hadSW = regs.length > 0;
+          return Promise.all(regs.map(function (r) { return r.unregister(); }));
+        }).then(function () {
+          if ('caches' in window) {
+            return caches.keys().then(function (keys) {
+              return Promise.all(keys.map(function (k) { return caches.delete(k); }));
+            });
+          }
+        }).then(function () {
+          // (3) Bu cihazda eski bir SW vardıysa BİR KEZ reload et → eski
+          // cache'lenmiş asset'lerden kurtul. localStorage flag'i ile döngü yok.
+          var KILLED = 'koala_sw_killed_v3';
+          var already = false;
+          try { already = localStorage.getItem(KILLED) === '1'; } catch (_) {}
+          try { localStorage.setItem(KILLED, '1'); } catch (_) {}
+          if (hadSW && !already) { location.reload(); }
+        }).catch(function () {/* sessizce geç — app yine de boot olur */});
       } catch (_) {}
     })();
   </script>
