@@ -904,10 +904,20 @@ class _ChatListScreenV2State extends State<ChatListScreenV2> {
 
     final designerId = (conv['designer_id'] ?? '').toString();
     final cached = _designerCache[designerId];
-    final designerName = (cached?['name'] ?? '').toString().trim().isEmpty
-        ? 'Tasarımcı'
-        : cached!['name']!;
-    final avatarUrl = cached?['avatar'];
+    // İsim/avatar önceliği: Evlumba designer cache → konuşma satırındaki
+    // denormalize designer_name/avatar (Koala'ya bağlı tasarımcılar, örn.
+    // Muratcan, Evlumba designer id'sine sahip değil → cache boş kalır) →
+    // jenerik "Tasarımcı". Böylece bağlı tasarımcılar adıyla görünür.
+    final cachedName = (cached?['name'] ?? '').toString().trim();
+    final convName = (conv['designer_name'] ?? '').toString().trim();
+    final designerName = cachedName.isNotEmpty
+        ? cachedName
+        : (convName.isNotEmpty ? convName : 'Tasarımcı');
+    final cachedAvatar = (cached?['avatar'] ?? '').toString().trim();
+    final convAvatar = (conv['designer_avatar'] ?? '').toString().trim();
+    final avatarUrl = cachedAvatar.isNotEmpty
+        ? cachedAvatar
+        : (convAvatar.isNotEmpty ? convAvatar : null);
 
     final initials = designerName
         .split(' ')

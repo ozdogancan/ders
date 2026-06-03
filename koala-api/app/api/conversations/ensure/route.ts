@@ -99,6 +99,8 @@ export async function POST(req: NextRequest) {
     // Evlumba köprüsü için orijinal id `evlumba_designer_id`'de saklanır.
     let effectiveDesignerId = designerId;
     let evlumbaDesignerId: string | null = null;
+    let linkedName: string | null = null;
+    let linkedAvatar: string | null = null;
     try {
       const { data: link } = await admin
         .from('koala_designer_links')
@@ -108,6 +110,16 @@ export async function POST(req: NextRequest) {
       if (link?.koala_uid) {
         effectiveDesignerId = link.koala_uid as string;
         evlumbaDesignerId = designerId;
+        // Bağlı tasarımcının adı/avatarını konuşma satırına denormalize et —
+        // chat listesi Evlumba cache'inde bulamadığında bunu gösterir (yoksa
+        // jenerik "Tasarımcı" görünür).
+        const { data: prof } = await admin
+          .from('koala_user_profiles')
+          .select('display_name, avatar_url')
+          .eq('uid', effectiveDesignerId)
+          .maybeSingle();
+        linkedName = (prof?.display_name as string | null) ?? null;
+        linkedAvatar = (prof?.avatar_url as string | null) ?? null;
       }
     } catch (e) {
       console.error('[conv/ensure] designer link lookup failed:', e);
@@ -147,6 +159,8 @@ export async function POST(req: NextRequest) {
         user_id: firebaseUid,
         designer_id: effectiveDesignerId,
         evlumba_designer_id: evlumbaDesignerId,
+        ...(linkedName ? { designer_name: linkedName } : {}),
+        ...(linkedAvatar ? { designer_avatar: linkedAvatar } : {}),
         title,
         status: 'active',
       })
