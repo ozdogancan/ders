@@ -35,6 +35,29 @@ class AIChatHistoryService {
     }
   }
 
+  /// Client tarafı id ile session'ı oluştur-ya-da-güncelle (upsert).
+  /// Chat ekranı 'chat_<timestamp>' id üretiyor; bu id ile bulutta kalıcı kıl.
+  static Future<bool> upsertSession({
+    required String id,
+    String title = 'Yeni Sohbet',
+    String intent = 'general',
+  }) async {
+    if (_uid == null || !Env.hasSupabaseConfig) return false;
+    try {
+      await _db.from('ai_chat_sessions').upsert({
+        'id': id,
+        'user_id': _uid,
+        'title': title,
+        'intent': intent,
+        'updated_at': DateTime.now().toIso8601String(),
+      }, onConflict: 'id');
+      return true;
+    } catch (e) {
+      debugPrint('AIChatHistoryService.upsertSession error: $e');
+      return false;
+    }
+  }
+
   /// Session listesi (son güncellenen önce)
   static Future<List<Map<String, dynamic>>> getSessions({
     int limit = 20,

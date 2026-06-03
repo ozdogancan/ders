@@ -66,9 +66,14 @@ class ChatPersistence {
     if (list.length > 50) list.removeRange(50, list.length);
     await prefs.setStringList(_listKey, list);
 
-    // Supabase (fire and forget)
+    // Supabase (fire and forget) — UPSERT: session yoksa oluştur, varsa güncelle.
+    // (Eski updateSessionTitle yalnızca UPDATE'ti → session hiç insert edilmiyordu.)
     try {
-      await AIChatHistoryService.updateSessionTitle(summary.id, summary.title);
+      await AIChatHistoryService.upsertSession(
+        id: summary.id,
+        title: summary.title,
+        intent: summary.intent ?? 'general',
+      );
     } catch (_) {}
   }
 
@@ -109,12 +114,38 @@ class ChatPersistence {
   }
 
   static Future<void> saveMessages(String chatId, List<Map<String, dynamic>> messages) async {
-    // SharedPreferences (her zaman)
+    // SharedPreferences (her zaman — offline fallback)
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('koala_msgs_$chatId', jsonEncode(messages));
 
-    // Supabase'e son mesajı kaydet (tüm listeyi değil, sadece yeni olanları)
-    // Not: tam senkronizasyon B.4'te migration ile yapılacak
+    // Supabase — yeni mesajları buluta yaz (append-only dedupe by count).
+    // Fire-and-forget: hata UI'ı asla bloke etmesin.
+    try {
+      // Önce session'ın var olduğundan emin ol (FK + RLS için).
+      String title = 'Yeni Sohbet';
+      for (final m in messages) {
+        if ((m['role'] ?? '') == 'user') {
+          final c = (m['content'] ?? m['text'] ?? '').toString().trim();
+          if (c.isNotEmpty) { title = c.length > 60 ? '${c.substring(0, 60)}…' : c; break; }
+        }
+      }
+      await AIChatHistoryService.upsertSession(id: chatId, title: title);
+
+      final existing = await AIChatHistoryService.getMessages(chatId, limit: 200);
+      if (messages.length > existing.length) {
+        for (final msg in messages.sublist(existing.length)) {
+          await AIChatHistoryService.addMessage(
+            sessionId: chatId,
+            role: (msg['role'] as String?) ?? 'user',
+            content: (msg['content'] as String?) ?? (msg['text'] as String?),
+            cards: (msg['cards'] as List?)?.cast<Map<String, dynamic>>(),
+            imageUrl: (msg['imageUrl'] as String?) ?? (msg['image_url'] as String?),
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint('ChatPersistence: Supabase saveMessages failed: $e');
+    }
   }
 
   // ── Migration ──

@@ -522,7 +522,25 @@ class KoalaAIService {
           // Dart-side intent detection → TOOL_HINT
           String? toolHint;
           String? designerName;
-          if (_isProductRequest(txt)) {
+          // Danışma/nasıl/ipucu soruları → arama tool'u YOK; Koala metinle
+          // (quick_tips dahil) danışman gibi cevap versin.
+          final isAdvisory = RegExp(
+                  r'(nereden\s+başla|nas[ıi]l\s|ipucu|ipuçlar|öner[iı]\s|tavsiye|'
+                  r'fikir\s+ver|yard[ıi]mc[ıi]\s+ol|ne\s+yapmal[ıi]|nas[ıi]l\s+yapsam|'
+                  r'rehber|ad[ıi]m\s+ad[ıi]m|nelere\s+dikkat)',
+                  caseSensitive: false)
+              .hasMatch(txt);
+          // Bütçe/alışveriş listesi → budget_plan üret (arama yok).
+          final isBudget = RegExp(
+                  r'(bütçe|butce|al[ıi]şveriş\s+listes|harcama\s+plan|'
+                  r'\d[\d.\s]*\s*(?:bin|k|tl|₺).*(liste|plan|dağ[ıi]t|ay[ıi]r))',
+                  caseSensitive: false)
+              .hasMatch(txt);
+          if (isBudget) {
+            toolHint = 'budget_plan'; // gerçek tool değil — prompt yönlendirmesi
+          } else if (isAdvisory) {
+            toolHint = null; // danışman metin modu, arama yok
+          } else if (_isProductRequest(txt)) {
             toolHint = 'search_products';
           } else if (RegExp(
                   r'(tasarımcı|iç\s*mimar|mimar|dekoratör|dekorat[oö]r|uzman|designer|expert)',
@@ -1168,6 +1186,15 @@ class KoalaAIService {
     ).hasMatch(lastUserText);
     final shouldForceTools =
         isDesignerRequest || isProductRequest || isProjectRequest;
+    // Danışma/bütçe turu: arama fonksiyonlarını TAMAMEN kapat ki AUTO modda
+    // bir nasıl-yapılır/bütçe sorusu proje görseline kaçmasın. Koala metinle
+    // (quick_tips/budget_plan) danışman gibi cevap versin.
+    final isAdvisoryOrBudget = !shouldForceTools &&
+        RegExp(
+          r'(nereden\s+başla|nas[ıi]l\s|ipucu|ipuçlar|tavsiye|nelere\s+dikkat|'
+          r'ad[ıi]m\s+ad[ıi]m|bütçe|butce|al[ıi]şveriş\s+listes|harcama\s+plan)',
+          caseSensitive: false,
+        ).hasMatch(lastUserText);
 
     // freeChat'te de keyword'den doğru fonksiyonu kısıtla
     if (allowedFunctions == null && isDesignerRequest) {
@@ -1195,7 +1222,7 @@ class KoalaAIService {
       //  - !jsonMode → 512 (düz text sentezi)
       final int turnMaxTokens = jsonMode
           ? (hasCardsIntent ? 2048 : 800)
-          : 512;
+          : (isAdvisoryOrBudget ? 1100 : 512);
       final genConfig = <String, dynamic>{
         'temperature': 0.7,
         'maxOutputTokens': turnMaxTokens,
@@ -1220,6 +1247,11 @@ class KoalaAIService {
         }
         payload['tool_config'] = {'function_calling_config': fcConfig};
         debugPrint('KoalaAI: Forcing function call (allowed: ${allowedFunctions ?? "any"})');
+      } else if (turn == 0 && isAdvisoryOrBudget) {
+        // Tavsiye/bütçe turu — model metinle (quick_tips/budget_plan) cevap versin,
+        // search_* çağırmasın. Aksi halde AUTO modda proje görseli dönebiliyor.
+        payload['tool_config'] = {'function_calling_config': {'mode': 'NONE'}};
+        debugPrint('KoalaAI: Advisory/budget turn — function calls disabled');
       } else if (turn > 0) {
         // Sentez turu — yeni function call açılmasın
         payload['tool_config'] = {'function_calling_config': {'mode': 'NONE'}};
