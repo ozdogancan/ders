@@ -2,10 +2,13 @@ import 'dart:async';
 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../config/env.dart';
+import '../theme/koala_tokens.dart';
+import '../../widgets/koala_widgets.dart';
 
 import '../../views/home_screen.dart';
 import '../../views/main_shell.dart';
@@ -115,6 +118,16 @@ final GoRouter appRouter = GoRouter(
       path: '/',
       builder: (context, state) {
         if (!onboardingComplete) return const OnboardingScreen();
+        // Oturum geri yüklenene kadar (REQUIRE_LOGIN) MainShell'i GÖSTERME —
+        // aksi halde auth restore yarışında bir an "misafir gibi" ana ekran
+        // görünüp 50 sohbet/profil yanıp sönüyor. Auth hazır olunca authRefresh
+        // router'ı yeniden çalıştırır → gerçek kullanıcı MainShell, yoksa /auth.
+        if (Env.requireLogin && !_authReady) {
+          return const Scaffold(
+            backgroundColor: KoalaColors.bg,
+            body: LoadingState(),
+          );
+        }
         return const MainShell();
       },
     ),
