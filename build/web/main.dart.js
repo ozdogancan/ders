@@ -37338,21 +37338,21 @@ case 2:return A.i(o.at(-1),r)}})
 return A.k($async$a8e,r)},
 lr(a,b,c,d){var s=null
 return A.c5h(a,b,c,d)},
-c5h(a8,a9,b0,b1){var s=0,r=A.l(t.h),q,p=2,o=[],n,m,l,k,j,i,h,g,f,e,d,c,b,a,a0,a1,a2,a3,a4,a5,a6,a7
-var $async$lr=A.h(function(b2,b3){if(b2===1){o.push(b3)
-s=p}for(;;)switch(s){case 0:a3=null
+c5h(a9,b0,b1,b2){var s=0,r=A.l(t.h),q,p=2,o=[],n,m,l,k,j,i,h,g,f,e,d,c,b,a,a0,a1,a2,a3,a4,a5,a6,a7,a8
+var $async$lr=A.h(function(b3,b4){if(b3===1){o.push(b4)
+s=p}for(;;)switch(s){case 0:a4=null
 $.nl=null
 n=null
 p=4
 s=7
 return A.c(A.zZ(),$async$lr)
-case 7:n=b3
+case 7:n=b4
 p=2
 s=6
 break
 case 4:p=3
-a4=o.pop()
-m=A.K(a4)
+a5=o.pop()
+m=A.K(a5)
 $.nl=J.r(m)
 q=null
 s=1
@@ -37362,76 +37362,78 @@ break
 case 3:s=2
 break
 case 6:p=9
-a=$.b3()
-a0=a.b
-a0===$&&A.b()
-a0=a0.aL("koala_direct_messages")
-a1=t.N
-l=A.C(a1,t.K)
-J.al(l,"conversation_id",b0)
+a0=$.b3()
+a1=a0.b
+a1===$&&A.b()
+a1=a1.aL("koala_direct_messages")
+a2=t.N
+l=A.C(a2,t.K)
+J.al(l,"conversation_id",b1)
 J.al(l,"sender_id",n)
-J.al(l,"content",a9)
-J.al(l,"message_type",b1.b)
-if(a8!=null)J.al(l,"attachment_url",a8)
-if(a3!=null)J.al(l,"metadata",a3)
+J.al(l,"content",b0)
+J.al(l,"message_type",b2.b)
+if(a9!=null)J.al(l,"attachment_url",a9)
+if(a4!=null)J.al(l,"metadata",a4)
 s=12
-return A.c(a0.fn(0,l).fT(0).pL(0),$async$lr)
-case 12:k=b3
+return A.c(a1.fn(0,l).fT(0).pL(0),$async$lr)
+case 12:k=b4
 s=13
-return A.c(a.b.aL("koala_conversations").bR(0,"user_id, designer_id").aP("id",b0).pL(0),$async$lr)
-case 13:j=b3
+return A.c(a0.b.aL("koala_conversations").bR(0,"user_id, designer_id, evlumba_designer_id").aP("id",b1).pL(0),$async$lr)
+case 13:j=b4
 i=J.m(J.d(j,"user_id"),n)
 h=i?"unread_count_designer":"unread_count_user"
 p=15
 l=t.z
 s=18
-return A.c(a.b.jJ("increment_unread",A.F(["conv_id",b0,"field_name",h],a1,l),l),$async$lr)
+return A.c(a0.b.jJ("increment_unread",A.F(["conv_id",b1,"field_name",h],a2,l),l),$async$lr)
 case 18:p=9
 s=17
 break
 case 15:p=14
-a5=o.pop()
+a6=o.pop()
 s=17
 break
 case 14:s=9
 break
 case 17:p=20
 g=new A.be(Date.now(),0,!1).AT().dX()
-if(b1===B.i8)a2=B.b.M(a9).length===0?"[image]":"[image] "+a9
-else a2=a9
-f=a2
+if(b2===B.i8)a3=B.b.M(b0).length===0?"[image]":"[image] "+b0
+else a3=b0
+f=a3
 l=$.b3().b
 l===$&&A.b()
-a=t.z
+a0=t.z
 s=23
-return A.c(l.aL("koala_conversations").cn(0,A.F(["last_message",f,"last_message_at",g,"updated_at",g],a,a)).aP("id",b0).tV("user_id.eq."+A.n(n)+",designer_id.eq."+A.n(n)).bR(0,"id, last_message_at"),$async$lr)
-case 23:e=b3
-if(J.cA(e))A.W().$1("sendMessage: koala_conversations UPDATE 0 rows (conv="+b0+", uid="+A.n(n)+") \u2014 RLS block?")
+return A.c(l.aL("koala_conversations").cn(0,A.F(["last_message",f,"last_message_at",g,"updated_at",g],a0,a0)).aP("id",b1).tV("user_id.eq."+A.n(n)+",designer_id.eq."+A.n(n)).bR(0,"id, last_message_at"),$async$lr)
+case 23:e=b4
+if(J.cA(e))A.W().$1("sendMessage: koala_conversations UPDATE 0 rows (conv="+b1+", uid="+A.n(n)+") \u2014 RLS block?")
 p=9
 s=22
 break
 case 20:p=19
-a6=o.pop()
-d=A.K(a6)
+a7=o.pop()
+d=A.K(a7)
 A.W().$1("sendMessage: conv UPDATE failed: "+A.n(d))
 s=22
 break
 case 19:s=9
 break
-case 22:if(i)l=(b1===B.lz||b1===B.i8)&&A.Z(J.d(j,"designer_id"))!=="evlumba-design"
+case 22:l=A.Z(J.d(j,"evlumba_designer_id"))
+c=(l==null?null:B.b.M(l).length!==0)===!0?A.ar(J.d(j,"evlumba_designer_id")):A.ar(J.d(j,"designer_id"))
+if(i)l=(b2===B.lz||b2===B.i8)&&!J.m(c,"evlumba-design")
 else l=!1
-if(l){l=A.ar(J.d(j,"designer_id"))
-A.a8b(b1===B.i8?a8:null,a9,l,b0)}q=k
+if(l){l=b2===B.i8?a9:null
+A.a8b(l,b0,c,b1)}q=k
 s=1
 break
 p=2
 s=11
 break
 case 9:p=8
-a7=o.pop()
-c=A.K(a7)
-A.W().$1("MessagingService.sendMessage error: "+A.n(c))
-$.nl=J.r(c)
+a8=o.pop()
+b=A.K(a8)
+A.W().$1("MessagingService.sendMessage error: "+A.n(b))
+$.nl=J.r(b)
 q=null
 s=1
 break
