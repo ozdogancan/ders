@@ -3,6 +3,7 @@
 import { motion } from "framer-motion";
 import { Sparkles, Star } from "lucide-react";
 import { PhoneMockup } from "./PhoneMockup";
+import { AppScreenSwipe } from "./AppScreenSwipe";
 import { StoreButtons } from "./StoreButtons";
 
 export function Hero() {
@@ -77,11 +78,9 @@ export function Hero() {
             transition={{ duration: 5.5, repeat: Infinity, ease: "easeInOut" }}
             style={{ transform: "rotateX(4deg) rotateY(-8deg)" }}
           >
-            <PhoneMockup
-              src="/brand/onboarding/step1.webp"
-              alt="Koala uygulaması — oda keşfet ekranı"
-              priority
-            />
+            <PhoneMockup>
+              <AppScreenSwipe />
+            </PhoneMockup>
           </motion.div>
 
           <motion.div
