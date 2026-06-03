@@ -1,0 +1,10 @@
+# Build artefactlarını BINARY say — git asla satır-satır merge etmesin
+# (minified main.dart.js line-merge edilince bozuluyor, beyaz ekran).
+build/web/main.dart.js binary
+build/web/flutter_bootstrap.js binary
+build/web/flutter_service_worker.js binary
+build/web/**/*.js binary
+build/web/**/*.json binary
+build/web/**/*.wasm binary
+build/web/**/*.otf binary
+build/web/**/*.ttf binary
