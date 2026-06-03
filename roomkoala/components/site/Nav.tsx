@@ -4,7 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useState } from "react";
 import { Menu, X } from "lucide-react";
-import { cn, LINKS } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 
 const items = [
   { href: "#ozellikler", label: "Özellikler" },
@@ -21,11 +21,11 @@ export function Nav() {
       <nav className="mx-auto flex h-16 max-w-6xl items-center justify-between px-5">
         <Link href="/" className="flex items-center gap-2.5">
           <Image
-            src="/brand/koala_logo.webp"
+            src="/brand/koala_splash_logo.webp"
             alt="Koala logosu"
-            width={34}
-            height={34}
-            className="rounded-lg"
+            width={38}
+            height={38}
+            className="rounded-xl"
           />
           <span className="text-lg font-extrabold tracking-tight">koala</span>
           <span className="hidden text-sm font-medium text-accent sm:inline">
@@ -47,12 +47,10 @@ export function Nav() {
 
         <div className="hidden md:block">
           <a
-            href={LINKS.webApp}
-            target="_blank"
-            rel="noopener"
+            href="#indir"
             className="rounded-full bg-accent-deep px-5 py-2.5 text-sm font-bold text-white shadow-lg shadow-accent/25 transition-transform hover:scale-[1.03]"
           >
-            Uygulamayı Aç
+            Uygulamayı İndir
           </a>
         </div>
 
@@ -84,12 +82,11 @@ export function Nav() {
             </a>
           ))}
           <a
-            href={LINKS.webApp}
-            target="_blank"
-            rel="noopener"
+            href="#indir"
+            onClick={() => setOpen(false)}
             className="mt-1 rounded-full bg-accent-deep px-5 py-3 text-center text-sm font-bold text-white"
           >
-            Uygulamayı Aç
+            Uygulamayı İndir
           </a>
         </div>
       </div>

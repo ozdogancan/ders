@@ -8,11 +8,11 @@ export function Footer() {
         <div>
           <div className="flex items-center gap-2.5">
             <Image
-              src="/brand/koala_logo.webp"
+              src="/brand/koala_splash_logo.webp"
               alt="Koala"
-              width={32}
-              height={32}
-              className="rounded-lg"
+              width={36}
+              height={36}
+              className="rounded-xl"
             />
             <span className="text-lg font-extrabold tracking-tight">koala</span>
           </div>

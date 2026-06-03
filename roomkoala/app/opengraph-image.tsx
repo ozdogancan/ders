@@ -109,7 +109,7 @@ export default function OpengraphImage() {
               borderRadius: 999,
             }}
           >
-            Web · Android · iOS
+            Android · iOS
           </div>
         </div>
       </div>

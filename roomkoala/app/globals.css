@@ -53,8 +53,39 @@ body {
   animation: marquee var(--marquee-duration, 40s) linear infinite;
 }
 
+/* Hareketli gradient blob'lar — premium, yumuşak arka plan hareketi */
+@keyframes blob {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  33% {
+    transform: translate(40px, -30px) scale(1.12);
+  }
+  66% {
+    transform: translate(-30px, 25px) scale(0.92);
+  }
+}
+.animate-blob {
+  animation: blob 16s ease-in-out infinite;
+  filter: blur(60px);
+}
+.animation-delay-2000 {
+  animation-delay: 2s;
+}
+.animation-delay-4000 {
+  animation-delay: 4s;
+}
+
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .animate-marquee {
+  .animate-marquee,
+  .animate-blob {
     animation: none;
   }
   html {
