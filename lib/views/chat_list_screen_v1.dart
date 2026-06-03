@@ -2103,18 +2103,32 @@ class _ChatListScreenV1State extends ConsumerState<ChatListScreenV1> {
     final designerId = (conv['designer_id'] ?? '').toString();
     final cached = _designerCache[designerId];
     final isEvlumba = designerId == 'evlumba-design';
-    // Evlumba Design için isim / avatar / meslek SABİT — cache boş gelse
-    // bile "Tasarımcı" placeholder'ı GÖSTERME (kullanıcı "tasarımcı" copy'sini
-    // istemiyor — her zaman "Evlumba Design").
+    // İsim önceliği: Evlumba cache → konuşma satırındaki denormalize designer_name
+    // (tüm sohbetlere backfill edildi → ANINDA gelir, ağ beklemez) → bundle
+    // counterparty.display_name (Koala'ya bağlı tasarımcılar, örn. Muratcan) →
+    // jenerik "Tasarımcı". Böylece açılışta herkes "Tasarımcı" görünmez.
+    final _cp = conv['counterparty'] is Map ? conv['counterparty'] as Map : null;
+    final _cachedName = (cached?['name'] ?? '').toString().trim();
+    final _convName = (conv['designer_name'] ?? '').toString().trim();
+    final _cpName = (_cp?['display_name'] ?? '').toString().trim();
     final designerName = isEvlumba
         ? 'Evlumba Design'
-        : ((cached?['name'] ?? '').toString().trim().isEmpty
-            ? 'Tasarımcı'
-            : cached!['name']!);
+        : (_cachedName.isNotEmpty
+            ? _cachedName
+            : (_convName.isNotEmpty
+                ? _convName
+                : (_cpName.isNotEmpty ? _cpName : 'Tasarımcı')));
+    final _cachedAvatar = (cached?['avatar'] ?? '').toString().trim();
+    final _convAvatar = (conv['designer_avatar'] ?? '').toString().trim();
+    final _cpAvatar = (_cp?['avatar_url'] ?? '').toString().trim();
     final avatarUrl = isEvlumba
         ? (cached?['avatar'] ??
             'https://xgefjepaqnghaotqybpi.supabase.co/storage/v1/object/public/koala-seed/avatars/evlumba-design.webp')
-        : cached?['avatar'];
+        : (_cachedAvatar.isNotEmpty
+            ? _cachedAvatar
+            : (_convAvatar.isNotEmpty
+                ? _convAvatar
+                : (_cpAvatar.isNotEmpty ? _cpAvatar : null)));
     final profession = isEvlumba
         ? 'Tasarım stüdyosu'
         : (cached?['profession'] ?? '').toString().trim();
