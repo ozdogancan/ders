@@ -91,24 +91,26 @@ export function Hero() {
             transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
             className="relative aspect-[4/5] w-full overflow-hidden rounded-[2.2rem] shadow-2xl shadow-accent/30 ring-1 ring-black/5"
           >
-            {/* SONRA — Koala'nın tasarladığı oda (içinde neşeli koala) */}
+            {/* ÖNCE — odanın boş/eski hali (taban) */}
             <Image
-              src="/brand/gen/koala-room.png"
-              alt="Koala'nın akıllı teknolojiyle tasarladığı oda"
+              src="/brand/showcase/before.webp"
+              alt="Odanın önceki hali"
               fill
               priority
               sizes="400px"
               className="object-cover"
             />
-            {/* ÖNCE — odanın eski hali (otomatik açılıp kapanır = wow değişim) */}
+            {/* SONRA — Koala'nın tasarladığı oda (içinde neşeli koala); soldan
+                açılır = wow değişim, koala lower-left'te erkenden görünür */}
             <div
               className="absolute inset-0"
               style={{ clipPath: `inset(0 ${100 - pos}% 0 0)` }}
             >
               <Image
-                src="/brand/showcase/before.webp"
-                alt="Odanın önceki hali"
+                src="/brand/gen/koala-room.png"
+                alt="Koala'nın akıllı teknolojiyle tasarladığı oda"
                 fill
+                priority
                 sizes="400px"
                 className="object-cover"
               />
