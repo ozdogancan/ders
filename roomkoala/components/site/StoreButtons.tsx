@@ -39,8 +39,10 @@ function Badge({
   disabled?: boolean;
 }) {
   const inner = (
-    <span className="flex items-center gap-3 px-5 py-2.5">
-      <span className="shrink-0">{icon}</span>
+    <span className="flex min-w-[184px] items-center gap-3 px-5 py-2.5">
+      <span className="flex h-7 w-7 shrink-0 items-center justify-center">
+        {icon}
+      </span>
       <span className="flex flex-col text-left leading-tight">
         <span className="text-[10px] font-medium tracking-wide opacity-90">
           {top}
@@ -54,7 +56,7 @@ function Badge({
   if (disabled || !href) {
     return (
       <span
-        className="inline-flex items-center rounded-xl border border-white/15 bg-ink/55 text-white/70"
+        className="inline-flex items-center rounded-xl bg-ink/55 text-white/70"
         aria-disabled
       >
         {inner}

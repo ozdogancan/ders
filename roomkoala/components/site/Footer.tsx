@@ -1,5 +1,4 @@
 import Image from "next/image";
-import { LINKS } from "@/lib/utils";
 
 export function Footer() {
   return (
@@ -22,33 +21,11 @@ export function Footer() {
         </div>
 
         <nav className="flex flex-wrap gap-x-8 gap-y-3 text-sm font-semibold text-ink-soft">
-          <a href="#ozellikler" className="hover:text-accent">
+          <a href="#kesfet" className="hover:text-accent">
             Özellikler
-          </a>
-          <a href="#nasil" className="hover:text-accent">
-            Nasıl çalışır
           </a>
           <a href="#pro" className="hover:text-accent">
             Koala Pro
-          </a>
-          <a href="#sss" className="hover:text-accent">
-            SSS
-          </a>
-          <a
-            href={LINKS.webApp}
-            target="_blank"
-            rel="noopener"
-            className="hover:text-accent"
-          >
-            Uygulama
-          </a>
-          <a
-            href={LINKS.evlumba}
-            target="_blank"
-            rel="noopener"
-            className="hover:text-accent"
-          >
-            Evlumba
           </a>
         </nav>
       </div>

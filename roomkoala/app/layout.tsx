@@ -1,5 +1,7 @@
 import type { Metadata, Viewport } from "next";
+import type { Graph } from "schema-dts";
 import { Manrope } from "next/font/google";
+import { LINKS } from "@/lib/utils";
 import "./globals.css";
 
 const manrope = Manrope({
@@ -62,26 +64,88 @@ export const viewport: Viewport = {
   initialScale: 1,
 };
 
-const jsonLd = {
+const FEATURES = [
+  "Fotoğraftan yapay zeka ile oda yeniden tasarımı",
+  "Binlerce hazır tasarımı kaydırarak keşfetme",
+  "Koala AI tasarım sohbeti",
+  "Gerçek iç mimarlara danışma (Evlumba Design)",
+  "Sınırsız tasarım için Koala Pro",
+];
+
+const FAQ: { q: string; a: string }[] = [
+  {
+    q: "Koala nedir?",
+    a: "Koala, odanın fotoğrafını yükleyince yapay zekayla saniyeler içinde yeniden tasarlayan, binlerce tasarımı kaydırarak keşfettiren ve gerçek iç mimarlara danışma imkânı sunan bir ev & oda tasarım uygulamasıdır.",
+  },
+  {
+    q: "Koala ücretsiz mi?",
+    a: "Koala'yı ücretsiz indirip kullanabilirsin. Sınırsız yapay zeka tasarımı, fotoğrafından sınırsız mekan dönüşümü ve iç mimarlardan öncelikli yanıt için Koala Pro'ya yükseltebilirsin; Pro'yu 7 gün ücretsiz deneyebilirsin.",
+  },
+  {
+    q: "Koala hangi platformlarda var?",
+    a: "Koala şu anda Android'de Google Play üzerinden yayında. iOS (App Store) sürümü çok yakında geliyor.",
+  },
+  {
+    q: "Odanın fotoğrafından nasıl yeni tasarım üretiliyor?",
+    a: "Odanın fotoğrafını yükle, oda tipini, stili ve renk paletini seç; Koala yapay zekayla saniyeler içinde sana özel, gerçekçi bir yeniden tasarım üretir.",
+  },
+  {
+    q: "Koala'da gerçek iç mimarlarla çalışabilir miyim?",
+    a: "Evet. Evlumba Design ile sertifikalı iç mimarlara danışabilir, ilk danışmanı tamamen ücretsiz alabilir ve genellikle 1 saat içinde yanıt alabilirsin.",
+  },
+  {
+    q: "Koala Pro'nun avantajları neler?",
+    a: "Koala Pro ile sınırsız yapay zeka tasarım sohbeti, fotoğrafından sınırsız mekan dönüşümü, uzmanlardan öncelikli hızlı yanıt ve sınırsız kaydır-keşfet özelliklerine erişirsin.",
+  },
+];
+
+const jsonLd: Graph = {
   "@context": "https://schema.org",
   "@graph": [
     {
       "@type": "Organization",
       "@id": `${SITE}#org`,
       name: "Koala",
+      alternateName: "Koala by Evlumba",
       url: SITE,
       logo: `${SITE}/brand/koala_logo.webp`,
-      sameAs: ["https://www.evlumba.com"],
+      description:
+        "Koala, yapay zeka destekli ev & oda tasarım uygulaması. Evlumba güvencesiyle gerçek iç mimar desteği sunar.",
+      areaServed: "Türkiye",
+      sameAs: ["https://www.evlumba.com", LINKS.googlePlay],
     },
     {
       "@type": "MobileApplication",
-      name: "Koala — Yapay Zeka ile Ev Tasarımı",
-      operatingSystem: "ANDROID, IOS, WEB",
+      "@id": `${SITE}#app`,
+      name: "Koala — Yapay Zeka ile Ev & Oda Tasarımı",
+      operatingSystem: "ANDROID, IOS",
       applicationCategory: "LifestyleApplication",
-      offers: { "@type": "Offer", price: "0", priceCurrency: "TRY" },
+      applicationSubCategory: "Interior Design",
+      inLanguage: "tr-TR",
+      offers: {
+        "@type": "Offer",
+        price: "0",
+        priceCurrency: "TRY",
+        category: "free",
+      },
       url: SITE,
+      downloadUrl: LINKS.googlePlay,
+      installUrl: LINKS.googlePlay,
       image: `${SITE}/brand/koala_hero.webp`,
+      screenshot: `${SITE}/opengraph-image`,
       description: DESC,
+      featureList: FEATURES,
+      publisher: { "@id": `${SITE}#org` },
+    },
+    {
+      "@type": "Service",
+      "@id": `${SITE}#service`,
+      name: "Yapay zeka ile iç mekan tasarımı ve iç mimar danışmanlığı",
+      serviceType: "İç mimarlık ve dekorasyon danışmanlığı",
+      provider: { "@id": `${SITE}#org` },
+      areaServed: "Türkiye",
+      description:
+        "Odanın fotoğrafından yapay zeka ile saniyeler içinde yeniden tasarım üretimi ve Evlumba Design üzerinden sertifikalı iç mimarlara danışmanlık.",
     },
     {
       "@type": "WebSite",
@@ -90,6 +154,7 @@ const jsonLd = {
       name: "Koala",
       inLanguage: "tr-TR",
       publisher: { "@id": `${SITE}#org` },
+      about: { "@id": `${SITE}#app` },
     },
     {
       "@type": "HowTo",
@@ -116,6 +181,15 @@ const jsonLd = {
           text: "Beğendiklerini kaydet, ürünleri gör, takıldığın yerde gerçek iç mimara sor.",
         },
       ],
+    },
+    {
+      "@type": "FAQPage",
+      "@id": `${SITE}#faq`,
+      mainEntity: FAQ.map((f) => ({
+        "@type": "Question" as const,
+        name: f.q,
+        acceptedAnswer: { "@type": "Answer" as const, text: f.a },
+      })),
     },
     {
       "@type": "BreadcrumbList",

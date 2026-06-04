@@ -1,30 +1,39 @@
-# Koala — Yapay Zekâ ile Ev & Oda Tasarımı
+# Koala — Yapay Zeka ile Ev & Oda Tasarımı
 
-> Koala, evin için yapay zekâ destekli bir iç mekân tasarım asistanıdır. Kullanıcılar odalarının fotoğrafını yükleyip saniyeler içinde yeniden tasarlatabilir, binlerce iç mekân tasarımını kaydırarak (swipe) keşfedebilir, yapay zekâ danışmandan ürün/renk/bütçe önerisi alabilir ve Evlumba stüdyosundaki gerçek, sertifikalı iç mimarlara danışabilir. Türkiye merkezli, Türkçe önceliklidir. Evlumba (evlumba.com) tarafından geliştirilmiştir.
+> Koala, evin için yapay zeka destekli bir iç mekan tasarım asistanıdır. Kullanıcılar odalarının fotoğrafını yükleyip saniyeler içinde yeniden tasarlatabilir, binlerce iç mekan tasarımını kaydırarak (swipe) keşfedebilir, Koala AI danışmandan ürün/renk/bütçe önerisi alabilir ve Evlumba Design'daki gerçek, sertifikalı iç mimarlara danışabilir. Türkiye merkezli ve Türkçe önceliklidir. Evlumba (evlumba.com) tarafından geliştirilmiştir.
+
+## Platformlar (mobil uygulama)
+- Android: Google Play'de yayında — https://play.google.com/store/apps/details?id=com.egitim_ai_tutor.app
+- iOS: App Store'da çok yakında
+- Koala bir mobil uygulamadır; en iyi deneyim Android ve iOS cihazlardadır.
 
 ## Temel özellikler
-- Kaydır & Keşfet: Binlerce gerçek iç mekân tasarımı arasında gezinerek ilham toplama; akış kullanıcının zevkine göre kişiselleşir.
-- Odanı Yeniden Tasarla: Bir oda fotoğrafından yapay zekâ ile yeni stilde gerçekçi tasarım üretme.
-- Koala AI Danışman: Sohbet temelli; ürün arama, renk paleti, bütçe planı ve düzen önerileri.
-- Gerçek İç Mimarlar: Evlumba stüdyosundaki sertifikalı iç mimarlarla uygulama içi mesajlaşma; ilk danışma ücretsiz.
-- Ürün & Bütçe: Bütçeye göre kalem kalem dağılım ve gerçek ürün önerileri.
+- Kaydır & Keşfet: Binlerce gerçek iç mekan tasarımı arasında kaydırarak ilham toplama; akış kullanıcının zevkine göre kişiselleşir. Beğen, geç, kaydet.
+- Odanı Yeniden Tasarla: Bir oda fotoğrafından yapay zeka ile yeni stilde, saniyeler içinde gerçekçi tasarım üretme. Oda tipi, stil ve renk paleti seçilir.
+- Koala AI Sohbet: Sohbet temelli akıllı danışman; ürün arama, renk paleti, bütçe planı ve düzen önerileri sunar, gerçek ürün kartları gösterir.
+- Gerçek İç Mimarlar (Evlumba Design): Sertifikalı iç mimarlarla uygulama içi mesajlaşma; ilk danışma ücretsiz, genellikle 1 saat içinde yanıt.
+- Profesyonel ol: İç mimarlar başvurup onaylanınca tasarımları Keşfet akışında kullanıcılara görünür hale gelir.
 
-## Platformlar
-- Web: https://www.koalatutor.com (indirmeden, anında)
-- Android: Google Play'de yayında
-- iOS: App Store'da çok yakında
+## Koala Pro
+- 7 gün ücretsiz deneme.
+- Sınırsız yapay zeka tasarım sohbeti.
+- Fotoğrafından sınırsız mekan dönüşümü.
+- Uzmanlardan öncelikli, hızlı yanıt.
+- Sınırsız kaydır & keşfet.
 
 ## Fiyatlandırma
-- Ücretsiz başlangıç. Koala Pro aboneliği: sınırsız yeniden tasarlama, sınırsız keşif, önceliklendirilmiş iç mimar erişimi, yüksek çözünürlüklü indirme.
+- Ücretsiz indirilir ve kullanılır. Koala Pro isteğe bağlı abonelik olup yukarıdaki sınırsız özellikleri açar.
 
 ## Sık sorulan sorular
-- Koala ücretsiz mi? Evet, ücretsiz kullanılabilir; Pro aboneliği isteğe bağlıdır.
-- Hangi platformlar? Web ve Android yayında; iOS yakında.
-- Gerçek iç mimara danışılır mı? Evet, Evlumba stüdyosu üzerinden; ilk danışma ücretsiz.
+- Koala nedir? Odanın fotoğrafından yapay zekayla saniyeler içinde yeniden tasarım üreten, tasarımları kaydırarak keşfettiren ve gerçek iç mimarlara danışma sunan bir ev & oda tasarım uygulaması.
+- Koala ücretsiz mi? Evet, ücretsiz kullanılabilir; sınırsız özellikler için Koala Pro (7 gün ücretsiz dene).
+- Hangi platformlarda var? Android'de yayında, iOS çok yakında.
+- Gerçek iç mimara danışılır mı? Evet, Evlumba Design üzerinden; ilk danışma ücretsiz.
+- Odanın fotoğrafından nasıl tasarım üretiliyor? Fotoğrafı yükle, oda tipi/stil/renk paleti seç; yapay zeka saniyeler içinde gerçekçi yeniden tasarım üretir.
 
 ## Bağlantılar
 - Ana site: https://roomkoala.com
-- Uygulama (web): https://www.koalatutor.com
+- Google Play: https://play.google.com/store/apps/details?id=com.egitim_ai_tutor.app
 - Evlumba: https://www.evlumba.com
 
 ## İletişim / marka
