@@ -1,10 +1,18 @@
 import { ImageResponse } from "next/og";
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
 
 export const alt = "Koala — Yapay Zeka ile Ev & Oda Tasarımı";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
-export default function OpengraphImage() {
+export default async function OpengraphImage() {
+  // Gemini ile üretilen Koala maskotu (PNG) — paylaşım kartının yıldızı.
+  const koala = await readFile(
+    join(process.cwd(), "public/brand/gen/hero-koala.png")
+  );
+  const koalaSrc = `data:image/png;base64,${koala.toString("base64")}`;
+
   return new ImageResponse(
     (
       <div
@@ -12,105 +20,142 @@ export default function OpengraphImage() {
           width: "100%",
           height: "100%",
           display: "flex",
-          flexDirection: "column",
-          justifyContent: "center",
-          padding: "80px",
           background:
-            "linear-gradient(135deg, #f6f1eb 0%, #efe6d9 55%, #f3f0ff 100%)",
+            "linear-gradient(135deg, #ede9ff 0%, #f7f2ff 45%, #fdeef6 100%)",
           fontFamily: "sans-serif",
+          position: "relative",
         }}
       >
+        {/* Sol: marka + mesaj */}
         <div
           style={{
             display: "flex",
-            alignItems: "center",
-            gap: 16,
-            fontSize: 34,
-            fontWeight: 800,
-            color: "#6c5ce7",
+            flexDirection: "column",
+            justifyContent: "center",
+            padding: "70px 56px",
+            width: 700,
           }}
         >
+          <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+            <div
+              style={{
+                width: 52,
+                height: 52,
+                borderRadius: 15,
+                background: "linear-gradient(135deg, #7c6ef2, #6c5ce7)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "white",
+                fontSize: 30,
+                fontWeight: 800,
+              }}
+            >
+              K
+            </div>
+            <div style={{ display: "flex", flexDirection: "column" }}>
+              <span style={{ fontSize: 34, fontWeight: 800, color: "#0f1020" }}>
+                koala
+              </span>
+              <span style={{ fontSize: 18, fontWeight: 600, color: "#7c6ef2" }}>
+                by evlumba
+              </span>
+            </div>
+          </div>
+
           <div
             style={{
-              width: 56,
-              height: 56,
-              borderRadius: 16,
-              background: "#6c5ce7",
               display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              color: "white",
-              fontSize: 34,
+              flexDirection: "column",
+              marginTop: 34,
+              fontSize: 64,
+              fontWeight: 800,
+              lineHeight: 1.08,
+              color: "#0f1020",
+              letterSpacing: -2,
             }}
           >
-            🐨
+            <span>Hayalindeki evi</span>
+            <span style={{ color: "#6c5ce7" }}>saniyeler içinde tasarla.</span>
           </div>
-          koala
-          <span style={{ color: "#8e8e93", fontWeight: 600, fontSize: 26 }}>
-            by evlumba
-          </span>
-        </div>
 
-        <div
-          style={{
-            display: "flex",
-            flexWrap: "wrap",
-            columnGap: 18,
-            marginTop: 36,
-            fontSize: 76,
-            fontWeight: 800,
-            lineHeight: 1.05,
-            color: "#1a1a1a",
-            letterSpacing: -2,
-            maxWidth: 950,
-          }}
-        >
-          <span>Evin için ilham,</span>
-          <span style={{ color: "#6c5ce7" }}>saniyeler içinde.</span>
-        </div>
-
-        <div
-          style={{
-            marginTop: 28,
-            fontSize: 32,
-            color: "#4a4a4a",
-            maxWidth: 900,
-            lineHeight: 1.35,
-          }}
-        >
-          Yapay zeka ile odanı yeniden tasarla, tasarımları keşfet, gerçek iç
-          mimarlara danış.
-        </div>
-
-        <div
-          style={{
-            marginTop: 44,
-            display: "flex",
-            gap: 14,
-            fontSize: 24,
-            fontWeight: 700,
-          }}
-        >
           <div
             style={{
-              background: "#6c5ce7",
-              color: "white",
-              padding: "14px 28px",
-              borderRadius: 999,
+              marginTop: 24,
+              fontSize: 27,
+              color: "#44465a",
+              lineHeight: 1.4,
+              maxWidth: 580,
             }}
           >
-            roomkoala.com
+            Yapay zeka ile odanı yeniden tasarla, binlerce tasarımı keşfet,
+            gerçek iç mimarlara danış.
           </div>
+
           <div
             style={{
-              border: "2px solid #d8cfc2",
-              color: "#4a4a4a",
-              padding: "14px 28px",
-              borderRadius: 999,
+              marginTop: 38,
+              display: "flex",
+              gap: 12,
+              fontSize: 22,
+              fontWeight: 700,
             }}
           >
-            Android · iOS
+            <div
+              style={{
+                background: "#6c5ce7",
+                color: "white",
+                padding: "13px 26px",
+                borderRadius: 999,
+              }}
+            >
+              roomkoala.com
+            </div>
+            <div
+              style={{
+                border: "2px solid #d7d2ee",
+                color: "#44465a",
+                padding: "13px 26px",
+                borderRadius: 999,
+              }}
+            >
+              Android · iOS
+            </div>
           </div>
+        </div>
+
+        {/* Sağ: Koala maskotu */}
+        <div
+          style={{
+            position: "absolute",
+            right: 0,
+            top: 0,
+            width: 500,
+            height: 630,
+            display: "flex",
+          }}
+        >
+          {/* soldan yumuşak geçiş */}
+          <div
+            style={{
+              position: "absolute",
+              left: 0,
+              top: 0,
+              width: 140,
+              height: 630,
+              background:
+                "linear-gradient(90deg, #f7f2ff 0%, rgba(247,242,255,0) 100%)",
+              zIndex: 2,
+            }}
+          />
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={koalaSrc}
+            width={500}
+            height={630}
+            style={{ width: 500, height: 630, objectFit: "cover" }}
+            alt=""
+          />
         </div>
       </div>
     ),
