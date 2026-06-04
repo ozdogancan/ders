@@ -1,13 +1,13 @@
 import Image from "next/image";
 
+// Gemini ile üretilen gerçek, şık iç mekan tasarımları.
 const shots = [
-  "/brand/pro/hero_1.webp",
-  "/brand/pro/hero_2.webp",
-  "/brand/pro/hero_3.webp",
-  "/brand/pro/hero_4.webp",
-  "/brand/showcase/after.webp",
-  "/brand/room_demo.jpg",
-  "/brand/test_room.webp",
+  "/brand/gen/marquee-1.png",
+  "/brand/gen/marquee-2.png",
+  "/brand/gen/marquee-3.png",
+  "/brand/gen/marquee-4.png",
+  "/brand/gen/marquee-5.png",
+  "/brand/gen/marquee-6.png",
 ];
 
 export function ShowcaseMarquee() {
