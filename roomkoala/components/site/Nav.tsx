@@ -25,9 +25,11 @@ export function Nav() {
             height={38}
             className="rounded-xl"
           />
-          <span className="text-lg font-extrabold tracking-tight">koala</span>
-          <span className="hidden text-sm font-medium text-accent sm:inline">
-            by evlumba
+          <span className="flex flex-col leading-none">
+            <span className="text-xl font-extrabold tracking-tight">koala</span>
+            <span className="-mt-0.5 self-end text-[9px] font-medium text-accent">
+              by evlumba
+            </span>
           </span>
         </Link>
 
