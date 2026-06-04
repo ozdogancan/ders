@@ -14,19 +14,18 @@ import { Reveal } from "./Reveal";
 
 type Card = {
   img: string;
-  title: string;
   style: string;
   name: string;
   role: string;
-  initial: string;
-  ring: string;
+  photo: string;
 };
 
+// Tek, temiz iç mekan tasarımları. Avatarlar placeholder portre — gerçek
+// tasarımcı fotoğrafları gelince public/brand/gen/ ile değiştirilebilir.
 const CARDS: Card[] = [
-  { img: "/brand/room_demo.jpg", title: "Bohem Salon", style: "Bohem · Doğal", name: "Selin Aydın", role: "İç Mimar", initial: "S", ring: "from-violet-500 to-fuchsia-500" },
-  { img: "/brand/test_room.webp", title: "Sıcak Oturma", style: "Modern · Sıcak", name: "Mert Kaya", role: "Dekoratör", initial: "M", ring: "from-amber-400 to-orange-500" },
-  { img: "/brand/showcase/after.webp", title: "Skandinav Salon", style: "Skandinav · Aydınlık", name: "Zeynep Demir", role: "İç Mimar", initial: "Z", ring: "from-rose-400 to-pink-500" },
-  { img: "/brand/pro/hero_1.webp", title: "Modern Dönüşüm", style: "Modern · Önce/Sonra", name: "Can Yılmaz", role: "Mimar", initial: "C", ring: "from-sky-400 to-cyan-500" },
+  { img: "/brand/room_demo.jpg", style: "Bohem · Doğal", name: "Selin Aydın", role: "İç Mimar", photo: "https://i.pravatar.cc/160?img=5" },
+  { img: "/brand/test_room.webp", style: "Modern · Sıcak", name: "Mert Kaya", role: "Dekoratör", photo: "https://i.pravatar.cc/160?img=12" },
+  { img: "/brand/showcase/after.webp", style: "Skandinav · Aydınlık", name: "Zeynep Demir", role: "İç Mimar", photo: "https://i.pravatar.cc/160?img=47" },
 ];
 
 export function SwipeShowcase() {
@@ -128,8 +127,8 @@ export function SwipeShowcase() {
                     {top.style}
                   </p>
                   <div className="flex items-center gap-2.5">
-                    <span className={`flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br ${top.ring} text-sm font-bold text-white`}>
-                      {top.initial}
+                    <span className="relative h-9 w-9 shrink-0 overflow-hidden rounded-full ring-2 ring-white/70">
+                      <Image src={top.photo} alt={top.name} fill sizes="40px" className="object-cover" />
                     </span>
                     <div className="leading-tight">
                       <p className="flex items-center gap-1 text-sm font-bold text-white">

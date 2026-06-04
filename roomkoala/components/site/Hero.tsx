@@ -105,6 +105,30 @@ export function Hero() {
               </div>
             </div>
           </motion.div>
+
+          {/* Heyecanlı Koala maskotu — "evini heyecanla tasarlayan" karakter */}
+          <motion.div
+            initial={{ opacity: 0, scale: 0.5, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            transition={{ delay: 0.6, type: "spring", stiffness: 180, damping: 12 }}
+            className="absolute -bottom-9 -left-6 z-20 hidden w-32 sm:block"
+          >
+            <motion.div
+              animate={{ y: [0, -10, 0], rotate: [-3, 3, -3] }}
+              transition={{ duration: 3.2, repeat: Infinity, ease: "easeInOut" }}
+            >
+              <Image
+                src="/brand/koala_hero.webp"
+                alt="Koala maskotu"
+                width={150}
+                height={150}
+                className="drop-shadow-[0_12px_22px_rgba(108,92,231,0.4)]"
+              />
+            </motion.div>
+            <span className="absolute -top-2 left-[88%] whitespace-nowrap rounded-2xl rounded-bl-md border border-line bg-white px-3 py-1.5 text-xs font-bold text-accent-deep shadow-lg">
+              Hadi tasarlayalım! ✨
+            </span>
+          </motion.div>
         </motion.div>
       </div>
     </section>
