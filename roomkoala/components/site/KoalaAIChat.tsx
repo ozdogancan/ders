@@ -1,15 +1,17 @@
 "use client";
 
+import Image from "next/image";
 import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useRef, useState } from "react";
 import { useInView } from "framer-motion";
 import { Sparkles, Send } from "lucide-react";
 import { Reveal } from "./Reveal";
 
+type Product = { name: string; price: string; img: string };
 type Step =
   | { who: "user"; text: string }
   | { who: "typing" }
-  | { who: "ai"; text: string; products?: { name: string; price: string }[] };
+  | { who: "ai"; text: string; products?: Product[] };
 
 const SCRIPT: Step[] = [
   { who: "user", text: "Salonum için rustik bir lamba arıyorum, bütçem 1500₺" },
@@ -18,9 +20,9 @@ const SCRIPT: Step[] = [
     who: "ai",
     text: "Rustik ve sıcak bir salon için 3 öneri hazırladım — bütçene uygun:",
     products: [
-      { name: "Ahşap tripod lambader", price: "1.299₺" },
-      { name: "Rattan abajur", price: "749₺" },
-      { name: "Pirinç masa lambası", price: "899₺" },
+      { name: "Ahşap tripod lambader", price: "1.299₺", img: "/brand/pro/hero_1.webp" },
+      { name: "Rattan abajur", price: "749₺", img: "/brand/pro/hero_3.webp" },
+      { name: "Pirinç masa lambası", price: "899₺", img: "/brand/pro/hero_4.webp" },
     ],
   },
 ];
@@ -136,14 +138,16 @@ export function KoalaAIChat() {
                   variants={{ show: { transition: { staggerChildren: 0.12, delayChildren: 0.2 } } }}
                   className="flex gap-2 overflow-hidden"
                 >
-                  {(SCRIPT[2] as { products: { name: string; price: string }[] }).products.map(
+                  {(SCRIPT[2] as { products: Product[] }).products.map(
                     (p) => (
                       <motion.div
                         key={p.name}
                         variants={{ hidden: { opacity: 0, y: 12 }, show: { opacity: 1, y: 0 } }}
                         className="flex-1 rounded-xl border border-line bg-surface p-2.5"
                       >
-                        <div className="mb-2 h-14 rounded-lg bg-gradient-to-br from-accent-soft to-cream-deep" />
+                        <div className="relative mb-2 h-16 overflow-hidden rounded-lg">
+                          <Image src={p.img} alt={p.name} fill sizes="90px" className="object-cover" />
+                        </div>
                         <p className="text-[10px] font-semibold leading-tight">{p.name}</p>
                         <p className="text-xs font-bold text-accent-deep">{p.price}</p>
                       </motion.div>

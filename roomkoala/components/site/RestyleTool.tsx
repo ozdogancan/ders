@@ -1,36 +1,38 @@
 "use client";
 
 import Image from "next/image";
-import { motion, useInView, animate, useMotionValue } from "framer-motion";
 import { useEffect, useRef, useState } from "react";
 import { Wand2, Camera } from "lucide-react";
 import { Reveal } from "./Reveal";
 
-const steps = ["Oda Tipi", "Stil", "Renk Paleti", "Yerleşim"];
-
 export function RestyleTool() {
   const ref = useRef<HTMLDivElement>(null);
-  const inView = useInView(ref, { once: true, margin: "-100px" });
-  const [active, setActive] = useState(0);
-  const reveal = useMotionValue(100); // before görünür (100%) → after açılır
-  const [w, setW] = useState(100);
+  const [pos, setPos] = useState(50);
+  const [dragging, setDragging] = useState(false);
+  const touched = useRef(false);
 
+  // Hafif salınım — kullanıcı dokunana kadar çizgi ortada nazikçe gider gelir.
   useEffect(() => {
-    if (!inView) return;
-    const timers = steps.map((_, i) => setTimeout(() => setActive(i + 1), 400 + i * 450));
-    const sweep = setTimeout(() => {
-      const c = animate(reveal, 8, {
-        duration: 1.4,
-        ease: [0.22, 1, 0.36, 1],
-        onUpdate: (v) => setW(v),
-      });
-      return () => c.stop();
-    }, 400 + steps.length * 450 + 200);
-    return () => {
-      timers.forEach(clearTimeout);
-      clearTimeout(sweep);
+    let raf = 0;
+    let t = 0;
+    const tick = () => {
+      if (!touched.current) {
+        t += 0.02;
+        setPos(50 + Math.sin(t) * 6);
+        raf = requestAnimationFrame(tick);
+      }
     };
-  }, [inView, reveal]);
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, []);
+
+  const update = (clientX: number) => {
+    const el = ref.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    const pct = ((clientX - r.left) / r.width) * 100;
+    setPos(Math.max(3, Math.min(97, pct)));
+  };
 
   return (
     <section className="bg-cream-deep/40 py-20 md:py-28">
@@ -47,61 +49,44 @@ export function RestyleTool() {
           </h2>
           <p className="mt-4 text-lg leading-relaxed text-ink-soft">
             Mevcut odanın fotoğrafını yükle, seçtiğin stille saniyeler içinde
-            yeniden tasarlansın. Oda tipi, stil, renk paleti ve yerleşimi seç —
-            gerisini yapay zekâ halletsin.
+            yeniden tasarlansın. Oda tipi, stil ve renk paletini seç — gerisini
+            yapay zekâ halletsin.
           </p>
-
-          {/* 4 adımlı sihirbaz */}
-          <div className="mt-7 flex flex-wrap gap-2">
-            {steps.map((s, i) => (
-              <span
-                key={s}
-                className={`rounded-xl border px-3.5 py-2 text-sm font-semibold transition-all duration-300 ${
-                  active > i
-                    ? "border-accent-deep bg-accent-deep text-white"
-                    : "border-line bg-surface text-ink-soft"
-                }`}
-              >
-                <span className="mr-1.5 opacity-70">{i + 1}</span>
-                {s}
-              </span>
-            ))}
-            <span
-              className={`rounded-xl px-3.5 py-2 text-sm font-bold transition-all duration-300 ${
-                active > steps.length - 1
-                  ? "bg-gradient-to-r from-accent-deep to-accent text-white shadow-lg shadow-accent/30"
-                  : "bg-cream text-muted"
-              }`}
-            >
-              Tasarla ✨
-            </span>
-          </div>
-          <p className="mt-5 text-sm font-medium text-muted">
-            Ücretsiz: ayda 2 dönüşüm · ilki bizden 🎁 · Pro&apos;da sınırsız
+          <p className="mt-6 inline-flex items-center gap-2 rounded-full bg-surface px-4 py-2 text-sm font-semibold text-ink-soft shadow-sm">
+            🎁 Ücretsiz ayda 2 dönüşüm · ilki bizden · Pro&apos;da sınırsız
+          </p>
+          <p className="mt-4 text-sm text-muted">
+            👆 Çizgiyi sağa-sola sürükle, önce/sonrayı karşılaştır
           </p>
         </Reveal>
 
-        {/* Before/After auto-sweep */}
         <Reveal delay={0.1}>
           <div
             ref={ref}
-            className="relative aspect-[4/3] w-full overflow-hidden rounded-[2rem] border border-line shadow-2xl shadow-accent/15"
+            onPointerDown={(e) => {
+              touched.current = true;
+              setDragging(true);
+              update(e.clientX);
+            }}
+            onPointerMove={(e) => dragging && update(e.clientX)}
+            onPointerUp={() => setDragging(false)}
+            onPointerLeave={() => setDragging(false)}
+            className="relative aspect-[4/3] w-full cursor-ew-resize select-none touch-none overflow-hidden rounded-[2rem] border border-line shadow-2xl shadow-accent/15"
           >
-            {/* after (alt) */}
             <Image
               src="/brand/showcase/after.webp"
               alt="Yapay zekâ ile yeniden tasarlanmış oda"
               fill
               sizes="(max-width:768px) 100vw, 560px"
               className="object-cover"
+              draggable={false}
             />
             <span className="absolute right-4 top-4 z-10 rounded-full bg-accent-deep px-3 py-1 text-xs font-bold text-white">
               SONRA
             </span>
-            {/* before (üst, clip) */}
             <div
               className="absolute inset-0"
-              style={{ clipPath: `inset(0 ${100 - w}% 0 0)` }}
+              style={{ clipPath: `inset(0 ${100 - pos}% 0 0)` }}
             >
               <Image
                 src="/brand/showcase/before.webp"
@@ -109,6 +94,7 @@ export function RestyleTool() {
                 fill
                 sizes="(max-width:768px) 100vw, 560px"
                 className="object-cover"
+                draggable={false}
               />
               <span className="absolute left-4 top-4 rounded-full bg-ink/70 px-3 py-1 text-xs font-bold text-white">
                 ÖNCE
@@ -117,13 +103,12 @@ export function RestyleTool() {
                 <Camera size={12} /> Senin fotoğrafın
               </span>
             </div>
-            {/* sweep çizgisi */}
             <div
-              className="absolute inset-y-0 z-10 w-1 bg-white shadow-lg"
-              style={{ left: `${w}%` }}
+              className="absolute inset-y-0 z-10 w-1 bg-white shadow-[0_0_12px_rgba(0,0,0,0.25)]"
+              style={{ left: `${pos}%` }}
             >
-              <div className="absolute top-1/2 left-1/2 flex h-10 w-10 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-white text-accent-deep shadow-xl">
-                <Wand2 size={16} />
+              <div className="absolute top-1/2 left-1/2 flex h-11 w-11 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 border-accent-deep bg-white text-accent-deep shadow-xl">
+                <Wand2 size={17} />
               </div>
             </div>
           </div>

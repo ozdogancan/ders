@@ -1,34 +1,71 @@
 "use client";
 
 import Image from "next/image";
-import { AnimatePresence, motion } from "framer-motion";
+import {
+  motion,
+  useMotionValue,
+  useTransform,
+  animate,
+  type PanInfo,
+} from "framer-motion";
 import { useEffect, useState } from "react";
-import { Heart, X, Layers, Sparkles } from "lucide-react";
+import { Heart, X, Layers, Sparkles, BadgeCheck } from "lucide-react";
 import { Reveal } from "./Reveal";
 
-const cards = [
-  { src: "/brand/pro/hero_1.webp", style: "Modern · Sıcak" },
-  { src: "/brand/pro/hero_3.webp", style: "Bohem · Doğal" },
-  { src: "/brand/showcase/after.webp", style: "Rustik · Toprak" },
-  { src: "/brand/pro/hero_4.webp", style: "Minimal · Ferah" },
-  { src: "/brand/room_demo.jpg", style: "Skandinav · Aydınlık" },
+type Card = {
+  img: string;
+  title: string;
+  style: string;
+  name: string;
+  role: string;
+  initial: string;
+  ring: string;
+};
+
+const CARDS: Card[] = [
+  { img: "/brand/pro/hero_1.webp", title: "Modern Salon", style: "Modern · Sıcak", name: "Selin Aydın", role: "İç Mimar", initial: "S", ring: "from-violet-500 to-fuchsia-500" },
+  { img: "/brand/pro/hero_3.webp", title: "Bohem Yatak Odası", style: "Bohem · Doğal", name: "Mert Kaya", role: "Dekoratör", initial: "M", ring: "from-amber-400 to-orange-500" },
+  { img: "/brand/showcase/after.webp", title: "Skandinav Salon", style: "Skandinav · Aydınlık", name: "Zeynep Demir", role: "İç Mimar", initial: "Z", ring: "from-rose-400 to-pink-500" },
+  { img: "/brand/pro/hero_4.webp", title: "Minimal Oturma", style: "Minimal · Ferah", name: "Can Yılmaz", role: "Mimar", initial: "C", ring: "from-sky-400 to-cyan-500" },
+  { img: "/brand/pro/hero_2.webp", title: "Rustik Banyo", style: "Rustik · Toprak", name: "Elif Şahin", role: "Dekoratör", initial: "E", ring: "from-emerald-400 to-teal-500" },
+  { img: "/brand/room_demo.jpg", title: "Sıcak Mutfak", style: "Klasik · Davetkâr", name: "Deniz Aras", role: "İç Mimar", initial: "D", ring: "from-indigo-500 to-violet-500" },
 ];
 
 export function SwipeShowcase() {
   const [i, setI] = useState(0);
-  const [dir, setDir] = useState<1 | -1>(1);
+  const [touched, setTouched] = useState(false);
+  const x = useMotionValue(0);
+  const rotate = useTransform(x, [-200, 200], [-16, 16]);
+  const likeOp = useTransform(x, [40, 130], [0, 1]);
+  const nopeOp = useTransform(x, [-130, -40], [1, 0]);
+
+  const advance = () => setI((v) => (v + 1) % CARDS.length);
+  const fling = (dir: 1 | -1) =>
+    animate(x, dir * 520, {
+      duration: 0.45,
+      ease: "easeIn",
+      onComplete: () => {
+        x.set(0);
+        advance();
+      },
+    });
 
   useEffect(() => {
-    const t = setInterval(() => {
-      setDir(Math.random() > 0.35 ? 1 : -1);
-      setI((v) => (v + 1) % cards.length);
-    }, 2200);
-    return () => clearInterval(t);
-  }, []);
+    if (touched) return;
+    const t = setTimeout(() => !touched && fling(1), 1800);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [i, touched]);
 
-  const top = cards[i];
-  const mid = cards[(i + 1) % cards.length];
-  const back = cards[(i + 2) % cards.length];
+  const onDragEnd = (_: unknown, info: PanInfo) => {
+    setTouched(true);
+    if (info.offset.x > 110) fling(1);
+    else if (info.offset.x < -110) fling(-1);
+    else animate(x, 0, { type: "spring", stiffness: 300, damping: 26 });
+  };
+
+  const top = CARDS[i];
+  const under = CARDS[(i + 1) % CARDS.length];
 
   return (
     <section id="kesfet" className="bg-cream-deep/40 py-20 md:py-28">
@@ -37,99 +74,95 @@ export function SwipeShowcase() {
           <span className="inline-flex items-center gap-2 rounded-full bg-accent-soft px-4 py-1.5 text-sm font-bold text-accent-deep">
             <Layers size={15} /> Kaydır & Keşfet
           </span>
-          <h2 className="text-balance mt-4 text-3xl font-extrabold tracking-tight sm:text-4xl">
-            Kaydırdıkça zevkini öğrenen akış
+          <h2 className="text-balance mt-4 text-4xl font-extrabold tracking-tight sm:text-5xl">
+            Kaydırdıkça{" "}
+            <span className="bg-gradient-to-r from-accent-deep to-[#ec4899] bg-clip-text text-transparent">
+              zevkini öğrenen akış
+            </span>
           </h2>
           <p className="mt-4 text-lg leading-relaxed text-ink-soft">
             Binlerce gerçek iç mekân tasarımını sağa-sola kaydırarak keşfet.
-            Beğen ❤️, geç ✕ — Koala zevkini öğrenir ve akışı tamamen sana özel
-            hâle getirir. Adeta evin için sonsuz bir ilham akışı.
+            Beğen ❤️, geç ✕ — Koala zevkini öğrenir, akış tamamen sana özel
+            şekillenir. Her tasarımın arkasında gerçek bir tasarımcı var.
           </p>
-          <ul className="mt-6 space-y-3">
+          <ul className="mt-6 space-y-2.5">
             {[
               "Beğendikçe kişiselleşen öneri akışı",
-              "Tek dokunuşla kaydet veya iç mimara sor",
-              "Her stil ve oda için binlerce kart",
+              "Farklı stil ve kategorilerden binlerce kart",
+              "Beğendiğini kaydet veya tasarımcısına sor",
             ].map((b) => (
-              <li key={b} className="flex items-center gap-3 font-semibold">
-                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-accent-deep text-white">
-                  <Sparkles size={13} />
-                </span>
-                {b}
+              <li key={b} className="flex items-center gap-2.5 font-semibold text-ink">
+                <Sparkles size={15} className="text-accent-deep" /> {b}
               </li>
             ))}
           </ul>
         </Reveal>
 
-        {/* Kart destesi */}
+        {/* Sürüklenebilir kart destesi */}
         <Reveal delay={0.1}>
-          <div className="relative mx-auto flex h-[420px] w-[300px] items-center justify-center">
-            {/* arka kartlar */}
-            <div
-              className="absolute h-[380px] w-[280px] overflow-hidden rounded-3xl border border-line bg-surface shadow-lg"
-              style={{ transform: "translateY(26px) scale(0.9)", zIndex: 1 }}
-            >
-              <Image src={back.src} alt="" fill sizes="280px" className="object-cover opacity-80" />
-            </div>
-            <div
-              className="absolute h-[380px] w-[280px] overflow-hidden rounded-3xl border border-line bg-surface shadow-xl"
-              style={{ transform: "translateY(13px) scale(0.95)", zIndex: 2 }}
-            >
-              <Image src={mid.src} alt="" fill sizes="280px" className="object-cover opacity-90" />
-            </div>
-
-            {/* üst kart — kaydırma animasyonu */}
-            <AnimatePresence custom={dir}>
+          <div className="mx-auto w-full max-w-[340px]">
+            <div className="relative aspect-[3/4] w-full">
+              {/* arka kart */}
+              <div className="absolute inset-0 translate-y-4 scale-[0.94] overflow-hidden rounded-[2rem] border border-line shadow-lg">
+                <Image src={under.img} alt="" fill sizes="340px" className="object-cover opacity-80" draggable={false} />
+              </div>
+              {/* üst kart */}
               <motion.div
-                key={i}
-                custom={dir}
-                variants={{
-                  enter: { opacity: 0, scale: 0.96 },
-                  center: { opacity: 1, scale: 1, x: 0, rotate: 0 },
-                  exit: (d: number) => ({
-                    x: d * 420,
-                    rotate: d * 18,
-                    opacity: 0,
-                    transition: { duration: 0.5, ease: "easeIn" },
-                  }),
-                }}
-                initial="enter"
-                animate="center"
-                exit="exit"
-                transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-                className="absolute h-[380px] w-[280px] overflow-hidden rounded-3xl border border-line bg-surface shadow-2xl shadow-accent/25"
-                style={{ zIndex: 3 }}
+                drag="x"
+                dragConstraints={{ left: 0, right: 0 }}
+                dragElastic={0.8}
+                onDragStart={() => setTouched(true)}
+                onDragEnd={onDragEnd}
+                style={{ x, rotate }}
+                className="absolute inset-0 cursor-grab touch-none overflow-hidden rounded-[2rem] border border-line bg-surface shadow-2xl shadow-accent/20 active:cursor-grabbing"
               >
-                <Image
-                  src={top.src}
-                  alt={`Koala swipe tasarım kartı — ${top.style}`}
-                  fill
-                  sizes="280px"
-                  className="object-cover"
-                />
-                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-4">
-                  <p className="text-sm font-bold text-white">{top.style}</p>
-                </div>
-                {/* yön damgası */}
-                <div
-                  className={`absolute top-5 ${
-                    dir === 1 ? "left-5 -rotate-12 border-emerald-400 text-emerald-400" : "right-5 rotate-12 border-rose-400 text-rose-400"
-                  } rounded-lg border-4 px-3 py-1 text-lg font-black uppercase opacity-90`}
-                >
-                  {dir === 1 ? "Beğen" : "Geç"}
+                <Image src={top.img} alt={top.title} fill sizes="340px" className="object-cover" draggable={false} priority />
+                {/* damgalar */}
+                <motion.span style={{ opacity: likeOp }} className="absolute right-5 top-5 -rotate-12 rounded-xl border-4 border-emerald-400 px-3 py-1 text-xl font-black uppercase text-emerald-400">
+                  Beğen
+                </motion.span>
+                <motion.span style={{ opacity: nopeOp }} className="absolute left-5 top-5 rotate-12 rounded-xl border-4 border-rose-400 px-3 py-1 text-xl font-black uppercase text-rose-400">
+                  Geç
+                </motion.span>
+                {/* alt bilgi */}
+                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent p-5">
+                  <p className="mb-2 inline-block rounded-full bg-white/20 px-2.5 py-0.5 text-[11px] font-bold text-white backdrop-blur">
+                    {top.style}
+                  </p>
+                  <div className="flex items-center gap-2.5">
+                    <span className={`flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br ${top.ring} text-sm font-bold text-white`}>
+                      {top.initial}
+                    </span>
+                    <div className="leading-tight">
+                      <p className="flex items-center gap-1 text-sm font-bold text-white">
+                        {top.name}
+                        <BadgeCheck size={13} className="text-emerald-400" />
+                      </p>
+                      <p className="text-[11px] text-white/80">{top.role}</p>
+                    </div>
+                  </div>
                 </div>
               </motion.div>
-            </AnimatePresence>
-
-            {/* aksiyon butonları */}
-            <div className="absolute -bottom-2 left-1/2 z-10 flex -translate-x-1/2 gap-5">
-              <span className="flex h-14 w-14 items-center justify-center rounded-full border border-line bg-surface text-rose-500 shadow-lg">
-                <X size={24} />
-              </span>
-              <span className="flex h-14 w-14 items-center justify-center rounded-full bg-accent-deep text-white shadow-lg shadow-accent/40">
-                <Heart size={24} className="fill-white" />
-              </span>
             </div>
+
+            {/* butonlar */}
+            <div className="mt-6 flex items-center justify-center gap-6">
+              <button
+                onClick={() => fling(-1)}
+                aria-label="Geç"
+                className="flex h-14 w-14 items-center justify-center rounded-full border border-line bg-surface text-rose-500 shadow-lg transition-transform hover:scale-110"
+              >
+                <X size={26} />
+              </button>
+              <button
+                onClick={() => fling(1)}
+                aria-label="Beğen"
+                className="flex h-16 w-16 items-center justify-center rounded-full bg-accent-deep text-white shadow-xl shadow-accent/40 transition-transform hover:scale-110"
+              >
+                <Heart size={28} className="fill-white" />
+              </button>
+            </div>
+            <p className="mt-3 text-center text-sm text-muted">👆 Kartı sağa-sola kaydır</p>
           </div>
         </Reveal>
       </div>
