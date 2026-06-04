@@ -91,10 +91,10 @@ export function Hero() {
             transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
             className="relative aspect-[4/5] w-full overflow-hidden rounded-[2.2rem] shadow-2xl shadow-accent/30 ring-1 ring-black/5"
           >
-            {/* SONRA — tasarlanmış oda (taban) */}
+            {/* SONRA — Koala'nın tasarladığı oda (içinde neşeli koala) */}
             <Image
-              src="/brand/showcase/after.webp"
-              alt="Akıllı teknolojiyle tasarlanmış oda"
+              src="/brand/gen/koala-room.png"
+              alt="Koala'nın akıllı teknolojiyle tasarladığı oda"
               fill
               priority
               sizes="400px"
@@ -125,27 +125,6 @@ export function Hero() {
             <span className="absolute left-4 top-4 z-10 inline-flex items-center gap-1.5 rounded-full bg-white/85 px-3 py-1.5 text-xs font-bold text-accent-deep shadow-sm backdrop-blur">
               <Sparkles size={13} /> Akıllı tasarım
             </span>
-          </motion.div>
-
-          {/* Full-vücut Koala — mekânda, paletini tutan, neşeli (Gemini ile üretildi) */}
-          <motion.div
-            initial={{ opacity: 0, scale: 0.6, y: 30 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            transition={{ delay: 0.5, type: "spring", stiffness: 160, damping: 13 }}
-            className="absolute -bottom-8 -left-16 z-20 hidden w-48 sm:block"
-          >
-            <motion.div
-              animate={{ y: [0, -12, 0], rotate: [-2, 2, -2] }}
-              transition={{ duration: 3.4, repeat: Infinity, ease: "easeInOut" }}
-            >
-              <Image
-                src="/brand/gen/koala-full.png"
-                alt="Koala — akıllı iç mekan asistanı"
-                width={220}
-                height={220}
-                className="drop-shadow-[0_16px_28px_rgba(108,92,231,0.45)]"
-              />
-            </motion.div>
           </motion.div>
         </motion.div>
       </div>
