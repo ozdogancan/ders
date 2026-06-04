@@ -5,7 +5,9 @@ import { MagazinCard } from "./MagazinCard";
 import { getAllPosts } from "@/lib/magazin";
 
 export function MagazinTeaser() {
-  const posts = getAllPosts().slice(0, 3);
+  const all = getAllPosts();
+  const latest = all[0]?.date;
+  const posts = all.slice(0, 3);
   if (posts.length === 0) return null;
 
   return (
@@ -39,7 +41,7 @@ export function MagazinTeaser() {
 
         <div className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {posts.map((p) => (
-            <MagazinCard key={p.slug} post={p} />
+            <MagazinCard key={p.slug} post={p} isNew={p.date === latest} />
           ))}
         </div>
 

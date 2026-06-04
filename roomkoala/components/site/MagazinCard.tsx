@@ -15,9 +15,11 @@ export function formatTrDate(iso: string): string {
 export function MagazinCard({
   post,
   priority = false,
+  isNew = false,
 }: {
   post: MagazinPost;
   priority?: boolean;
+  isNew?: boolean;
 }) {
   return (
     <Link
@@ -36,6 +38,11 @@ export function MagazinCard({
         <span className="absolute left-3 top-3 rounded-full bg-white/90 px-3 py-1 text-[11px] font-bold text-accent-deep shadow-sm backdrop-blur">
           {post.category}
         </span>
+        {isNew && (
+          <span className="absolute right-3 top-3 inline-flex items-center gap-1 rounded-full bg-emerald-500 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-white shadow-sm">
+            <span className="h-1.5 w-1.5 rounded-full bg-white" /> Yeni
+          </span>
+        )}
       </div>
       <div className="flex flex-1 flex-col p-4">
         <h3 className="text-balance text-[17px] font-bold leading-snug tracking-tight transition-colors group-hover:text-accent-deep">
