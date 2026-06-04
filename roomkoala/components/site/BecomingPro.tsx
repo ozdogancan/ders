@@ -54,16 +54,16 @@ export function BecomingPro() {
               transition={{ duration: 0.7, delay: 0.5, ease: [0.22, 1, 0.36, 1] }}
               className="relative h-[78%] w-[64%] overflow-hidden rounded-3xl border border-line bg-surface shadow-2xl shadow-accent/20"
             >
-              <div className="relative h-[72%] w-full overflow-hidden">
+              <div className="relative h-[80%] w-full overflow-hidden">
                 <Image
-                  src="/brand/pro/hero_3.webp"
+                  src="/brand/gen/swipe-2.png"
                   alt="Senin yayınladığın tasarım"
                   fill
                   sizes="280px"
                   className="object-cover"
                 />
               </div>
-              <div className="absolute inset-x-0 bottom-0 p-3">
+              <div className="flex h-[20%] items-center px-3">
                 <div className="flex items-center gap-2">
                   <span className="flex h-8 w-8 items-center justify-center rounded-full bg-accent-deep text-xs font-bold text-white">
                     S

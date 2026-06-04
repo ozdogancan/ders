@@ -24,8 +24,8 @@ const rows: Row[] = [
       "1 saat içinde yanıt",
       "İlk danışma tamamen ücretsiz",
     ],
-    image: "/brand/pro/hero_2.webp",
-    imageAlt: "Evlumba Design ile tasarlanmış mekan",
+    image: "/brand/gen/evlumba.png",
+    imageAlt: "Evlumba Design — sertifikalı iç mimar",
   },
 ];
 

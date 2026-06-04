@@ -3,31 +3,16 @@
 import Image from "next/image";
 import { motion } from "framer-motion";
 import { Sparkles, Star } from "lucide-react";
-import { useEffect, useState } from "react";
 import { StoreButtons } from "./StoreButtons";
 
 export function Hero() {
-  // Önce → Sonra otomatik "wow değişim" salınımı (oda dönüşüyormuş gibi).
-  const [pos, setPos] = useState(50);
-  useEffect(() => {
-    let raf = 0;
-    let t = 0;
-    const tick = () => {
-      t += 0.012;
-      setPos(51 + Math.sin(t) * 39); // 12 ↔ 90 arası
-      raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, []);
-
   return (
     <section className="relative overflow-hidden">
       {/* Canlı mesh gradient (Stripe/Framer) + alt beyaz geçiş */}
       <div className="mesh-vivid mesh-animate pointer-events-none absolute inset-0 -z-10" />
       <div className="pointer-events-none absolute inset-x-0 bottom-0 -z-10 h-40 bg-gradient-to-t from-cream to-transparent" />
 
-      <div className="mx-auto grid max-w-6xl items-center gap-12 px-5 pb-20 pt-16 md:grid-cols-2 md:gap-8 md:pb-28 md:pt-24">
+      <div className="mx-auto grid min-h-[calc(100svh-4rem)] max-w-6xl items-center gap-12 px-5 pb-20 pt-14 md:grid-cols-2 md:gap-8 md:pb-24 md:pt-20">
         <div>
           <motion.span
             initial={{ opacity: 0, y: 12 }}
@@ -86,44 +71,20 @@ export function Hero() {
           transition={{ duration: 0.8, delay: 0.1, ease: [0.22, 1, 0.36, 1] }}
           className="relative mx-auto w-full max-w-[400px]"
         >
+          {/* Tek görsel — Koala'nın tasarladığı şık oda; hafifçe salınır */}
           <motion.div
-            animate={{ y: [0, -10, 0] }}
-            transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
+            animate={{ y: [0, -14, 0], rotate: [-1, 1, -1] }}
+            transition={{ duration: 6.5, repeat: Infinity, ease: "easeInOut" }}
             className="relative aspect-[4/5] w-full overflow-hidden rounded-[2.2rem] shadow-2xl shadow-accent/30 ring-1 ring-black/5"
           >
-            {/* ÖNCE — odanın boş/eski hali (taban) */}
             <Image
-              src="/brand/showcase/before.webp"
-              alt="Odanın önceki hali"
+              src="/brand/gen/hero-koala.png"
+              alt="Koala'nın akıllı teknolojiyle tasarladığı şık oturma odası"
               fill
               priority
               sizes="400px"
               className="object-cover"
             />
-            {/* SONRA — Koala'nın tasarladığı oda (içinde neşeli koala); soldan
-                açılır = wow değişim, koala lower-left'te erkenden görünür */}
-            <div
-              className="absolute inset-0"
-              style={{ clipPath: `inset(0 ${100 - pos}% 0 0)` }}
-            >
-              <Image
-                src="/brand/gen/koala-room.png"
-                alt="Koala'nın akıllı teknolojiyle tasarladığı oda"
-                fill
-                priority
-                sizes="400px"
-                className="object-cover"
-              />
-            </div>
-            {/* dönüşüm çizgisi + parıltı */}
-            <div
-              className="absolute inset-y-0 z-10 w-0.5 bg-white shadow-[0_0_16px_rgba(255,255,255,0.9)]"
-              style={{ left: `${pos}%` }}
-            >
-              <span className="absolute top-1/2 left-1/2 flex h-9 w-9 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 border-accent-deep bg-white text-accent-deep shadow-lg">
-                <Sparkles size={15} />
-              </span>
-            </div>
             <span className="absolute left-4 top-4 z-10 inline-flex items-center gap-1.5 rounded-full bg-white/85 px-3 py-1.5 text-xs font-bold text-accent-deep shadow-sm backdrop-blur">
               <Sparkles size={13} /> Akıllı tasarım
             </span>

@@ -52,12 +52,6 @@ export function RestyleTool() {
             yeniden tasarlansın. Oda tipi, stil ve renk paletini seç — gerisini
             akıllı teknoloji halletsin.
           </p>
-          <p className="mt-6 inline-flex items-center gap-2 rounded-full bg-surface px-4 py-2 text-sm font-semibold text-ink-soft shadow-sm">
-            🎁 Ücretsiz ayda 2 dönüşüm · ilki bizden · Pro&apos;da sınırsız
-          </p>
-          <p className="mt-4 text-sm text-muted">
-            👆 Çizgiyi sağa-sola sürükle, önce/sonrayı karşılaştır
-          </p>
         </Reveal>
 
         <Reveal delay={0.1}>
@@ -112,6 +106,9 @@ export function RestyleTool() {
               </div>
             </div>
           </div>
+          <p className="mt-4 text-center text-sm text-muted">
+            👆 Çizgiyi sağa-sola sürükle, önce/sonrayı karşılaştır
+          </p>
         </Reveal>
       </div>
     </section>

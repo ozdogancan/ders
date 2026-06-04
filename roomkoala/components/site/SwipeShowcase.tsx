@@ -23,9 +23,9 @@ type Card = {
 // Tek, temiz iç mekan tasarımları. Avatarlar placeholder portre — gerçek
 // tasarımcı fotoğrafları gelince public/brand/gen/ ile değiştirilebilir.
 const CARDS: Card[] = [
-  { img: "/brand/room_demo.jpg", style: "Bohem · Doğal", name: "Selin Aydın", role: "İç Mimar", photo: "https://i.pravatar.cc/160?img=5" },
-  { img: "/brand/test_room.webp", style: "Modern · Sıcak", name: "Mert Kaya", role: "Dekoratör", photo: "https://i.pravatar.cc/160?img=12" },
-  { img: "/brand/showcase/after.webp", style: "Skandinav · Aydınlık", name: "Zeynep Demir", role: "İç Mimar", photo: "https://i.pravatar.cc/160?img=47" },
+  { img: "/brand/gen/swipe-1.png", style: "Bohem · Doğal", name: "Selin Aydın", role: "İç Mimar", photo: "https://i.pravatar.cc/160?img=5" },
+  { img: "/brand/gen/swipe-2.png", style: "Modern · Sıcak", name: "Mert Kaya", role: "Dekoratör", photo: "https://i.pravatar.cc/160?img=12" },
+  { img: "/brand/gen/swipe-3.png", style: "Skandinav · Aydınlık", name: "Zeynep Demir", role: "İç Mimar", photo: "https://i.pravatar.cc/160?img=47" },
 ];
 
 export function SwipeShowcase() {
