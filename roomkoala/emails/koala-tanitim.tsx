@@ -17,6 +17,8 @@ import {
 
 const HERO = "https://roomkoala.com/brand/email/hero.jpg";
 const LOGO = "https://roomkoala.com/brand/email/logo.png";
+const PLAY_ICON = "https://roomkoala.com/brand/email/play.png";
+const APPLE_ICON = "https://roomkoala.com/brand/email/apple.png";
 const SITE ="https://roomkoala.com/?utm_source=email&utm_medium=tanitim&utm_campaign=lansman";
 const PLAY =
   "https://play.google.com/store/apps/details?id=com.egitim_ai_tutor.app&utm_source=email&utm_medium=tanitim";
@@ -116,15 +118,52 @@ export default function KoalaTanitim({ name = "" }: { name?: string }) {
               ))}
             </Section>
 
-            {/* Store CTA */}
-            <Section style={{ padding: "18px 32px 30px", textAlign: "center" }}>
-              <Hr style={{ borderColor: "#eceaf6", margin: "8px 0 22px" }} />
-              <Text style={{ margin: "0 0 12px", fontSize: 14, color: soft }}>
-                Android&apos;de yayında · iOS çok yakında
-              </Text>
-              <Button href={PLAY} style={{ backgroundColor: ink, color: "#ffffff", fontSize: 15, fontWeight: 700, padding: "13px 30px", borderRadius: 12, textDecoration: "none" }}>
-                Google Play&apos;den indir
-              </Button>
+            {/* Store CTA — sitedeki resmi rozetler */}
+            <Section style={{ padding: "8px 24px 28px" }}>
+              <Section style={{ backgroundColor: cardBg, borderRadius: 18, padding: "24px 14px", border: "1px solid #eceaf6" }}>
+                <Text style={{ margin: "0 0 2px", fontSize: 18, fontWeight: 800, color: ink, textAlign: "center" }}>
+                  Uygulamayı indir, hemen başla
+                </Text>
+                <Text style={{ margin: "0 0 18px", fontSize: 13, color: soft, textAlign: "center" }}>
+                  Android&apos;de yayında · iOS çok yakında
+                </Text>
+                <Row>
+                  <Column style={{ textAlign: "center", verticalAlign: "top" }}>
+                    <Link href={PLAY} style={{ display: "inline-block", backgroundColor: ink, borderRadius: 12, padding: "9px 16px", textDecoration: "none" }}>
+                      <table cellPadding={0} cellSpacing={0} role="presentation" style={{ display: "inline-table" }}>
+                        <tbody>
+                          <tr>
+                            <td style={{ verticalAlign: "middle", paddingRight: 9 }}>
+                              <Img src={PLAY_ICON} width="24" height="24" alt="" style={{ display: "block" }} />
+                            </td>
+                            <td style={{ verticalAlign: "middle", textAlign: "left" }}>
+                              <span style={{ display: "block", color: "#cfc8ff", fontSize: 9, fontWeight: 600, letterSpacing: "0.5px" }}>ŞURADAN İNDİRİN</span>
+                              <span style={{ display: "block", color: "#ffffff", fontSize: 16, fontWeight: 700 }}>Google Play</span>
+                            </td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </Link>
+                  </Column>
+                  <Column style={{ textAlign: "center", verticalAlign: "top" }}>
+                    <span style={{ display: "inline-block", backgroundColor: "#3a3b52", borderRadius: 12, padding: "9px 16px" }}>
+                      <table cellPadding={0} cellSpacing={0} role="presentation" style={{ display: "inline-table" }}>
+                        <tbody>
+                          <tr>
+                            <td style={{ verticalAlign: "middle", paddingRight: 9 }}>
+                              <Img src={APPLE_ICON} width="22" height="24" alt="" style={{ display: "block" }} />
+                            </td>
+                            <td style={{ verticalAlign: "middle", textAlign: "left" }}>
+                              <span style={{ display: "block", color: "#b9bac7", fontSize: 9, fontWeight: 600, letterSpacing: "0.5px" }}>ÇOK YAKINDA</span>
+                              <span style={{ display: "block", color: "#e8e8ee", fontSize: 16, fontWeight: 700 }}>App Store</span>
+                            </td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </span>
+                  </Column>
+                </Row>
+              </Section>
             </Section>
           </Section>
 
