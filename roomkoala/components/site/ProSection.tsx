@@ -1,6 +1,5 @@
 import { Check, Crown, Sparkles } from "lucide-react";
 import { Reveal } from "./Reveal";
-import { BorderBeam } from "@/components/magicui/border-beam";
 import { LINKS } from "@/lib/utils";
 
 // Koddaki gerçek Pro avantajları (paywall_screen) — uydurma yok.
@@ -19,7 +18,6 @@ export function ProSection() {
           {/* derinlik için ışık parçacıkları */}
           <div className="pointer-events-none absolute -left-10 -top-10 h-64 w-64 rounded-full bg-white/20 blur-3xl" />
           <div className="pointer-events-none absolute -bottom-12 right-10 h-72 w-72 rounded-full bg-[#ec4899]/30 blur-3xl" />
-          <BorderBeam size={300} duration={9} colorFrom="#ffffff" colorTo="#f0abfc" borderWidth={2} />
 
           <div className="relative grid gap-10 md:grid-cols-2 md:items-center">
             <div>

@@ -23,12 +23,10 @@ type Card = {
 };
 
 const CARDS: Card[] = [
-  { img: "/brand/pro/hero_1.webp", title: "Modern Salon", style: "Modern · Sıcak", name: "Selin Aydın", role: "İç Mimar", initial: "S", ring: "from-violet-500 to-fuchsia-500" },
-  { img: "/brand/pro/hero_3.webp", title: "Bohem Yatak Odası", style: "Bohem · Doğal", name: "Mert Kaya", role: "Dekoratör", initial: "M", ring: "from-amber-400 to-orange-500" },
+  { img: "/brand/room_demo.jpg", title: "Bohem Salon", style: "Bohem · Doğal", name: "Selin Aydın", role: "İç Mimar", initial: "S", ring: "from-violet-500 to-fuchsia-500" },
+  { img: "/brand/test_room.webp", title: "Sıcak Oturma", style: "Modern · Sıcak", name: "Mert Kaya", role: "Dekoratör", initial: "M", ring: "from-amber-400 to-orange-500" },
   { img: "/brand/showcase/after.webp", title: "Skandinav Salon", style: "Skandinav · Aydınlık", name: "Zeynep Demir", role: "İç Mimar", initial: "Z", ring: "from-rose-400 to-pink-500" },
-  { img: "/brand/pro/hero_4.webp", title: "Minimal Oturma", style: "Minimal · Ferah", name: "Can Yılmaz", role: "Mimar", initial: "C", ring: "from-sky-400 to-cyan-500" },
-  { img: "/brand/pro/hero_2.webp", title: "Rustik Banyo", style: "Rustik · Toprak", name: "Elif Şahin", role: "Dekoratör", initial: "E", ring: "from-emerald-400 to-teal-500" },
-  { img: "/brand/room_demo.jpg", title: "Sıcak Mutfak", style: "Klasik · Davetkâr", name: "Deniz Aras", role: "İç Mimar", initial: "D", ring: "from-indigo-500 to-violet-500" },
+  { img: "/brand/pro/hero_1.webp", title: "Modern Dönüşüm", style: "Modern · Önce/Sonra", name: "Can Yılmaz", role: "Mimar", initial: "C", ring: "from-sky-400 to-cyan-500" },
 ];
 
 export function SwipeShowcase() {
