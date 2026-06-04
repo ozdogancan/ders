@@ -154890,7 +154890,7 @@ g.push(new A.hM(B.aoo,"Sat\u0131n Al\u0131mlar\u0131 Geri Y\xfckle",j,m?B.azx:j,
 g=A.a([new A.O(B.a0L,r,j),q,B.a4,p,B.ax,o,B.aO,B.aVP,new A.xy(n,j),B.aO,B.aVN,new A.xy(g,j),B.aO],s)
 if(e)B.c.H(g,A.a([B.aVR,new A.xy(A.a([new A.hM(B.anU,"Aboneli\u011fi Y\xf6net",j,j,k.gaM9(),!1,j)],s),j),B.aO],s))
 g.push(B.aVO)
-r=B.c.gU("1.0.172+176".split("+"))
+r=B.c.gU("1.0.173+177".split("+"))
 g.push(new A.xy(A.a([new A.hM(B.ux,"Bizi De\u011ferlendirin",j,j,k.gaRM(),!1,j),new A.hM(B.bC,"Geri Bildirim",j,j,k.gaPv(),!1,j),new A.hM(B.f9,"Uygulamam\u0131z\u0131 Payla\u015f",j,j,k.gaUO(),!1,j),new A.hM(B.IV,"Gizlilik Politikas\u0131",j,j,new A.bot(a),!1,j),new A.hM(B.uq,"Kullan\u0131m \u015eartlar\u0131",j,j,new A.bou(a),!1,j),new A.hM(B.ao2,"KVKK Ayd\u0131nlatma Metni",j,j,new A.bov(a),!1,j),new A.hM(B.IN,"Versiyon",r,j,j,!1,j)],s),j))
 if(!k.gv5()){r=k.at
 q=!r
