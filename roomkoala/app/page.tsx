@@ -8,6 +8,7 @@ import { Highlights } from "@/components/site/Highlights";
 import { BecomingPro } from "@/components/site/BecomingPro";
 import { ShowcaseMarquee } from "@/components/site/ShowcaseMarquee";
 import { ProSection } from "@/components/site/ProSection";
+import { MagazinTeaser } from "@/components/site/MagazinTeaser";
 import { DownloadCTA } from "@/components/site/DownloadCTA";
 import { Footer } from "@/components/site/Footer";
 
@@ -25,6 +26,7 @@ export default function Home() {
         <BecomingPro />
         <ShowcaseMarquee />
         <ProSection />
+        <MagazinTeaser />
         <DownloadCTA />
       </main>
       <Footer />
