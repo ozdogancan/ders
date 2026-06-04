@@ -19,6 +19,7 @@ const SITE = "https://roomkoala.com/?utm_source=email&utm_medium=tanitim&utm_cam
 const PLAY =
   "https://play.google.com/store/apps/details?id=com.egitim_ai_tutor.app&utm_source=email&utm_medium=tanitim";
 const HERO = "https://roomkoala.com/brand/email/hero.png";
+const LOGO = "https://roomkoala.com/brand/email/logo.png";
 
 const accent = "#6c5ce7";
 const ink = "#0f1020";
@@ -39,13 +40,21 @@ export default function KoalaTanitim() {
       <Body style={{ backgroundColor: "#f1eeff", margin: 0, fontFamily: "Helvetica, Arial, sans-serif" }}>
         <Container style={{ maxWidth: 600, margin: "0 auto", padding: "24px 12px" }}>
           <Section style={{ backgroundColor: "#ffffff", borderRadius: 20, overflow: "hidden", border: "1px solid #eceaf6" }}>
-            <Img src={HERO} width="600" height="240" alt="Koala ile tasarlanmış şık bir oturma odası" style={{ width: "100%", height: 240, objectFit: "cover", display: "block" }} />
+            {/* Logo lockup — sitedeki nav ile birebir */}
+            <Row style={{ padding: "22px 32px 16px" }}>
+              <Column style={{ width: 50, verticalAlign: "middle" }}>
+                <Img src={LOGO} width="42" height="42" alt="Koala" style={{ borderRadius: 12, display: "block" }} />
+              </Column>
+              <Column style={{ verticalAlign: "middle", paddingLeft: 4 }}>
+                <Text style={{ margin: 0, fontSize: 21, fontWeight: 800, color: ink, lineHeight: 1 }}>koala</Text>
+                <Text style={{ margin: "1px 0 0", fontSize: 12, fontWeight: 600, color: accent, lineHeight: 1 }}>by evlumba</Text>
+              </Column>
+            </Row>
 
-            <Section style={{ padding: "32px 32px 8px" }}>
-              <Text style={{ margin: 0, fontSize: 13, fontWeight: 700, letterSpacing: 1, color: accent, textTransform: "uppercase" }}>
-                Koala · by evlumba
-              </Text>
-              <Heading style={{ margin: "10px 0 0", fontSize: 30, lineHeight: 1.15, color: ink, fontWeight: 800 }}>
+            <Img src={HERO} width="600" height="230" alt="Koala ile tasarlanmış şık bir oturma odası" style={{ width: "100%", height: 230, objectFit: "cover", display: "block" }} />
+
+            <Section style={{ padding: "30px 32px 8px" }}>
+              <Heading style={{ margin: "0", fontSize: 30, lineHeight: 1.15, color: ink, fontWeight: 800 }}>
                 Hayalindeki evi saniyeler içinde tasarla
               </Heading>
               <Text style={{ margin: "14px 0 0", fontSize: 16, lineHeight: 1.6, color: soft }}>
