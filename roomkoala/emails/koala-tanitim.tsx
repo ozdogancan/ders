@@ -17,9 +17,7 @@ import {
 
 const HERO = "https://roomkoala.com/brand/email/hero.jpg";
 const LOGO = "https://roomkoala.com/brand/email/logo.png";
-const THUMB1 = "https://roomkoala.com/brand/email/thumb-1.jpg";
-const THUMB2 = "https://roomkoala.com/brand/email/thumb-2.jpg";
-const SITE = "https://roomkoala.com/?utm_source=email&utm_medium=tanitim&utm_campaign=lansman";
+const SITE ="https://roomkoala.com/?utm_source=email&utm_medium=tanitim&utm_campaign=lansman";
 const PLAY =
   "https://play.google.com/store/apps/details?id=com.egitim_ai_tutor.app&utm_source=email&utm_medium=tanitim";
 
@@ -116,21 +114,6 @@ export default function KoalaTanitim({ name = "" }: { name?: string }) {
                   </Row>
                 </Section>
               ))}
-            </Section>
-
-            {/* İç mekan görsel ızgarası */}
-            <Section style={{ padding: "12px 24px 4px" }}>
-              <Text style={{ margin: "0 0 12px 8px", fontSize: 15, fontWeight: 700, color: ink }}>
-                Her zevke uygun binlerce tasarım 👇
-              </Text>
-              <Row>
-                <Column style={{ padding: "0 5px", width: "50%" }}>
-                  <Img src={THUMB1} width="100%" height="150" alt="İç mekan tasarımı" style={{ borderRadius: 14, objectFit: "cover", height: 150, display: "block" }} />
-                </Column>
-                <Column style={{ padding: "0 5px", width: "50%" }}>
-                  <Img src={THUMB2} width="100%" height="150" alt="İç mekan tasarımı" style={{ borderRadius: 14, objectFit: "cover", height: 150, display: "block" }} />
-                </Column>
-              </Row>
             </Section>
 
             {/* Store CTA */}
