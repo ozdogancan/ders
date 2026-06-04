@@ -109,6 +109,30 @@ body {
   }
 }
 
+/* Magic UI — Border Beam (animasyonlu kenar ışığı) */
+@keyframes border-beam {
+  to {
+    offset-distance: 100%;
+  }
+}
+.animate-border-beam {
+  animation: border-beam calc(var(--duration, 12) * 1s) infinite linear;
+}
+
+/* Magic UI — Shimmer button parıltısı */
+@keyframes shiny-sweep {
+  0% {
+    background-position: 200% center;
+  }
+  100% {
+    background-position: -200% center;
+  }
+}
+.animate-shiny {
+  background-size: 200% auto;
+  animation: shiny-sweep 3s linear infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .animate-marquee,
   .animate-blob {

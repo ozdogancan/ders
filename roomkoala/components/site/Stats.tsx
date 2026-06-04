@@ -1,43 +1,4 @@
-"use client";
-
-import { animate, useInView } from "framer-motion";
-import { useEffect, useRef, useState } from "react";
-
-function Counter({
-  to,
-  suffix = "",
-  decimals = 0,
-}: {
-  to: number;
-  suffix?: string;
-  decimals?: number;
-}) {
-  const ref = useRef<HTMLSpanElement>(null);
-  const inView = useInView(ref, { once: true, margin: "-60px" });
-  const [val, setVal] = useState(0);
-
-  useEffect(() => {
-    if (!inView) return;
-    const controls = animate(0, to, {
-      duration: 1.6,
-      ease: [0.22, 1, 0.36, 1],
-      onUpdate: (v) => setVal(v),
-    });
-    return () => controls.stop();
-  }, [inView, to]);
-
-  const formatted =
-    decimals > 0
-      ? val.toFixed(decimals)
-      : Math.round(val).toLocaleString("tr-TR");
-
-  return (
-    <span ref={ref}>
-      {formatted}
-      {suffix}
-    </span>
-  );
-}
+import { NumberTicker } from "@/components/magicui/number-ticker";
 
 const stats = [
   { to: 10000, suffix: "+", label: "Hazır tasarım" },
@@ -55,13 +16,14 @@ export function Stats() {
             key={s.label}
             className="flex flex-col items-center justify-center bg-surface px-4 py-8 text-center"
           >
-            <div className="text-4xl font-extrabold tracking-tight text-accent-deep sm:text-5xl">
+            <div className="flex items-baseline text-4xl font-extrabold tracking-tight text-accent-deep sm:text-5xl">
               {s.star && (
                 <span className="mr-1 text-amber-400" aria-hidden>
                   ★
                 </span>
               )}
-              <Counter to={s.to} suffix={s.suffix} decimals={s.decimals} />
+              <NumberTicker value={s.to} decimalPlaces={s.decimals ?? 0} />
+              {s.suffix}
             </div>
             <p className="mt-2 text-sm font-semibold text-ink-soft">
               {s.label}
