@@ -5,6 +5,7 @@ import { SwipeShowcase } from "@/components/site/SwipeShowcase";
 import { KoalaAIChat } from "@/components/site/KoalaAIChat";
 import { RestyleTool } from "@/components/site/RestyleTool";
 import { Highlights } from "@/components/site/Highlights";
+import { BecomingPro } from "@/components/site/BecomingPro";
 import { ShowcaseMarquee } from "@/components/site/ShowcaseMarquee";
 import { ProSection } from "@/components/site/ProSection";
 import { DownloadCTA } from "@/components/site/DownloadCTA";
@@ -21,6 +22,7 @@ export default function Home() {
         <KoalaAIChat />
         <RestyleTool />
         <Highlights />
+        <BecomingPro />
         <ShowcaseMarquee />
         <ProSection />
         <DownloadCTA />
