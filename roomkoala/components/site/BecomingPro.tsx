@@ -42,9 +42,9 @@ export function BecomingPro() {
               initial={{ scale: 0, opacity: 0 }}
               animate={inView ? { scale: 1, opacity: 1 } : {}}
               transition={{ type: "spring", stiffness: 200, damping: 14, delay: 0.2 }}
-              className="absolute left-6 top-6 z-10 flex items-center gap-2 rounded-full bg-emerald-500 px-4 py-2 text-sm font-bold text-white shadow-lg"
+              className="absolute left-3 top-3 z-10 flex items-center gap-1.5 whitespace-nowrap rounded-full bg-emerald-500 px-3 py-1.5 text-[11px] font-bold text-white shadow-lg sm:left-6 sm:top-6 sm:gap-2 sm:px-4 sm:py-2 sm:text-sm"
             >
-              <BadgeCheck size={16} /> Profesyonel onaylandı 🎉
+              <BadgeCheck size={15} /> Profesyonel onaylandı 🎉
             </motion.div>
 
             {/* feed kartı */}
@@ -84,7 +84,7 @@ export function BecomingPro() {
                 initial={{ scale: 0 }}
                 animate={inView ? { scale: 1 } : {}}
                 transition={{ type: "spring", stiffness: 220, damping: 12, delay: 1.1 }}
-                className="absolute right-3 top-3 rounded-full bg-accent-deep px-2.5 py-1 text-[10px] font-bold text-white"
+                className="absolute right-3 bottom-[24%] rounded-full bg-accent-deep px-2.5 py-1 text-[10px] font-bold text-white shadow-md"
               >
                 Keşfet&apos;te yayında
               </motion.span>

@@ -3,9 +3,9 @@ import fs from "node:fs";
 import KoalaTanitim from "../emails/koala-tanitim";
 
 (async () => {
-  const user = await render(<KoalaTanitim name="Can" audience="user" />);
-  fs.writeFileSync("public/_email-preview.html", user);
-  const pro = await render(<KoalaTanitim name="Can" audience="pro" />);
-  fs.writeFileSync("public/_email-preview-pro.html", pro);
-  console.log("OK user(" + user.length + ") + pro(" + pro.length + ")");
+  const html = await render(<KoalaTanitim name="Can" />);
+  fs.writeFileSync("public/_email-preview.html", html);
+  // eski pro önizlemesi varsa temizle
+  try { fs.rmSync("public/_email-preview-pro.html"); } catch {}
+  console.log("OK public/_email-preview.html (" + html.length + " bytes)");
 })();
