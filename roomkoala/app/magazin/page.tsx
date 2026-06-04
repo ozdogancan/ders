@@ -72,7 +72,7 @@ export default function MagazinPage() {
             <h1 className="text-balance mt-4 text-4xl font-extrabold tracking-[-0.02em] sm:text-5xl">
               İlham veren{" "}
               <span className="bg-gradient-to-r from-accent-deep via-[#a855f7] to-[#ec4899] bg-clip-text text-transparent">
-                tasarım hikâyeleri
+                tasarım hikayeleri
               </span>
             </h1>
             <p className="mt-3 max-w-2xl text-lg leading-relaxed text-ink-soft">
