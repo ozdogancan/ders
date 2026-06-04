@@ -28,8 +28,10 @@ export const metadata: Metadata = {
 
 const SITE = "https://roomkoala.com";
 
-export default function MagazinPage() {
-  const posts = getAllPosts();
+export const revalidate = 1800;
+
+export default async function MagazinPage() {
+  const posts = await getAllPosts();
   const featured = posts[0];
   const rest = posts.slice(1);
 

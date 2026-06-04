@@ -11,8 +11,12 @@ import { getAllPosts, getPost, getRelated } from "@/lib/magazin";
 
 const SITE = "https://roomkoala.com";
 
-export function generateStaticParams() {
-  return getAllPosts().map((p) => ({ slug: p.slug }));
+export const revalidate = 1800;
+export const dynamicParams = true;
+
+export async function generateStaticParams() {
+  const posts = await getAllPosts();
+  return posts.map((p) => ({ slug: p.slug }));
 }
 
 export async function generateMetadata({
@@ -21,7 +25,7 @@ export async function generateMetadata({
   params: Promise<{ slug: string }>;
 }): Promise<Metadata> {
   const { slug } = await params;
-  const post = getPost(slug);
+  const post = await getPost(slug);
   if (!post) return { title: "Yazı bulunamadı · Koala Magazin" };
   const url = `${SITE}/magazin/${post.slug}`;
   return {
@@ -46,9 +50,9 @@ export default async function ArticlePage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const post = getPost(slug);
+  const post = await getPost(slug);
   if (!post) notFound();
-  const related = getRelated(slug, 3);
+  const related = await getRelated(slug, 3);
 
   const jsonLd = {
     "@context": "https://schema.org",

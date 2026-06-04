@@ -4,8 +4,8 @@ import { Reveal } from "./Reveal";
 import { MagazinCard } from "./MagazinCard";
 import { getAllPosts } from "@/lib/magazin";
 
-export function MagazinTeaser() {
-  const all = getAllPosts();
+export async function MagazinTeaser() {
+  const all = await getAllPosts();
   const latest = all[0]?.date;
   const posts = all.slice(0, 3);
   if (posts.length === 0) return null;

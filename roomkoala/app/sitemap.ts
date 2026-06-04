@@ -19,8 +19,10 @@ const images = [
   `${SITE}/brand/room_demo.jpg`,
 ];
 
-export default function sitemap(): MetadataRoute.Sitemap {
-  const posts = getAllPosts();
+export const revalidate = 1800;
+
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+  const posts = await getAllPosts();
   const postEntries: MetadataRoute.Sitemap = posts.map((p) => ({
     url: `${SITE}/magazin/${p.slug}`,
     lastModified: p.date,

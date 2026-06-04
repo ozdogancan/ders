@@ -3,10 +3,10 @@ import { getAllPosts } from "@/lib/magazin";
 
 const SITE = "https://roomkoala.com";
 
-export const dynamic = "force-static";
+export const revalidate = 1800;
 
-export function GET() {
-  const posts = getAllPosts();
+export async function GET() {
+  const posts = await getAllPosts();
 
   const feed = new Feed({
     title: "Koala Magazin",
