@@ -113,7 +113,7 @@ export function SwipeShowcase() {
                 style={{ x, rotate }}
                 className="absolute inset-0 cursor-grab touch-none overflow-hidden rounded-[2rem] border border-line bg-surface shadow-2xl shadow-accent/20 active:cursor-grabbing"
               >
-                <Image src={top.img} alt={top.title} fill sizes="340px" className="object-cover" draggable={false} priority />
+                <Image src={top.img} alt={top.style} fill sizes="340px" className="object-cover" draggable={false} priority />
                 {/* damgalar */}
                 <motion.span style={{ opacity: likeOp }} className="absolute right-5 top-5 -rotate-12 rounded-xl border-4 border-emerald-400 px-3 py-1 text-xl font-black uppercase text-emerald-400">
                   Beğen
