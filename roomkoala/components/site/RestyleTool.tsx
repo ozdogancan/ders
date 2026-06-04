@@ -65,7 +65,7 @@ export function RestyleTool() {
             onPointerMove={(e) => dragging && update(e.clientX)}
             onPointerUp={() => setDragging(false)}
             onPointerLeave={() => setDragging(false)}
-            className="relative aspect-[4/3] w-full cursor-ew-resize select-none touch-none overflow-hidden rounded-[2rem] border border-line shadow-2xl shadow-accent/15"
+            className="relative aspect-[4/3] w-full cursor-ew-resize select-none touch-pan-y overflow-hidden rounded-[2rem] border border-line shadow-2xl shadow-accent/15"
           >
             <Image
               src="/brand/showcase/after.webp"

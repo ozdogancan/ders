@@ -27,7 +27,7 @@ export function Hero() {
             initial={{ opacity: 0, y: 18 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.05 }}
-            className="text-balance mt-6 text-5xl font-extrabold leading-[0.98] tracking-[-0.03em] sm:text-6xl lg:text-[4.4rem]"
+            className="text-balance mt-6 text-4xl font-extrabold leading-[1.02] tracking-[-0.03em] sm:text-5xl lg:text-[4.4rem]"
           >
             Hayalindeki evi{" "}
             <span className="bg-gradient-to-r from-accent-deep via-[#a855f7] to-[#ec4899] bg-clip-text text-transparent">

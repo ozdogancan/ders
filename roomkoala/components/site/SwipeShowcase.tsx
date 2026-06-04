@@ -138,7 +138,7 @@ export function SwipeShowcase() {
                 onDragStart={() => setTouched(true)}
                 onDragEnd={onDragEnd}
                 style={{ x, rotate }}
-                className="absolute inset-0 cursor-grab touch-none overflow-hidden rounded-[2rem] border border-line bg-surface shadow-2xl shadow-accent/20 active:cursor-grabbing"
+                className="absolute inset-0 cursor-grab touch-pan-y overflow-hidden rounded-[2rem] border border-line bg-surface shadow-2xl shadow-accent/20 active:cursor-grabbing"
               >
                 <Image src={top.img} alt={top.style} fill sizes="340px" className="object-cover" draggable={false} priority />
                 {/* damgalar */}
