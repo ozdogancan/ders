@@ -40,7 +40,7 @@ export function Hero() {
             initial={{ opacity: 0, y: 18 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.12 }}
-            className="text-balance mt-5 max-w-xl text-lg leading-relaxed text-ink-soft"
+            className="text-balance mt-4 max-w-xl text-[15px] leading-relaxed text-ink-soft sm:mt-5 sm:text-lg"
           >
             Odanın fotoğrafını yükle, akıllı teknolojiyle saniyeler içinde
             yeniden tasarlansın. Binlerce tasarımı kaydırarak keşfet, Koala

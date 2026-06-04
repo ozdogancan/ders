@@ -39,15 +39,15 @@ function Badge({
   disabled?: boolean;
 }) {
   const inner = (
-    <span className="flex min-w-[184px] items-center gap-3 px-5 py-2.5">
-      <span className="flex h-7 w-7 shrink-0 items-center justify-center">
+    <span className="flex min-w-[148px] items-center gap-2.5 px-3.5 py-2.5 sm:min-w-[184px] sm:gap-3 sm:px-5">
+      <span className="flex h-6 w-6 shrink-0 items-center justify-center sm:h-7 sm:w-7">
         {icon}
       </span>
       <span className="flex flex-col text-left leading-tight">
-        <span className="text-[10px] font-medium tracking-wide opacity-90">
+        <span className="text-[9px] font-medium tracking-wide opacity-90 sm:text-[10px]">
           {top}
         </span>
-        <span className="-mt-0.5 text-[19px] font-semibold tracking-tight">
+        <span className="-mt-0.5 text-[16px] font-semibold tracking-tight sm:text-[19px]">
           {bottom}
         </span>
       </span>
@@ -77,7 +77,7 @@ function Badge({
 
 export function StoreButtons({ className = "" }: { className?: string }) {
   return (
-    <div className={`flex flex-wrap items-center gap-3 ${className}`}>
+    <div className={`flex flex-wrap items-center gap-2.5 sm:gap-3 ${className}`}>
       <Badge
         href={LINKS.googlePlay}
         icon={<GooglePlayIcon size={24} />}
