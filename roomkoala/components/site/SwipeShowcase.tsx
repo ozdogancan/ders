@@ -37,8 +37,10 @@ export function SwipeShowcase() {
   const nopeOp = useTransform(x, [-130, -40], [1, 0]);
 
   const advance = () => setI((v) => (v + 1) % CARDS.length);
+
+  // Manuel/buton: kartı hemen uçur.
   const fling = (dir: 1 | -1) =>
-    animate(x, dir * 520, {
+    animate(x, dir * 560, {
       duration: 0.45,
       ease: "easeIn",
       onComplete: () => {
@@ -47,9 +49,34 @@ export function SwipeShowcase() {
       },
     });
 
+  // Otomatik demo: önce damgayı (BEĞEN/GEÇ) net göster, kısa beklet, sonra uçur.
+  const autoFling = (dir: 1 | -1) => {
+    animate(x, dir * 155, {
+      duration: 0.5,
+      ease: "easeOut",
+      onComplete: () => {
+        setTimeout(() => {
+          if (touched) return;
+          animate(x, dir * 560, {
+            duration: 0.4,
+            ease: "easeIn",
+            onComplete: () => {
+              x.set(0);
+              advance();
+            },
+          });
+        }, 650);
+      },
+    });
+  };
+
+  // Yön dönüşümlü: çift index → sağ (BEĞEN), tek index → sol (GEÇ).
   useEffect(() => {
     if (touched) return;
-    const t = setTimeout(() => !touched && fling(1), 1800);
+    const dir: 1 | -1 = i % 2 === 0 ? 1 : -1;
+    const t = setTimeout(() => {
+      if (!touched) autoFling(dir);
+    }, 1400);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [i, touched]);
@@ -78,7 +105,7 @@ export function SwipeShowcase() {
             </span>
           </h2>
           <p className="mt-4 text-lg leading-relaxed text-ink-soft">
-            Binlerce gerçek iç mekân tasarımını sağa-sola kaydırarak keşfet.
+            Binlerce gerçek iç mekan tasarımını sağa-sola kaydırarak keşfet.
             Beğen ❤️, geç ✕ — Koala zevkini öğrenir, akış tamamen sana özel
             şekillenir. Her tasarımın arkasında gerçek bir tasarımcı var.
           </p>

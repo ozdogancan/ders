@@ -20,7 +20,7 @@ export function Hero() {
             transition={{ duration: 0.5 }}
             className="inline-flex items-center gap-2 rounded-full border border-white/60 bg-white/70 px-4 py-1.5 text-sm font-semibold text-accent-deep shadow-sm backdrop-blur"
           >
-            <Sparkles size={15} /> Yapay zekâ destekli iç mekân asistanın
+            <Sparkles size={15} /> Akıllı iç mekan asistanın
           </motion.span>
 
           <motion.h1
@@ -42,9 +42,9 @@ export function Hero() {
             transition={{ duration: 0.6, delay: 0.12 }}
             className="text-balance mt-5 max-w-xl text-lg leading-relaxed text-ink-soft"
           >
-            Odanın fotoğrafını yükle, yapay zekâ yeniden tasarlasın. Binlerce
-            tasarımı kaydırarak keşfet, Koala AI&apos;ya danış ve gerçek iç
-            mimarlarla hayalini gerçeğe dönüştür.
+            Odanın fotoğrafını yükle, akıllı teknolojiyle saniyeler içinde
+            yeniden tasarlansın. Binlerce tasarımı kaydırarak keşfet, Koala
+            AI&apos;ya danış ve gerçek iç mimarlarla hayalini gerçeğe dönüştür.
           </motion.p>
 
           <motion.div
@@ -85,7 +85,7 @@ export function Hero() {
               className="object-cover"
             />
             <span className="absolute left-4 top-4 inline-flex items-center gap-1.5 rounded-full bg-white/85 px-3 py-1.5 text-xs font-bold text-accent-deep shadow-sm backdrop-blur">
-              <Sparkles size={13} /> Yapay zekâ ile tasarlandı
+              <Sparkles size={13} /> Akıllı tasarım
             </span>
             <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/25 to-transparent p-5">
               <p className="mb-2 inline-block rounded-full bg-white/20 px-2.5 py-0.5 text-[11px] font-bold text-white backdrop-blur">

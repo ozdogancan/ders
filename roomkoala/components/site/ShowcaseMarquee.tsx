@@ -28,7 +28,7 @@ export function ShowcaseMarquee() {
           >
             <Image
               src={src}
-              alt="Koala ile üretilmiş iç mekân tasarımı"
+              alt="Koala ile üretilmiş iç mekan tasarımı"
               fill
               sizes="320px"
               className="object-cover"

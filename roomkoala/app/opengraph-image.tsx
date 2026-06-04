@@ -1,6 +1,6 @@
 import { ImageResponse } from "next/og";
 
-export const alt = "Koala — Yapay Zekâ ile Ev & Oda Tasarımı";
+export const alt = "Koala — Yapay Zeka ile Ev & Oda Tasarımı";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
@@ -78,7 +78,7 @@ export default function OpengraphImage() {
             lineHeight: 1.35,
           }}
         >
-          Yapay zekâ ile odanı yeniden tasarla, tasarımları keşfet, gerçek iç
+          Yapay zeka ile odanı yeniden tasarla, tasarımları keşfet, gerçek iç
           mimarlara danış.
         </div>
 

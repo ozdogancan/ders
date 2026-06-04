@@ -9,9 +9,9 @@ const manrope = Manrope({
 });
 
 const SITE = "https://roomkoala.com";
-const TITLE = "Koala — Yapay Zekâ ile Ev & Oda Tasarımı";
+const TITLE = "Koala — Yapay Zeka ile Ev & Oda Tasarımı";
 const DESC =
-  "Koala, evin için yapay zekâ destekli iç mekân asistanın. Odanın fotoğrafını yükle, saniyeler içinde yeniden tasarla; tasarımları kaydır-keşfet, gerçek iç mimarlara danış. Türkiye'nin AI dekorasyon uygulaması.";
+  "Koala, evin için yapay zeka destekli iç mekan asistanın. Odanın fotoğrafını yükle, saniyeler içinde yeniden tasarla; tasarımları kaydır-keşfet, gerçek iç mimarlara danış. Türkiye'nin AI dekorasyon uygulaması.";
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE),
@@ -75,7 +75,7 @@ const jsonLd = {
     },
     {
       "@type": "MobileApplication",
-      name: "Koala — Yapay Zekâ ile Ev Tasarımı",
+      name: "Koala — Yapay Zeka ile Ev Tasarımı",
       operatingSystem: "ANDROID, IOS, WEB",
       applicationCategory: "LifestyleApplication",
       offers: { "@type": "Offer", price: "0", priceCurrency: "TRY" },
@@ -95,7 +95,7 @@ const jsonLd = {
       "@type": "HowTo",
       name: "Koala ile odanı nasıl yeniden tasarlarsın",
       description:
-        "Üç adımda yapay zekâ ile evini yeniden tasarla: yükle, AI tasarlasın, beğen ve danış.",
+        "Üç adımda yapay zeka ile evini yeniden tasarla: yükle, AI tasarlasın, beğen ve danış.",
       step: [
         {
           "@type": "HowToStep",
@@ -106,7 +106,7 @@ const jsonLd = {
         {
           "@type": "HowToStep",
           position: 2,
-          name: "Yapay zekâ tasarlasın",
+          name: "Yapay zeka tasarlasın",
           text: "Stilini seç; Koala saniyeler içinde sana özel, gerçekçi bir yeniden tasarım üretsin.",
         },
         {

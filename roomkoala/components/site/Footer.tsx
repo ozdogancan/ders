@@ -17,7 +17,7 @@ export function Footer() {
             <span className="text-lg font-extrabold tracking-tight">koala</span>
           </div>
           <p className="mt-3 max-w-xs text-sm text-muted">
-            Yapay zekâ ile ev & oda tasarımı. Evlumba güvencesiyle.
+            Akıllı ev & oda tasarımı. Evlumba güvencesiyle.
           </p>
         </div>
 

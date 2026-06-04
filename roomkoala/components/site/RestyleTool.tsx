@@ -50,7 +50,7 @@ export function RestyleTool() {
           <p className="mt-4 text-lg leading-relaxed text-ink-soft">
             Mevcut odanın fotoğrafını yükle, seçtiğin stille saniyeler içinde
             yeniden tasarlansın. Oda tipi, stil ve renk paletini seç — gerisini
-            yapay zekâ halletsin.
+            akıllı teknoloji halletsin.
           </p>
           <p className="mt-6 inline-flex items-center gap-2 rounded-full bg-surface px-4 py-2 text-sm font-semibold text-ink-soft shadow-sm">
             🎁 Ücretsiz ayda 2 dönüşüm · ilki bizden · Pro&apos;da sınırsız
@@ -75,7 +75,7 @@ export function RestyleTool() {
           >
             <Image
               src="/brand/showcase/after.webp"
-              alt="Yapay zekâ ile yeniden tasarlanmış oda"
+              alt="Akıllı teknolojiyle yeniden tasarlanmış oda"
               fill
               sizes="(max-width:768px) 100vw, 560px"
               className="object-cover"

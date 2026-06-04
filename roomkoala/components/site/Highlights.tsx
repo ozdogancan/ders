@@ -25,7 +25,7 @@ const rows: Row[] = [
       "İlk danışma tamamen ücretsiz",
     ],
     image: "/brand/pro/hero_2.webp",
-    imageAlt: "Evlumba Design ile tasarlanmış mekân",
+    imageAlt: "Evlumba Design ile tasarlanmış mekan",
   },
 ];
 
