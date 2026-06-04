@@ -1,6 +1,8 @@
 import type { Metadata, Viewport } from "next";
 import type { Graph } from "schema-dts";
 import { Manrope } from "next/font/google";
+import { GoogleAnalytics } from "@next/third-parties/google";
+import { Analytics } from "@vercel/analytics/next";
 import { LINKS } from "@/lib/utils";
 import "./globals.css";
 
@@ -216,7 +218,9 @@ export default function RootLayout({
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
         />
         {children}
+        <Analytics />
       </body>
+      <GoogleAnalytics gaId="G-Q4ED57EBTS" />
     </html>
   );
 }
