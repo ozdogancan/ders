@@ -20,6 +20,7 @@
 
 html {
   scroll-behavior: smooth;
+  overflow-x: clip;
 }
 
 body {
@@ -28,6 +29,9 @@ body {
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+  /* Animasyonlar (örn. swipe kartının sağa uçması) bir an viewport dışına
+     taşıp yatay scrollbar oluşturmasın. clip → sticky nav'ı bozmaz. */
+  overflow-x: clip;
 }
 
 .bg-radial-accent {
