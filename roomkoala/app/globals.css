@@ -113,6 +113,18 @@ body {
   }
 }
 
+/* Çerez banner giriş animasyonu */
+@keyframes cookieUp {
+  from {
+    opacity: 0;
+    transform: translateY(120%);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 /* Magic UI — Border Beam (animasyonlu kenar ışığı) */
 @keyframes border-beam {
   to {

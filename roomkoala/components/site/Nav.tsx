@@ -7,9 +7,10 @@ import { Menu, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const items = [
-  { href: "#kesfet", label: "Keşfet" },
-  { href: "#pro", label: "Koala Pro" },
-  { href: "#indir", label: "İndir" },
+  { href: "/#kesfet", label: "Keşfet" },
+  { href: "/#pro", label: "Koala Pro" },
+  { href: "/magazin", label: "Magazin" },
+  { href: "/#indir", label: "İndir" },
 ];
 
 export function Nav() {
@@ -47,7 +48,7 @@ export function Nav() {
 
         <div className="hidden md:block">
           <a
-            href="#indir"
+            href="/#indir"
             className="rounded-full bg-accent-deep px-5 py-2.5 text-sm font-bold text-white shadow-lg shadow-accent/25 transition-transform hover:scale-[1.03]"
           >
             Uygulamayı İndir
@@ -82,7 +83,7 @@ export function Nav() {
             </a>
           ))}
           <a
-            href="#indir"
+            href="/#indir"
             onClick={() => setOpen(false)}
             className="mt-1 rounded-full bg-accent-deep px-5 py-3 text-center text-sm font-bold text-white"
           >

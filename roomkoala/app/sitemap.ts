@@ -1,4 +1,5 @@
 import type { MetadataRoute } from "next";
+import { getAllPosts } from "@/lib/magazin";
 
 const SITE = "https://roomkoala.com";
 
@@ -19,6 +20,15 @@ const images = [
 ];
 
 export default function sitemap(): MetadataRoute.Sitemap {
+  const posts = getAllPosts();
+  const postEntries: MetadataRoute.Sitemap = posts.map((p) => ({
+    url: `${SITE}/magazin/${p.slug}`,
+    lastModified: p.date,
+    changeFrequency: "monthly",
+    priority: 0.7,
+    images: [`${SITE}${p.hero}`],
+  }));
+
   return [
     {
       url: SITE,
@@ -26,6 +36,19 @@ export default function sitemap(): MetadataRoute.Sitemap {
       changeFrequency: "weekly",
       priority: 1,
       images,
+    },
+    {
+      url: `${SITE}/magazin`,
+      lastModified: new Date(),
+      changeFrequency: "daily",
+      priority: 0.8,
+    },
+    ...postEntries,
+    {
+      url: `${SITE}/cerez-politikasi`,
+      lastModified: new Date(),
+      changeFrequency: "yearly",
+      priority: 0.2,
     },
   ];
 }

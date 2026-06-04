@@ -21,11 +21,17 @@ export function Footer() {
         </div>
 
         <nav className="flex flex-wrap gap-x-8 gap-y-3 text-sm font-semibold text-ink-soft">
-          <a href="#kesfet" className="hover:text-accent">
+          <a href="/#kesfet" className="hover:text-accent">
             Özellikler
           </a>
-          <a href="#pro" className="hover:text-accent">
+          <a href="/#pro" className="hover:text-accent">
             Koala Pro
+          </a>
+          <a href="/magazin" className="hover:text-accent">
+            Magazin
+          </a>
+          <a href="/cerez-politikasi" className="hover:text-accent">
+            Çerez Politikası
           </a>
         </nav>
       </div>

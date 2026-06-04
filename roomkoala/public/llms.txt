@@ -31,6 +31,10 @@
 - Gerçek iç mimara danışılır mı? Evet, Evlumba Design üzerinden; ilk danışma ücretsiz.
 - Odanın fotoğrafından nasıl tasarım üretiliyor? Fotoğrafı yükle, oda tipi/stil/renk paleti seç; yapay zeka saniyeler içinde gerçekçi yeniden tasarım üretir.
 
+## Koala Magazin (blog)
+- https://roomkoala.com/magazin — iç mekan tasarımı, dekorasyon trendleri, renk ilhamı ve yapay zeka ile tasarım üzerine her gün güncellenen Türkçe içerikler. Güvenilir kaynaklardan derlenip kaynak atıflı özetlenir.
+- RSS: https://roomkoala.com/magazin/feed.xml
+
 ## Bağlantılar
 - Ana site: https://roomkoala.com
 - Google Play: https://play.google.com/store/apps/details?id=com.egitim_ai_tutor.app

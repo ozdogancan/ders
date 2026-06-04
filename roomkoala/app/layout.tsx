@@ -1,8 +1,8 @@
 import type { Metadata, Viewport } from "next";
 import type { Graph } from "schema-dts";
 import { Manrope } from "next/font/google";
-import { GoogleAnalytics } from "@next/third-parties/google";
 import { Analytics } from "@vercel/analytics/next";
+import { ConsentAnalytics } from "@/components/site/ConsentAnalytics";
 import { LINKS } from "@/lib/utils";
 import "./globals.css";
 
@@ -219,8 +219,8 @@ export default function RootLayout({
         />
         {children}
         <Analytics />
+        <ConsentAnalytics gaId="G-TF9KTNZBCL" />
       </body>
-      <GoogleAnalytics gaId="G-TF9KTNZBCL" />
     </html>
   );
 }
