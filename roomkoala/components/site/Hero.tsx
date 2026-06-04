@@ -2,10 +2,25 @@
 
 import Image from "next/image";
 import { motion } from "framer-motion";
-import { Sparkles, Star, BadgeCheck } from "lucide-react";
+import { Sparkles, Star } from "lucide-react";
+import { useEffect, useState } from "react";
 import { StoreButtons } from "./StoreButtons";
 
 export function Hero() {
+  // Önce → Sonra otomatik "wow değişim" salınımı (oda dönüşüyormuş gibi).
+  const [pos, setPos] = useState(50);
+  useEffect(() => {
+    let raf = 0;
+    let t = 0;
+    const tick = () => {
+      t += 0.012;
+      setPos(51 + Math.sin(t) * 39); // 12 ↔ 90 arası
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, []);
+
   return (
     <section className="relative overflow-hidden">
       {/* Canlı mesh gradient (Stripe/Framer) + alt beyaz geçiş */}
@@ -72,57 +87,63 @@ export function Hero() {
           className="relative mx-auto w-full max-w-[400px]"
         >
           <motion.div
-            animate={{ y: [0, -12, 0] }}
+            animate={{ y: [0, -10, 0] }}
             transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
             className="relative aspect-[4/5] w-full overflow-hidden rounded-[2.2rem] shadow-2xl shadow-accent/30 ring-1 ring-black/5"
           >
+            {/* SONRA — tasarlanmış oda (taban) */}
             <Image
               src="/brand/showcase/after.webp"
-              alt="Koala'da keşfedilen bir iç mekan tasarımı"
+              alt="Akıllı teknolojiyle tasarlanmış oda"
               fill
               priority
               sizes="400px"
               className="object-cover"
             />
-            <span className="absolute left-4 top-4 inline-flex items-center gap-1.5 rounded-full bg-white/85 px-3 py-1.5 text-xs font-bold text-accent-deep shadow-sm backdrop-blur">
-              <Sparkles size={13} /> Akıllı tasarım
-            </span>
-            <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/25 to-transparent p-5">
-              <p className="mb-2 inline-block rounded-full bg-white/20 px-2.5 py-0.5 text-[11px] font-bold text-white backdrop-blur">
-                Skandinav · Aydınlık
-              </p>
-              <div className="flex items-center gap-2.5">
-                <span className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-rose-400 to-pink-500 text-sm font-bold text-white">
-                  Z
-                </span>
-                <div className="leading-tight">
-                  <p className="flex items-center gap-1 text-sm font-bold text-white">
-                    Zeynep Demir
-                    <BadgeCheck size={13} className="text-emerald-400" />
-                  </p>
-                  <p className="text-[11px] text-white/80">İç Mimar</p>
-                </div>
-              </div>
-            </div>
-          </motion.div>
-
-          {/* Heyecanlı Koala maskotu — "evini heyecanla tasarlayan" karakter */}
-          <motion.div
-            initial={{ opacity: 0, scale: 0.5, y: 20 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            transition={{ delay: 0.6, type: "spring", stiffness: 180, damping: 12 }}
-            className="absolute -bottom-12 -left-10 z-20 hidden w-28 sm:block"
-          >
-            <motion.div
-              animate={{ y: [0, -10, 0], rotate: [-3, 3, -3] }}
-              transition={{ duration: 3.2, repeat: Infinity, ease: "easeInOut" }}
+            {/* ÖNCE — odanın eski hali (otomatik açılıp kapanır = wow değişim) */}
+            <div
+              className="absolute inset-0"
+              style={{ clipPath: `inset(0 ${100 - pos}% 0 0)` }}
             >
               <Image
-                src="/brand/koala_hero.webp"
-                alt="Koala maskotu"
-                width={150}
-                height={150}
-                className="drop-shadow-[0_12px_22px_rgba(108,92,231,0.4)]"
+                src="/brand/showcase/before.webp"
+                alt="Odanın önceki hali"
+                fill
+                sizes="400px"
+                className="object-cover"
+              />
+            </div>
+            {/* dönüşüm çizgisi + parıltı */}
+            <div
+              className="absolute inset-y-0 z-10 w-0.5 bg-white shadow-[0_0_16px_rgba(255,255,255,0.9)]"
+              style={{ left: `${pos}%` }}
+            >
+              <span className="absolute top-1/2 left-1/2 flex h-9 w-9 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 border-accent-deep bg-white text-accent-deep shadow-lg">
+                <Sparkles size={15} />
+              </span>
+            </div>
+            <span className="absolute left-4 top-4 z-10 inline-flex items-center gap-1.5 rounded-full bg-white/85 px-3 py-1.5 text-xs font-bold text-accent-deep shadow-sm backdrop-blur">
+              <Sparkles size={13} /> Akıllı tasarım
+            </span>
+          </motion.div>
+
+          {/* Full-vücut Koala — mekânda, paletini tutan, neşeli (Gemini ile üretildi) */}
+          <motion.div
+            initial={{ opacity: 0, scale: 0.6, y: 30 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            transition={{ delay: 0.5, type: "spring", stiffness: 160, damping: 13 }}
+            className="absolute -bottom-8 -left-16 z-20 hidden w-48 sm:block"
+          >
+            <motion.div
+              animate={{ y: [0, -12, 0], rotate: [-2, 2, -2] }}
+              transition={{ duration: 3.4, repeat: Infinity, ease: "easeInOut" }}
+            >
+              <Image
+                src="/brand/gen/koala-full.png"
+                alt="Koala — akıllı iç mekan asistanı"
+                width={220}
+                height={220}
+                className="drop-shadow-[0_16px_28px_rgba(108,92,231,0.45)]"
               />
             </motion.div>
           </motion.div>
