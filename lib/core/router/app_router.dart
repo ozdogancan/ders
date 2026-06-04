@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:firebase_analytics/firebase_analytics.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -87,6 +88,10 @@ Future<void> _bindAuthForRouter() async {
 final GoRouter appRouter = GoRouter(
   initialLocation: isAdminHost ? '/admin' : '/',
   debugLogDiagnostics: false,
+  // GA4 ekran takibi — her rota değişiminde screen_view olayı gönderir.
+  observers: [
+    FirebaseAnalyticsObserver(analytics: FirebaseAnalytics.instance),
+  ],
   refreshListenable: authRefresh,
   redirect: (context, state) {
     final loc = state.matchedLocation;
