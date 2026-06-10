@@ -6,6 +6,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
+import '../../core/theme/koala_ds.dart';
 import '../../core/theme/koala_tokens.dart';
 import '../../services/analytics_service.dart';
 import '../../services/swipe_deck_service.dart';
@@ -278,7 +279,7 @@ class _SwipeScreenState extends ConsumerState<SwipeScreen> {
         elevation: 0,
         scrolledUnderElevation: 0,
         leading: IconButton(
-          icon: const Icon(LucideIcons.chevronLeft, color: KoalaColors.text),
+          icon: const Icon(LucideIcons.chevronLeft, color: KoalaDS.ink),
           onPressed: () => Navigator.of(context).maybePop(),
         ),
         bottom: const PreferredSize(
@@ -286,7 +287,7 @@ class _SwipeScreenState extends ConsumerState<SwipeScreen> {
           child: Divider(
             height: 0.5,
             thickness: 0.5,
-            color: KoalaColors.divider,
+            color: KoalaDS.line,
           ),
         ),
       ),
@@ -610,7 +611,7 @@ class _SwipeCardView extends StatelessWidget {
       decoration: BoxDecoration(
         color: KoalaColors.surface,
         borderRadius: BorderRadius.circular(KoalaRadius.lg),
-        border: Border.all(color: KoalaColors.divider, width: 1),
+        border: Border.all(color: KoalaDS.line, width: 1),
         boxShadow: KoalaShadows.card,
       ),
       clipBehavior: Clip.antiAlias,
@@ -633,25 +634,25 @@ class _SwipeCardView extends StatelessWidget {
                               .clamp(360.0, 1600.0)
                               .round(),
                           errorBuilder: (_, __, ___) => Container(
-                            color: KoalaColors.surfaceAlt,
+                            color: KoalaDS.surfaceMuted,
                             alignment: Alignment.center,
                             child: const Icon(
                               LucideIcons.image,
-                              color: KoalaColors.textTer,
+                              color: KoalaDS.inkFaint,
                               size: 24,
                             ),
                           ),
                         ),
                       )
-                    : Container(color: KoalaColors.surfaceAlt),
+                    : Container(color: KoalaDS.surfaceMuted),
                 if (likeStrength.abs() > 0.05)
                   IgnorePointer(
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 120),
                       decoration: BoxDecoration(
                         color: (likeStrength > 0
-                                ? KoalaColors.like
-                                : KoalaColors.dislike)
+                                ? KoalaDS.cta
+                                : KoalaDS.danger)
                             .withValues(alpha: likeStrength.abs() * 0.18),
                       ),
                     ),
@@ -698,7 +699,7 @@ class _SwipeCardView extends StatelessWidget {
                             color: c,
                             shape: BoxShape.circle,
                             border: Border.all(
-                              color: KoalaColors.border,
+                              color: KoalaDS.line,
                               width: 0.5,
                             ),
                           ),
@@ -729,7 +730,7 @@ class _TagChip extends StatelessWidget {
         vertical: 4,
       ),
       decoration: BoxDecoration(
-        color: KoalaColors.surfaceAlt,
+        color: KoalaDS.surfaceMuted,
         borderRadius: BorderRadius.circular(KoalaRadius.pill),
       ),
       child: Text(
@@ -737,7 +738,7 @@ class _TagChip extends StatelessWidget {
         style: const TextStyle(
           fontSize: 11,
           fontWeight: FontWeight.w500,
-          color: KoalaColors.textMed,
+          color: KoalaDS.inkSoft,
         ),
       ),
     );
@@ -753,7 +754,7 @@ class _HintPill extends StatelessWidget {
         vertical: 6,
       ),
       decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.55),
+        color: KoalaDS.ink.withValues(alpha: 0.55),
         borderRadius: BorderRadius.circular(KoalaRadius.pill),
       ),
       child: const Text(
@@ -761,7 +762,7 @@ class _HintPill extends StatelessWidget {
         style: TextStyle(
           fontSize: 11,
           fontWeight: FontWeight.w500,
-          color: Colors.white,
+          color: KoalaDS.onAccent,
         ),
       ),
     ).animate(onPlay: (c) => c.repeat(reverse: true)).fadeIn(
@@ -788,8 +789,8 @@ class _ProgressDots extends StatelessWidget {
             height: 6,
             decoration: BoxDecoration(
               color: i < done
-                  ? KoalaColors.accentDeep
-                  : KoalaColors.surfaceAlt,
+                  ? KoalaDS.accentDeep
+                  : KoalaDS.surfaceMuted,
               shape: BoxShape.circle,
             ),
           ),
@@ -810,9 +811,9 @@ class _MoodBoardImage extends StatelessWidget {
       width: 110,
       height: 140,
       decoration: BoxDecoration(
-        color: KoalaColors.surfaceAlt,
+        color: KoalaDS.surfaceMuted,
         borderRadius: BorderRadius.circular(KoalaRadius.md),
-        border: Border.all(color: KoalaColors.divider, width: 0.5),
+        border: Border.all(color: KoalaDS.line, width: 0.5),
       ),
       clipBehavior: Clip.antiAlias,
       child: card.coverUrl.isNotEmpty
@@ -823,13 +824,13 @@ class _MoodBoardImage extends StatelessWidget {
                   (110 * MediaQuery.of(context).devicePixelRatio * 2).round(),
               errorBuilder: (_, __, ___) => const Icon(
                 LucideIcons.image,
-                color: KoalaColors.textTer,
+                color: KoalaDS.inkFaint,
                 size: 20,
               ),
             )
           : const Icon(
               LucideIcons.image,
-              color: KoalaColors.textTer,
+              color: KoalaDS.inkFaint,
               size: 20,
             ),
     );
@@ -896,12 +897,12 @@ class _DeckSkeleton extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           const SizedBox(height: KoalaSpacing.sm),
-          Container(width: 220, height: 14, color: KoalaColors.surfaceAlt),
+          Container(width: 220, height: 14, color: KoalaDS.surfaceMuted),
           const SizedBox(height: KoalaSpacing.sm),
           Container(
             width: double.infinity,
             height: 22,
-            color: KoalaColors.surfaceAlt,
+            color: KoalaDS.surfaceMuted,
           ),
           const SizedBox(height: KoalaSpacing.lg),
           Expanded(
@@ -909,7 +910,7 @@ class _DeckSkeleton extends StatelessWidget {
               aspectRatio: 16 / 9,
               child: Container(
                 decoration: BoxDecoration(
-                  color: KoalaColors.surfaceAlt,
+                  color: KoalaDS.surfaceMuted,
                   borderRadius: BorderRadius.circular(KoalaRadius.lg),
                 ),
               )
@@ -921,7 +922,7 @@ class _DeckSkeleton extends StatelessWidget {
           Container(
             height: 6,
             decoration: BoxDecoration(
-              color: KoalaColors.surfaceAlt,
+              color: KoalaDS.surfaceMuted,
               borderRadius: BorderRadius.circular(KoalaRadius.pill),
             ),
           ),

@@ -26,6 +26,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show Supabase;
 import 'package:firebase_auth/firebase_auth.dart';
 
+import '../core/theme/koala_ds.dart';
 import '../core/theme/koala_tokens.dart';
 import '../helpers/paywall_router.dart';
 import '../providers/pro_status_provider.dart';
@@ -361,7 +362,7 @@ class _StyleDiscoveryLiveScreenState
       context: context,
       barrierDismissible: true,
       barrierLabel: 'realize-hint',
-      barrierColor: Colors.black.withValues(alpha: 0.32),
+      barrierColor: KoalaDS.ink.withValues(alpha: 0.32),
       transitionDuration: const Duration(milliseconds: 220),
       pageBuilder: (ctx, _, __) => const SizedBox.shrink(),
       transitionBuilder: (ctx, anim, _, __) {
@@ -2128,7 +2129,7 @@ class _StyleDiscoveryLiveScreenState
           mainAxisSize: MainAxisSize.min,
           children: [
             const Icon(LucideIcons.sparkles,
-                size: 48, color: KoalaColors.textTer),
+                size: 48, color: KoalaDS.inkFaint),
             const SizedBox(height: 12),
             Text(
               filtered
@@ -2136,7 +2137,7 @@ class _StyleDiscoveryLiveScreenState
                   : 'Şu an gösterilecek tasarım yok',
               textAlign: TextAlign.center,
               style: const TextStyle(
-                  fontSize: 15, color: KoalaColors.textMed),
+                  fontSize: 15, color: KoalaDS.inkSoft),
             ),
             const SizedBox(height: 16),
             if (filtered)
@@ -2444,7 +2445,7 @@ class _StyleDiscoveryLiveScreenState
                                 left: 20,
                                 child: _Stamp(
                                   text: 'SEVERİM',
-                                  color: const Color(0xFF22C55E),
+                                  color: KoalaDS.cta,
                                   opacity: likeOpacity,
                                   rotate: -0.25,
                                 ),
@@ -2454,7 +2455,7 @@ class _StyleDiscoveryLiveScreenState
                                 right: 20,
                                 child: _Stamp(
                                   text: 'PAS',
-                                  color: const Color(0xFFEF4444),
+                                  color: KoalaDS.danger,
                                   opacity: passOpacity,
                                   rotate: 0.25,
                                 ),
@@ -2691,10 +2692,10 @@ class _Card extends StatelessWidget {
                   end: Alignment.bottomCenter,
                   stops: const [0.0, 0.2, 0.7, 1.0],
                   colors: [
-                    Colors.black.withValues(alpha: 0.12),
+                    KoalaDS.ink.withValues(alpha: 0.12),
                     Colors.transparent,
                     Colors.transparent,
-                    Colors.black.withValues(alpha: 0.78),
+                    KoalaDS.ink.withValues(alpha: 0.78),
                   ],
                 ),
               ),
@@ -3050,8 +3051,8 @@ class _GlassPill extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
         color: accent
-            ? KoalaColors.accentDeep.withValues(alpha: 0.88)
-            : Colors.black.withValues(alpha: 0.38),
+            ? KoalaDS.accentDeep.withValues(alpha: 0.88)
+            : KoalaDS.ink.withValues(alpha: 0.38),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
           color: Colors.white.withValues(alpha: accent ? 0.22 : 0.12),
@@ -3230,13 +3231,13 @@ class _ActionBtnState extends State<_ActionBtn>
           bgGradient = const LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [Color(0xFFF4F2FE), Color(0xFFEDE9FF)],
+            colors: [KoalaDS.surface, KoalaDS.accentTint],
           );
-          fg = KoalaColors.accentDeep;
-          border = KoalaColors.accentDeep.withValues(alpha: 0.45);
+          fg = KoalaDS.accentDeep;
+          border = KoalaDS.accentDeep.withValues(alpha: 0.45);
           shadow = [
             BoxShadow(
-              color: KoalaColors.accentDeep.withValues(alpha: 0.15),
+              color: KoalaDS.accentDeep.withValues(alpha: 0.15),
               blurRadius: 10,
               spreadRadius: -1,
               offset: const Offset(0, 4),
@@ -3248,9 +3249,9 @@ class _ActionBtnState extends State<_ActionBtn>
             ),
           ];
         } else {
-          bg = Colors.white;
-          fg = KoalaColors.textMed;
-          border = KoalaColors.border;
+          bg = KoalaDS.surface;
+          fg = KoalaDS.inkSoft;
+          border = KoalaDS.line;
           shadow = [
             BoxShadow(
               color: Colors.black.withValues(alpha: 0.05),
@@ -3263,24 +3264,24 @@ class _ActionBtnState extends State<_ActionBtn>
       case _ActionVariant.soft:
         // "Sor" aksiyonu — primary kadar öne çıkmasın ama sönük de durmasın.
         // Hafif accent dolgu + soft accent border + mor sızıntı gölgesi.
-        bg = KoalaColors.accentSoft;
-        fg = KoalaColors.accentDeep;
-        border = KoalaColors.accentDeep.withValues(alpha: 0.18);
+        bg = KoalaDS.accentTint;
+        fg = KoalaDS.accentDeep;
+        border = KoalaDS.accentDeep.withValues(alpha: 0.18);
         shadow = [
           BoxShadow(
-            color: KoalaColors.accentDeep.withValues(alpha: 0.14),
+            color: KoalaDS.accentDeep.withValues(alpha: 0.14),
             blurRadius: 12,
             offset: const Offset(0, 4),
           ),
         ];
         break;
       case _ActionVariant.primary:
-        bg = KoalaColors.accentDeep;
-        fg = Colors.white;
+        bg = KoalaDS.accentDeep;
+        fg = KoalaDS.onAccent;
         border = null;
         shadow = [
           BoxShadow(
-            color: KoalaColors.accentDeep.withValues(alpha: 0.30),
+            color: KoalaDS.accentDeep.withValues(alpha: 0.30),
             blurRadius: 16,
             offset: const Offset(0, 6),
           ),
@@ -3289,12 +3290,12 @@ class _ActionBtnState extends State<_ActionBtn>
       case _ActionVariant.gold:
         // "Mekanıma uygula" — Pro restyle entry. Sıcak altın, soft kuşatan
         // gölge ile; mor primary'yi gölgelemeden dikkat çekmeli.
-        bg = const Color(0xFFFFC54D);
-        fg = Colors.white;
+        bg = KoalaDS.clay;
+        fg = KoalaDS.onAccent;
         border = null;
         shadow = [
           BoxShadow(
-            color: const Color(0xFFEFA01F).withValues(alpha: 0.34),
+            color: KoalaDS.clay.withValues(alpha: 0.34),
             blurRadius: 14,
             offset: const Offset(0, 5),
           ),
@@ -3513,12 +3514,10 @@ class _CategoryChip extends StatelessWidget {
             horizontal: 14, vertical: 9),
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: active ? KoalaColors.accentDeep : KoalaColors.surface,
+          color: active ? KoalaDS.accentDeep : KoalaDS.surface,
           borderRadius: BorderRadius.circular(100),
           border: Border.all(
-            color: active
-                ? KoalaColors.accentDeep
-                : KoalaColors.borderSolid,
+            color: active ? KoalaDS.accentDeep : KoalaDS.line,
             width: 0.9,
           ),
         ),
@@ -3528,7 +3527,7 @@ class _CategoryChip extends StatelessWidget {
             Icon(
               icon,
               size: 14,
-              color: active ? Colors.white : KoalaColors.text,
+              color: active ? KoalaDS.onAccent : KoalaDS.ink,
             ),
             const SizedBox(width: 6),
             Text(
@@ -3536,7 +3535,7 @@ class _CategoryChip extends StatelessWidget {
               style: TextStyle(
                 fontSize: 12.5,
                 fontWeight: FontWeight.w700,
-                color: active ? Colors.white : KoalaColors.text,
+                color: active ? KoalaDS.onAccent : KoalaDS.ink,
                 letterSpacing: -0.1,
                 height: 1.0,
               ),
@@ -3648,9 +3647,7 @@ class _SwipeIntroCarouselState extends State<_SwipeIntroCarousel> {
                     width: on ? 20 : 7,
                     height: 7,
                     decoration: BoxDecoration(
-                      color: on
-                          ? const Color(0xFF6C63FF)
-                          : const Color(0xFFD9D5EC),
+                      color: on ? KoalaDS.accent : KoalaDS.line,
                       borderRadius: BorderRadius.circular(99),
                     ),
                   );
@@ -3658,7 +3655,7 @@ class _SwipeIntroCarouselState extends State<_SwipeIntroCarousel> {
               ),
               const SizedBox(height: 16),
               Material(
-                color: const Color(0xFF6C63FF),
+                color: KoalaDS.accent,
                 borderRadius: BorderRadius.circular(999),
                 child: InkWell(
                   borderRadius: BorderRadius.circular(999),
@@ -3752,9 +3749,9 @@ class _RealizeHintImage extends StatelessWidget {
           gradient: const LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [Color(0xFFF3F0FF), Color(0xFFFAF8FF)],
+            colors: [KoalaDS.accentTint, KoalaDS.surface],
           ),
-          border: Border.all(color: const Color(0xFFE0DAFF)),
+          border: Border.all(color: KoalaDS.accent.withValues(alpha: 0.22)),
         ),
         child: Stack(
           alignment: Alignment.center,
@@ -3791,18 +3788,14 @@ class _RealizeHintImage extends StatelessWidget {
             Container(
               width: 44,
               height: 44,
-              decoration: const BoxDecoration(
+              decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [Color(0xFF6C63FF), Color(0xFF9B5CFF)],
-                ),
+                gradient: KoalaDS.accentGradient,
                 boxShadow: [
                   BoxShadow(
-                    color: Color(0x336C63FF),
+                    color: KoalaDS.accent.withValues(alpha: 0.20),
                     blurRadius: 16,
-                    offset: Offset(0, 4),
+                    offset: const Offset(0, 4),
                   ),
                 ],
               ),
@@ -3851,7 +3844,7 @@ class _RealizeMiniCard extends StatelessWidget {
                     begin: Alignment.bottomCenter,
                     end: Alignment.topCenter,
                     colors: [
-                      Colors.black.withValues(alpha: 0.55),
+                      KoalaDS.ink.withValues(alpha: 0.55),
                       Colors.transparent,
                     ],
                   ),
@@ -3889,7 +3882,7 @@ class _ProQuotaCard extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(24),
-        color: const Color(0xFF1A1410),
+        color: KoalaDS.ink,
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.25),
@@ -3908,9 +3901,9 @@ class _ProQuotaCard extends StatelessWidget {
             fit: BoxFit.cover,
             memCacheWidth: (360 * dpr).round(),
             fadeInDuration: const Duration(milliseconds: 250),
-            placeholder: (_, __) => const ColoredBox(color: Color(0xFF1A1410)),
+            placeholder: (_, __) => const ColoredBox(color: KoalaDS.ink),
             errorWidget: (_, __, ___) =>
-                const ColoredBox(color: Color(0xFF1A1410)),
+                const ColoredBox(color: KoalaDS.ink),
           ),
           // Alttan koyu scrim — metnin okunması için.
           DecoratedBox(
@@ -3919,9 +3912,9 @@ class _ProQuotaCard extends StatelessWidget {
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
                 colors: [
-                  Colors.black.withValues(alpha: 0.05),
-                  Colors.black.withValues(alpha: 0.35),
-                  Colors.black.withValues(alpha: 0.82),
+                  KoalaDS.ink.withValues(alpha: 0.05),
+                  KoalaDS.ink.withValues(alpha: 0.35),
+                  KoalaDS.ink.withValues(alpha: 0.82),
                 ],
                 stops: const [0.0, 0.45, 1.0],
               ),
@@ -3978,7 +3971,7 @@ class _ProQuotaCard extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.w800,
-                      color: Color(0xFF1A1410),
+                      color: KoalaDS.ink,
                       letterSpacing: 0.1,
                     ),
                   ),
@@ -4337,8 +4330,7 @@ class _AskComposeSheetState extends State<_AskComposeSheet> {
                   selected
                       ? Icons.radio_button_checked_rounded
                       : Icons.radio_button_unchecked_rounded,
-                  color:
-                      selected ? KoalaColors.accent : KoalaColors.textMuted,
+                  color: selected ? KoalaDS.accent : KoalaDS.inkFaint,
                   size: 20,
                 ),
               ],
@@ -4414,10 +4406,10 @@ class _AskComposeSheetState extends State<_AskComposeSheet> {
                 Expanded(
                   child: Container(
                     decoration: BoxDecoration(
-                      color: KoalaColors.surface,
+                      color: KoalaDS.surface,
                       borderRadius: BorderRadius.circular(18),
                       border: Border.all(
-                          color: KoalaColors.borderSolid, width: 0.8),
+                          color: KoalaDS.line, width: 0.8),
                     ),
                     padding:
                         const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
@@ -4485,9 +4477,9 @@ class _BellButton extends StatelessWidget {
           height: 40,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            color: KoalaColors.surface,
+            color: KoalaDS.surface,
             border:
-                Border.all(color: KoalaColors.borderSolid, width: 0.8),
+                Border.all(color: KoalaDS.line, width: 0.8),
           ),
           child: Stack(
             clipBehavior: Clip.none,
@@ -4545,13 +4537,13 @@ class _SettingsButton extends StatelessWidget {
                 height: 40,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: KoalaColors.surface,
+                  color: KoalaDS.surface,
                   border:
-                      Border.all(color: KoalaColors.borderSolid, width: 0.8),
+                      Border.all(color: KoalaDS.line, width: 0.8),
                 ),
                 alignment: Alignment.center,
                 child: const Icon(LucideIcons.settings,
-                    size: 19, color: KoalaColors.text),
+                    size: 19, color: KoalaDS.ink),
               ),
               if (isPro)
                 Positioned(
@@ -4565,13 +4557,12 @@ class _SettingsButton extends StatelessWidget {
                       gradient: const LinearGradient(
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
-                        colors: [Color(0xFFE5C879), Color(0xFFD4A853)],
+                        colors: [KoalaDS.star, KoalaDS.clay],
                       ),
                       border: Border.all(color: Colors.white, width: 1.5),
                       boxShadow: [
                         BoxShadow(
-                          color:
-                              const Color(0xFFD4A853).withValues(alpha: 0.45),
+                          color: KoalaDS.clay.withValues(alpha: 0.45),
                           blurRadius: 4,
                           offset: const Offset(0, 1),
                         ),
@@ -4610,11 +4601,11 @@ class _SettingsButton extends StatelessWidget {
             shape: BoxShape.circle,
             gradient: const SweepGradient(
               colors: [
-                KoalaColors.accentDeep,
-                KoalaColors.brandLight,
-                Color(0xFFFFC44C),
-                KoalaColors.accent,
-                KoalaColors.accentDeep,
+                KoalaDS.accentDeep,
+                KoalaDS.accent,
+                KoalaDS.star,
+                KoalaDS.accent,
+                KoalaDS.accentDeep,
               ],
             ),
             boxShadow: [
@@ -4649,7 +4640,7 @@ class _SettingsButton extends StatelessWidget {
               gradient: const LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
-                colors: [Color(0xFFFFD66B), Color(0xFFEFA01F)],
+                colors: [KoalaDS.star, KoalaDS.clay],
               ),
               borderRadius: BorderRadius.circular(8),
               border: Border.all(color: KoalaColors.bg, width: 1.4),
@@ -4683,12 +4674,12 @@ class _SettingsButton extends StatelessWidget {
       height: 40,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        color: KoalaColors.surface,
-        border: Border.all(color: KoalaColors.borderSolid, width: 0.8),
+        color: KoalaDS.surface,
+        border: Border.all(color: KoalaDS.line, width: 0.8),
       ),
       alignment: Alignment.center,
       child: const Icon(LucideIcons.settings,
-          size: 19, color: KoalaColors.text),
+          size: 19, color: KoalaDS.ink),
     );
   }
 }
@@ -4713,10 +4704,10 @@ class _ProPill extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 12),
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            color: const Color(0xFFFFF8E8),
+            color: KoalaDS.clayTint,
             borderRadius: BorderRadius.circular(100),
             border: Border.all(
-              color: const Color(0xFFE6C679),
+              color: KoalaDS.clay.withValues(alpha: 0.55),
               width: 0.9,
             ),
           ),
@@ -4724,14 +4715,14 @@ class _ProPill extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               const Icon(LucideIcons.crown,
-                  size: 13, color: Color(0xFFB8862F)),
+                  size: 13, color: KoalaDS.clay),
               const SizedBox(width: 5),
               Text(
                 'PRO',
                 style: const TextStyle(
                   fontSize: 11.5,
                   fontWeight: FontWeight.w800,
-                  color: Color(0xFFB8862F),
+                  color: KoalaDS.clay,
                   letterSpacing: 0.6,
                   height: 1.0,
                 ),
@@ -4739,7 +4730,7 @@ class _ProPill extends StatelessWidget {
               if (isPro) ...[
                 const SizedBox(width: 5),
                 const Icon(LucideIcons.check,
-                    size: 12, color: Color(0xFFB8862F)),
+                    size: 12, color: KoalaDS.clay),
               ],
             ],
           ),
@@ -4774,7 +4765,7 @@ class _ApplyPill extends StatelessWidget {
             gradient: const LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
-              colors: [Color(0xFFFFD66B), Color(0xFFEFA01F)],
+              colors: [KoalaDS.star, KoalaDS.clay],
             ),
             borderRadius: BorderRadius.circular(100),
             boxShadow: [
