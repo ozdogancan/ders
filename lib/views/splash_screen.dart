@@ -22,9 +22,9 @@ class _SplashScreenState extends State<SplashScreen>
   late final AnimationController _controller;
 
   // Progress bar paleti.
-  static const _barTrack = Color(0xFFE0DCEC);
-  static const _barFrom = Color(0xFF6C63FF);
-  static const _barTo = Color(0xFF9B5CFF);
+  static const _barTrack = Color(0xFFE3DEEF);
+  static const _barFrom = Color(0xFF7C6EF2); // KoalaDS.accent
+  static const _barTo = Color(0xFF6C5CE7);   // KoalaDS.accentDeep
 
   @override
   void initState() {

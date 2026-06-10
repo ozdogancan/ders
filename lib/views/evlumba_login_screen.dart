@@ -18,6 +18,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
 import '../core/config/env.dart';
+import '../core/theme/koala_ds.dart';
 import '../core/theme/koala_tokens.dart';
 import 'auth_common.dart';
 
@@ -215,14 +216,9 @@ class _EvlumbaLoginScreenState extends State<EvlumbaLoginScreen> {
                   height: 72,
                   decoration: BoxDecoration(
                     color: Colors.white,
-                    borderRadius: BorderRadius.circular(18),
-                    boxShadow: const [
-                      BoxShadow(
-                        color: Color(0x14000000),
-                        blurRadius: 16,
-                        offset: Offset(0, 6),
-                      ),
-                    ],
+                    borderRadius: BorderRadius.circular(KoalaR.lg),
+                    border: Border.all(color: KoalaDS.line),
+                    boxShadow: KoalaElev.card,
                   ),
                   padding: const EdgeInsets.all(12),
                   child: CachedNetworkImage(
@@ -234,15 +230,11 @@ class _EvlumbaLoginScreenState extends State<EvlumbaLoginScreen> {
                 ),
               ),
               const SizedBox(height: 18),
-              const Text(
+              // V2: serif display başlık — auth ekranlarıyla ortak dil.
+              Text(
                 'Evlumba ile giriş',
                 textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w800,
-                  color: KoalaColors.text,
-                  letterSpacing: -0.4,
-                ),
+                style: KoalaType.display3(),
               ),
               const SizedBox(height: 6),
               const Text(
@@ -250,7 +242,7 @@ class _EvlumbaLoginScreenState extends State<EvlumbaLoginScreen> {
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 13.5,
-                  color: KoalaColors.textSec,
+                  color: KoalaDS.inkSoft,
                   height: 1.45,
                 ),
               ),
@@ -307,7 +299,7 @@ class _EvlumbaLoginScreenState extends State<EvlumbaLoginScreen> {
                 Text(
                   _error!,
                   style: const TextStyle(
-                    color: Color(0xFFC2410C),
+                    color: KoalaDS.danger,
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
                   ),
@@ -359,8 +351,7 @@ class _EvlumbaLoginScreenState extends State<EvlumbaLoginScreen> {
                   ),
                   style: OutlinedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 13),
-                    side: const BorderSide(
-                        color: KoalaColors.borderSolid, width: 1),
+                    side: const BorderSide(color: KoalaDS.line, width: 1),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(KoalaRadius.pill),
                     ),
@@ -385,17 +376,17 @@ class _EvlumbaLoginScreenState extends State<EvlumbaLoginScreen> {
         filled: true,
         fillColor: KoalaColors.surface,
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(KoalaR.md),
           borderSide:
-              const BorderSide(color: KoalaColors.borderSolid, width: 0.8),
+              const BorderSide(color: KoalaDS.line, width: 1),
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(KoalaR.md),
           borderSide:
-              const BorderSide(color: KoalaColors.borderSolid, width: 0.8),
+              const BorderSide(color: KoalaDS.line, width: 1),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(KoalaR.md),
           borderSide:
               const BorderSide(color: KoalaColors.accentDeep, width: 1.2),
         ),
@@ -480,7 +471,7 @@ class _EvlumbaMagicScreenState extends State<EvlumbaMagicScreen> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     const Icon(LucideIcons.alertCircle,
-                        size: 44, color: Color(0xFFC25A1A)),
+                        size: 44, color: KoalaDS.clay),
                     const SizedBox(height: 14),
                     Text(_error!,
                         textAlign: TextAlign.center,
