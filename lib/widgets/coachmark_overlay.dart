@@ -2,7 +2,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
-import '../core/theme/koala_tokens.dart';
+import '../core/theme/koala_ds.dart';
 
 /// Lifetime-once "shell coachmark" — darkens screen, cuts a spotlight hole
 /// around each anchor, and shows a small Koala-voice info card next to it.
@@ -270,17 +270,17 @@ class _CoachmarkCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 14, 14, 12),
       decoration: BoxDecoration(
-        color: KoalaColors.surface,
+        color: KoalaDS.surface,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: KoalaColors.border, width: 0.5),
+        border: Border.all(color: KoalaDS.line, width: 0.5),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.18),
+            color: KoalaDS.ink.withValues(alpha: 0.18),
             blurRadius: 24,
             offset: const Offset(0, 8),
           ),
           BoxShadow(
-            color: KoalaColors.accent.withValues(alpha: 0.10),
+            color: KoalaDS.accent.withValues(alpha: 0.10),
             blurRadius: 24,
             offset: const Offset(0, 4),
           ),
@@ -314,23 +314,23 @@ class _CoachmarkCard extends StatelessWidget {
                   height: 30,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: KoalaColors.accentSoft,
+                    color: KoalaDS.accentTint,
                   ),
                   child: Icon(step.icon,
-                      size: 16, color: KoalaColors.accentDeep),
+                      size: 16, color: KoalaDS.accentDeep),
                 ),
                 const SizedBox(width: 10),
               ],
               Expanded(
                 child: Text(
                   step.title,
-                  style: KoalaText.h3.copyWith(letterSpacing: -0.2),
+                  style: KoalaType.h3.copyWith(letterSpacing: -0.2),
                 ),
               ),
               Text(
                 '${index + 1}/$total',
-                style: KoalaText.labelSmall.copyWith(
-                  color: KoalaColors.textTer,
+                style: KoalaType.labelSm.copyWith(
+                  color: KoalaDS.inkFaint,
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -339,11 +339,7 @@ class _CoachmarkCard extends StatelessWidget {
           const SizedBox(height: 8),
           Text(
             step.body,
-            style: KoalaText.body.copyWith(
-              color: KoalaColors.textMed,
-              fontSize: 13.5,
-              height: 1.45,
-            ),
+            style: KoalaType.bodySm.copyWith(height: 1.45),
           ),
           const SizedBox(height: 10),
           Row(
@@ -351,7 +347,7 @@ class _CoachmarkCard extends StatelessWidget {
               TextButton(
                 onPressed: onSkip,
                 style: TextButton.styleFrom(
-                  foregroundColor: KoalaColors.textSec,
+                  foregroundColor: KoalaDS.inkSoft,
                   padding: const EdgeInsets.symmetric(horizontal: 8),
                   minimumSize: const Size(0, 36),
                   tapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -368,8 +364,8 @@ class _CoachmarkCard extends StatelessWidget {
               ElevatedButton(
                 onPressed: onNext,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: KoalaColors.accentDeep,
-                  foregroundColor: Colors.white,
+                  backgroundColor: KoalaDS.accentDeep,
+                  foregroundColor: KoalaDS.onAccent,
                   elevation: 0,
                   padding:
                       const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
@@ -413,12 +409,12 @@ class _ImageFallback extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: KoalaColors.accentSoft,
+      color: KoalaDS.accentTint,
       alignment: Alignment.center,
       child: Icon(
         icon ?? LucideIcons.sparkles,
         size: 36,
-        color: KoalaColors.accentDeep,
+        color: KoalaDS.accentDeep,
       ),
     );
   }
@@ -443,7 +439,7 @@ class _SpotlightPainter extends CustomPainter {
     final mask = Path.combine(PathOperation.difference, bg, cut);
     canvas.drawPath(
       mask,
-      Paint()..color = Colors.black.withValues(alpha: dimAlpha),
+      Paint()..color = KoalaDS.overlay.withValues(alpha: dimAlpha),
     );
   }
 
