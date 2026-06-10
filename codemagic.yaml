@@ -24,9 +24,6 @@ workflows:
     integrations:
       app_store_connect: koala_appstore_api   # Codemagic UI'daki entegrasyon adı
     environment:
-      ios_signing:
-        distribution_type: app_store
-        bundle_identifier: com.koala.evlumba
       groups:
         - koala_ios            # REVENUECAT_IOS_KEY, SUPABASE_ANON_KEY, EVLUMBA_SUPABASE_ANON_KEY
       vars:
@@ -41,9 +38,18 @@ workflows:
     scripts:
       - name: Flutter pub get
         script: flutter pub get
-      - name: Set up provisioning (automatic via ASC API key)
+      - name: Set up code signing (create cert + profile via ASC API)
         script: |
-          # App Store Connect API key ile imzalama profilini çek.
+          # Portaldaki mevcut App Store profili eski sertifikaya bagli (gecersiz).
+          # --create: yeni sertifika + yeni App Store profili olusturur.
+          keychain initialize
+          openssl genrsa -out "$CM_BUILD_DIR/cert_key.pem" 2048
+          app-store-connect fetch-signing-files "com.koala.evlumba" \
+            --platform IOS \
+            --type IOS_APP_STORE \
+            --certificate-key=@file:$CM_BUILD_DIR/cert_key.pem \
+            --create
+          keychain add-certificates
           xcode-project use-profiles
       - name: Pod install
         script: |
