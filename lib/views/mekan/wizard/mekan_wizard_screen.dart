@@ -24,6 +24,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
+import '../../../core/theme/koala_ds.dart';
 import '../../../core/theme/koala_tokens.dart';
 import '../../../helpers/paywall_router.dart';
 import '../../../services/analytics_service.dart';
@@ -842,7 +843,7 @@ class _StyleStep extends StatelessWidget {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      barrierColor: Colors.black.withValues(alpha: 0.4),
+      barrierColor: KoalaDS.ink.withValues(alpha: 0.4),
       builder: (_) => _CustomStylePage(initial: customPrompt),
     );
     if (result != null && result.trim().isNotEmpty) {
@@ -1108,8 +1109,8 @@ class _StyleTileShell extends StatelessWidget {
                         end: Alignment.bottomCenter,
                         colors: [
                           Colors.transparent,
-                          Colors.black.withValues(alpha: 0.10),
-                          Colors.black.withValues(alpha: 0.55),
+                          KoalaDS.ink.withValues(alpha: 0.10),
+                          KoalaDS.ink.withValues(alpha: 0.55),
                         ],
                         stops: const [0.45, 0.65, 1.0],
                       ),
@@ -1177,15 +1178,14 @@ class _StyleTileShell extends StatelessWidget {
                         horizontal: 6, vertical: 1),
                     decoration: BoxDecoration(
                       gradient: const LinearGradient(
-                        colors: [Color(0xFFE0B96B), Color(0xFFB8862F)],
+                        colors: [KoalaDS.star, KoalaDS.clay],
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
                       ),
                       borderRadius: BorderRadius.circular(99),
                       boxShadow: [
                         BoxShadow(
-                          color: const Color(0xFFB8862F)
-                              .withValues(alpha: 0.30),
+                          color: KoalaDS.clay.withValues(alpha: 0.30),
                           blurRadius: 6,
                           offset: const Offset(0, 2),
                         ),
@@ -1363,8 +1363,8 @@ class _CustomStylePageState extends State<_CustomStylePage> {
                           BorderRadius.circular(KoalaRadius.lg),
                       border: Border.all(
                         color: _focusNode.hasFocus
-                            ? KoalaColors.accent
-                            : KoalaColors.borderSolid,
+                            ? KoalaDS.accent
+                            : KoalaDS.line,
                         width: _focusNode.hasFocus ? 1.5 : 1,
                       ),
                     ),
@@ -1390,7 +1390,7 @@ class _CustomStylePageState extends State<_CustomStylePage> {
                             'mavi-bej palet, akşam vibe…',
                         hintStyle: TextStyle(
                           fontSize: 15,
-                          color: KoalaColors.textTer,
+                          color: KoalaDS.inkFaint,
                           height: 1.45,
                         ),
                         border: InputBorder.none,
@@ -1416,7 +1416,7 @@ class _CustomStylePageState extends State<_CustomStylePage> {
                   child: Text(
                     '${_ctrl.text.length}/300',
                     style: KoalaText.labelSmall
-                        .copyWith(color: KoalaColors.textTer),
+                        .copyWith(color: KoalaDS.inkFaint),
                   ),
                 ),
               ),
@@ -1600,7 +1600,7 @@ class _CustomStyleSheetState extends State<_CustomStyleSheet> {
               child: Text(
                 '${_ctrl.text.length}/300',
                 style: KoalaText.labelSmall
-                    .copyWith(color: KoalaColors.textTer),
+                    .copyWith(color: KoalaDS.inkFaint),
               ),
             ),
             const SizedBox(height: 18),
@@ -1887,7 +1887,7 @@ class _LayoutStep extends StatelessWidget {
                       padding: const EdgeInsets.symmetric(
                           horizontal: 10, vertical: 6),
                       decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.55),
+                        color: KoalaDS.ink.withValues(alpha: 0.55),
                         borderRadius: BorderRadius.circular(99),
                       ),
                       child: const Row(
@@ -2074,11 +2074,11 @@ class _ContinueBar extends StatelessWidget {
             child: FilledButton(
             style: FilledButton.styleFrom(
               backgroundColor: enabled
-                  ? KoalaColors.accentDeep
-                  : KoalaColors.surfaceAlt,
+                  ? KoalaDS.accentDeep
+                  : KoalaDS.surfaceMuted,
               foregroundColor: Colors.white,
-              disabledBackgroundColor: KoalaColors.surfaceAlt,
-              disabledForegroundColor: KoalaColors.textTer,
+              disabledBackgroundColor: KoalaDS.surfaceMuted,
+              disabledForegroundColor: KoalaDS.inkFaint,
               padding: EdgeInsets.zero,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(16),

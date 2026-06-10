@@ -10,6 +10,7 @@ import 'package:lucide_icons/lucide_icons.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/config/env.dart';
+import '../../core/theme/koala_ds.dart';
 import '../../core/theme/koala_tokens.dart';
 import '../../services/saved_items_service.dart';
 import 'widgets/pro_match_sheet.dart';
@@ -129,7 +130,7 @@ class _RealizeScreenState extends ConsumerState<RealizeScreen>
     ScaffoldMessenger.of(context).clearSnackBars();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        backgroundColor: KoalaColors.text.withValues(alpha: 0.92),
+        backgroundColor: KoalaDS.ink.withValues(alpha: 0.92),
         behavior: SnackBarBehavior.floating,
         margin: const EdgeInsets.fromLTRB(16, 0, 16, 24),
         content: Row(
@@ -151,7 +152,7 @@ class _RealizeScreenState extends ConsumerState<RealizeScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: KoalaColors.bg,
+      backgroundColor: KoalaDS.bg,
       body: SafeArea(
         child: Column(
           children: [
@@ -183,19 +184,14 @@ class _RealizeScreenState extends ConsumerState<RealizeScreen>
       child: Row(
         children: [
           IconButton(
-            icon: const Icon(LucideIcons.x, color: KoalaColors.text),
+            icon: const Icon(LucideIcons.x, color: KoalaDS.ink),
             onPressed: () => Navigator.of(context).pop(),
           ),
           const SizedBox(width: 4),
-          const Expanded(
+          Expanded(
             child: Text(
               'Gerçeğe Dönüştür',
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.w700,
-                color: KoalaColors.text,
-                letterSpacing: -0.4,
-              ),
+              style: KoalaType.display3(),
             ),
           ),
         ],
@@ -211,9 +207,9 @@ class _RealizeScreenState extends ConsumerState<RealizeScreen>
       child: Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: KoalaColors.surface,
+          color: KoalaDS.surface,
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: KoalaColors.border, width: 0.6),
+          border: Border.all(color: KoalaDS.line, width: 0.6),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withValues(alpha: 0.04),
@@ -256,7 +252,7 @@ class _RealizeScreenState extends ConsumerState<RealizeScreen>
                     style: TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.w700,
-                      color: KoalaColors.text,
+                      color: KoalaDS.ink,
                       letterSpacing: -0.2,
                     ),
                   ),
@@ -265,7 +261,7 @@ class _RealizeScreenState extends ConsumerState<RealizeScreen>
                     'Ürün satın al ya da bir iç mimara devret.',
                     style: TextStyle(
                       fontSize: 12,
-                      color: KoalaColors.textSec,
+                      color: KoalaDS.inkSoft,
                       height: 1.35,
                     ),
                   ),
@@ -284,20 +280,20 @@ class _RealizeScreenState extends ConsumerState<RealizeScreen>
       child: Container(
         padding: const EdgeInsets.all(4),
         decoration: BoxDecoration(
-          color: KoalaColors.surfaceAlt,
+          color: KoalaDS.surfaceMuted,
           borderRadius: BorderRadius.circular(KoalaRadius.pill),
         ),
         child: TabBar(
           controller: _tabs,
           indicator: BoxDecoration(
-            color: KoalaColors.surface,
+            color: KoalaDS.surface,
             borderRadius: BorderRadius.circular(KoalaRadius.pill),
             boxShadow: KoalaShadows.card,
           ),
           indicatorSize: TabBarIndicatorSize.tab,
           dividerColor: Colors.transparent,
-          labelColor: KoalaColors.accentDeep,
-          unselectedLabelColor: KoalaColors.textSec,
+          labelColor: KoalaDS.accentDeep,
+          unselectedLabelColor: KoalaDS.inkSoft,
           labelStyle: const TextStyle(
             fontSize: 13.5,
             fontWeight: FontWeight.w700,
@@ -359,7 +355,7 @@ class _RealizeScreenState extends ConsumerState<RealizeScreen>
                         width: 80,
                         height: 100,
                         decoration: BoxDecoration(
-                          color: KoalaColors.accentSoft,
+                          color: KoalaDS.accentTint,
                           borderRadius: BorderRadius.circular(16),
                         ),
                       ),
@@ -374,7 +370,7 @@ class _RealizeScreenState extends ConsumerState<RealizeScreen>
                         width: 80,
                         height: 100,
                         decoration: BoxDecoration(
-                          color: KoalaColors.accentDeep,
+                          color: KoalaDS.accentDeep,
                           borderRadius: BorderRadius.circular(16),
                         ),
                         child: const Center(
@@ -388,10 +384,10 @@ class _RealizeScreenState extends ConsumerState<RealizeScreen>
                     width: 88,
                     height: 110,
                     decoration: BoxDecoration(
-                      color: KoalaColors.surface,
+                      color: KoalaDS.surface,
                       borderRadius: BorderRadius.circular(18),
                       border:
-                          Border.all(color: KoalaColors.border, width: 0.6),
+                          Border.all(color: KoalaDS.line, width: 0.6),
                       boxShadow: [
                         BoxShadow(
                           color: Colors.black.withValues(alpha: 0.08),
@@ -402,7 +398,7 @@ class _RealizeScreenState extends ConsumerState<RealizeScreen>
                     ),
                     child: const Center(
                       child: Icon(LucideIcons.tag,
-                          size: 30, color: KoalaColors.accentDeep),
+                          size: 30, color: KoalaDS.accentDeep),
                     ),
                   ),
                 ],
@@ -414,7 +410,7 @@ class _RealizeScreenState extends ConsumerState<RealizeScreen>
               style: TextStyle(
                 fontSize: 22,
                 fontWeight: FontWeight.w800,
-                color: KoalaColors.text,
+                color: KoalaDS.ink,
                 letterSpacing: -0.4,
               ),
             ),
@@ -424,7 +420,7 @@ class _RealizeScreenState extends ConsumerState<RealizeScreen>
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 14,
-                color: KoalaColors.textSec,
+                color: KoalaDS.inkSoft,
                 height: 1.5,
                 fontWeight: FontWeight.w500,
                 letterSpacing: -0.1,
@@ -435,21 +431,21 @@ class _RealizeScreenState extends ConsumerState<RealizeScreen>
               padding:
                   const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               decoration: BoxDecoration(
-                color: KoalaColors.accentSoft,
+                color: KoalaDS.accentTint,
                 borderRadius: BorderRadius.circular(99),
               ),
               child: const Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Icon(LucideIcons.sparkles,
-                      size: 12, color: KoalaColors.accentDeep),
+                      size: 12, color: KoalaDS.accentDeep),
                   SizedBox(width: 6),
                   Text(
                     'Geliştiriliyor',
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w700,
-                      color: KoalaColors.accentDeep,
+                      color: KoalaDS.accentDeep,
                       letterSpacing: -0.1,
                     ),
                   ),
@@ -475,8 +471,8 @@ class _RealizeScreenState extends ConsumerState<RealizeScreen>
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
                 colors: [
-                  KoalaColors.accentSoft,
-                  KoalaColors.accentSoft.withValues(alpha: 0.5),
+                  KoalaDS.accentTint,
+                  KoalaDS.accentTint.withValues(alpha: 0.5),
                 ],
               ),
               borderRadius: BorderRadius.circular(20),
@@ -491,7 +487,7 @@ class _RealizeScreenState extends ConsumerState<RealizeScreen>
                       height: 44,
                       decoration: const BoxDecoration(
                         shape: BoxShape.circle,
-                        color: KoalaColors.accentDeep,
+                        color: KoalaDS.accentDeep,
                       ),
                       child: const Icon(LucideIcons.users,
                           size: 22, color: Colors.white),
@@ -503,7 +499,7 @@ class _RealizeScreenState extends ConsumerState<RealizeScreen>
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w700,
-                          color: KoalaColors.accentDeep,
+                          color: KoalaDS.accentDeep,
                           letterSpacing: -0.2,
                         ),
                       ),
@@ -517,7 +513,7 @@ class _RealizeScreenState extends ConsumerState<RealizeScreen>
                   'gör, doğrudan mesaj at.',
                   style: TextStyle(
                     fontSize: 13.5,
-                    color: KoalaColors.text,
+                    color: KoalaDS.ink,
                     height: 1.5,
                     fontWeight: FontWeight.w500,
                   ),
@@ -566,9 +562,9 @@ class _RealizeScreenState extends ConsumerState<RealizeScreen>
       child: Container(
         padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
         decoration: const BoxDecoration(
-          color: KoalaColors.bg,
+          color: KoalaDS.bg,
           border: Border(
-              top: BorderSide(color: KoalaColors.border, width: 0.5)),
+              top: BorderSide(color: KoalaDS.line, width: 0.5)),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -578,7 +574,7 @@ class _RealizeScreenState extends ConsumerState<RealizeScreen>
               width: double.infinity,
               child: ElevatedButton.icon(
             style: ElevatedButton.styleFrom(
-              backgroundColor: KoalaColors.accentDeep,
+              backgroundColor: KoalaDS.accentDeep,
               foregroundColor: Colors.white,
               elevation: 0,
               shape: RoundedRectangleBorder(
@@ -613,14 +609,14 @@ class _RealizeScreenState extends ConsumerState<RealizeScreen>
         final b = base64Decode(s.substring(commaIdx + 1));
         return Image.memory(b, fit: BoxFit.cover);
       } catch (_) {
-        return Container(color: KoalaColors.surfaceAlt);
+        return Container(color: KoalaDS.surfaceMuted);
       }
     }
     return CachedNetworkImage(
       imageUrl: s,
       fit: BoxFit.cover,
-      placeholder: (_, _) => Container(color: KoalaColors.surfaceAlt),
-      errorWidget: (_, _, _) => Container(color: KoalaColors.surfaceAlt),
+      placeholder: (_, _) => Container(color: KoalaDS.surfaceMuted),
+      errorWidget: (_, _, _) => Container(color: KoalaDS.surfaceMuted),
     );
   }
 }
@@ -640,7 +636,7 @@ class _SmallChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
       decoration: BoxDecoration(
-        color: tinted ? KoalaColors.accentSoft : KoalaColors.surfaceAlt,
+        color: tinted ? KoalaDS.accentTint : KoalaDS.surfaceMuted,
         borderRadius: BorderRadius.circular(KoalaRadius.pill),
       ),
       child: Row(
@@ -649,14 +645,14 @@ class _SmallChip extends StatelessWidget {
           Icon(icon,
               size: 11,
               color:
-                  tinted ? KoalaColors.accentDeep : KoalaColors.textSec),
+                  tinted ? KoalaDS.accentDeep : KoalaDS.inkSoft),
           const SizedBox(width: 4),
           Text(
             label,
             style: TextStyle(
               fontSize: 11,
               fontWeight: FontWeight.w700,
-              color: tinted ? KoalaColors.accentDeep : KoalaColors.text,
+              color: tinted ? KoalaDS.accentDeep : KoalaDS.ink,
               letterSpacing: -0.1,
             ),
           ),
@@ -681,14 +677,14 @@ class _ProBadge extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 11, color: KoalaColors.accentDeep),
+          Icon(icon, size: 11, color: KoalaDS.accentDeep),
           const SizedBox(width: 4),
           Text(
             label,
             style: const TextStyle(
               fontSize: 11,
               fontWeight: FontWeight.w700,
-              color: KoalaColors.accentDeep,
+              color: KoalaDS.accentDeep,
               letterSpacing: -0.1,
             ),
           ),
@@ -708,9 +704,9 @@ class _StepRow extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: KoalaColors.surface,
+        color: KoalaDS.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: KoalaColors.border, width: 0.6),
+        border: Border.all(color: KoalaDS.line, width: 0.6),
       ),
       child: Row(
         children: [
@@ -720,14 +716,14 @@ class _StepRow extends StatelessWidget {
             alignment: Alignment.center,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: KoalaColors.accentSoft,
+              color: KoalaDS.accentTint,
             ),
             child: Text(
               n,
               style: const TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w800,
-                color: KoalaColors.accentDeep,
+                color: KoalaDS.accentDeep,
               ),
             ),
           ),
@@ -741,7 +737,7 @@ class _StepRow extends StatelessWidget {
                   style: const TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w700,
-                    color: KoalaColors.text,
+                    color: KoalaDS.ink,
                     letterSpacing: -0.2,
                   ),
                 ),
@@ -750,7 +746,7 @@ class _StepRow extends StatelessWidget {
                   sub,
                   style: const TextStyle(
                     fontSize: 12.5,
-                    color: KoalaColors.textSec,
+                    color: KoalaDS.inkSoft,
                     height: 1.4,
                   ),
                 ),
@@ -817,9 +813,9 @@ class _ProductCard extends StatelessWidget {
         onTap: () => _open(context),
         child: Container(
           decoration: BoxDecoration(
-            color: KoalaColors.surface,
+            color: KoalaDS.surface,
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: KoalaColors.border, width: 0.6),
+            border: Border.all(color: KoalaDS.line, width: 0.6),
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withValues(alpha: 0.04),
@@ -841,9 +837,9 @@ class _ProductCard extends StatelessWidget {
                       imageUrl: p.imageUrl,
                       fit: BoxFit.cover,
                       placeholder: (_, _) =>
-                          Container(color: KoalaColors.surfaceAlt),
+                          Container(color: KoalaDS.surfaceMuted),
                       errorWidget: (_, _, _) =>
-                          Container(color: KoalaColors.surfaceAlt),
+                          Container(color: KoalaDS.surfaceMuted),
                     ),
                     Positioned(
                       top: 8,
@@ -858,7 +854,7 @@ class _ProductCard extends StatelessWidget {
                         child: const Icon(
                           LucideIcons.externalLink,
                           size: 13,
-                          color: KoalaColors.text,
+                          color: KoalaDS.ink,
                         ),
                       ),
                     ),
@@ -877,7 +873,7 @@ class _ProductCard extends StatelessWidget {
                       style: const TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
-                        color: KoalaColors.text,
+                        color: KoalaDS.ink,
                         height: 1.3,
                         letterSpacing: -0.1,
                       ),
@@ -888,7 +884,7 @@ class _ProductCard extends StatelessWidget {
                       style: const TextStyle(
                         fontSize: 13.5,
                         fontWeight: FontWeight.w800,
-                        color: KoalaColors.accentDeep,
+                        color: KoalaDS.accentDeep,
                         letterSpacing: -0.2,
                       ),
                     ),

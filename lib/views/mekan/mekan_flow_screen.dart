@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../pro/widgets/restyle_counter_pill.dart';
+import '../../core/theme/koala_ds.dart';
 import '../../core/theme/koala_tokens.dart';
 import '../../widgets/koala_bottom_nav.dart';
 import '../main_shell.dart';
@@ -717,7 +718,7 @@ class _MekanFlowScreenState extends ConsumerState<MekanFlowScreen> {
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
-      barrierColor: Colors.black.withValues(alpha: 0.55),
+      barrierColor: KoalaDS.ink.withValues(alpha: 0.55),
       builder: (ctx) => Container(
         decoration: const BoxDecoration(
           color: KoalaColors.surface,
@@ -741,7 +742,7 @@ class _MekanFlowScreenState extends ConsumerState<MekanFlowScreen> {
                 width: 36,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: KoalaColors.border,
+                  color: KoalaDS.line,
                   borderRadius: BorderRadius.circular(KoalaRadius.pill),
                 ),
               ),
@@ -1082,7 +1083,7 @@ class _MekanFlowScreenState extends ConsumerState<MekanFlowScreen> {
                   image: MemoryImage(_bytes),
                   fit: BoxFit.cover,
                 ),
-                border: Border.all(color: KoalaColors.border, width: 0.5),
+                border: Border.all(color: KoalaDS.line, width: 0.5),
               ),
             ),
           ),
@@ -1154,12 +1155,12 @@ class _MekanFlowScreenState extends ConsumerState<MekanFlowScreen> {
               width: 72,
               height: 72,
               decoration: BoxDecoration(
-                color: KoalaColors.error.withValues(alpha: 0.12),
+                color: KoalaDS.danger.withValues(alpha: 0.12),
                 shape: BoxShape.circle,
               ),
               alignment: Alignment.center,
               child: const Icon(LucideIcons.alertCircle,
-                  color: KoalaColors.error, size: 32),
+                  color: KoalaDS.danger, size: 32),
             ),
           ),
           const SizedBox(height: KoalaSpacing.xl),
@@ -1194,7 +1195,7 @@ class _MekanFlowScreenState extends ConsumerState<MekanFlowScreen> {
               child: Text(
                 'Geri dön',
                 style: KoalaText.label.copyWith(
-                  color: KoalaColors.textSec,
+                  color: KoalaDS.inkSoft,
                 ),
               ),
             ),
@@ -1327,7 +1328,7 @@ class _AnalyzingViewState extends State<_AnalyzingView>
                                 widget.referenceUrl!,
                                 fit: BoxFit.cover,
                                 errorBuilder: (_, _, _) => Container(
-                                    color: KoalaColors.surfaceAlt),
+                                    color: KoalaDS.surfaceMuted),
                               ),
                             ),
                           ),
@@ -1339,14 +1340,7 @@ class _AnalyzingViewState extends State<_AnalyzingView>
                         height: 44,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          gradient: LinearGradient(
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                            colors: [
-                              KoalaColors.accentDeep,
-                              KoalaColors.accent,
-                            ],
-                          ),
+                          gradient: KoalaDS.accentGradient,
                           boxShadow: [
                             BoxShadow(
                               color:
@@ -1428,9 +1422,9 @@ class _AnalyzingViewState extends State<_AnalyzingView>
               borderRadius: BorderRadius.circular(KoalaRadius.pill),
               child: const LinearProgressIndicator(
                 minHeight: 3,
-                backgroundColor: KoalaColors.surfaceAlt,
+                backgroundColor: KoalaDS.surfaceMuted,
                 valueColor:
-                    AlwaysStoppedAnimation<Color>(KoalaColors.accentDeep),
+                    AlwaysStoppedAnimation<Color>(KoalaDS.accentDeep),
               ),
             ),
           ),
