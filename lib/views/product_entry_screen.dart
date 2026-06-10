@@ -3,12 +3,11 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-import '../core/theme/koala_tokens.dart';
+import '../core/theme/koala_ds.dart';
 import '../services/evlumba_live_service.dart';
 import '../services/koala_tool_handler.dart';
 import '../widgets/koala_widgets.dart';
@@ -17,17 +16,17 @@ import '../helpers/auth_guard.dart';
 import '../widgets/chat/designer_chat_popup.dart';
 import 'chat_detail_screen.dart';
 
-// Alias — gradually migrate to KoalaColors directly
+// Alias — V2: KoalaDS token'larına bağlı (warm-premium)
 class _K {
-  static const surface = KoalaColors.bg;
-  static const surfaceContainerLow = KoalaColors.surfaceAlt;
-  static const surfaceContainer = KoalaColors.surfaceAlt;
-  static const surfaceContainerLowest = KoalaColors.surface;
-  static const outlineVariant = KoalaColors.border;
-  static const onSurface = KoalaColors.text;
-  static const onSurfaceVariant = KoalaColors.textSec;
-  static const primary = KoalaColors.accent;
-  static const primaryContainer = KoalaColors.accent;
+  static const surface = KoalaDS.bg;
+  static const surfaceContainerLow = KoalaDS.surfaceMuted;
+  static const surfaceContainer = KoalaDS.surfaceMuted;
+  static const surfaceContainerLowest = KoalaDS.surface;
+  static const outlineVariant = KoalaDS.line;
+  static const onSurface = KoalaDS.ink;
+  static const onSurfaceVariant = KoalaDS.inkSoft;
+  static const primary = KoalaDS.accent;
+  static const primaryContainer = KoalaDS.accent;
 }
 
 class _ChipOption {
@@ -773,7 +772,7 @@ class _ProductEntryScreenState extends State<ProductEntryScreen> {
               'Lütfen bir oda tipi belirtin: Salon, Yatak Odası, Mutfak, Banyo, Antre…',
               style: const TextStyle(fontSize: 13),
             ),
-            backgroundColor: const Color(0xFF4A6741),
+            backgroundColor: KoalaDS.cta,
             behavior: SnackBarBehavior.floating,
             duration: const Duration(seconds: 3),
           ),
@@ -854,7 +853,7 @@ class _ProductEntryScreenState extends State<ProductEntryScreen> {
       isScrollControlled: true,
       useSafeArea: false,
       backgroundColor: Colors.transparent,
-      barrierColor: Colors.black.withValues(alpha: 0.24),
+      barrierColor: KoalaDS.ink.withValues(alpha: 0.24),
       builder: (_) => _ProjectDetailSheet(
         card: card,
         onSendMessage: (message) => _openProjectChat(card, customMessage: message),
@@ -917,29 +916,23 @@ class _ProductEntryScreenState extends State<ProductEntryScreen> {
                 child: const Icon(
                   LucideIcons.arrowLeft,
                   size: 24,
-                  color: KoalaColors.accent,
+                  color: KoalaDS.accent,
                 ),
               ),
               const SizedBox(width: 16),
-              const Text(
+              Text(
                 'Ürün Bul',
-                style: TextStyle(
-                  fontFamily: 'Georgia',
-                  fontSize: 20,
-                  fontWeight: FontWeight.w700,
-                  color: _K.onSurface,
-                  letterSpacing: -0.3,
-                ),
+                style: KoalaType.display3(),
               ),
             ],
           ),
           const Text(
             'koala',
             style: TextStyle(
-              fontFamily: 'Georgia',
               fontSize: 18,
               fontWeight: FontWeight.w700,
-              color: KoalaColors.accent,
+              color: KoalaDS.accent,
+              letterSpacing: -0.5,
             ),
           ),
         ],
@@ -1216,12 +1209,12 @@ class _ProductEntryScreenState extends State<ProductEntryScreen> {
             color: Colors.white,
             borderRadius: BorderRadius.circular(28),
             border: Border.all(
-              color: Colors.black.withValues(alpha: 0.06),
+              color: KoalaDS.line,
               width: 0.5,
             ),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha: 0.06),
+                color: KoalaDS.ink.withValues(alpha: 0.06),
                 blurRadius: 24,
                 offset: const Offset(0, 12),
               ),
@@ -1237,7 +1230,7 @@ class _ProductEntryScreenState extends State<ProductEntryScreen> {
                     width: 38,
                     height: 38,
                     decoration: BoxDecoration(
-                      color: Colors.black.withValues(alpha: 0.04),
+                      color: KoalaDS.ink.withValues(alpha: 0.04),
                       shape: BoxShape.circle,
                     ),
                     child: const Icon(
@@ -1256,10 +1249,10 @@ class _ProductEntryScreenState extends State<ProductEntryScreen> {
                   onSubmitted: (_) => _submit(),
                   decoration: InputDecoration(
                     hintText: _selectedArea == null ? 'ürün keşfet...' : "Koala'ya sor...",
-                    hintStyle: GoogleFonts.manrope(
+                    hintStyle: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w400,
-                      color: KoalaColors.textSec.withValues(alpha: 0.72),
+                      color: KoalaDS.inkSoft.withValues(alpha: 0.72),
                     ),
                     border: InputBorder.none,
                     enabledBorder: InputBorder.none,
@@ -1269,7 +1262,7 @@ class _ProductEntryScreenState extends State<ProductEntryScreen> {
                       vertical: 14,
                     ),
                   ),
-                  style: GoogleFonts.manrope(
+                  style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w500,
                     color: _K.onSurface,
@@ -1286,12 +1279,12 @@ class _ProductEntryScreenState extends State<ProductEntryScreen> {
                     height: 38,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: hasText ? null : Colors.black.withValues(alpha: 0.04),
+                      color: hasText ? null : KoalaDS.ink.withValues(alpha: 0.04),
                       gradient: hasText
                           ? const LinearGradient(
                               begin: Alignment.topLeft,
                               end: Alignment.bottomRight,
-                              colors: [KoalaColors.accent, KoalaColors.accentDark],
+                              colors: [KoalaDS.accent, KoalaDS.accentDeep],
                             )
                           : null,
                     ),
@@ -1326,7 +1319,7 @@ class _ProductEntryScreenState extends State<ProductEntryScreen> {
             Text(
               _error ?? 'Yüklenemedi',
               textAlign: TextAlign.center,
-              style: GoogleFonts.manrope(
+              style: TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w600,
                 color: _K.onSurfaceVariant,
@@ -1404,14 +1397,12 @@ class _AssistantBubble extends StatelessWidget {
                 bottomLeft: Radius.circular(24),
                 bottomRight: Radius.circular(24),
               ),
-              border: Border.all(
-                color: _K.outlineVariant.withValues(alpha: lowSurface ? 0.10 : 0.15),
-              ),
+              border: Border.all(color: _K.outlineVariant),
               boxShadow: lowSurface
                   ? null
                   : [
                       BoxShadow(
-                        color: KoalaColors.ink.withValues(alpha: 0.04),
+                        color: KoalaDS.ink.withValues(alpha: 0.04),
                         blurRadius: 18,
                         offset: const Offset(0, 10),
                       ),
@@ -1423,16 +1414,16 @@ class _AssistantBubble extends StatelessWidget {
                 const Text(
                   'Koala AI',
                   style: TextStyle(
-                    fontFamily: 'Georgia',
                     fontSize: 12,
                     fontWeight: FontWeight.w700,
                     color: _K.primary,
+                    letterSpacing: 0.4,
                   ),
                 ),
                 const SizedBox(height: 8),
                 Text(
                   text,
-                  style: GoogleFonts.manrope(
+                  style: TextStyle(
                     fontSize: 14,
                     height: 1.65,
                     fontWeight: FontWeight.w500,
@@ -1526,10 +1517,10 @@ class _TypingBubble extends StatelessWidget {
               bottomLeft: Radius.circular(24),
               bottomRight: Radius.circular(24),
             ),
-            border: Border.all(color: _K.outlineVariant.withValues(alpha: 0.15)),
+            border: Border.all(color: _K.outlineVariant),
             boxShadow: [
               BoxShadow(
-                color: KoalaColors.ink.withValues(alpha: 0.04),
+                color: KoalaDS.ink.withValues(alpha: 0.04),
                 blurRadius: 18,
                 offset: const Offset(0, 10),
               ),
@@ -1616,7 +1607,7 @@ class _AreaChip extends StatelessWidget {
           border: Border.all(color: _K.primary.withValues(alpha: 0.82)),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.04),
+              color: KoalaDS.ink.withValues(alpha: 0.04),
               blurRadius: 10,
               offset: const Offset(0, 6),
             ),
@@ -1628,7 +1619,7 @@ class _AreaChip extends StatelessWidget {
             const SizedBox(width: 8),
             Text(
               label,
-              style: GoogleFonts.manrope(
+              style: TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w700,
                 color: _K.primary,
@@ -1674,7 +1665,7 @@ class _LockedAreaPill extends StatelessWidget {
             const SizedBox(width: 8),
             Text(
               label,
-              style: GoogleFonts.manrope(
+              style: TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w700,
                 color: Colors.white,
@@ -1701,7 +1692,7 @@ class _UserBubble extends StatelessWidget {
         gradient: const LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [KoalaColors.accentDark, KoalaColors.accentDeep],
+          colors: [KoalaDS.accentDeep, KoalaDS.accentDeep],
         ),
         borderRadius: const BorderRadius.only(
           topLeft: Radius.circular(24),
@@ -1719,7 +1710,7 @@ class _UserBubble extends StatelessWidget {
       ),
       child: Text(
         text,
-        style: GoogleFonts.manrope(
+        style: TextStyle(
           fontSize: 14,
           fontWeight: FontWeight.w600,
           color: Colors.white,
@@ -1751,14 +1742,8 @@ class _ProjectCard extends StatelessWidget {
         decoration: BoxDecoration(
           color: _K.surfaceContainerLowest,
           borderRadius: BorderRadius.circular(28),
-          border: Border.all(color: _K.outlineVariant.withValues(alpha: 0.12)),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.05),
-              blurRadius: 30,
-              offset: const Offset(0, 10),
-            ),
-          ],
+          border: Border.all(color: _K.outlineVariant),
+          boxShadow: KoalaElev.card,
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1782,7 +1767,7 @@ class _ProjectCard extends StatelessWidget {
                           child: Container(
                             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
                             decoration: BoxDecoration(
-                              color: Colors.black.withValues(alpha: 0.26),
+                              color: KoalaDS.ink.withValues(alpha: 0.26),
                               borderRadius: BorderRadius.circular(999),
                               border: Border.all(
                                 color: Colors.white.withValues(alpha: 0.18),
@@ -1790,7 +1775,7 @@ class _ProjectCard extends StatelessWidget {
                             ),
                             child: Text(
                               card.badge,
-                              style: GoogleFonts.manrope(
+                              style: TextStyle(
                                 fontSize: 12,
                                 fontWeight: FontWeight.w800,
                                 color: Colors.white,
@@ -1819,7 +1804,7 @@ class _ProjectCard extends StatelessWidget {
                           children: [
                             Text(
                               (card.project['title'] ?? 'Modern salon').toString(),
-                              style: GoogleFonts.manrope(
+                              style: TextStyle(
                                 fontSize: 16,
                                 height: 1.2,
                                 fontWeight: FontWeight.w800,
@@ -1833,7 +1818,7 @@ class _ProjectCard extends StatelessWidget {
                                   child: Text(
                                     designerName,
                                     overflow: TextOverflow.ellipsis,
-                                    style: GoogleFonts.manrope(
+                                    style: TextStyle(
                                       fontSize: 12,
                                       fontWeight: FontWeight.w600,
                                       color: _K.onSurfaceVariant,
@@ -1855,7 +1840,7 @@ class _ProjectCard extends StatelessWidget {
                                   const SizedBox(width: 2),
                                   Text(
                                     card.rating!.toStringAsFixed(1),
-                                    style: GoogleFonts.manrope(
+                                    style: TextStyle(
                                       fontSize: 12,
                                       fontWeight: FontWeight.w700,
                                       color: _K.primary,
@@ -1884,7 +1869,7 @@ class _ProjectCard extends StatelessWidget {
                               const SizedBox(width: 6),
                               Text(
                                 '${card.productCount}',
-                                style: GoogleFonts.manrope(
+                                style: TextStyle(
                                   fontSize: 12,
                                   fontWeight: FontWeight.w800,
                                   color: _K.onSurface,
@@ -1905,7 +1890,7 @@ class _ProjectCard extends StatelessWidget {
                     ),
                     child: Text(
                       '"${card.reason}"',
-                      style: GoogleFonts.manrope(
+                      style: TextStyle(
                         fontSize: 12.5,
                         height: 1.48,
                         fontStyle: FontStyle.italic,
@@ -1921,7 +1906,7 @@ class _ProjectCard extends StatelessWidget {
                     children: [
                       Text(
                         'Detayları İncele',
-                        style: GoogleFonts.manrope(
+                        style: TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w800,
                           color: _K.primary,
@@ -2006,7 +1991,7 @@ class _PromptWrap extends StatelessWidget {
             ),
             child: Text(
               prompt,
-              style: GoogleFonts.manrope(
+              style: TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w600,
                 color: _K.onSurface,
@@ -2173,7 +2158,7 @@ class _ProjectDetailSheetState extends State<_ProjectDetailSheet> {
                               width: 54,
                               height: 5,
                               decoration: BoxDecoration(
-                                color: Colors.black.withValues(alpha: 0.12),
+                                color: KoalaDS.ink.withValues(alpha: 0.12),
                                 borderRadius: BorderRadius.circular(999),
                               ),
                             ),
@@ -2215,10 +2200,13 @@ class _ProjectDetailSheetState extends State<_ProjectDetailSheet> {
                                 child: DecoratedBox(
                                   decoration: BoxDecoration(
                                     borderRadius: BorderRadius.circular(28),
-                                    gradient: const LinearGradient(
+                                    gradient: LinearGradient(
                                       begin: Alignment.topCenter,
                                       end: Alignment.bottomCenter,
-                                      colors: [Colors.transparent, Color(0x66000000)],
+                                      colors: [
+                                        Colors.transparent,
+                                        KoalaDS.ink.withValues(alpha: 0.4),
+                                      ],
                                     ),
                                   ),
                                 ),
@@ -2233,7 +2221,7 @@ class _ProjectDetailSheetState extends State<_ProjectDetailSheet> {
                               borderRadius: BorderRadius.circular(28),
                               boxShadow: [
                                 BoxShadow(
-                                  color: Colors.black.withValues(alpha: 0.05),
+                                  color: KoalaDS.ink.withValues(alpha: 0.05),
                                   blurRadius: 30,
                                   offset: const Offset(0, 12),
                                 ),
@@ -2248,7 +2236,7 @@ class _ProjectDetailSheetState extends State<_ProjectDetailSheet> {
                                     Expanded(
                                       child: Text(
                                         title,
-                                        style: GoogleFonts.manrope(
+                                        style: TextStyle(
                                           fontSize: 24,
                                           fontWeight: FontWeight.w800,
                                           color: _K.onSurface,
@@ -2269,7 +2257,7 @@ class _ProjectDetailSheetState extends State<_ProjectDetailSheet> {
                                             const SizedBox(width: 4),
                                             Text(
                                               widget.card.rating!.toStringAsFixed(1),
-                                              style: GoogleFonts.manrope(
+                                              style: TextStyle(
                                                 fontSize: 13,
                                                 fontWeight: FontWeight.w800,
                                                 color: _K.onSurface,
@@ -2288,7 +2276,7 @@ class _ProjectDetailSheetState extends State<_ProjectDetailSheet> {
                                     Expanded(
                                       child: Text(
                                         designerName,
-                                        style: GoogleFonts.manrope(
+                                        style: TextStyle(
                                           fontSize: 14,
                                           fontWeight: FontWeight.w700,
                                           color: _K.onSurfaceVariant,
@@ -2326,7 +2314,7 @@ class _ProjectDetailSheetState extends State<_ProjectDetailSheet> {
                             const SizedBox(height: 22),
                             Text(
                               'Kullanılan Ürünler',
-                              style: GoogleFonts.manrope(
+                              style: TextStyle(
                                 fontSize: 20,
                                 fontWeight: FontWeight.w800,
                                 color: _K.onSurface,
@@ -2373,7 +2361,7 @@ class _InsightPanel extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: KoalaColors.accentSoft,
+        color: KoalaDS.accentTint,
         borderRadius: BorderRadius.circular(28),
       ),
       child: Column(
@@ -2394,7 +2382,7 @@ class _InsightPanel extends StatelessWidget {
               const SizedBox(width: 12),
               Text(
                 'Koala AI Tavsiyesi',
-                style: GoogleFonts.manrope(
+                style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.w800,
                   color: _K.primary,
@@ -2405,7 +2393,7 @@ class _InsightPanel extends StatelessWidget {
           const SizedBox(height: 14),
           Text(
             reason,
-            style: GoogleFonts.manrope(
+            style: TextStyle(
               fontSize: 14,
               height: 1.6,
               color: _K.onSurfaceVariant,
@@ -2441,17 +2429,17 @@ class _DesignerContactCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: Colors.black.withValues(alpha: 0.05), width: 0.5),
+        border: Border.all(color: KoalaDS.line, width: 0.5),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             'Tasarımcıyla İletişime Geç',
-            style: GoogleFonts.manrope(
+            style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w800,
-              color: KoalaColors.textSec,
+              color: KoalaDS.inkSoft,
               letterSpacing: 0.8,
             ),
           ),
@@ -2466,7 +2454,7 @@ class _DesignerContactCard extends StatelessWidget {
                   children: [
                     Text(
                       designerName,
-                      style: GoogleFonts.manrope(
+                      style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w800,
                         color: _K.onSurface,
@@ -2475,9 +2463,9 @@ class _DesignerContactCard extends StatelessWidget {
                     const SizedBox(height: 2),
                     Text(
                       specialty,
-                      style: GoogleFonts.manrope(
+                      style: TextStyle(
                         fontSize: 13,
-                        color: KoalaColors.textTer,
+                        color: KoalaDS.inkFaint,
                       ),
                     ),
                   ],
@@ -2491,7 +2479,7 @@ class _DesignerContactCard extends StatelessWidget {
             decoration: BoxDecoration(
               color: _K.surfaceContainerLow,
               borderRadius: BorderRadius.circular(24),
-              border: Border.all(color: Colors.black.withValues(alpha: 0.05), width: 0.5),
+              border: Border.all(color: KoalaDS.line, width: 0.5),
             ),
             child: Row(
               children: [
@@ -2507,13 +2495,13 @@ class _DesignerContactCard extends StatelessWidget {
                     scrollPadding: const EdgeInsets.only(bottom: 120),
                     decoration: InputDecoration(
                       hintText: '$designerName için mesaj yaz...',
-                      hintStyle: GoogleFonts.manrope(
+                      hintStyle: TextStyle(
                         fontSize: 14,
-                        color: KoalaColors.textSec.withValues(alpha: 0.74),
+                        color: KoalaDS.inkSoft.withValues(alpha: 0.74),
                       ),
                       border: InputBorder.none,
                     ),
-                    style: GoogleFonts.manrope(
+                    style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
                       color: _K.onSurface,
@@ -2529,7 +2517,7 @@ class _DesignerContactCard extends StatelessWidget {
                     decoration: const BoxDecoration(
                       shape: BoxShape.circle,
                       gradient: LinearGradient(
-                        colors: [KoalaColors.accent, KoalaColors.accentDark],
+                        colors: [KoalaDS.accent, KoalaDS.accentDeep],
                       ),
                     ),
                     alignment: Alignment.center,
@@ -2602,7 +2590,7 @@ class _ProductListTile extends StatelessWidget {
                     title,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: GoogleFonts.manrope(
+                    style: TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.w700,
                       color: _K.onSurface,
@@ -2612,7 +2600,7 @@ class _ProductListTile extends StatelessWidget {
                   if (price.isNotEmpty)
                     Text(
                       price,
-                      style: GoogleFonts.manrope(
+                      style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w700,
                         color: _K.primary,
@@ -2662,7 +2650,7 @@ class _DesignerAvatar extends StatelessWidget {
       child: url.isEmpty
           ? Text(
               name.isEmpty ? 'K' : name.characters.first.toUpperCase(),
-              style: GoogleFonts.manrope(
+              style: TextStyle(
                 fontSize: size * 0.34,
                 fontWeight: FontWeight.w800,
                 color: _K.primary,
