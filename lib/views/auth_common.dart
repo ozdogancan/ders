@@ -414,7 +414,8 @@ class AuthCoordinator {
           if (msg.contains('network')) {
             return 'İnternet bağlantını kontrol edip tekrar dene.';
           }
-          return fallback;
+          // Hata kodunu goster: destek/teshis icin (ornek: [invalid-credential]).
+          return '$fallback [${error.code}]';
       }
     }
 
