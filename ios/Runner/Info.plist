@@ -59,5 +59,19 @@
 		     muaf şifreleme. App Store yüklemesinde "encryption" sorusunu atlatır. -->
 		<key>ITSAppUsesNonExemptEncryption</key>
 		<false/>
+		<!-- Google Sign-In: REVERSED_CLIENT_ID URL şeması (GoogleService-Info.plist ile eşleşir) -->
+		<key>CFBundleURLTypes</key>
+		<array>
+			<dict>
+				<key>CFBundleTypeRole</key>
+				<string>Editor</string>
+				<key>CFBundleURLSchemes</key>
+				<array>
+					<string>com.googleusercontent.apps.54104143654-0perkvvrrbdcbrarr3nhvcohq2o8n6gp</string>
+				</array>
+			</dict>
+		</array>
+		<key>GIDClientID</key>
+		<string>54104143654-0perkvvrrbdcbrarr3nhvcohq2o8n6gp.apps.googleusercontent.com</string>
 	</dict>
 </plist>
