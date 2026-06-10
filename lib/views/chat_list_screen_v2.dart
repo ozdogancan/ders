@@ -5,8 +5,8 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../widgets/koala_avatar.dart';
 import 'package:go_router/go_router.dart';
-import 'package:google_fonts/google_fonts.dart';
 
+import '../core/theme/koala_ds.dart';
 import '../core/utils/format_utils.dart';
 import '../services/chat_persistence.dart';
 import '../services/evlumba_live_service.dart';
@@ -27,37 +27,36 @@ import 'package:lucide_icons/lucide_icons.dart';
 // Rollback: `chat_list_screen.dart` içinde `kUseChatListV2 = false`.
 // ═══════════════════════════════════════════════════════════════════
 
-// ─── v2 design tokens (scoped — global tema'yı kirletmemek için) ───
+// ─── v2 design tokens — KoalaDS'e bağlı scoped alias'lar.
+// Renk/font değerleri artık tek kaynaktan (koala_ds.dart) gelir;
+// alias isimleri ekran gövdesinde minimum diff için korunur.
 abstract final class _V2 {
-  // Warm neutral palette — restrained, editorial
-  static const bg       = Color(0xFFF4EEE5); // slightly warmer cream than v1
-  static const paper    = Color(0xFFFBF7F1); // card surface — aged paper
-  static const line     = Color(0x14000000); // hairlines, 8% black
-  static const lineSoft = Color(0x0A000000); // soft dividers
-  static const ink      = Color(0xFF181613); // body/headline ink
-  static const inkSoft  = Color(0xFF4A423A); // secondary text
-  static const inkMute  = Color(0xFF8A8278); // tertiary, timestamps
-  static const rust     = Color(0xFFB0502E); // single warm accent (unread bar)
-  static const gold     = Color(0xFF8E6B2A); // premium thread
-  static const goldSoft = Color(0xFFD4AE6B);
-  static const purple     = Color(0xFF6C63FF); // AI assistant accent
-  static const purpleDeep = Color(0xFF9B5CFF); // AI assistant gradient stop
+  // Warm neutral palette — KoalaDS
+  static const bg       = KoalaDS.bg;       // sıcak krem zemin
+  static const paper    = KoalaDS.surface;  // kart yüzeyi
+  static const line     = KoalaDS.line;     // krem-tinted border
+  static const lineSoft = KoalaDS.lineSoft; // ince ayraç
+  static const ink      = KoalaDS.ink;      // başlık/gövde
+  static const inkSoft  = KoalaDS.inkSoft;  // ikincil metin
+  static const inkMute  = KoalaDS.inkFaint; // tertiary, timestamp
+  static const rust     = KoalaDS.clay;     // sıcak vurgu (unread bar)
+  static const gold     = KoalaDS.clay;     // premium thread (Evlumba)
+  static const goldSoft = KoalaDS.clay;
+  static const purple     = KoalaDS.accent;     // AI accent
+  static const purpleDeep = KoalaDS.accentDeep; // AI gradient ucu
 
-  // Serif display — google_fonts Fraunces (variable, editorial)
+  // Serif display — KoalaType (Fraunces) üzerinden, esnek boyutla
   static TextStyle serif({double size = 34, FontWeight weight = FontWeight.w400, Color? color, double spacing = -0.8}) =>
-      GoogleFonts.fraunces(
+      KoalaType.display3(color: color ?? ink).copyWith(
         fontSize: size,
         fontWeight: weight,
-        color: color ?? ink,
         letterSpacing: spacing,
         height: 1.05,
-        // Opsz 144 → tighter, more display-like
-        fontFeatures: const [FontFeature('ss01'), FontFeature('ss02')],
       );
 
-  // Body — Manrope (clean humanist, pairs well with Fraunces)
+  // Body — Inter (global theme'den miras; üçüncü font Manrope kaldırıldı)
   static TextStyle body({double size = 14, FontWeight weight = FontWeight.w400, Color? color, double spacing = 0, double? height}) =>
-      GoogleFonts.manrope(
+      TextStyle(
         fontSize: size,
         fontWeight: weight,
         color: color ?? ink,
@@ -65,8 +64,8 @@ abstract final class _V2 {
         height: height,
       );
 
-  // Uppercase label
-  static TextStyle eyebrow({Color? color}) => GoogleFonts.manrope(
+  // Uppercase label — Inter (theme miras)
+  static TextStyle eyebrow({Color? color}) => TextStyle(
         fontSize: 10.5,
         fontWeight: FontWeight.w700,
         color: color ?? inkMute,
@@ -336,7 +335,7 @@ class _ChatListScreenV2State extends State<ChatListScreenV2> {
       messenger?.showSnackBar(
         SnackBar(
           behavior: SnackBarBehavior.floating,
-          backgroundColor: const Color(0xFFB00020),
+          backgroundColor: KoalaDS.danger,
           content: Text('Senkron hatası: $e',
               style: _V2.body(color: Colors.white)),
         ),
@@ -641,11 +640,7 @@ class _ChatListScreenV2State extends State<ChatListScreenV2> {
                           width: 22,
                           height: 22,
                           decoration: BoxDecoration(
-                            gradient: const LinearGradient(
-                              colors: [_V2.purple, _V2.purpleDeep],
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                            ),
+                            gradient: KoalaDS.accentGradient,
                             shape: BoxShape.circle,
                             border: Border.all(color: _V2.paper, width: 1.6),
                             boxShadow: [
@@ -698,11 +693,7 @@ class _ChatListScreenV2State extends State<ChatListScreenV2> {
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 7, vertical: 2.5),
                             decoration: BoxDecoration(
-                              gradient: const LinearGradient(
-                                colors: [_V2.purple, _V2.purpleDeep],
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
-                              ),
+                              gradient: KoalaDS.accentGradient,
                               borderRadius: BorderRadius.circular(100),
                             ),
                             child: Text(
@@ -761,11 +752,7 @@ class _ChatListScreenV2State extends State<ChatListScreenV2> {
                         padding: const EdgeInsets.symmetric(
                             horizontal: 7, vertical: 2),
                         decoration: BoxDecoration(
-                          gradient: const LinearGradient(
-                            colors: [_V2.purple, _V2.purpleDeep],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                          ),
+                          gradient: KoalaDS.accentGradient,
                           borderRadius: BorderRadius.circular(100),
                           boxShadow: [
                             BoxShadow(
@@ -949,7 +936,7 @@ class _ChatListScreenV2State extends State<ChatListScreenV2> {
             messenger?.showSnackBar(
               SnackBar(
                 behavior: SnackBarBehavior.floating,
-                backgroundColor: const Color(0xFFB00020),
+                backgroundColor: KoalaDS.danger,
                 content: Text('Okundu işaretleme başarısız: $err',
                     style: _V2.body(color: Colors.white)),
               ),
