@@ -6,6 +6,7 @@ import 'package:lucide_icons/lucide_icons.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/router/app_router.dart';
+import '../core/theme/koala_ds.dart';
 import '../core/theme/koala_tokens.dart';
 import '../services/analytics_service.dart';
 
@@ -394,15 +395,10 @@ class _PageBodyState extends State<_PageBody>
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      // V2: serif display başlık — auth/onboarding ortak dili.
                       Text(
                         widget.page.title,
-                        style: GoogleFonts.inter(
-                          fontSize: 30,
-                          fontWeight: FontWeight.w800,
-                          color: KoalaColors.text,
-                          height: 1.15,
-                          letterSpacing: -0.6,
-                        ),
+                        style: KoalaType.display3().copyWith(fontSize: 30),
                       ),
                       const SizedBox(height: 12),
                       Text(
@@ -410,7 +406,7 @@ class _PageBodyState extends State<_PageBody>
                         style: GoogleFonts.inter(
                           fontSize: 15,
                           fontWeight: FontWeight.w500,
-                          color: KoalaColors.textMed,
+                          color: KoalaDS.inkSoft,
                           height: 1.5,
                         ),
                       ),
