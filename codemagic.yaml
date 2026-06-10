@@ -37,7 +37,7 @@ workflows:
         SUPABASE_URL: "https://xgefjepaqnghaotqybpi.supabase.co"
         EVLUMBA_SUPABASE_URL: "https://vgtgcjnrsladdharzkwn.supabase.co"
         BUNDLE_ID: "com.koala.evlumba"
-      flutter: stable
+      flutter: 3.41.3   # lokal surumle ayni; "stable" (3.44+) lucide_icons'u kirar (IconData final)
       xcode: latest
       cocoapods: default
     scripts:
