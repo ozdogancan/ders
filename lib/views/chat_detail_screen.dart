@@ -18,7 +18,7 @@ import '../services/saved_plans_service.dart';
 import '../services/analytics_service.dart';
 import '../services/profile_feedback_service.dart';
 import '../services/taste_profile_service.dart';
-import '../core/theme/koala_tokens.dart';
+import '../core/theme/koala_ds.dart';
 import '../services/evlumba_live_service.dart';
 import '../services/quota_service.dart';
 import '../services/saved_items_service.dart';
@@ -33,9 +33,9 @@ import 'package:lucide_icons/lucide_icons.dart';
 import '../helpers/web_drop.dart' as web_drop;
 import 'chat/widgets/chat_widgets.dart';
 
-const _accent = KoalaColors.accentDeep;
-const _accentLight = KoalaColors.accentSoft;
-const _ink = KoalaColors.ink;
+const _accent = KoalaDS.accentDeep;
+const _accentLight = KoalaDS.accentTint;
+const _ink = KoalaDS.ink;
 
 class ChatDetailScreen extends ConsumerStatefulWidget {
   const ChatDetailScreen({
@@ -574,7 +574,7 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
                   height: 4,
                   margin: const EdgeInsets.only(bottom: 14),
                   decoration: BoxDecoration(
-                    color: KoalaColors.borderSolid,
+                    color: KoalaDS.line,
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
@@ -609,7 +609,7 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
                       borderSide: const BorderSide(
-                          color: KoalaColors.borderSolid, width: 1),
+                          color: KoalaDS.line, width: 1),
                     ),
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
@@ -630,8 +630,8 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
                           ),
-                          backgroundColor: KoalaColors.surfaceAlt,
-                          foregroundColor: KoalaColors.text,
+                          backgroundColor: KoalaDS.surfaceMuted,
+                          foregroundColor: KoalaDS.ink,
                         ),
                         child: const Text(
                           'Vazgeç',
@@ -1169,7 +1169,7 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
               height: 4,
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(2),
-                color: Colors.grey.shade300,
+                color: KoalaDS.line,
               ),
             ),
             const SizedBox(height: 16),
@@ -1256,7 +1256,7 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
                 style: const TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
-                  color: KoalaColors.ink,
+                  color: KoalaDS.ink,
                 ),
               ),
             ],
@@ -1271,7 +1271,7 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
   Widget build(BuildContext context) {
     final btm = MediaQuery.of(context).padding.bottom;
     return Scaffold(
-      backgroundColor: KoalaColors.surfaceMuted,
+      backgroundColor: KoalaDS.surfaceMuted,
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
@@ -1361,7 +1361,7 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
                           color: Colors.white,
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.12),
+                              color: KoalaDS.ink.withValues(alpha: 0.12),
                               blurRadius: 8,
                               offset: const Offset(0, 2),
                             ),
@@ -1639,7 +1639,7 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
                 height: 4,
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(2),
-                  color: Colors.grey.shade300,
+                  color: KoalaDS.line,
                 ),
               ),
             ),
@@ -1788,11 +1788,7 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
               padding: const EdgeInsets.all(3),
               decoration: const BoxDecoration(
                 shape: BoxShape.circle,
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [Color(0xFF6C63FF), Color(0xFF9B5CFF)],
-                ),
+                gradient: KoalaDS.accentGradient,
               ),
               child: Container(
                 decoration: const BoxDecoration(
@@ -1804,21 +1800,16 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
               ),
             ),
             const SizedBox(height: 20),
-            const Text(
+            Text(
               'Merhaba! Ben Koala 🐨',
-              style: TextStyle(
-                fontFamily: 'Manrope',
-                fontSize: 22,
-                fontWeight: FontWeight.w800,
-                color: _ink,
-              ),
+              style: KoalaType.display3(),
             ),
             const SizedBox(height: 8),
-            Text(
+            const Text(
               'İç mekan tasarımı hakkında\nher şeyi sorabilirsin',
               style: TextStyle(
                 fontSize: 13,
-                color: Colors.grey.shade500,
+                color: KoalaDS.inkSoft,
                 height: 1.45,
               ),
               textAlign: TextAlign.center,
@@ -1838,12 +1829,10 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
                     child: Ink(
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(26),
-                        gradient: const LinearGradient(
-                          colors: [Color(0xFF6C63FF), Color(0xFF9B5CFF)],
-                        ),
+                        gradient: KoalaDS.accentGradient,
                         boxShadow: [
                           BoxShadow(
-                            color: const Color(0xFF6C63FF).withValues(alpha: 0.25),
+                            color: KoalaDS.accent.withValues(alpha: 0.25),
                             blurRadius: 16,
                             offset: const Offset(0, 6),
                           ),
@@ -1936,13 +1925,13 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
     // ── Case A: sohbette oda görseli mevcut ──
     if (_hasRecentImage()) {
       return [
-        _suggestionChip(LucideIcons.wand2, 'Bu odayı yeniden tasarla', KoalaColors.accentDeep,
+        _suggestionChip(LucideIcons.wand2, 'Bu odayı yeniden tasarla', KoalaDS.accentDeep,
           () => _onChipTap('Bu odayı yeniden tasarla')),
-        _suggestionChip(LucideIcons.palette, 'Renk paletini analiz et', KoalaColors.pink,
+        _suggestionChip(LucideIcons.palette, 'Renk paletini analiz et', KoalaDS.clay,
           () => _onChipTap('Bu odanın renk paletini analiz et')),
-        _suggestionChip(LucideIcons.userCheck, 'Bu oda için uzman öner', KoalaColors.greenAlt,
+        _suggestionChip(LucideIcons.userCheck, 'Bu oda için uzman öner', KoalaDS.cta,
           () => _onChipTap('Bu oda için uzman öner')),
-        _suggestionChip(LucideIcons.sparkles, 'Farklı bir stil dene', KoalaColors.accentDeep,
+        _suggestionChip(LucideIcons.sparkles, 'Farklı bir stil dene', KoalaDS.accentDeep,
           () => _onChipTap('Bu oda için farklı bir stil dene')),
       ];
     }
@@ -1953,32 +1942,32 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
       final styleKey = taste.topStyles.first.style;
       final styleTr = _styleLabelTr(styleKey);
       return [
-        _suggestionChip(LucideIcons.lightbulb, '$styleTr tarzda salon nasıl olmalı?', KoalaColors.accentDeep,
+        _suggestionChip(LucideIcons.lightbulb, '$styleTr tarzda salon nasıl olmalı?', KoalaDS.accentDeep,
           () => _onChipTap('$styleTr tarzda salon nasıl olmalı?')),
-        _suggestionChip(LucideIcons.camera, 'Kendi mekanımın fotoğrafını yükle', KoalaColors.greenAlt,
+        _suggestionChip(LucideIcons.camera, 'Kendi mekanımın fotoğrafını yükle', KoalaDS.cta,
           _showPicker),
-        _suggestionChip(LucideIcons.palette, '$styleTr tarz için renk önerileri', KoalaColors.pink,
+        _suggestionChip(LucideIcons.palette, '$styleTr tarz için renk önerileri', KoalaDS.clay,
           () => _onChipTap('$styleTr tarz için renk önerileri ver')),
-        _suggestionChip(LucideIcons.wand2, 'Mekanımı $styleTr tarza dönüştür', KoalaColors.accentDeep,
+        _suggestionChip(LucideIcons.wand2, 'Mekanımı $styleTr tarza dönüştür', KoalaDS.accentDeep,
           () => _onChipTap('Mekanımı $styleTr tarza dönüştür')),
       ];
     }
 
     // ── Case C: fotoğraf da zevk profili de yok ──
     return [
-      _suggestionChip(LucideIcons.compass, 'Hangi tasarım stili bana uygun?', KoalaColors.accentDeep,
+      _suggestionChip(LucideIcons.compass, 'Hangi tasarım stili bana uygun?', KoalaDS.accentDeep,
         () => _onChipTap('Hangi tasarım stili bana uygun?')),
-      _suggestionChip(LucideIcons.camera, 'Kendi mekanımın fotoğrafını yükle', KoalaColors.greenAlt,
+      _suggestionChip(LucideIcons.camera, 'Kendi mekanımın fotoğrafını yükle', KoalaDS.cta,
         _showPicker),
-      _suggestionChip(LucideIcons.sparkles, 'Tarzımı keşfetmek istiyorum', KoalaColors.pink,
+      _suggestionChip(LucideIcons.sparkles, 'Tarzımı keşfetmek istiyorum', KoalaDS.clay,
         () => _onChipTap('Tarzımı keşfetmek istiyorum')),
-      _suggestionChip(LucideIcons.maximize2, 'Küçük bir odayı nasıl ferah gösterebilirim?', KoalaColors.greenAlt,
+      _suggestionChip(LucideIcons.maximize2, 'Küçük bir odayı nasıl ferah gösterebilirim?', KoalaDS.cta,
         () => _onChipTap('Küçük bir odayı nasıl ferah gösterebilirim?')),
     ];
   }
 
   // Soft purple border for refined suggestion chips
-  static const Color _kPurpleSoft = Color(0xFFF3F0FF);
+  static const Color _kPurpleSoft = KoalaDS.accentTint;
 
   Widget _suggestionChip(IconData icon, String label, Color color, VoidCallback onTap) => Semantics(
     button: true,
@@ -2002,7 +1991,7 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
               style: const TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w600,
-                color: KoalaColors.text,
+                color: KoalaDS.ink,
               ),
             ),
           ],
@@ -2035,7 +2024,7 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
                     (widget.intent == KoalaIntent.photoAnalysis && _msgs.length <= 1
                         ? 'fotoğrafı analiz ediyorum...'
                         : 'düşünüyor...'),
-                style: TextStyle(fontSize: 13, color: Colors.grey.shade500),
+                style: const TextStyle(fontSize: 13, color: KoalaDS.inkSoft),
               ),
             ],
           ),
@@ -2072,10 +2061,10 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
                       width: 200,
                       height: 150,
                       decoration: BoxDecoration(
-                        color: Colors.grey.shade200,
+                        color: KoalaDS.surfaceMuted,
                         borderRadius: BorderRadius.circular(16),
                       ),
-                      child: const Icon(LucideIcons.imageOff, color: Colors.grey),
+                      child: const Icon(LucideIcons.imageOff, color: KoalaDS.inkFaint),
                     ),
                   ),
                 ),
@@ -2116,7 +2105,7 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
                           behavior: SnackBarBehavior.floating,
-                          backgroundColor: KoalaColors.accentDeep,
+                          backgroundColor: KoalaDS.accentDeep,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
                           ),
@@ -2168,7 +2157,7 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
               alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
               child: Text(
                 '${msg.time.hour.toString().padLeft(2, '0')}:${msg.time.minute.toString().padLeft(2, '0')}',
-                style: TextStyle(fontSize: 10, color: Colors.grey.shade400),
+                style: const TextStyle(fontSize: 10, color: KoalaDS.inkFaint),
               ),
             ),
           ),
@@ -2208,20 +2197,20 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(16),
-        color: const Color(0xFFFFF7ED),
-        border: Border.all(color: const Color(0xFFFED7AA)),
+        color: KoalaDS.clayTint,
+        border: Border.all(color: KoalaDS.clay.withValues(alpha: 0.4)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              const Icon(LucideIcons.meh, size: 20, color: Color(0xFFEA580C)),
+              const Icon(LucideIcons.meh, size: 20, color: KoalaDS.clay),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
                   msg.errorMsg ?? 'Şu an bu konuda yardımcı olamıyorum, ama şunları deneyebilirsin:',
-                  style: const TextStyle(fontSize: 13, color: Color(0xFF9A3412), height: 1.4),
+                  style: const TextStyle(fontSize: 13, color: KoalaDS.inkSoft, height: 1.4),
                 ),
               ),
             ],
@@ -2273,14 +2262,14 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(99),
           color: Colors.white,
-          border: Border.all(color: const Color(0xFFFED7AA)),
+          border: Border.all(color: KoalaDS.clay.withValues(alpha: 0.4)),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(icon, size: 14, color: _accent),
             const SizedBox(width: 5),
-            Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF9A3412))),
+            Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: KoalaDS.clay)),
           ],
         ),
       ),
@@ -2297,7 +2286,7 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
       color: Colors.white,
       boxShadow: [
         BoxShadow(
-          color: Colors.black.withValues(alpha: 0.06),
+          color: KoalaDS.ink.withValues(alpha: 0.06),
           blurRadius: 8,
           offset: const Offset(0, 2),
         ),
@@ -2329,7 +2318,7 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
                   height: 22,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: Colors.black.withValues(alpha: 0.55),
+                    color: KoalaDS.ink.withValues(alpha: 0.55),
                   ),
                   child: const Icon(
                     LucideIcons.x,
@@ -2366,7 +2355,7 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
               const SizedBox(height: 4),
               Text(
                 'Metin ekleyebilir veya doğrudan gönderebilirsin.',
-                style: TextStyle(fontSize: 11, color: Colors.grey.shade500, height: 1.35),
+                style: const TextStyle(fontSize: 11, color: KoalaDS.inkSoft, height: 1.35),
               ),
             ],
           ),
@@ -2384,7 +2373,7 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
         height: 48,
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(99),
-          color: KoalaColors.accentSoft,
+          color: KoalaDS.accentTint,
         ),
         child: Row(
           children: [
@@ -2402,7 +2391,7 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
                   child: Icon(
                     LucideIcons.camera,
                     size: 18,
-                    color: Colors.grey.shade600,
+                    color: KoalaDS.inkSoft,
                   ),
                 ),
               ),
@@ -2431,7 +2420,9 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
                               : _currentHint,
                   hintStyle: TextStyle(
                     fontSize: 14,
-                    color: _loading ? Colors.grey.shade300 : Colors.grey.shade400,
+                    color: _loading
+                        ? KoalaDS.inkFaint.withValues(alpha: 0.5)
+                        : KoalaDS.inkFaint,
                   ),
                   border: InputBorder.none,
                   // Tema seviyesindeki inputDecorationTheme.focusedBorder mor
@@ -2546,7 +2537,7 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           behavior: SnackBarBehavior.floating,
-          backgroundColor: KoalaColors.accentDeep,
+          backgroundColor: KoalaDS.accentDeep,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
           ),
@@ -2584,7 +2575,7 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           behavior: SnackBarBehavior.floating,
-          backgroundColor: KoalaColors.greenAlt,
+          backgroundColor: KoalaDS.cta,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
           ),
@@ -2615,7 +2606,7 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
       child: Row(
         mainAxisAlignment: MainAxisAlignment.end,
         children: [
-          _miniAction(LucideIcons.copy, 'Paylaş', KoalaColors.greenAlt, () => _shareCard(card)),
+          _miniAction(LucideIcons.copy, 'Paylaş', KoalaDS.cta, () => _shareCard(card)),
         ],
       ),
     );
@@ -2782,7 +2773,7 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen>
             borderRadius: BorderRadius.circular(16),
             color: Colors.white,
           ),
-          child: Text(title, style: TextStyle(fontSize: 13, color: KoalaColors.ink)),
+          child: Text(title, style: TextStyle(fontSize: 13, color: KoalaDS.ink)),
         );
     }
   }
@@ -2876,7 +2867,7 @@ class _TypingDotsState extends State<_TypingDots>
                 margin: const EdgeInsets.symmetric(horizontal: 2.5),
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: Color.lerp(KoalaColors.accentLight, _accent, t),
+                  color: Color.lerp(KoalaDS.accentTint, _accent, t),
                 ),
               ),
             ),
@@ -3014,7 +3005,7 @@ class _ProjectCardInline extends StatelessWidget {
       ..hideCurrentSnackBar()
       ..showSnackBar(SnackBar(
         content: Text(ok ? 'Kaydedildi' : 'Kaydedilemedi, tekrar dene'),
-        backgroundColor: ok ? KoalaColors.greenAlt : Colors.red.shade700,
+        backgroundColor: ok ? KoalaDS.cta : KoalaDS.danger,
         duration: const Duration(seconds: 2),
       ));
   }
@@ -3047,7 +3038,7 @@ class _ProjectCardInline extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: KoalaColors.border),
+        border: Border.all(color: KoalaDS.lineSoft),
       ),
       clipBehavior: Clip.antiAlias,
       child: Column(
@@ -3062,9 +3053,9 @@ class _ProjectCardInline extends StatelessWidget {
                   imageUrl,
                   fit: BoxFit.cover,
                   errorBuilder: (_, __, ___) => Container(
-                    color: KoalaColors.surfaceMuted,
+                    color: KoalaDS.surfaceMuted,
                     child: const Icon(LucideIcons.imageOff,
-                        color: KoalaColors.textMuted),
+                        color: KoalaDS.inkFaint),
                   ),
                 ),
               ),
@@ -3079,7 +3070,7 @@ class _ProjectCardInline extends StatelessWidget {
                     padding: const EdgeInsets.symmetric(
                         horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
-                      color: KoalaColors.accentSoft,
+                      color: KoalaDS.accentTint,
                       borderRadius: BorderRadius.circular(999),
                     ),
                     child: Text(
@@ -3087,7 +3078,7 @@ class _ProjectCardInline extends StatelessWidget {
                       style: const TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w600,
-                        color: KoalaColors.accentDeep,
+                        color: KoalaDS.accentDeep,
                       ),
                     ),
                   ),
@@ -3096,7 +3087,7 @@ class _ProjectCardInline extends StatelessWidget {
                   Row(
                     children: [
                       const Icon(LucideIcons.user,
-                          size: 14, color: KoalaColors.textMuted),
+                          size: 14, color: KoalaDS.inkFaint),
                       const SizedBox(width: 4),
                       Flexible(
                         child: GestureDetector(
@@ -3107,7 +3098,7 @@ class _ProjectCardInline extends StatelessWidget {
                             designerName,
                             style: const TextStyle(
                               fontSize: 12,
-                              color: KoalaColors.textMuted,
+                              color: KoalaDS.inkFaint,
                             ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
@@ -3178,11 +3169,11 @@ class _ProjectActionIconButtonState extends State<_ProjectActionIconButton> {
             width: 32,
             height: 32,
             decoration: BoxDecoration(
-              color: KoalaColors.accentSoft,
+              color: KoalaDS.accentTint,
               borderRadius: BorderRadius.circular(10),
             ),
             alignment: Alignment.center,
-            child: Icon(widget.icon, size: 16, color: KoalaColors.accentDeep),
+            child: Icon(widget.icon, size: 16, color: KoalaDS.accentDeep),
           ),
         ),
       ),
@@ -3297,7 +3288,7 @@ class _TypingBubble extends StatelessWidget {
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: const Color(0xFFE5E7EB)),
+            border: Border.all(color: KoalaDS.line),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
@@ -3344,7 +3335,7 @@ class _AnimatedDotState extends State<_AnimatedDot>
         height: 7,
         margin: const EdgeInsets.symmetric(horizontal: 2),
         decoration: BoxDecoration(
-          color: const Color(0xFF6C63FF)
+          color: KoalaDS.accent
               .withValues(alpha: 0.35 + 0.55 * _c.value),
           shape: BoxShape.circle,
         ),
