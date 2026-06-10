@@ -375,12 +375,18 @@ class _GoogleIcon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Text(
-      'G',
-      style: TextStyle(
-        fontSize: 20,
-        fontWeight: FontWeight.w700,
-        color: Color(0xFFEA4335),
+    // V2: resmî çok renkli Google "G" logosu (marka kurallarına uygun).
+    return Image.asset(
+      'assets/images/google_g_logo.png',
+      width: 21,
+      height: 21,
+      errorBuilder: (_, __, ___) => const Text(
+        'G',
+        style: TextStyle(
+          fontSize: 20,
+          fontWeight: FontWeight.w700,
+          color: Color(0xFFEA4335),
+        ),
       ),
     );
   }

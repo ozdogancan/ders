@@ -492,27 +492,36 @@ class KoalaHeroLogo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // V2: jenerik kıvılcım karesi yerine MARKA — splash'taki koala maskotu.
+    // Splash → login marka devamlılığı; gölge sıkı ve net (puslu halo yok).
     return Hero(
       tag: heroTag,
       child: Container(
-        width: size,
-        height: size,
         decoration: BoxDecoration(
-          // V2: tek DS degradesi (kacak morlar bitti), gölge sıkı ve net.
-          gradient: KoalaDS.accentGradient,
-          borderRadius: BorderRadius.circular(size * 0.28),
+          borderRadius: BorderRadius.circular(size * 0.225),
           boxShadow: <BoxShadow>[
             BoxShadow(
-              color: KoalaDS.accentDeep.withValues(alpha: 0.22),
-              blurRadius: 18,
-              offset: const Offset(0, 8),
+              color: Colors.black.withValues(alpha: 0.18),
+              blurRadius: 22,
+              offset: const Offset(0, 10),
+              spreadRadius: -8,
+            ),
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.08),
+              blurRadius: 7,
+              offset: const Offset(0, 3),
+              spreadRadius: -2,
             ),
           ],
         ),
-        child: Icon(
-          LucideIcons.sparkles,
-          color: Colors.white,
-          size: size * 0.42,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(size * 0.225),
+          child: Image.asset(
+            'assets/images/koala_splash_logo.webp',
+            width: size,
+            height: size,
+            fit: BoxFit.cover,
+          ),
         ),
       ),
     );
