@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../core/theme/koala_ds.dart';
 import '../core/theme/koala_tokens.dart';
 import '../helpers/auth_guard.dart';
 import '../providers/pro_status_provider.dart';
@@ -117,10 +118,10 @@ class _DesignerProfileScreenState extends ConsumerState<DesignerProfileScreen> {
         .toUpperCase();
 
     return Scaffold(
-      backgroundColor: KoalaColors.bg,
+      backgroundColor: KoalaDS.bg,
       appBar: AppBar(
-        backgroundColor: KoalaColors.surface,
-        surfaceTintColor: KoalaColors.surface,
+        backgroundColor: KoalaDS.surface,
+        surfaceTintColor: KoalaDS.surface,
         elevation: 0,
         title: Text(name, style: KoalaText.h3),
         leading: const KoalaBackButton(),
@@ -128,7 +129,7 @@ class _DesignerProfileScreenState extends ConsumerState<DesignerProfileScreen> {
       ),
       body: _loading
           ? const Center(
-              child: CircularProgressIndicator(color: KoalaColors.accent))
+              child: CircularProgressIndicator(color: KoalaDS.accent))
           : (_hasError || _designer == null)
               ? ErrorState(
                   message: 'Tasarımcı yüklenemedi',
@@ -152,12 +153,7 @@ class _DesignerProfileScreenState extends ConsumerState<DesignerProfileScreen> {
                           height: 80,
                           decoration: const BoxDecoration(
                             shape: BoxShape.circle,
-                            gradient: LinearGradient(
-                              colors: [
-                                KoalaColors.accent,
-                                KoalaColors.accentMuted
-                              ],
-                            ),
+                            gradient: KoalaDS.accentGradient,
                           ),
                           child: avatar != null
                               ? ClipOval(
@@ -180,7 +176,7 @@ class _DesignerProfileScreenState extends ConsumerState<DesignerProfileScreen> {
                                 ),
                         ),
                         const SizedBox(height: KoalaSpacing.lg),
-                        Text(name, style: KoalaText.h2),
+                        Text(name, style: KoalaType.display3()),
                         if (specialty != null) ...[
                           const SizedBox(height: KoalaSpacing.xs),
                           Text(specialty, style: KoalaText.bodySec),
@@ -221,7 +217,7 @@ class _DesignerProfileScreenState extends ConsumerState<DesignerProfileScreen> {
                                           fontSize: 15,
                                           fontWeight: FontWeight.w600)),
                                   style: ElevatedButton.styleFrom(
-                                    backgroundColor: KoalaColors.accent,
+                                    backgroundColor: KoalaDS.accent,
                                     foregroundColor: Colors.white,
                                     shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(
@@ -241,17 +237,14 @@ class _DesignerProfileScreenState extends ConsumerState<DesignerProfileScreen> {
                                         horizontal: 6, vertical: 1),
                                     decoration: BoxDecoration(
                                       gradient: const LinearGradient(
-                                        colors: [
-                                          Color(0xFFE0B96B),
-                                          Color(0xFFB8862F)
-                                        ],
+                                        colors: [KoalaDS.star, KoalaDS.clay],
                                         begin: Alignment.topLeft,
                                         end: Alignment.bottomRight,
                                       ),
                                       borderRadius: BorderRadius.circular(99),
                                       boxShadow: [
                                         BoxShadow(
-                                          color: const Color(0xFFB8862F)
+                                          color: KoalaDS.clay
                                               .withValues(alpha: 0.30),
                                           blurRadius: 6,
                                           offset: const Offset(0, 2),
@@ -319,7 +312,7 @@ class _DesignerProfileScreenState extends ConsumerState<DesignerProfileScreen> {
                                 imageUrl: _designer?['avatar_url'] as String?,
                               ),
                               child: const Icon(LucideIcons.share2,
-                                  size: 22, color: KoalaColors.text),
+                                  size: 22, color: KoalaDS.ink),
                               label: 'Paylaş',
                             ),
                           ],
@@ -368,7 +361,7 @@ class _ActionIcon extends StatelessWidget {
         const SizedBox(height: 4),
         Text(label,
             style: KoalaText.caption
-                .copyWith(color: KoalaColors.textMuted, fontSize: 11)),
+                .copyWith(color: KoalaDS.inkFaint, fontSize: 11)),
       ],
     );
     if (onTap == null) return column;
@@ -448,10 +441,10 @@ class _ProjectCard extends StatelessWidget {
               fit: BoxFit.cover,
               errorBuilder: (_, __, ___) => Container(
                 height: 180,
-                color: KoalaColors.surfaceAlt,
+                color: KoalaDS.surfaceMuted,
                 child: const Center(
                     child: Icon(LucideIcons.image,
-                        color: KoalaColors.textTer, size: 40)),
+                        color: KoalaDS.inkFaint, size: 40)),
               ),
             ),
           Padding(
