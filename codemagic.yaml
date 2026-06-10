@@ -24,6 +24,9 @@ workflows:
     integrations:
       app_store_connect: koala_appstore_api   # Codemagic UI'daki entegrasyon adı
     environment:
+      ios_signing:
+        certificates:
+          - koala_ios_distribution   # Codemagic Code signing identities'de kayitli
       groups:
         - koala_ios            # REVENUECAT_IOS_KEY, SUPABASE_ANON_KEY, EVLUMBA_SUPABASE_ANON_KEY
       vars:
@@ -38,16 +41,19 @@ workflows:
     scripts:
       - name: Flutter pub get
         script: flutter pub get
-      - name: Set up code signing (create cert + profile via ASC API)
+      - name: Set up code signing (reuse cert, create profile via ASC API)
         script: |
-          # Portaldaki mevcut App Store profili eski sertifikaya bagli (gecersiz).
-          # --create: yeni sertifika + yeni App Store profili olusturur.
-          keychain initialize
-          openssl genrsa -out "$CM_BUILD_DIR/cert_key.pem" 2048
+          # Apple sertifika limiti dolu (409); Codemagic'te kayitli
+          # koala_ios_distribution sertifikasinin anahtariyla eslesen mevcut
+          # sertifikayi bul ve SADECE eksik App Store profilini olustur.
+          P12=$(ls "$HOME/Library/MobileDevice/Certificates"/*.p12 2>/dev/null | head -1)
+          echo "P12: $P12"
+          openssl pkcs12 -in "$P12" -nodes -nocerts -legacy -out /tmp/cert_key.pem -passin pass: \
+            || openssl pkcs12 -in "$P12" -nodes -nocerts -out /tmp/cert_key.pem -passin pass:
           app-store-connect fetch-signing-files "com.koala.evlumba" \
             --platform IOS \
             --type IOS_APP_STORE \
-            --certificate-key=@file:$CM_BUILD_DIR/cert_key.pem \
+            --certificate-key=@file:/tmp/cert_key.pem \
             --create
           keychain add-certificates
           xcode-project use-profiles
