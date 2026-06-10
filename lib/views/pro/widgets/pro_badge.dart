@@ -5,7 +5,7 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
-import '../../../core/theme/koala_tokens.dart';
+import '../../../core/theme/koala_ds.dart';
 
 class ProBadge extends StatelessWidget {
   const ProBadge({
@@ -30,15 +30,11 @@ class ProBadge extends StatelessWidget {
         : const EdgeInsets.symmetric(horizontal: 7, vertical: 2);
     final gradient = gold
         ? const LinearGradient(
-            colors: [Color(0xFFE0B96B), Color(0xFFB8862F)],
+            colors: [KoalaDS.star, KoalaDS.clay],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           )
-        : const LinearGradient(
-            colors: [KoalaColors.accentDeep, KoalaColors.accentMuted],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          );
+        : KoalaDS.accentGradient;
     return Container(
       height: h,
       padding: pad,
@@ -46,8 +42,10 @@ class ProBadge extends StatelessWidget {
         gradient: gradient,
         borderRadius: BorderRadius.circular(99),
         boxShadow: [
+          // KoalaElev glow'lar bu ölçek için fazla geniş — rozet boyutunda
+          // kalır, renkler DS token'larından.
           BoxShadow(
-            color: (gold ? const Color(0xFFB8862F) : KoalaColors.accentDeep)
+            color: (gold ? KoalaDS.clay : KoalaDS.accentDeep)
                 .withValues(alpha: 0.25),
             blurRadius: 6,
             offset: const Offset(0, 2),

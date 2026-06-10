@@ -6,7 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
-import '../../../core/theme/koala_tokens.dart';
+import '../../../core/theme/koala_ds.dart';
 import '../../../helpers/paywall_router.dart';
 import '../../../providers/pro_status_provider.dart';
 import '../../../services/quota_service.dart';
@@ -50,13 +50,9 @@ class _RestyleCounterPillState extends ConsumerState<RestyleCounterPill> {
     // 2/2 hâlâ varken pill = gereksiz görsel kirlilik.
     if (remaining > 1) return const SizedBox.shrink();
 
-    final bg = exhausted
-        ? const Color(0xFFFEF6E0)
-        : KoalaColors.accentSoft;
-    final fg = exhausted
-        ? const Color(0xFF8A6515)
-        : KoalaColors.accentDeep;
-    final iconColor = exhausted ? const Color(0xFFB8862F) : KoalaColors.accentDeep;
+    final bg = exhausted ? KoalaDS.clayTint : KoalaDS.accentTint;
+    final fg = exhausted ? KoalaDS.clay : KoalaDS.accentDeep;
+    final iconColor = exhausted ? KoalaDS.clay : KoalaDS.accentDeep;
 
     return GestureDetector(
       onTap: exhausted
@@ -69,8 +65,8 @@ class _RestyleCounterPillState extends ConsumerState<RestyleCounterPill> {
           borderRadius: BorderRadius.circular(99),
           border: Border.all(
             color: exhausted
-                ? const Color(0xFFE0B96B)
-                : KoalaColors.accentDeep.withValues(alpha: 0.15),
+                ? KoalaDS.clay.withValues(alpha: 0.45)
+                : KoalaDS.accentDeep.withValues(alpha: 0.15),
             width: 0.6,
           ),
         ),
