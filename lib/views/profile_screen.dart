@@ -801,8 +801,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             const SizedBox(height: 16),
             _buildBecomeProDesignerCta(),
             const SizedBox(height: 20),
-            _buildProBanner(isPro, proStatus?.proUntil),
-            const SizedBox(height: 24),
+            // Magaza yapilandirilmamissa (iOS'ta RC anahtari yok) Pro banner
+            // OLU UC: kullaniciyi satin alamayacagi seye cagirir. Gizle.
+            // (Aktif Pro uyeler durumlarini gormeye devam eder.)
+            if (BillingService.purchasesConfigured || isPro) ...[
+              _buildProBanner(isPro, proStatus?.proUntil),
+              const SizedBox(height: 24),
+            ],
 
             // ─── Hesap
             const _SectionHeader('HESAP'),
