@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import '../core/theme/koala_ds.dart';
 import '../core/theme/koala_tokens.dart';
 import '../services/evlumba_live_service.dart';
 import '../services/saved_items_service.dart';
@@ -146,7 +147,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
           onPressed: _goBackHome,
           icon: const Icon(LucideIcons.arrowLeft),
         ),
-        title: const Text('Keşfet', style: KoalaText.h2),
+        title: Text('Keşfet', style: KoalaType.display3()),
       ),
       body: Column(
         children: [
@@ -165,7 +166,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
               decoration: InputDecoration(
                 hintText: 'Tasarım veya tasarımcı ara...',
                 hintStyle: KoalaText.hint,
-                prefixIcon: const Icon(LucideIcons.search, color: KoalaColors.textTer),
+                prefixIcon: const Icon(LucideIcons.search, color: KoalaDS.inkFaint),
                 filled: true,
                 fillColor: KoalaColors.surface,
                 border: OutlineInputBorder(
@@ -197,9 +198,9 @@ class _ExploreScreenState extends State<ExploreScreen> {
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: KoalaSpacing.lg, vertical: KoalaSpacing.sm),
                     decoration: BoxDecoration(
-                      color: active ? KoalaColors.accent : KoalaColors.surface,
-                      borderRadius: BorderRadius.circular(KoalaRadius.pill),
-                      border: Border.all(color: active ? KoalaColors.accent : KoalaColors.border),
+                      color: active ? KoalaDS.accent : KoalaDS.surface,
+                      borderRadius: BorderRadius.circular(KoalaR.pill),
+                      border: Border.all(color: active ? KoalaDS.accent : KoalaDS.line),
                     ),
                     child: Center(
                       child: Text(
@@ -207,7 +208,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
                         style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w600,
-                          color: active ? Colors.white : KoalaColors.text,
+                          color: active ? KoalaDS.onAccent : KoalaDS.ink,
                         ),
                       ),
                     ),
@@ -230,15 +231,15 @@ class _ExploreScreenState extends State<ExploreScreen> {
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(LucideIcons.searchX, size: 48, color: KoalaColors.textTer),
+                            Icon(LucideIcons.searchX, size: 48, color: KoalaDS.inkFaint),
                             SizedBox(height: KoalaSpacing.md),
-                            Text('Bu kategoride tasarım bulunamadı', style: KoalaText.bodySec),
+                            Text('Bu kategoride tasarım bulunamadı', style: KoalaType.bodySoft),
                           ],
                         ),
                       )
                     : RefreshIndicator(
                         onRefresh: _load,
-                        color: KoalaColors.accent,
+                        color: KoalaDS.accent,
                         child: GridView.builder(
                           controller: _scrollCtrl,
                           padding: const EdgeInsets.symmetric(horizontal: KoalaSpacing.lg),
@@ -299,11 +300,11 @@ class _ProjectCard extends StatelessWidget {
                 fit: StackFit.expand,
                 children: [
                   Container(
-                    color: KoalaColors.surfaceAlt,
+                    color: KoalaDS.surfaceMuted,
                     child: imageUrl != null
                         ? Image.network(imageUrl, fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => const Icon(LucideIcons.image, color: KoalaColors.textTer))
-                        : const Icon(LucideIcons.image, size: 36, color: KoalaColors.textTer),
+                            errorBuilder: (_, __, ___) => const Icon(LucideIcons.image, color: KoalaDS.inkFaint))
+                        : const Icon(LucideIcons.image, size: 36, color: KoalaDS.inkFaint),
                   ),
                   // Save button
                   Positioned(
