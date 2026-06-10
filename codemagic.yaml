@@ -24,6 +24,9 @@ workflows:
     integrations:
       app_store_connect: koala_appstore_api   # Codemagic UI'daki entegrasyon adı
     environment:
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.koala.evlumba
       groups:
         - koala_ios            # REVENUECAT_IOS_KEY, SUPABASE_ANON_KEY, EVLUMBA_SUPABASE_ANON_KEY
       vars:
@@ -36,27 +39,36 @@ workflows:
       xcode: latest
       cocoapods: default
     scripts:
-      # GECICI (tek seferlik): Apple'da gecerli sertifikalara bagli yeni bir
-      # App Store provisioning profili olustur. Basarili olunca bu adim
-      # kaldirilacak ve asil build adimlari geri gelecek.
-      - name: Create App Store provisioning profile
+      - name: Flutter pub get
+        script: flutter pub get
+      - name: Set up provisioning (automatic via ASC API key)
         script: |
-          set -x
-          BUNDLE_RES=$(app-store-connect bundle-ids list \
-            --bundle-id-identifier com.koala.evlumba --platform IOS --json \
-            | python3 -c 'import sys,json;print(json.load(sys.stdin)[0]["id"])')
-          echo "Bundle resource id: $BUNDLE_RES"
-          app-store-connect certificates list --json > /tmp/certs.json
-          python3 -c 'import json;print([{ "id": c["id"], "type": c.get("attributes",{}).get("certificateType"), "exp": c.get("attributes",{}).get("expirationDate") } for c in json.load(open("/tmp/certs.json"))])'
-          CERTS=$(python3 -c 'import json;print(" ".join(c["id"] for c in json.load(open("/tmp/certs.json")) if "DISTRIBUTION" in str(c.get("attributes",{}).get("certificateType",""))))')
-          echo "Certificate ids: $CERTS"
-          test -n "$CERTS"
-          app-store-connect profiles create \
-            --certificate-ids $CERTS \
-            --type IOS_APP_STORE \
-            --name "Koala App Store CM" --json \
-            "$BUNDLE_RES"
+          # "Koala App Store CM" profili portalda mevcut (build #5'te olusturuldu).
+          xcode-project use-profiles
+      - name: Pod install
+        script: |
+          find . -name "Podfile" -execdir pod install \;
+      - name: Build IPA (release, dart-defines)
+        script: |
+          flutter build ipa --release \
+            --export-options-plist=/Users/builder/export_options.plist \
+            --dart-define=APP_VERSION="$APP_VERSION" \
+            --dart-define=AI_PROVIDER=gemini \
+            --dart-define=KOALA_API_URL="$KOALA_API_URL" \
+            --dart-define=SUPABASE_URL="$SUPABASE_URL" \
+            --dart-define=SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY" \
+            --dart-define=EVLUMBA_SUPABASE_URL="$EVLUMBA_SUPABASE_URL" \
+            --dart-define=EVLUMBA_SUPABASE_ANON_KEY="$EVLUMBA_SUPABASE_ANON_KEY" \
+            --dart-define=REVENUECAT_IOS_KEY="$REVENUECAT_IOS_KEY" \
+            --dart-define=REQUIRE_LOGIN=true
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
     publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true     # önce TestFlight — gerçek cihazda test et
+        # submit_to_app_store: false   # TestFlight'ta doğrulayınca true yap
       email:
         recipients:
           - canozdogan@outlook.com
