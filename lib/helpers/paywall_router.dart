@@ -25,6 +25,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../services/analytics_service.dart';
+import '../services/billing_service.dart';
 import '../views/pro/paywall_screen.dart';
 
 DateTime? _cooldownUntil;
@@ -86,6 +87,37 @@ Future<void> showPaywall(
   BuildContext context, {
   required String trigger,
 }) async {
+  // Magaza yapilandirilmamissa (ör. iOS'ta RevenueCat anahtari yok) paywall
+  // HIC acilmaz: fiyat gosterip satin alamamak App Review reddi demektir
+  // (2.1 / 3.1.1). Kibar bir "yakinda" mesaji goster ve cik.
+  if (!BillingService.purchasesConfigured) {
+    try {
+      await Analytics.log('paywall_suppressed', {
+        'trigger': trigger,
+        'reason': 'billing_unconfigured',
+      });
+    } catch (_) {}
+    if (context.mounted) {
+      await showDialog<void>(
+        context: context,
+        builder: (BuildContext ctx) => AlertDialog(
+          title: const Text('Koala Pro yakında!'),
+          content: const Text(
+            'Pro üyelik bu platformda çok yakında aktif olacak. '
+            'Şimdilik Koala\'yı keşfetmeye devam edebilirsin.',
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Tamam'),
+            ),
+          ],
+        ),
+      );
+    }
+    return;
+  }
+
   // Explicit-gesture triggers always go through.
   final bypass = _kAlwaysShowTriggers.contains(trigger);
 

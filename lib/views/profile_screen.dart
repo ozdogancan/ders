@@ -866,21 +866,24 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 trailing: 'Türkçe',
                 onTap: _openLanguagePicker,
               ),
-              _SettingsTile(
-                icon: LucideIcons.shoppingCart,
-                label: 'Satın Alımları Geri Yükle',
-                onTap: _restoring ? null : _restorePurchases,
-                trailingWidget: _restoring
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: KoalaColors.accentDeep,
-                        ),
-                      )
-                    : null,
-              ),
+              // Magaza yapilandirilmadiysa (iOS'ta RC anahtari yok) gizle —
+              // calismayan satin alma UI'si App Review reddi (2.1).
+              if (BillingService.purchasesConfigured)
+                _SettingsTile(
+                  icon: LucideIcons.shoppingCart,
+                  label: 'Satın Alımları Geri Yükle',
+                  onTap: _restoring ? null : _restorePurchases,
+                  trailingWidget: _restoring
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: KoalaColors.accentDeep,
+                          ),
+                        )
+                      : null,
+                ),
             ]),
             const SizedBox(height: 24),
 

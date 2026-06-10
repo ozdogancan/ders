@@ -57,6 +57,16 @@ class BillingService {
     return true;
   }
 
+  /// Magaza anahtari gercekten tanimli mi? (iOS: appl_, Android: goog_)
+  /// Degilse paywall/satin alma UI'si tamamen gizlenir — fiyat gosterip
+  /// satin alamamak App Review reddine yol acar (2.1 / 3.1.1).
+  static bool get purchasesConfigured {
+    if (!isSupported) return false;
+    final String prefix =
+        defaultTargetPlatform == TargetPlatform.iOS ? 'appl_' : 'goog_';
+    return _publicKey.startsWith(prefix);
+  }
+
   static Future<void> initialize() async {
     if (_initialized) return;
     if (!isSupported) {
