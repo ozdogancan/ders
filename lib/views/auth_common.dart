@@ -107,9 +107,12 @@ class AuthCoordinator {
       nonce: hashedNonce,
     );
 
+    // accessToken (authorizationCode) zorunlu: eksikse Firebase token'i
+    // [invalid-credential] ile reddediyor (yeni firebase_auth surumleri).
     final OAuthCredential credential = OAuthProvider('apple.com').credential(
       idToken: appleCredential.identityToken,
       rawNonce: rawNonce,
+      accessToken: appleCredential.authorizationCode,
     );
 
     final UserCredential userCred =
