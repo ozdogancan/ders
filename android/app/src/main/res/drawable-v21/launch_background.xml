@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <!-- Pre-Android-12 splash: yumuşak krem arka plan (kod ile çizilir,
-         asset yüklenmez) — Flutter SplashScreen ile aynı ton. -->
-    <item android:drawable="@color/splash_background"/>
+    <item>
+        <bitmap android:gravity="fill" android:src="@drawable/background"/>
+    </item>
     <item>
         <bitmap android:gravity="center" android:src="@drawable/splash"/>
     </item>
