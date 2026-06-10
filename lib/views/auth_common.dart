@@ -18,6 +18,7 @@ import 'package:go_router/go_router.dart';
 
 import '../core/config/env.dart';
 import '../core/router/app_router.dart';
+import '../core/theme/koala_ds.dart';
 import '../core/theme/koala_tokens.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
@@ -497,17 +498,14 @@ class KoalaHeroLogo extends StatelessWidget {
         width: size,
         height: size,
         decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: <Color>[KoalaColors.brand, KoalaColors.brandLight],
-          ),
+          // V2: tek DS degradesi (kacak morlar bitti), gölge sıkı ve net.
+          gradient: KoalaDS.accentGradient,
           borderRadius: BorderRadius.circular(size * 0.28),
           boxShadow: <BoxShadow>[
             BoxShadow(
-              color: KoalaColors.brand.withValues(alpha: 0.25),
-              blurRadius: 28,
-              offset: const Offset(0, 12),
+              color: KoalaDS.accentDeep.withValues(alpha: 0.22),
+              blurRadius: 18,
+              offset: const Offset(0, 8),
             ),
           ],
         ),
@@ -551,10 +549,10 @@ class AuthActionButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bool enabled = onPressed != null && !loading;
-    final BorderRadius br = BorderRadius.circular(16);
+    final BorderRadius br = BorderRadius.circular(KoalaR.lg);
     final bool hasGradient = gradient != null;
-    final Color fg = foregroundColor ?? KoalaColors.inkSoft;
-    final Color sp = spinnerColor ?? KoalaColors.brand;
+    final Color fg = foregroundColor ?? KoalaDS.ink;
+    final Color sp = spinnerColor ?? KoalaDS.accentDeep;
 
     return AnimatedOpacity(
       duration: const Duration(milliseconds: 180),
@@ -576,7 +574,7 @@ class AuthActionButton extends StatelessWidget {
             border: hasGradient
                 ? null
                 : Border.all(
-                    color: borderColor ?? KoalaColors.borderSolid,
+                    color: borderColor ?? KoalaDS.line,
                     width: 1.2,
                   ),
             boxShadow: <BoxShadow>[
@@ -587,11 +585,7 @@ class AuthActionButton extends StatelessWidget {
                   offset: const Offset(0, 14),
                 )
               else
-                BoxShadow(
-                  color: KoalaColors.inkDeep.withValues(alpha: 0.04),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
-                ),
+                ...KoalaElev.card,
             ],
           ),
           child: InkWell(
@@ -656,15 +650,15 @@ class AuthErrorBanner extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
       decoration: BoxDecoration(
-        color: const Color(0xFFFEF2F2),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFFECACA)),
+        color: KoalaDS.dangerTint,
+        borderRadius: BorderRadius.circular(KoalaR.md),
+        border: Border.all(color: KoalaDS.danger.withValues(alpha: 0.25)),
       ),
       child: Row(
         children: <Widget>[
           const Icon(
             LucideIcons.alertCircle,
-            color: KoalaColors.errorBright,
+            color: KoalaDS.danger,
             size: 18,
           ),
           const SizedBox(width: 10),
@@ -672,7 +666,7 @@ class AuthErrorBanner extends StatelessWidget {
             child: Text(
               message,
               style: const TextStyle(
-                color: KoalaColors.errorDark,
+                color: KoalaDS.danger,
                 fontSize: 13,
                 fontWeight: FontWeight.w600,
                 height: 1.35,
@@ -721,14 +715,14 @@ class _FeatureDot extends StatelessWidget {
           height: 6,
           decoration: const BoxDecoration(
             shape: BoxShape.circle,
-            color: KoalaColors.brand,
+            color: KoalaDS.accent,
           ),
         ),
         const SizedBox(width: 6),
         Text(
           label,
           style: const TextStyle(
-            color: KoalaColors.textMuted,
+            color: KoalaDS.inkSoft,
             fontSize: 12,
             fontWeight: FontWeight.w600,
           ),

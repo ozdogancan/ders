@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 
 import 'package:cached_network_image/cached_network_image.dart';
 
+import '../core/theme/koala_ds.dart';
 import '../core/theme/koala_tokens.dart';
 import 'auth_common.dart';
 import 'evlumba_login_screen.dart';
@@ -220,6 +221,9 @@ class _AuthEntryScreenState extends State<AuthEntryScreen>
                   child: ConstrainedBox(
                     constraints: const BoxConstraints(maxWidth: 400),
                     child: Column(
+                      // V2: içerik kümesi dikeyde ortalanır — uzun ekranlarda
+                      // altta ölü boşluk bırakmak yerine dengeli kompozisyon.
+                      mainAxisAlignment: MainAxisAlignment.center,
                       children: <Widget>[
                         // Close button — scroll content içinde, sağ üste hizalı
                         if (widget.showCloseButton)
@@ -228,8 +232,8 @@ class _AuthEntryScreenState extends State<AuthEntryScreen>
                             child: IconButton(
                               onPressed: () => Navigator.of(context).pop(false),
                               style: IconButton.styleFrom(
-                                backgroundColor: KoalaColors.surfaceCool,
-                                foregroundColor: KoalaColors.textMed,
+                                backgroundColor: KoalaDS.surfaceMuted,
+                                foregroundColor: KoalaDS.inkSoft,
                                 minimumSize: const Size(40, 40),
                               ),
                               icon: const Icon(LucideIcons.x, size: 20),
@@ -252,18 +256,13 @@ class _AuthEntryScreenState extends State<AuthEntryScreen>
                           beginOffset: const Offset(0, 0.08),
                           child: Column(
                             children: <Widget>[
+                              // V2: serif display başlık — warm-premium imzası.
                               Text(
                                 signupMode
                                     ? "Koala'ya Hoşgeldin"
                                     : 'Tekrar Hoşgeldin!',
                                 textAlign: TextAlign.center,
-                                style: const TextStyle(
-                                  fontSize: 30,
-                                  fontWeight: FontWeight.w900,
-                                  color: KoalaColors.inkDeep,
-                                  letterSpacing: -0.8,
-                                  height: 1.1,
-                                ),
+                                style: KoalaType.display2(),
                               ),
                               const SizedBox(height: 12),
                               Text(
@@ -271,12 +270,7 @@ class _AuthEntryScreenState extends State<AuthEntryScreen>
                                     ? 'Mekanını tara, stilini keşfet, doğru tasarımcıyla eşleş.'
                                     : 'Mekan analizine kaldığın yerden devam et.',
                                 textAlign: TextAlign.center,
-                                style: const TextStyle(
-                                  color: KoalaColors.textMuted,
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w500,
-                                  height: 1.5,
-                                ),
+                                style: KoalaType.bodySoft,
                               ),
                             ],
                           ),
@@ -418,13 +412,13 @@ class _OrDivider extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: <Widget>[
-        Expanded(child: Divider(color: KoalaColors.borderSolid, thickness: 1)),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
+        const Expanded(child: Divider(color: KoalaDS.line, thickness: 1)),
+        const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 16),
           child: Text(
             'veya',
             style: TextStyle(
-              color: KoalaColors.textMuted.withValues(alpha: 0.8),
+              color: KoalaDS.inkFaint,
               fontSize: 13,
               fontWeight: FontWeight.w500,
             ),
