@@ -25,7 +25,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:purchases_flutter/purchases_flutter.dart';
 
-import '../../core/theme/koala_tokens.dart';
+import '../../core/theme/koala_ds.dart';
 import '../../helpers/paywall_router.dart';
 import '../legal_sheet.dart';
 import '../../providers/pro_status_provider.dart';
@@ -35,11 +35,10 @@ import '../../services/usage_limit_service.dart';
 
 enum _PlanKind { weekly, monthly, yearly }
 
-// Koala brand purple palette.
-const _kPurple = Color(0xFF6C63FF);
-const _kPurpleDeep = Color(0xFF9B5CFF);
-const _kPurpleSoft = Color(0xFFF3F0FF);
-const _kBorder = Color(0xFFE0DAFF);
+// Koala brand purple palette — V2 DS alias'ları (kaçak mor yok).
+const _kPurple = KoalaDS.accent;
+const _kPurpleSoft = KoalaDS.accentTint;
+const _kBorder = KoalaDS.line;
 
 // Carousel hero slides — bundled assets for instant first paint.
 const _kSlideAssets = <String>[
@@ -319,7 +318,7 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
           const SnackBar(
             content: Text('Pro üyeliğin aktif!',
                 style: TextStyle(fontWeight: FontWeight.w600)),
-            backgroundColor: KoalaColors.greenBright,
+            backgroundColor: KoalaDS.cta,
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -340,17 +339,17 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
     await showDialog<void>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: KoalaColors.surface,
+        backgroundColor: KoalaDS.surface,
         shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(KoalaRadius.lg)),
-        title: const Text('Satın alma tamamlanamadı', style: KoalaText.h3),
+            borderRadius: BorderRadius.circular(KoalaR.lg)),
+        title: const Text('Satın alma tamamlanamadı', style: KoalaType.h3),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
               'Bir aksaklık oldu. Şunları denersen yardımcı olabilir:',
-              style: TextStyle(fontSize: 14, color: KoalaColors.textMed),
+              style: TextStyle(fontSize: 14, color: KoalaDS.inkSoft),
             ),
             const SizedBox(height: 8),
             const Text(
@@ -358,21 +357,21 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
               '• Uygulamayı Play Store üzerinden güncelle/yeniden kur\n'
               '• İnternet bağlantını kontrol et\n'
               '• Kart bilgilerin Play Store hesabında ekli mi bak',
-              style: TextStyle(fontSize: 13, color: KoalaColors.textMed, height: 1.5),
+              style: TextStyle(fontSize: 13, color: KoalaDS.inkSoft, height: 1.5),
             ),
             if (detail != null && detail.isNotEmpty) ...[
               const SizedBox(height: 12),
               Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: KoalaColors.surfaceAlt,
+                  color: KoalaDS.surfaceMuted,
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
                   'Teknik detay: $detail',
                   style: const TextStyle(
                     fontSize: 11,
-                    color: KoalaColors.textTer,
+                    color: KoalaDS.inkFaint,
                   ),
                 ),
               ),
@@ -407,7 +406,7 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: KoalaColors.bg,
+      backgroundColor: KoalaDS.bg,
       body: SafeArea(
         child: Center(
           child: ConstrainedBox(
@@ -469,7 +468,7 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
               spreadRadius: -6,
             ),
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.05),
+              color: KoalaDS.ink.withValues(alpha: 0.05),
               blurRadius: 10,
               offset: const Offset(0, 4),
               spreadRadius: -4,
@@ -513,7 +512,7 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
                       borderRadius: BorderRadius.circular(20),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.10),
+                          color: KoalaDS.ink.withValues(alpha: 0.10),
                           blurRadius: 8,
                           offset: const Offset(0, 2),
                         ),
@@ -524,7 +523,7 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
                       style: TextStyle(
                         fontSize: 12.5,
                         fontWeight: FontWeight.w700,
-                        color: KoalaColors.text,
+                        color: KoalaDS.ink,
                       ),
                     ),
                   ),
@@ -562,26 +561,20 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
   Widget _buildTitle() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.center,
-      children: const [
+      children: [
         Text(
           'Pro Erişimi',
           textAlign: TextAlign.center,
-          style: TextStyle(
-            fontSize: 26,
-            fontWeight: FontWeight.w800,
-            color: KoalaColors.text,
-            letterSpacing: -0.5,
-            height: 1.1,
-          ),
+          style: KoalaType.display3(),
         ),
-        SizedBox(height: 4),
-        Text(
+        const SizedBox(height: 4),
+        const Text(
           'AI tasarım, sınırsız ilham',
           textAlign: TextAlign.center,
           style: TextStyle(
             fontSize: 13.5,
             fontWeight: FontWeight.w500,
-            color: KoalaColors.textMed,
+            color: KoalaDS.inkSoft,
           ),
         ),
       ],
@@ -620,7 +613,7 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
                     style: const TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
-                      color: KoalaColors.text,
+                      color: KoalaDS.ink,
                       height: 1.25,
                       letterSpacing: -0.1,
                     ),
@@ -650,7 +643,7 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
               style: TextStyle(
                 fontSize: 13.5,
                 fontWeight: FontWeight.w600,
-                color: KoalaColors.text,
+                color: KoalaDS.ink,
               ),
             ),
           ),
@@ -777,9 +770,7 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
         borderRadius: BorderRadius.circular(18),
         child: DecoratedBox(
           decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              colors: [_kPurple, _kPurpleDeep],
-            ),
+            gradient: KoalaDS.accentGradient,
           ),
           child: Material(
             color: Colors.transparent,
@@ -837,7 +828,7 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
               style: TextStyle(
                 fontSize: 11,
                 fontWeight: FontWeight.w500,
-                color: KoalaColors.textTer,
+                color: KoalaDS.inkFaint,
               ),
             ),
           ),
@@ -845,14 +836,14 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             const Icon(Icons.shield_outlined,
-                size: 13, color: KoalaColors.greenAlt),
+                size: 13, color: KoalaDS.cta),
             const SizedBox(width: 6),
             Text(
               'İstediğin zaman iptal',
               style: TextStyle(
                 fontSize: 11.5,
                 fontWeight: FontWeight.w500,
-                color: KoalaColors.textMed,
+                color: KoalaDS.inkSoft,
               ),
             ),
           ],
@@ -899,13 +890,13 @@ class _CircleIconButton extends StatelessWidget {
           shape: BoxShape.circle,
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.12),
+              color: KoalaDS.ink.withValues(alpha: 0.12),
               blurRadius: 10,
               offset: const Offset(0, 3),
             ),
           ],
         ),
-        child: Icon(icon, color: KoalaColors.text, size: 20),
+        child: Icon(icon, color: KoalaDS.ink, size: 20),
       ),
     );
   }
@@ -959,17 +950,17 @@ class _PlanCard extends StatelessWidget {
               curve: Curves.easeOut,
               padding: const EdgeInsets.fromLTRB(16, 13, 16, 13),
               decoration: BoxDecoration(
-                color: selected ? _kPurpleSoft : Colors.white,
+                color: selected ? _kPurpleSoft : KoalaDS.surface,
                 borderRadius: BorderRadius.circular(18),
                 border: Border.all(
-                  color: selected ? _kPurple : _kBorder.withValues(alpha: 0.55),
+                  color: selected ? _kPurple : _kBorder,
                   width: selected ? 1.8 : 1,
                 ),
                 boxShadow: [
                   BoxShadow(
                     color: selected
                         ? _kPurple.withValues(alpha: 0.16)
-                        : Colors.black.withValues(alpha: 0.05),
+                        : KoalaDS.ink.withValues(alpha: 0.05),
                     blurRadius: selected ? 18 : 12,
                     offset: const Offset(0, 6),
                     spreadRadius: -4,
@@ -988,7 +979,7 @@ class _PlanCard extends StatelessWidget {
                           style: const TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.w800,
-                            color: KoalaColors.text,
+                            color: KoalaDS.ink,
                             letterSpacing: 0.2,
                           ),
                         ),
@@ -1000,7 +991,7 @@ class _PlanCard extends StatelessWidget {
                           style: const TextStyle(
                             fontSize: 11.5,
                             fontWeight: FontWeight.w500,
-                            color: KoalaColors.textMed,
+                            color: KoalaDS.inkSoft,
                           ),
                         ),
                       ],
@@ -1017,7 +1008,7 @@ class _PlanCard extends StatelessWidget {
                           style: const TextStyle(
                             fontSize: 17,
                             fontWeight: FontWeight.w800,
-                            color: KoalaColors.text,
+                            color: KoalaDS.ink,
                             letterSpacing: -0.4,
                           ),
                         )
@@ -1028,7 +1019,7 @@ class _PlanCard extends StatelessWidget {
                         style: const TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.w500,
-                          color: KoalaColors.textMed,
+                          color: KoalaDS.inkSoft,
                         ),
                       ),
                     ],
@@ -1044,9 +1035,8 @@ class _PlanCard extends StatelessWidget {
                   padding:
                       const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                        colors: [_kPurple, _kPurpleDeep]),
-                    borderRadius: BorderRadius.circular(999),
+                    gradient: KoalaDS.accentGradient,
+                    borderRadius: BorderRadius.circular(KoalaR.pill),
                     boxShadow: [
                       BoxShadow(
                         color: _kPurple.withValues(alpha: 0.3),
@@ -1089,7 +1079,7 @@ class _PriceSkeleton extends StatelessWidget {
         style: TextStyle(
           fontSize: 17,
           fontWeight: FontWeight.w800,
-          color: KoalaColors.textTer,
+          color: KoalaDS.inkFaint,
           letterSpacing: -0.4,
         ),
       );
@@ -1129,7 +1119,7 @@ class _FooterLink extends StatelessWidget {
         style: const TextStyle(
           fontSize: 11,
           fontWeight: FontWeight.w500,
-          color: KoalaColors.textTer,
+          color: KoalaDS.inkFaint,
           decoration: TextDecoration.underline,
         ),
       ),
@@ -1143,7 +1133,7 @@ class _FooterDot extends StatelessWidget {
   Widget build(BuildContext context) => const Padding(
         padding: EdgeInsets.symmetric(horizontal: 8),
         child: Text('·',
-            style: TextStyle(fontSize: 12, color: KoalaColors.textTer)),
+            style: TextStyle(fontSize: 12, color: KoalaDS.inkFaint)),
       );
 }
 
