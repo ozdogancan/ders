@@ -15,6 +15,7 @@ import 'package:supabase_flutter/supabase_flutter.dart' show Supabase, FileOptio
 import 'package:universal_html/html.dart' as html;
 import 'package:url_launcher/url_launcher.dart';
 
+import '../core/theme/koala_ds.dart';
 import '../core/theme/koala_tokens.dart';
 import '../helpers/paywall_router.dart';
 import '../providers/pro_status_provider.dart';
@@ -81,12 +82,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
   // ─── Palette (per spec) ────────────────────────────────────────
   static const Color _screenBg = KoalaColors.bg;
-  static const Color _proPurple1 = Color(0xFF6C63FF);
-  static const Color _proPurple2 = Color(0xFF9B5CFF);
-  static const Color _avatarGrad1 = Color(0xFF6C63FF);
-  static const Color _avatarGrad2 = Color(0xFF9B5CFF);
-  static const Color _sectionLabel = Color(0xFF6B7280);
-  static const Color _dangerRed = Color(0xFFE5484D);
+  static const Color _proPurple1 = KoalaDS.accent;
+  static const Color _proPurple2 = KoalaDS.accentDeep;
+  static const Color _sectionLabel = KoalaDS.inkSoft;
+  static const Color _dangerRed = KoalaDS.danger;
 
   @override
   void initState() {
@@ -1114,7 +1113,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   const Padding(
                     padding: EdgeInsets.only(right: 12, left: 6),
                     child: Icon(LucideIcons.chevronRight,
-                        size: 20, color: Color(0xFFAEAEB2)),
+                        size: 20, color: KoalaDS.inkFaint),
                   )
                 else
                   const SizedBox(width: 12),
@@ -1162,11 +1161,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   height: 72,
                   decoration: const BoxDecoration(
                     shape: BoxShape.circle,
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [_avatarGrad1, _avatarGrad2],
-                    ),
+                    gradient: KoalaDS.accentGradient,
                   ),
                   child: ClipOval(
                     child: _photoUrl != null && _photoUrl!.isNotEmpty
@@ -1268,11 +1263,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       height: 140,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(20),
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [_proPurple1, _proPurple2],
-        ),
+        gradient: KoalaDS.accentGradient,
         boxShadow: [
           BoxShadow(
             color: _proPurple1.withValues(alpha: 0.32),
@@ -1412,7 +1403,7 @@ class _SectionHeader extends StatelessWidget {
           fontFamily: 'Manrope',
           fontSize: 12,
           fontWeight: FontWeight.w600,
-          color: Color(0xFF6B7280),
+          color: KoalaDS.inkSoft,
           letterSpacing: 0.8,
         ),
       ),
@@ -1433,7 +1424,7 @@ class _SettingsCard extends StatelessWidget {
       if (i != visible.length - 1) {
         children.add(const Padding(
           padding: EdgeInsets.only(left: 60, right: 16),
-          child: Divider(height: 1, color: Color(0xFFF1F3F5)),
+          child: Divider(height: 1, color: KoalaDS.line),
         ));
       }
     }
@@ -1476,12 +1467,10 @@ class _SettingsTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final hasChevron = onTap != null;
-    const dangerRed = Color(0xFFE5484D);
+    const dangerRed = KoalaDS.danger;
     final labelColor = danger ? dangerRed : KoalaColors.text;
     final iconColor = danger ? dangerRed : KoalaColors.text;
-    final iconBg = danger
-        ? const Color(0xFFFDECEC)
-        : const Color(0xFFF3F4F6);
+    final iconBg = danger ? KoalaDS.dangerTint : KoalaDS.surfaceMuted;
 
     return Material(
       color: Colors.transparent,
@@ -1531,7 +1520,7 @@ class _SettingsTile extends StatelessWidget {
                         fontFamily: 'Manrope',
                         fontSize: 14,
                         fontWeight: FontWeight.w500,
-                        color: Color(0xFF8E8E93),
+                        color: KoalaDS.inkFaint,
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -1543,7 +1532,7 @@ class _SettingsTile extends StatelessWidget {
                     size: 18,
                     color: danger
                         ? dangerRed.withValues(alpha: 0.55)
-                        : const Color(0xFFAEAEB2)),
+                        : KoalaDS.inkFaint),
             ],
           ),
         ),
@@ -1572,7 +1561,7 @@ class _UpgradePill extends StatelessWidget {
               fontFamily: 'Manrope',
               fontSize: 13,
               fontWeight: FontWeight.w800,
-              color: Color(0xFF6C63FF),
+              color: KoalaDS.accent,
               letterSpacing: -0.1,
             ),
           ),
