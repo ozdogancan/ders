@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../core/theme/koala_ds.dart';
 import '../core/theme/koala_tokens.dart';
 import '../services/saved_items_service.dart';
 import '../services/taste_profile_service.dart';
@@ -37,11 +38,11 @@ class TasteSummarySheet extends ConsumerWidget {
   }) {
     return showModalBottomSheet<void>(
       context: context,
-      backgroundColor: KoalaColors.bg,
-      barrierColor: Colors.black54,
+      backgroundColor: KoalaDS.surface,
+      barrierColor: KoalaDS.ink.withValues(alpha: 0.54),
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(KoalaR.xl)),
       ),
       builder: (_) => TasteSummarySheet(
         profile: profile,
@@ -96,7 +97,7 @@ class TasteSummarySheet extends ConsumerWidget {
       if (s.length == 6) s = 'FF$s';
       return Color(int.parse(s, radix: 16));
     } catch (_) {
-      return KoalaColors.surfaceAlt;
+      return KoalaDS.surfaceMuted;
     }
   }
 
@@ -119,7 +120,7 @@ class TasteSummarySheet extends ConsumerWidget {
                   width: 36,
                   height: 4,
                   decoration: BoxDecoration(
-                    color: KoalaColors.border,
+                    color: KoalaDS.line,
                     borderRadius: BorderRadius.circular(100),
                   ),
                 ),
@@ -160,8 +161,8 @@ class TasteSummarySheet extends ConsumerWidget {
                           color: _hex(h),
                           shape: BoxShape.circle,
                           border: Border.all(
-                              color: KoalaColors.border, width: 0.5),
-                          boxShadow: KoalaShadows.card,
+                              color: KoalaDS.line, width: 0.5),
+                          boxShadow: KoalaElev.card,
                         ),
                       ),
                     ),
@@ -179,7 +180,7 @@ class TasteSummarySheet extends ConsumerWidget {
                       rc['imageUrl']!,
                       fit: BoxFit.cover,
                       errorBuilder: (_, _, _) =>
-                          Container(color: KoalaColors.surfaceAlt),
+                          Container(color: KoalaDS.surfaceMuted),
                     ),
                   ),
                 ),
@@ -216,7 +217,7 @@ class TasteSummarySheet extends ConsumerWidget {
                           );
                         },
                   style: FilledButton.styleFrom(
-                    backgroundColor: KoalaColors.accentDeep,
+                    backgroundColor: KoalaDS.accentDeep,
                     foregroundColor: Colors.white,
                     minimumSize: const Size.fromHeight(52),
                     shape: RoundedRectangleBorder(
@@ -317,9 +318,9 @@ class _StyleBar extends StatelessWidget {
           child: LinearProgressIndicator(
             value: share.clamp(0.0, 1.0),
             minHeight: 7,
-            backgroundColor: KoalaColors.accentLight,
+            backgroundColor: KoalaDS.accentTint,
             valueColor:
-                const AlwaysStoppedAnimation<Color>(KoalaColors.accentDeep),
+                const AlwaysStoppedAnimation<Color>(KoalaDS.accentDeep),
           ),
         ),
       ],
@@ -338,8 +339,8 @@ class _SecondaryBtn extends StatelessWidget {
     return OutlinedButton(
       onPressed: onTap,
       style: OutlinedButton.styleFrom(
-        foregroundColor: KoalaColors.accentDeep,
-        side: const BorderSide(color: KoalaColors.borderSolid),
+        foregroundColor: KoalaDS.accentDeep,
+        side: const BorderSide(color: KoalaDS.line),
         minimumSize: const Size.fromHeight(46),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),

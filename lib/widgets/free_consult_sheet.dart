@@ -17,7 +17,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
-import '../core/theme/koala_tokens.dart';
+import '../core/theme/koala_ds.dart';
 import '../providers/pro_status_provider.dart';
 import '../services/messaging_service.dart';
 
@@ -87,7 +87,7 @@ Future<void> enterEvlumbaConversation(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      barrierColor: Colors.black54,
+      barrierColor: KoalaDS.ink.withValues(alpha: 0.54),
       builder: (_) => const FreeConsultSheet(),
     );
     if (go != true || !context.mounted) return;
@@ -112,7 +112,7 @@ Future<void> enterEvlumbaConversation(
                 ? 'Sohbet başlatılamadı — tekrar deneyin'
                 : 'Sohbet başlatılamadı: $err',
           ),
-          backgroundColor: Colors.red.shade700,
+          backgroundColor: KoalaDS.danger,
           duration: const Duration(seconds: 6),
         ),
       );
@@ -141,7 +141,7 @@ Future<void> enterEvlumbaConversation(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      barrierColor: Colors.black54,
+      barrierColor: KoalaDS.ink.withValues(alpha: 0.54),
       builder: (_) => const FreeConsultSheet(),
     );
     if (go != true || !context.mounted) return;
@@ -185,13 +185,13 @@ class FreeConsultSheet extends StatelessWidget {
     return Container(
       padding: EdgeInsets.fromLTRB(24, 16, 24, bottomPad + 24),
       decoration: const BoxDecoration(
-        // Premium champagne gradient — Evlumba brand.
+        // Premium warm gradient — DS token'ları (Evlumba brand hissi korunur).
         gradient: LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [Color(0xFFFBF7EE), Color(0xFFFFFFFF)],
+          colors: [KoalaDS.bg, KoalaDS.surface],
         ),
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(KoalaR.xl)),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -200,7 +200,7 @@ class FreeConsultSheet extends StatelessWidget {
             width: 40,
             height: 4,
             decoration: BoxDecoration(
-              color: KoalaColors.borderSolid,
+              color: KoalaDS.line,
               borderRadius: BorderRadius.circular(2),
             ),
           ),
@@ -212,14 +212,14 @@ class FreeConsultSheet extends StatelessWidget {
             height: 72,
             decoration: BoxDecoration(
               gradient: const LinearGradient(
-                colors: [Color(0xFFD4A853), Color(0xFFE8C76A)],
+                colors: [KoalaDS.star, KoalaDS.clay],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
-              borderRadius: BorderRadius.circular(20),
+              borderRadius: BorderRadius.circular(KoalaR.lg),
               boxShadow: [
                 BoxShadow(
-                  color: const Color(0xFFD4A853).withValues(alpha: 0.32),
+                  color: KoalaDS.clay.withValues(alpha: 0.32),
                   blurRadius: 22,
                   offset: const Offset(0, 8),
                 ),
@@ -238,7 +238,7 @@ class FreeConsultSheet extends StatelessWidget {
             style: TextStyle(
               fontSize: 22,
               fontWeight: FontWeight.w800,
-              color: KoalaColors.text,
+              color: KoalaDS.ink,
               letterSpacing: -0.3,
             ),
           ),
@@ -251,7 +251,7 @@ class FreeConsultSheet extends StatelessWidget {
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 14,
-                color: KoalaColors.textSec,
+                color: KoalaDS.inkSoft,
                 height: 1.45,
               ),
             ),
@@ -270,12 +270,12 @@ class FreeConsultSheet extends StatelessWidget {
             child: ElevatedButton(
               onPressed: () => Navigator.of(context).pop(true),
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFD4A853),
+                backgroundColor: KoalaDS.clay,
                 foregroundColor: Colors.white,
                 elevation: 0,
                 padding: const EdgeInsets.symmetric(vertical: 16),
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(KoalaRadius.md),
+                  borderRadius: BorderRadius.circular(KoalaR.md),
                 ),
               ),
               child: const Text(
@@ -291,7 +291,7 @@ class FreeConsultSheet extends StatelessWidget {
               'Şimdi değil',
               style: TextStyle(
                 fontSize: 13,
-                color: KoalaColors.textTer,
+                color: KoalaDS.inkFaint,
                 fontWeight: FontWeight.w600,
               ),
             ),
@@ -307,14 +307,14 @@ class FreeConsultSheet extends StatelessWidget {
             width: 32,
             height: 32,
             decoration: BoxDecoration(
-              color: const Color(0xFFFDF8EC),
-              borderRadius: BorderRadius.circular(10),
+              color: KoalaDS.clayTint,
+              borderRadius: BorderRadius.circular(KoalaR.sm),
               border: Border.all(
-                color: const Color(0xFFE8D7A8),
+                color: KoalaDS.clay.withValues(alpha: 0.35),
                 width: 0.8,
               ),
             ),
-            child: Icon(icon, size: 16, color: const Color(0xFFD4A853)),
+            child: Icon(icon, size: 16, color: KoalaDS.clay),
           ),
           const SizedBox(width: 12),
           Text(
@@ -322,7 +322,7 @@ class FreeConsultSheet extends StatelessWidget {
             style: const TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.w600,
-              color: KoalaColors.text,
+              color: KoalaDS.ink,
             ),
           ),
         ],

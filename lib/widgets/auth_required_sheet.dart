@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../core/theme/koala_ds.dart';
 import '../views/auth_common.dart';
 import '../views/auth_entry_screen.dart';
 import 'package:lucide_icons/lucide_icons.dart';
@@ -8,6 +9,11 @@ Future<void> showAuthRequiredSheet(BuildContext context) async {
   final bool? shouldLogin = await showModalBottomSheet<bool>(
     context: context,
     showDragHandle: true,
+    backgroundColor: KoalaDS.surface,
+    barrierColor: KoalaDS.ink.withValues(alpha: 0.54),
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(KoalaR.xl)),
+    ),
     builder: (BuildContext context) {
       return SafeArea(
         child: Padding(
