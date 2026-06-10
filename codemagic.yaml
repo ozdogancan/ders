@@ -46,15 +46,16 @@ workflows:
             --bundle-id-identifier com.koala.evlumba --platform IOS --json \
             | python3 -c 'import sys,json;print(json.load(sys.stdin)[0]["id"])')
           echo "Bundle resource id: $BUNDLE_RES"
-          CERTS=$(app-store-connect certificates list --type IOS_DISTRIBUTION --json \
-            | python3 -c 'import sys,json;print(",".join(c["id"] for c in json.load(sys.stdin)))')
+          app-store-connect certificates list --json > /tmp/certs.json
+          python3 -c 'import json;print([{ "id": c["id"], "type": c.get("attributes",{}).get("certificateType"), "exp": c.get("attributes",{}).get("expirationDate") } for c in json.load(open("/tmp/certs.json"))])'
+          CERTS=$(python3 -c 'import json;print(" ".join(c["id"] for c in json.load(open("/tmp/certs.json")) if "DISTRIBUTION" in str(c.get("attributes",{}).get("certificateType",""))))')
           echo "Certificate ids: $CERTS"
+          test -n "$CERTS"
           app-store-connect profiles create \
-            --bundle-id-resource-id "$BUNDLE_RES" \
-            --certificate-resource-ids "$CERTS" \
+            --certificate-ids $CERTS \
             --type IOS_APP_STORE \
             --name "Koala App Store CM" --json \
-            || { app-store-connect profiles create --help; exit 1; }
+            "$BUNDLE_RES"
     publishing:
       email:
         recipients:
