@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
 import '../core/router/app_router.dart';
+import '../core/theme/koala_ds.dart';
 import '../core/theme/koala_tokens.dart';
 import '../core/utils/format_utils.dart';
 import '../helpers/paywall_router.dart';
@@ -261,20 +262,13 @@ class _NotificationsFeedScreenState
         leading: const KoalaBackButton(),
         leadingWidth: 64,
         titleSpacing: 0,
-        title: const Text(
-          'Bildirimler',
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.w700,
-            color: KoalaColors.ink,
-          ),
-        ),
+        title: Text('Bildirimler', style: KoalaType.display3()),
         actions: [
           if (hasUnread)
             IconButton(
               tooltip: 'Tümünü okundu işaretle',
               icon: const Icon(LucideIcons.checkCheck, size: 20),
-              color: KoalaColors.accentDeep,
+              color: KoalaDS.accentDeep,
               onPressed: _markAllRead,
             ),
           const SizedBox(width: 4),
@@ -351,8 +345,8 @@ class _NotificationsFeedScreenState
                 shape: BoxShape.circle,
                 gradient: RadialGradient(
                   colors: [
-                    KoalaColors.accentSoft,
-                    KoalaColors.accentSoft.withValues(alpha: 0.0),
+                    KoalaDS.accentTint,
+                    KoalaDS.accentTint.withValues(alpha: 0.0),
                   ],
                   stops: const [0.55, 1.0],
                 ),
@@ -361,7 +355,7 @@ class _NotificationsFeedScreenState
                 child: Icon(
                   LucideIcons.bell,
                   size: 30,
-                  color: KoalaColors.accentDeep,
+                  color: KoalaDS.accentDeep,
                 ),
               ),
             ),
@@ -393,7 +387,7 @@ class _SectionLabel extends StatelessWidget {
         style: const TextStyle(
           fontSize: 13,
           fontWeight: FontWeight.w700,
-          color: Color(0xFF6B7280),
+          color: KoalaDS.inkSoft,
           letterSpacing: 0.2,
         ),
       ),
@@ -461,8 +455,8 @@ class _NotifTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final unread = !notif.read;
     final tileBg = (unread && highlightFirst)
-        ? const Color(0xFFF4F2FE)
-        : Colors.white;
+        ? KoalaDS.accentTint
+        : KoalaDS.surface;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
@@ -517,7 +511,7 @@ class _NotifTile extends StatelessWidget {
                                 style: const TextStyle(
                                   fontSize: 13,
                                   fontWeight: FontWeight.w500,
-                                  color: KoalaColors.textSec,
+                                  color: KoalaDS.inkSoft,
                                   height: 1.35,
                                 ),
                                 maxLines: 2,
@@ -536,14 +530,14 @@ class _NotifTile extends StatelessWidget {
                             style: const TextStyle(
                               fontSize: 12,
                               fontWeight: FontWeight.w600,
-                              color: KoalaColors.textTer,
+                              color: KoalaDS.inkFaint,
                             ),
                           ),
                           const SizedBox(height: 6),
                           const Icon(
                             LucideIcons.chevronRight,
                             size: 16,
-                            color: KoalaColors.textTer,
+                            color: KoalaDS.inkFaint,
                           ),
                         ],
                       ),
@@ -562,7 +556,7 @@ class _NotifTile extends StatelessWidget {
                 height: 12,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: KoalaColors.accentDeep,
+                  color: KoalaDS.accentDeep,
                   border: Border.all(color: Colors.white, width: 2),
                 ),
               ),
@@ -585,15 +579,15 @@ class _Leading extends StatelessWidget {
         return _avatarThumb(notif);
       case _TileKind.ai:
         return _typedSquare(
-          bg: const Color(0xFF1F1B3A),
+          bg: KoalaDS.ink,
           icon: LucideIcons.sparkles,
           iconColor: Colors.white,
         );
       case _TileKind.inspiration:
         return _typedSquare(
-          bg: const Color(0xFFFBEFE0),
+          bg: KoalaDS.clayTint,
           icon: LucideIcons.lamp,
-          iconColor: const Color(0xFF7C5A1E),
+          iconColor: KoalaDS.clay,
         );
       case _TileKind.pro:
         return Container(
@@ -604,7 +598,7 @@ class _Leading extends StatelessWidget {
             gradient: const LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
-              colors: [Color(0xFFE5C879), Color(0xFFD4A853)],
+              colors: [KoalaDS.star, KoalaDS.clay],
             ),
           ),
           child: const Icon(
@@ -617,9 +611,9 @@ class _Leading extends StatelessWidget {
         return _imageSquare(notif);
       case _TileKind.generic:
         return _typedSquare(
-          bg: KoalaColors.accentSoft,
+          bg: KoalaDS.accentTint,
           icon: LucideIcons.bell,
-          iconColor: KoalaColors.accentDeep,
+          iconColor: KoalaDS.accentDeep,
         );
     }
   }
@@ -649,9 +643,9 @@ class _Leading extends StatelessWidget {
         .toString();
     if (url.isEmpty) {
       return _typedSquare(
-        bg: KoalaColors.accentSoft,
+        bg: KoalaDS.accentTint,
         icon: LucideIcons.messageCircle,
-        iconColor: KoalaColors.accentDeep,
+        iconColor: KoalaDS.accentDeep,
       );
     }
     return ClipOval(
@@ -662,14 +656,14 @@ class _Leading extends StatelessWidget {
           imageUrl: url,
           fit: BoxFit.cover,
           memCacheWidth: 220,
-          placeholder: (_, _) => Container(color: KoalaColors.accentSoft),
+          placeholder: (_, _) => Container(color: KoalaDS.accentTint),
           errorWidget: (_, _, _) => Container(
-            color: KoalaColors.accentSoft,
+            color: KoalaDS.accentTint,
             alignment: Alignment.center,
             child: const Icon(
               LucideIcons.user,
               size: 22,
-              color: KoalaColors.accentDeep,
+              color: KoalaDS.accentDeep,
             ),
           ),
         ),
@@ -681,9 +675,9 @@ class _Leading extends StatelessWidget {
     final url = (n.imageUrl ?? n.actionData?['image_url'] ?? '').toString();
     if (url.isEmpty) {
       return _typedSquare(
-        bg: KoalaColors.accentSoft,
+        bg: KoalaDS.accentTint,
         icon: LucideIcons.image,
-        iconColor: KoalaColors.accentDeep,
+        iconColor: KoalaDS.accentDeep,
       );
     }
     return ClipRRect(
@@ -695,14 +689,14 @@ class _Leading extends StatelessWidget {
           imageUrl: url,
           fit: BoxFit.cover,
           memCacheWidth: 220,
-          placeholder: (_, _) => Container(color: KoalaColors.accentSoft),
+          placeholder: (_, _) => Container(color: KoalaDS.accentTint),
           errorWidget: (_, _, _) => Container(
-            color: KoalaColors.accentSoft,
+            color: KoalaDS.accentTint,
             alignment: Alignment.center,
             child: const Icon(
               LucideIcons.image,
               size: 22,
-              color: KoalaColors.accentDeep,
+              color: KoalaDS.accentDeep,
             ),
           ),
         ),

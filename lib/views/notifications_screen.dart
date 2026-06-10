@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../core/theme/koala_ds.dart';
 import '../core/theme/koala_tokens.dart';
 import '../core/utils/format_utils.dart';
 import '../services/notifications_service.dart';
@@ -146,17 +147,17 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   Color _colorForType(String? type) {
     switch (type) {
       case 'new_message':
-        return KoalaColors.accent;
+        return KoalaDS.accent;
       case 'designer_match':
-        return KoalaColors.star;
+        return KoalaDS.star;
       case 'product_recommend':
-        return KoalaColors.green;
+        return KoalaDS.cta;
       case 'style_result':
-        return KoalaColors.pink;
+        return KoalaDS.clay;
       case 'promo':
-        return KoalaColors.errorBright;
+        return KoalaDS.danger;
       default:
-        return KoalaColors.textSec;
+        return KoalaDS.inkSoft;
     }
   }
 
