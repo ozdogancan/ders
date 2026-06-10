@@ -13,6 +13,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../core/theme/koala_ds.dart';
 import '../core/theme/koala_tokens.dart';
 import '../providers/pro_status_provider.dart';
 import '../services/chat_persistence.dart';
@@ -539,13 +540,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                             crossAxisAlignment: CrossAxisAlignment.baseline,
                             textBaseline: TextBaseline.alphabetic,
                             children: [
-                              const Text(
+                              Text(
                                 'koala',
-                                style: TextStyle(
+                                // Marka wordmark — serif display (Fraunces),
+                                // KoalaType token'ından gelir.
+                                style: KoalaType.display2().copyWith(
                                   fontSize: 36,
-                                  fontWeight: FontWeight.w700,
-                                  fontFamily: 'Georgia',
-                                  color: KoalaColors.ink,
                                   letterSpacing: -1.6,
                                   height: 1.0,
                                 ),
@@ -904,7 +904,7 @@ class _ImageCyclerState extends State<_ImageCycler> {
         imageUrl: url,
         fit: BoxFit.cover,
         fadeInDuration: const Duration(milliseconds: 200),
-        placeholder: (_, __) => Container(color: const Color(0xFFEFEAE3)),
+        placeholder: (_, __) => Container(color: KoalaDS.surfaceMuted),
         errorWidget: (_, __, ___) => Image.asset(
           widget.fallbackAsset,
           fit: BoxFit.cover,
@@ -979,7 +979,7 @@ class _HeroCaptureCard extends StatelessWidget {
                             style: TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.w800,
-                              color: Color(0xFF0F172A),
+                              color: KoalaDS.ink,
                               letterSpacing: -0.4,
                               height: 1.15,
                             ),
@@ -992,7 +992,7 @@ class _HeroCaptureCard extends StatelessWidget {
                             style: TextStyle(
                               fontSize: 13,
                               fontWeight: FontWeight.w400,
-                              color: Color(0xFF64748B),
+                              color: KoalaDS.inkSoft,
                               letterSpacing: -0.1,
                               height: 1.25,
                             ),
@@ -1070,7 +1070,7 @@ class _HeroDiscoveryCard extends StatelessWidget {
                             style: TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.w800,
-                              color: Color(0xFF0F172A),
+                              color: KoalaDS.ink,
                               letterSpacing: -0.4,
                               height: 1.15,
                             ),
@@ -1083,7 +1083,7 @@ class _HeroDiscoveryCard extends StatelessWidget {
                             style: TextStyle(
                               fontSize: 13,
                               fontWeight: FontWeight.w400,
-                              color: Color(0xFF64748B),
+                              color: KoalaDS.inkSoft,
                               letterSpacing: -0.1,
                               height: 1.25,
                             ),
@@ -1357,7 +1357,7 @@ class _BeforeAfterShowcaseState extends State<_BeforeAfterShowcase>
                                 child: const Icon(
                                   LucideIcons.arrowLeftRight,
                                   size: 14,
-                                  color: Color(0xFF222222),
+                                  color: KoalaDS.ink,
                                 ),
                               ),
                             ),
@@ -1969,7 +1969,7 @@ class _DesignerMatchPill extends StatelessWidget {
                   imageUrl: _kDesignerAvatarUrl,
                   fit: BoxFit.cover,
                   placeholder: (_, _) => Container(
-                    color: const Color(0xFFEFEAE3),
+                    color: KoalaDS.surfaceMuted,
                     alignment: Alignment.center,
                     child: const Text(
                       'E',
@@ -2014,7 +2014,7 @@ class _DesignerMatchPill extends StatelessWidget {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Icon(LucideIcons.star,
-                          size: 10, color: Color(0xFFE0A53A)),
+                          size: 10, color: KoalaDS.star),
                       SizedBox(width: 3),
                       Text(
                         '4.9 · İstanbul · 8 yıl',
@@ -2184,7 +2184,7 @@ class _SwipeDeckShowcaseState extends State<_SwipeDeckShowcase>
         ? CachedNetworkImage(
             imageUrl: url,
             fit: BoxFit.cover,
-            placeholder: (_, _) => Container(color: const Color(0xFFEFEAE3)),
+            placeholder: (_, _) => Container(color: KoalaDS.surfaceMuted),
             errorWidget: (_, _, _) =>
                 Image.asset(widget.fallbackAsset, fit: BoxFit.cover),
           )
