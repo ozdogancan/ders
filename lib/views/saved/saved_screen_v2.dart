@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
+import '../../core/theme/koala_ds.dart';
 import '../../core/theme/koala_tokens.dart';
 import '../../services/saved_items_service.dart';
 import '../../widgets/koala_back_button.dart';
@@ -113,11 +114,11 @@ class _SavedScreenV2State extends State<SavedScreenV2> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: KoalaColors.bg,
+      backgroundColor: KoalaDS.bg,
       body: SafeArea(
         child: RefreshIndicator(
           onRefresh: _refresh,
-          color: KoalaColors.accentDeep,
+          color: KoalaDS.accentDeep,
           child: FutureBuilder<_SavedData>(
             future: _future,
             builder: (context, snap) {
@@ -240,7 +241,7 @@ class _SavedScreenV2State extends State<SavedScreenV2> {
                 padding: const EdgeInsets.symmetric(
                     horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
-                  color: KoalaColors.accentSoft,
+                  color: KoalaDS.accentTint,
                   borderRadius: BorderRadius.circular(KoalaRadius.pill),
                 ),
                 child: Text(
@@ -248,7 +249,7 @@ class _SavedScreenV2State extends State<SavedScreenV2> {
                   style: const TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w700,
-                    color: KoalaColors.accentDeep,
+                    color: KoalaDS.accentDeep,
                   ),
                 ),
               ),
@@ -301,7 +302,7 @@ class _SavedScreenV2State extends State<SavedScreenV2> {
                 child: FilledButton.icon(
                   onPressed: () => context.go('/explore'),
                   style: FilledButton.styleFrom(
-                    backgroundColor: KoalaColors.accentDeep,
+                    backgroundColor: KoalaDS.accentDeep,
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     shape: RoundedRectangleBorder(
@@ -331,9 +332,9 @@ class _SavedScreenV2State extends State<SavedScreenV2> {
       child: Stack(
         alignment: Alignment.center,
         children: [
-          _deckCard(-12, KoalaColors.surfaceAlt),
-          _deckCard(0, KoalaColors.accentSoft),
-          _deckCard(12, KoalaColors.greenLight),
+          _deckCard(-12, KoalaDS.surfaceMuted),
+          _deckCard(0, KoalaDS.accentTint),
+          _deckCard(12, KoalaDS.ctaTint),
         ],
       ),
     )
@@ -355,13 +356,7 @@ class _SavedScreenV2State extends State<SavedScreenV2> {
         decoration: BoxDecoration(
           color: color,
           borderRadius: BorderRadius.circular(KoalaRadius.lg),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.06),
-              blurRadius: 14,
-              offset: const Offset(0, 4),
-            ),
-          ],
+          boxShadow: KoalaElev.card,
         ),
       ),
     );
@@ -383,7 +378,7 @@ class _SavedScreenV2State extends State<SavedScreenV2> {
             itemBuilder: (_, i) => Container(
               width: 260,
               decoration: BoxDecoration(
-                color: KoalaColors.surfaceAlt,
+                color: KoalaDS.surfaceMuted,
                 borderRadius: BorderRadius.circular(KoalaRadius.xl),
               ),
             )
@@ -391,7 +386,7 @@ class _SavedScreenV2State extends State<SavedScreenV2> {
                 .shimmer(
                   delay: (i * 120).ms,
                   duration: 1400.ms,
-                  color: KoalaColors.surface.withValues(alpha: 0.6),
+                  color: KoalaDS.surface.withValues(alpha: 0.6),
                 ),
           ),
         ),
@@ -426,11 +421,11 @@ class _WordNavDelegate extends SliverPersistentHeaderDelegate {
     return AnimatedContainer(
       duration: const Duration(milliseconds: 200),
       decoration: BoxDecoration(
-        color: pinned ? KoalaColors.bg : Colors.transparent,
+        color: pinned ? KoalaDS.bg : Colors.transparent,
         border: Border(
           bottom: BorderSide(
             color: pinned
-                ? KoalaColors.border
+                ? KoalaDS.lineSoft
                 : Colors.transparent,
             width: 0.5,
           ),
@@ -448,7 +443,7 @@ class _WordNavDelegate extends SliverPersistentHeaderDelegate {
                 child: Text(
                   '·',
                   style: TextStyle(
-                    color: KoalaColors.textTer,
+                    color: KoalaDS.inkFaint,
                     fontSize: 15,
                   ),
                 ),
@@ -470,7 +465,7 @@ class _WordNavDelegate extends SliverPersistentHeaderDelegate {
         style: KoalaText.serif(
           fontSize: 15,
           fontWeight: FontWeight.w600,
-          color: isActive ? KoalaColors.accentDeep : KoalaColors.textSec,
+          color: isActive ? KoalaDS.accentDeep : KoalaDS.inkSoft,
           letterSpacing: -0.1,
         ),
         child: Column(
@@ -490,8 +485,8 @@ class _WordNavDelegate extends SliverPersistentHeaderDelegate {
                       fontSize: 10,
                       fontWeight: FontWeight.w600,
                       color: isActive
-                          ? KoalaColors.accentDeep
-                          : KoalaColors.textTer,
+                          ? KoalaDS.accentDeep
+                          : KoalaDS.inkFaint,
                     ),
                   ),
                 ],
@@ -503,7 +498,7 @@ class _WordNavDelegate extends SliverPersistentHeaderDelegate {
               curve: Curves.easeOutCubic,
               height: 1,
               width: isActive ? 16 : 0,
-              color: KoalaColors.accentDeep,
+              color: KoalaDS.accentDeep,
             ),
           ],
         ),
@@ -542,7 +537,7 @@ abstract class _BaseRail extends StatelessWidget {
             style: KoalaText.serif(
               fontSize: 22,
               fontWeight: FontWeight.w700,
-              color: KoalaColors.text,
+              color: KoalaDS.ink,
               letterSpacing: -0.4,
             ),
           ),
@@ -551,7 +546,7 @@ abstract class _BaseRail extends StatelessWidget {
             '$count',
             style: const TextStyle(
               fontSize: 12,
-              color: KoalaColors.textTer,
+              color: KoalaDS.inkFaint,
               fontWeight: FontWeight.w600,
             ),
           ),
@@ -562,7 +557,7 @@ abstract class _BaseRail extends StatelessWidget {
               child: Text(
                 'Tümü',
                 style: KoalaText.bodySmall.copyWith(
-                  color: KoalaColors.accentDeep,
+                  color: KoalaDS.accentDeep,
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -582,7 +577,7 @@ abstract class _BaseRail extends StatelessWidget {
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(KoalaRadius.lg),
         border: Border.all(
-          color: KoalaColors.border,
+          color: KoalaDS.lineSoft,
           width: 0.5,
           style: BorderStyle.solid,
         ),
@@ -590,7 +585,7 @@ abstract class _BaseRail extends StatelessWidget {
       alignment: Alignment.center,
       child: Text(
         copy,
-        style: KoalaText.bodySmall.copyWith(color: KoalaColors.textSec),
+        style: KoalaText.bodySmall.copyWith(color: KoalaDS.inkSoft),
         textAlign: TextAlign.center,
       ),
     );
@@ -706,7 +701,7 @@ class _DesignRailCardState extends State<_DesignRailCard> {
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-                  Container(color: KoalaColors.surfaceAlt),
+                  Container(color: KoalaDS.surfaceMuted),
                   if (imageUrl.isNotEmpty)
                     CachedNetworkImage(
                       imageUrl: imageUrl,
@@ -716,11 +711,11 @@ class _DesignRailCardState extends State<_DesignRailCard> {
                               .round(),
                       fadeInDuration: const Duration(milliseconds: 280),
                       errorWidget: (_, _, _) => Container(
-                        color: KoalaColors.surfaceAlt,
+                        color: KoalaDS.surfaceMuted,
                         alignment: Alignment.center,
                         child: const Icon(
                             LucideIcons.imageOff,
-                            color: KoalaColors.textTer),
+                            color: KoalaDS.inkFaint),
                       ),
                     ),
                   const DecoratedBox(
@@ -731,7 +726,7 @@ class _DesignRailCardState extends State<_DesignRailCard> {
                         colors: [
                           Colors.transparent,
                           Colors.transparent,
-                          Color(0xCC000000),
+                          KoalaDS.overlay,
                         ],
                         stops: [0.0, 0.5, 1.0],
                       ),
@@ -828,16 +823,10 @@ class _ProductRailCard extends StatelessWidget {
     return Container(
       width: 160,
       decoration: BoxDecoration(
-        color: KoalaColors.surface,
+        color: KoalaDS.surface,
         borderRadius: BorderRadius.circular(KoalaRadius.lg),
-        border: Border.all(color: KoalaColors.border, width: 0.5),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 10,
-            offset: const Offset(0, 3),
-          ),
-        ],
+        border: Border.all(color: KoalaDS.lineSoft, width: 0.5),
+        boxShadow: KoalaElev.card,
       ),
       padding: const EdgeInsets.all(6),
       child: Column(
@@ -849,10 +838,10 @@ class _ProductRailCard extends StatelessWidget {
               borderRadius: BorderRadius.circular(KoalaRadius.md),
               child: imageUrl.isEmpty
                   ? Container(
-                      color: KoalaColors.surfaceAlt,
+                      color: KoalaDS.surfaceMuted,
                       alignment: Alignment.center,
                       child: const Icon(LucideIcons.armchair,
-                          color: KoalaColors.textTer, size: 28),
+                          color: KoalaDS.inkFaint, size: 28),
                     )
                   : CachedNetworkImage(
                       imageUrl: imageUrl,
@@ -862,11 +851,11 @@ class _ProductRailCard extends StatelessWidget {
                               .round(),
                       fadeInDuration: const Duration(milliseconds: 240),
                       errorWidget: (_, _, _) => Container(
-                        color: KoalaColors.surfaceAlt,
+                        color: KoalaDS.surfaceMuted,
                         alignment: Alignment.center,
                         child: const Icon(
                             LucideIcons.imageOff,
-                            color: KoalaColors.textTer),
+                            color: KoalaDS.inkFaint),
                       ),
                     ),
             ),
@@ -889,7 +878,7 @@ class _ProductRailCard extends StatelessWidget {
                 style: const TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w700,
-                  color: KoalaColors.green,
+                  color: KoalaDS.cta,
                 ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
@@ -950,9 +939,9 @@ class _DesignerRailCard extends StatelessWidget {
     return Container(
       width: 280,
       decoration: BoxDecoration(
-        color: KoalaColors.surface,
+        color: KoalaDS.surface,
         borderRadius: BorderRadius.circular(KoalaRadius.lg),
-        border: Border.all(color: KoalaColors.border, width: 0.5),
+        border: Border.all(color: KoalaDS.lineSoft, width: 0.5),
       ),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
       child: Row(
@@ -962,13 +951,13 @@ class _DesignerRailCard extends StatelessWidget {
             height: 64,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              border: Border.all(color: KoalaColors.accentSoft, width: 2),
+              border: Border.all(color: KoalaDS.accentTint, width: 2),
             ),
             padding: const EdgeInsets.all(2),
             child: ClipOval(
               child: imageUrl.isEmpty
                   ? Container(
-                      color: KoalaColors.surfaceAlt,
+                      color: KoalaDS.surfaceMuted,
                       alignment: Alignment.center,
                       child: Text(
                         name.isEmpty
@@ -984,10 +973,10 @@ class _DesignerRailCard extends StatelessWidget {
                           (64 * MediaQuery.of(context).devicePixelRatio)
                               .round(),
                       errorWidget: (_, _, _) => Container(
-                        color: KoalaColors.surfaceAlt,
+                        color: KoalaDS.surfaceMuted,
                         alignment: Alignment.center,
                         child: const Icon(LucideIcons.user,
-                            color: KoalaColors.textTer),
+                            color: KoalaDS.inkFaint),
                       ),
                     ),
             ),
@@ -1010,7 +999,7 @@ class _DesignerRailCard extends StatelessWidget {
                   style: const TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w600,
-                    color: KoalaColors.textSec,
+                    color: KoalaDS.inkSoft,
                     letterSpacing: 0.8,
                   ),
                   maxLines: 1,
@@ -1024,14 +1013,14 @@ class _DesignerRailCard extends StatelessWidget {
             width: 36,
             height: 36,
             decoration: const BoxDecoration(
-              color: KoalaColors.accentSoft,
+              color: KoalaDS.accentTint,
               shape: BoxShape.circle,
             ),
             alignment: Alignment.center,
             child: const Icon(
               LucideIcons.messageCircle,
               size: 16,
-              color: KoalaColors.accentDeep,
+              color: KoalaDS.accentDeep,
             ),
           ),
         ],
@@ -1099,9 +1088,9 @@ class _PaletteRailCard extends StatelessWidget {
     final seed = name.hashCode;
     return [
       Color(0xFF000000 | (seed & 0xFFFFFF)),
-      KoalaColors.accentSoft,
-      KoalaColors.greenLight,
-      KoalaColors.surfaceAlt,
+      KoalaDS.accentTint,
+      KoalaDS.ctaTint,
+      KoalaDS.surfaceMuted,
     ];
   }
 
@@ -1137,7 +1126,7 @@ class _PaletteRailCard extends StatelessWidget {
             Positioned(
               left: 0, right: 0, bottom: 0,
               child: Container(
-                color: const Color(0xCC000000),
+                color: KoalaDS.overlay,
                 padding: const EdgeInsets.symmetric(
                     horizontal: 10, vertical: 10),
                 child: Text(
