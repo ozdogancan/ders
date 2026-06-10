@@ -32,7 +32,7 @@ workflows:
       groups:
         - koala_ios            # REVENUECAT_IOS_KEY, SUPABASE_ANON_KEY, EVLUMBA_SUPABASE_ANON_KEY
       vars:
-        APP_VERSION: "2.0.0-preview+182"
+        APP_VERSION: "2.0.0-preview+183"
         KOALA_API_URL: "https://koala-api-olive.vercel.app"
         SUPABASE_URL: "https://xgefjepaqnghaotqybpi.supabase.co"
         EVLUMBA_SUPABASE_URL: "https://vgtgcjnrsladdharzkwn.supabase.co"
