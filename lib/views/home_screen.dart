@@ -35,6 +35,7 @@ import 'main_shell.dart';
 // import 'home/widgets/ai_tools_section.dart'; // 2026-05-26 AI tab basitleştirildi
 
 import '../widgets/koala_bottom_nav.dart';
+import '../widgets/shimmer_loading.dart';
 import '../widgets/style_discovery_pull.dart'; // GlobalKey type için tutuldu
 // import 'home/widgets/continue_design_card.dart'; // 2026-04-30 kaldırıldı
 
@@ -3417,7 +3418,7 @@ class _CommunityStrip extends StatelessWidget {
         SizedBox(
           height: 168,
           child: items == null
-              // Skeleton — krem-tinted placeholder'lar (DS: surfaceMuted).
+              // Skeleton — warm shimmer kartlar (DS: surfaceMuted/surface).
               ? ListView.separated(
                   scrollDirection: Axis.horizontal,
                   padding:
@@ -3426,12 +3427,10 @@ class _CommunityStrip extends StatelessWidget {
                   itemCount: 3,
                   separatorBuilder: (_, _) =>
                       const SizedBox(width: KoalaGap.md),
-                  itemBuilder: (_, _) => Container(
+                  itemBuilder: (_, _) => const ShimmerCard(
                     width: 136,
-                    decoration: BoxDecoration(
-                      color: KoalaDS.surfaceMuted,
-                      borderRadius: BorderRadius.circular(KoalaR.md),
-                    ),
+                    height: 168,
+                    borderRadius: KoalaR.md,
                   ),
                 )
               : ListView.separated(

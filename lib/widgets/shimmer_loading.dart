@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../core/theme/koala_ds.dart';
 import '../core/theme/koala_tokens.dart';
 
 /// Shimmer efektli skeleton loading widget'ları.
@@ -55,10 +56,12 @@ class _ShimmerCardState extends State<ShimmerCard>
           gradient: LinearGradient(
             begin: Alignment(_anim.value - 1, 0),
             end: Alignment(_anim.value, 0),
+            // Warm-premium iskelet — soğuk gri yok; krem zemin + beyaz süpürme
+            // (KoalaDS.surfaceMuted/surface tonları).
             colors: const [
-              KoalaColors.surfaceAlt,
-              KoalaColors.surfaceCool,
-              KoalaColors.surfaceAlt,
+              KoalaDS.surfaceMuted,
+              KoalaDS.surface,
+              KoalaDS.surfaceMuted,
             ],
           ),
         ),

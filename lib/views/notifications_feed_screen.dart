@@ -12,6 +12,7 @@ import '../core/utils/format_utils.dart';
 import '../helpers/paywall_router.dart';
 import '../services/notifications_feed_service.dart';
 import '../widgets/koala_back_button.dart';
+import '../widgets/shimmer_loading.dart';
 import 'designer_profile_screen.dart';
 import 'my_designs/design_detail_screen.dart';
 import 'projeler_screen.dart' show ProjectItem, ProjectDetailScreen;
@@ -286,7 +287,13 @@ class _NotificationsFeedScreenState
         ],
       ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator())
+          // Spinner yerine kart-stili iskelet — tile yüksekliğiyle uyumlu.
+          ? const ShimmerList(
+              itemCount: 6,
+              cardHeight: 84,
+              spacing: 8,
+              padding: EdgeInsets.fromLTRB(20, 8, 20, 0),
+            )
           : _items.isEmpty
               ? RefreshIndicator(
                   onRefresh: _onRefresh,
