@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../core/theme/koala_tokens.dart';
 import '../services/quota_service.dart';
 import '../services/saved_items_service.dart';
@@ -87,6 +88,7 @@ class _SaveButtonState extends State<SaveButton>
 
   Future<void> _toggle() async {
     if (_loading) return;
+    HapticFeedback.lightImpact();
     setState(() => _loading = true);
 
     final result = await SavedItemsService.toggle(

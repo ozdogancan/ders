@@ -21,6 +21,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:purchases_flutter/purchases_flutter.dart';
@@ -311,6 +312,8 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
       final ok = await BillingService.purchase(match);
       if (!mounted) return;
       if (ok) {
+        // Satın alma başarı anı — somut dokunsal onay.
+        HapticFeedback.mediumImpact();
         await UsageLimitService.resetAll();
         notePaywallConverted(widget.trigger);
         if (!mounted) return;

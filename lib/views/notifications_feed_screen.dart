@@ -1,5 +1,6 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
@@ -48,6 +49,12 @@ class _NotificationsFeedScreenState
       } catch (_) {}
     });
     super.dispose();
+  }
+
+  Future<void> _onRefresh() {
+    // Pull-to-refresh tetiklenince hafif dokunsal geri bildirim.
+    HapticFeedback.lightImpact();
+    return _load();
   }
 
   Future<void> _load() async {
@@ -282,7 +289,7 @@ class _NotificationsFeedScreenState
           ? const Center(child: CircularProgressIndicator())
           : _items.isEmpty
               ? RefreshIndicator(
-                  onRefresh: _load,
+                  onRefresh: _onRefresh,
                   color: KoalaColors.accent,
                   child: ListView(
                     physics: const AlwaysScrollableScrollPhysics(),
@@ -295,7 +302,7 @@ class _NotificationsFeedScreenState
                   ),
                 )
               : RefreshIndicator(
-                  onRefresh: _load,
+                  onRefresh: _onRefresh,
                   color: KoalaColors.accent,
                   child: _buildList(firstUnreadId: firstUnreadId),
                 ),

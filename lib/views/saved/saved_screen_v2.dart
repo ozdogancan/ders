@@ -94,6 +94,8 @@ class _SavedScreenV2State extends State<SavedScreenV2> {
   }
 
   Future<void> _refresh() async {
+    // Pull-to-refresh tetiklenince hafif dokunsal geri bildirim.
+    HapticFeedback.lightImpact();
     setState(() => _future = _loadAll());
     await _future;
   }

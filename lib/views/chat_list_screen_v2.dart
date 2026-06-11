@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../widgets/koala_avatar.dart';
@@ -313,6 +314,8 @@ class _ChatListScreenV2State extends State<ChatListScreenV2> {
   }
 
   Future<void> _manualSync() async {
+    // Pull-to-refresh tetiklenince hafif dokunsal geri bildirim.
+    HapticFeedback.lightImpact();
     final messenger = ScaffoldMessenger.maybeOf(context);
     try {
       final synced = await MessagingService.pullInbound();

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
 import '../core/theme/koala_ds.dart';
@@ -242,7 +243,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
                         ),
                       )
                     : RefreshIndicator(
-                        onRefresh: _load,
+                        onRefresh: _onRefresh,
                         color: KoalaDS.accent,
                         child: _buildGrid(),
                       ),
@@ -250,6 +251,12 @@ class _ExploreScreenState extends State<ExploreScreen> {
         ],
       ),
     );
+  }
+
+  Future<void> _onRefresh() {
+    // Pull-to-refresh tetiklenince hafif dokunsal geri bildirim.
+    HapticFeedback.lightImpact();
+    return _load();
   }
 
   Widget _buildGrid() {
