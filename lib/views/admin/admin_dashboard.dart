@@ -1,7 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' hide User;
+import '../../core/theme/koala_ds.dart';
 import '../../core/theme/koala_tokens.dart';
 import '../../widgets/koala_widgets.dart';
+
+// Warm DS kart dekorasyonlari — KoalaDeco (soguk %6 siyah border) yerine.
+BoxDecoration get _dsCard => BoxDecoration(
+      color: KoalaDS.surface,
+      borderRadius: BorderRadius.circular(KoalaR.lg),
+      border: Border.all(color: KoalaDS.line, width: 0.5),
+    );
+
+BoxDecoration get _dsCardElevated => BoxDecoration(
+      color: KoalaDS.surface,
+      borderRadius: BorderRadius.circular(KoalaR.lg),
+      border: Border.all(color: KoalaDS.line, width: 0.5),
+      boxShadow: KoalaElev.card,
+    );
 
 /// Admin Dashboard — yonetici icin tum KPI / metrik ozeti.
 ///
@@ -66,10 +81,10 @@ class _AdminDashboardState extends State<AdminDashboard> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: KoalaColors.bg,
+      backgroundColor: KoalaDS.bg,
       appBar: AppBar(
-        backgroundColor: KoalaColors.bg,
-        surfaceTintColor: KoalaColors.bg,
+        backgroundColor: KoalaDS.bg,
+        surfaceTintColor: KoalaDS.bg,
         elevation: 0,
         title: const Text('Yönetim Paneli', style: KoalaText.h2),
         automaticallyImplyLeading: false,
@@ -81,7 +96,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 constraints: const BoxConstraints(maxWidth: 920),
                 child: RefreshIndicator(
               onRefresh: _load,
-              color: KoalaColors.accent,
+              color: KoalaDS.accent,
               child: ListView(
                 padding: const EdgeInsets.all(KoalaSpacing.lg),
                 children: _error != null
@@ -110,7 +125,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
   Widget _errorBox(String msg) => Container(
         padding: const EdgeInsets.all(KoalaSpacing.lg),
         decoration: BoxDecoration(
-          color: KoalaColors.error.withValues(alpha: 0.08),
+          color: KoalaDS.danger.withValues(alpha: 0.08),
           borderRadius: BorderRadius.circular(KoalaRadius.md),
         ),
         child: Text('Panel yüklenemedi: $msg', style: KoalaText.bodySec),
@@ -122,9 +137,9 @@ class _AdminDashboardState extends State<AdminDashboard> {
       width: double.infinity,
       padding: const EdgeInsets.all(KoalaSpacing.xl),
       decoration: BoxDecoration(
-        gradient: KoalaColors.accentGradientV,
+        gradient: KoalaDS.accentGradient,
         borderRadius: BorderRadius.circular(KoalaRadius.xl),
-        boxShadow: KoalaShadows.accentGlow,
+        boxShadow: KoalaElev.accentGlow,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -198,55 +213,55 @@ class _AdminDashboardState extends State<AdminDashboard> {
     return _section('Genel Özet', [
       _StatCard(
         icon: Icons.groups_rounded,
-        color: KoalaColors.accent,
+        color: KoalaDS.accent,
         label: 'Tekil ziyaretçi',
         value: _v('summary', 'unique_visitors'),
       ),
       _StatCard(
         icon: Icons.badge_rounded,
-        color: KoalaColors.accentMuted,
+        color: KoalaDS.accent,
         label: 'Kayıtlı kullanıcı',
         value: _v('summary', 'registered_users'),
       ),
       _StatCard(
         icon: Icons.workspace_premium_rounded,
-        color: KoalaColors.star,
+        color: KoalaDS.star,
         label: 'Profesyonel (tasarımcı)',
         value: _v('summary', 'professionals'),
       ),
       _StatCard(
         icon: Icons.verified_rounded,
-        color: KoalaColors.accentDeep,
+        color: KoalaDS.accentDeep,
         label: 'Pro üye',
         value: _v('summary', 'registered_pros'),
       ),
       _StatCard(
         icon: Icons.home_rounded,
-        color: KoalaColors.blue,
+        color: KoalaDS.clay,
         label: 'Ev sahibi',
         value: _v('summary', 'homeowners'),
       ),
       _StatCard(
         icon: Icons.image_rounded,
-        color: KoalaColors.green,
+        color: KoalaDS.cta,
         label: 'Toplam tasarım',
         value: _v('summary', 'total_designs'),
       ),
       _StatCard(
         icon: Icons.how_to_reg_rounded,
-        color: KoalaColors.warning,
+        color: KoalaDS.star,
         label: 'Bekleyen başvuru',
         value: _v('summary', 'pro_applications_pending'),
       ),
       _StatCard(
         icon: Icons.favorite_rounded,
-        color: KoalaColors.pink,
+        color: KoalaDS.clay,
         label: 'Takip',
         value: _v('summary', 'follows'),
       ),
       _StatCard(
         icon: Icons.forum_rounded,
-        color: KoalaColors.like,
+        color: KoalaDS.cta,
         label: 'Toplam mesaj',
         value: _v('summary', 'messages'),
       ),
@@ -258,25 +273,25 @@ class _AdminDashboardState extends State<AdminDashboard> {
     return _section('Kullanıcılar', [
       _StatCard(
         icon: Icons.people_alt_rounded,
-        color: KoalaColors.accent,
+        color: KoalaDS.accent,
         label: 'Toplam kullanıcı',
         value: _v('active', 'total_users'),
       ),
       _StatCard(
         icon: Icons.person_add_rounded,
-        color: KoalaColors.green,
+        color: KoalaDS.cta,
         label: 'Yeni — bugün',
         value: _v('new_users', 'today'),
       ),
       _StatCard(
         icon: Icons.trending_up_rounded,
-        color: KoalaColors.greenAlt,
+        color: KoalaDS.cta,
         label: 'Yeni — 7 gün',
         value: _v('new_users', 'd7'),
       ),
       _StatCard(
         icon: Icons.calendar_month_rounded,
-        color: KoalaColors.blue,
+        color: KoalaDS.clay,
         label: 'Yeni — 30 gün',
         value: _v('new_users', 'd30'),
       ),
@@ -291,25 +306,25 @@ class _AdminDashboardState extends State<AdminDashboard> {
     return _section('Pro & Dönüşüm (7 gün)', [
       _StatCard(
         icon: Icons.workspace_premium_rounded,
-        color: KoalaColors.star,
+        color: KoalaDS.star,
         label: 'Aktif Pro üye',
         value: _v('pro', 'active'),
       ),
       _StatCard(
         icon: Icons.visibility_rounded,
-        color: KoalaColors.accentMuted,
+        color: KoalaDS.accent,
         label: 'Paywall gösterimi',
         value: views,
       ),
       _StatCard(
         icon: Icons.ads_click_rounded,
-        color: KoalaColors.pink,
+        color: KoalaDS.clay,
         label: 'Paywall CTA tıklaması',
         value: cta,
       ),
       _StatCard(
         icon: Icons.percent_rounded,
-        color: KoalaColors.green,
+        color: KoalaDS.cta,
         label: 'CTA dönüşümü',
         valueText: '${conv.toStringAsFixed(1)}%',
       ),
@@ -325,37 +340,37 @@ class _AdminDashboardState extends State<AdminDashboard> {
     return _section('Etkileşim (7 gün)', [
       _StatCard(
         icon: Icons.favorite_rounded,
-        color: KoalaColors.like,
+        color: KoalaDS.cta,
         label: 'Tarz beğenisi',
         value: likes,
       ),
       _StatCard(
         icon: Icons.thumb_down_rounded,
-        color: KoalaColors.dislike,
+        color: KoalaDS.clay,
         label: 'Tarz geçişi',
         value: passes,
       ),
       _StatCard(
         icon: Icons.insights_rounded,
-        color: KoalaColors.green,
+        color: KoalaDS.cta,
         label: 'Beğeni oranı',
         valueText: '${likeRate.toStringAsFixed(0)}%',
       ),
       _StatCard(
         icon: Icons.bookmark_rounded,
-        color: KoalaColors.accent,
+        color: KoalaDS.accent,
         label: 'Toplam kaydetme',
         value: _v('engagement', 'saves_total'),
       ),
       _StatCard(
         icon: Icons.ios_share_rounded,
-        color: KoalaColors.blue,
+        color: KoalaDS.clay,
         label: 'Paylaşım',
         value: _v('engagement', 'shares_7d'),
       ),
       _StatCard(
         icon: Icons.touch_app_rounded,
-        color: KoalaColors.accentMuted,
+        color: KoalaDS.accent,
         label: 'Bugün uygulama açılışı',
         value: _v('engagement', 'app_opens_today'),
       ),
@@ -373,25 +388,25 @@ class _AdminDashboardState extends State<AdminDashboard> {
     return _section('AI Kullanımı (7 gün)', [
       _StatCard(
         icon: Icons.chat_bubble_rounded,
-        color: KoalaColors.accent,
+        color: KoalaDS.accent,
         label: 'AI sohbet',
         value: chats,
       ),
       _StatCard(
         icon: Icons.photo_camera_rounded,
-        color: KoalaColors.blue,
+        color: KoalaDS.clay,
         label: 'Oda analizi',
         value: rooms,
       ),
       _StatCard(
         icon: Icons.auto_awesome_rounded,
-        color: KoalaColors.star,
+        color: KoalaDS.star,
         label: 'Restyle üretimi',
         value: restyles,
       ),
       _StatCard(
         icon: Icons.error_outline_rounded,
-        color: errors > 0 ? KoalaColors.error : KoalaColors.green,
+        color: errors > 0 ? KoalaDS.danger : KoalaDS.cta,
         label: 'AI hatası',
         value: errors,
         sub: '%${errRate.toStringAsFixed(1)} hata oranı',
@@ -418,13 +433,13 @@ class _AdminDashboardState extends State<AdminDashboard> {
           children: [
             _StatCard(
               icon: Icons.forum_rounded,
-              color: KoalaColors.accent,
+              color: KoalaDS.accent,
               label: 'Aktif konuşma',
               value: _v('messaging', 'conversations_active'),
             ),
             _StatCard(
               icon: Icons.mark_chat_unread_rounded,
-              color: KoalaColors.pink,
+              color: KoalaDS.clay,
               label: 'Bugün mesaj',
               value: _v('messaging', 'messages_today'),
             ),
@@ -438,12 +453,12 @@ class _AdminDashboardState extends State<AdminDashboard> {
           child: Container(
             padding: const EdgeInsets.all(KoalaSpacing.md),
             decoration: BoxDecoration(
-              color: KoalaColors.surface,
+              color: KoalaDS.surface,
               borderRadius: BorderRadius.circular(KoalaRadius.md),
               border: Border.all(
                 color: breached > 0
-                    ? KoalaColors.error.withValues(alpha: 0.4)
-                    : KoalaColors.border,
+                    ? KoalaDS.danger.withValues(alpha: 0.4)
+                    : KoalaDS.line,
               ),
             ),
             child: Row(
@@ -451,20 +466,20 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 Icon(Icons.timer_rounded,
                     size: 20,
                     color: breached > 0
-                        ? KoalaColors.error
-                        : KoalaColors.textSec),
+                        ? KoalaDS.danger
+                        : KoalaDS.inkSoft),
                 const SizedBox(width: KoalaSpacing.sm),
                 const Expanded(
                   child: Text('SLA durumu', style: KoalaText.label),
                 ),
-                _slaPill('$breached', '24s+', KoalaColors.error),
+                _slaPill('$breached', '24s+', KoalaDS.danger),
                 const SizedBox(width: 6),
-                _slaPill('$warning', 'uyarı', KoalaColors.warning),
+                _slaPill('$warning', 'uyarı', KoalaDS.star),
                 const SizedBox(width: 6),
-                _slaPill('$escalated', 'eskale', KoalaColors.blue),
+                _slaPill('$escalated', 'eskale', KoalaDS.clay),
                 const SizedBox(width: 4),
                 const Icon(Icons.chevron_right_rounded,
-                    size: 18, color: KoalaColors.textTer),
+                    size: 18, color: KoalaDS.inkFaint),
               ],
             ),
           ),
@@ -499,13 +514,13 @@ class _AdminDashboardState extends State<AdminDashboard> {
     return _section('İçerik', [
       _StatCard(
         icon: Icons.dashboard_customize_rounded,
-        color: KoalaColors.accentDeep,
+        color: KoalaDS.accentDeep,
         label: 'Yayında feed kartı',
         value: cards,
       ),
       _StatCard(
         icon: Icons.collections_rounded,
-        color: KoalaColors.accentMuted,
+        color: KoalaDS.accent,
         label: 'Toplam feed kartı',
         value: _v('content', 'feed_cards_total'),
       ),
@@ -529,7 +544,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
         _sectionHeader('Platform Dağılımı (30 gün)'),
         Container(
           padding: const EdgeInsets.all(KoalaSpacing.lg),
-          decoration: KoalaDeco.cardElevated,
+          decoration: _dsCardElevated,
           child: Column(
             children: [
               ClipRRect(
@@ -540,19 +555,19 @@ class _AdminDashboardState extends State<AdminDashboard> {
                       Expanded(
                         flex: android,
                         child: Container(
-                            height: 12, color: KoalaColors.green),
+                            height: 12, color: KoalaDS.cta),
                       ),
                     if (web > 0)
                       Expanded(
                         flex: web,
                         child: Container(
-                            height: 12, color: KoalaColors.accent),
+                            height: 12, color: KoalaDS.accent),
                       ),
                     if (other > 0)
                       Expanded(
                         flex: other,
                         child: Container(
-                            height: 12, color: KoalaColors.textTer),
+                            height: 12, color: KoalaDS.inkFaint),
                       ),
                   ],
                 ),
@@ -560,11 +575,11 @@ class _AdminDashboardState extends State<AdminDashboard> {
               const SizedBox(height: KoalaSpacing.md),
               Row(
                 children: [
-                  _legend(KoalaColors.green, 'Android', android,
+                  _legend(KoalaDS.cta, 'Android', android,
                       android / total),
-                  _legend(KoalaColors.accent, 'Web', web, web / total),
+                  _legend(KoalaDS.accent, 'Web', web, web / total),
                   if (other > 0)
-                    _legend(KoalaColors.textTer, 'Diğer', other,
+                    _legend(KoalaDS.inkFaint, 'Diğer', other,
                         other / total),
                 ],
               ),
@@ -616,7 +631,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
         _sectionHeader('En Çok Olay (7 gün)'),
         Container(
           padding: const EdgeInsets.all(KoalaSpacing.lg),
-          decoration: KoalaDeco.cardElevated,
+          decoration: _dsCardElevated,
           child: Column(
             children: [
               for (final e in list)
@@ -640,9 +655,9 @@ class _AdminDashboardState extends State<AdminDashboard> {
                           child: LinearProgressIndicator(
                             value: countOf(e) / maxCount,
                             minHeight: 8,
-                            backgroundColor: KoalaColors.surfaceAlt,
+                            backgroundColor: KoalaDS.surfaceMuted,
                             valueColor: const AlwaysStoppedAnimation(
-                                KoalaColors.accent),
+                                KoalaDS.accent),
                           ),
                         ),
                       ),
@@ -693,11 +708,11 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 onTap: () => widget.onNavigate?.call(it.$3),
                 behavior: HitTestBehavior.opaque,
                 child: Container(
-                  decoration: KoalaDeco.card,
+                  decoration: _dsCard,
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(it.$1, size: 24, color: KoalaColors.accent),
+                      Icon(it.$1, size: 24, color: KoalaDS.accent),
                       const SizedBox(height: KoalaSpacing.sm),
                       Text(it.$2,
                           textAlign: TextAlign.center,
@@ -760,7 +775,7 @@ class _StatCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(KoalaSpacing.md),
-      decoration: KoalaDeco.cardElevated,
+      decoration: _dsCardElevated,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -779,7 +794,7 @@ class _StatCard extends StatelessWidget {
             children: [
               Text(
                 valueText ?? '${value ?? 0}',
-                style: KoalaText.h1.copyWith(color: KoalaColors.text),
+                style: KoalaText.h1.copyWith(color: KoalaDS.ink),
               ),
               Text(label,
                   style: KoalaText.labelSmall,

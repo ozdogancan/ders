@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' hide User;
+import '../../core/theme/koala_ds.dart';
 import '../../core/theme/koala_tokens.dart';
 import '../../widgets/koala_widgets.dart';
 
@@ -61,10 +62,10 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: KoalaColors.bg,
+      backgroundColor: KoalaDS.bg,
       appBar: AppBar(
-        backgroundColor: KoalaColors.bg,
-        surfaceTintColor: KoalaColors.bg,
+        backgroundColor: KoalaDS.bg,
+        surfaceTintColor: KoalaDS.bg,
         elevation: 0,
         title: const Text('Analytics', style: KoalaText.h2),
         automaticallyImplyLeading: false,
@@ -95,7 +96,7 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
                     ? const Center(child: Text('Bu dönemde event yok', style: KoalaText.bodySec))
                     : RefreshIndicator(
                         onRefresh: _load,
-                        color: KoalaColors.accent,
+                        color: KoalaDS.accent,
                         child: ListView(
                           padding: const EdgeInsets.all(KoalaSpacing.lg),
                           children: [
@@ -103,7 +104,7 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: KoalaSpacing.md, vertical: KoalaSpacing.sm),
                               decoration: BoxDecoration(
-                                color: KoalaColors.surfaceAlt,
+                                color: KoalaDS.surfaceMuted,
                                 borderRadius: BorderRadius.circular(KoalaRadius.sm),
                               ),
                               child: Row(
@@ -123,7 +124,13 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
                               return Container(
                                 margin: const EdgeInsets.only(bottom: 2),
                                 padding: const EdgeInsets.symmetric(horizontal: KoalaSpacing.md, vertical: KoalaSpacing.md),
-                                decoration: KoalaDeco.card,
+                                decoration: BoxDecoration(
+                                  color: KoalaDS.surface,
+                                  borderRadius:
+                                      BorderRadius.circular(KoalaR.lg),
+                                  border: Border.all(
+                                      color: KoalaDS.line, width: 0.5),
+                                ),
                                 child: Row(
                                   children: [
                                     Expanded(
@@ -138,8 +145,8 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
                                             borderRadius: BorderRadius.circular(2),
                                             child: LinearProgressIndicator(
                                               value: ratio,
-                                              backgroundColor: KoalaColors.surfaceAlt,
-                                              color: KoalaColors.accent,
+                                              backgroundColor: KoalaDS.surfaceMuted,
+                                              color: KoalaDS.accent,
                                               minHeight: 4,
                                             ),
                                           ),
@@ -171,14 +178,14 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: KoalaSpacing.md, vertical: KoalaSpacing.sm),
         decoration: BoxDecoration(
-          color: active ? KoalaColors.accent : KoalaColors.surface,
+          color: active ? KoalaDS.accent : KoalaDS.surface,
           borderRadius: BorderRadius.circular(KoalaRadius.pill),
-          border: Border.all(color: active ? KoalaColors.accent : KoalaColors.border),
+          border: Border.all(color: active ? KoalaDS.accent : KoalaDS.line),
         ),
         child: Text(label, style: TextStyle(
           fontSize: 12,
           fontWeight: FontWeight.w600,
-          color: active ? Colors.white : KoalaColors.text,
+          color: active ? KoalaDS.onAccent : KoalaDS.ink,
         )),
       ),
     );

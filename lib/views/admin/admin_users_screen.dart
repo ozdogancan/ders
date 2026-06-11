@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' hide User;
 
+import '../../core/theme/koala_ds.dart';
 import '../../core/theme/koala_tokens.dart';
 import '../../core/utils/format_utils.dart';
 import '../../services/evlumba_live_service.dart';
@@ -135,17 +136,17 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
   Widget build(BuildContext context) {
     final list = _filtered;
     return Scaffold(
-      backgroundColor: KoalaColors.bg,
+      backgroundColor: KoalaDS.bg,
       appBar: AppBar(
-        backgroundColor: KoalaColors.bg,
-        surfaceTintColor: KoalaColors.bg,
+        backgroundColor: KoalaDS.bg,
+        surfaceTintColor: KoalaDS.bg,
         elevation: 0,
         title: const Text('Kullanıcılar', style: KoalaText.h2),
         automaticallyImplyLeading: false,
         actions: [
           IconButton(
             icon: const Icon(LucideIcons.refreshCw,
-                size: 18, color: KoalaColors.textSec),
+                size: 18, color: KoalaDS.inkSoft),
             onPressed: _loading ? null : _load,
           ),
         ],
@@ -166,16 +167,20 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
                     hintText: 'İsim, meslek veya telefon ile ara…',
                     hintStyle: KoalaText.hint,
                     prefixIcon: const Icon(Icons.search_rounded,
-                        color: KoalaColors.textTer),
+                        color: KoalaDS.inkFaint),
                     filled: true,
-                    fillColor: KoalaColors.surface,
+                    fillColor: KoalaDS.surface,
                     border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(KoalaRadius.md),
-                      borderSide: BorderSide(color: KoalaColors.border),
+                      borderRadius: BorderRadius.circular(KoalaR.md),
+                      borderSide: BorderSide(color: KoalaDS.line),
                     ),
                     enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(KoalaRadius.md),
-                      borderSide: BorderSide(color: KoalaColors.border),
+                      borderRadius: BorderRadius.circular(KoalaR.md),
+                      borderSide: BorderSide(color: KoalaDS.line),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(KoalaR.md),
+                      borderSide: BorderSide(color: KoalaDS.accent),
                     ),
                   ),
                 ),
@@ -205,7 +210,7 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
                                 style: KoalaText.bodySec))
                         : RefreshIndicator(
                             onRefresh: _load,
-                            color: KoalaColors.accent,
+                            color: KoalaDS.accent,
                             child: ListView.builder(
                               padding: const EdgeInsets.fromLTRB(
                                   KoalaSpacing.lg, 4, KoalaSpacing.lg, 24),
@@ -231,10 +236,10 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
           alignment: Alignment.center,
           padding: const EdgeInsets.symmetric(horizontal: 14),
           decoration: BoxDecoration(
-            color: active ? KoalaColors.accentDeep : KoalaColors.surface,
+            color: active ? KoalaDS.accentDeep : KoalaDS.surface,
             borderRadius: BorderRadius.circular(100),
             border: Border.all(
-                color: active ? KoalaColors.accentDeep : KoalaColors.border,
+                color: active ? KoalaDS.accentDeep : KoalaDS.line,
                 width: 1),
           ),
           child: Text(
@@ -242,7 +247,7 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
             style: TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.w700,
-              color: active ? Colors.white : KoalaColors.text,
+              color: active ? KoalaDS.onAccent : KoalaDS.ink,
             ),
           ),
         ),
@@ -263,7 +268,11 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
       child: Container(
         margin: const EdgeInsets.only(bottom: KoalaSpacing.sm),
         padding: const EdgeInsets.all(KoalaSpacing.md),
-        decoration: KoalaDeco.card,
+        decoration: BoxDecoration(
+          color: KoalaDS.surface,
+          borderRadius: BorderRadius.circular(KoalaR.lg),
+          border: Border.all(color: KoalaDS.line, width: 0.5),
+        ),
         child: Row(
           children: [
             ClipOval(
@@ -275,15 +284,15 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
                         imageUrl: avatar,
                         fit: BoxFit.cover,
                         errorWidget: (_, __, ___) => Container(
-                          color: KoalaColors.surfaceAlt,
+                          color: KoalaDS.surfaceMuted,
                           child: const Icon(Icons.person_rounded,
-                              color: KoalaColors.textSec),
+                              color: KoalaDS.inkSoft),
                         ),
                       )
                     : Container(
-                        color: KoalaColors.surfaceAlt,
+                        color: KoalaDS.surfaceMuted,
                         child: const Icon(Icons.person_rounded,
-                            color: KoalaColors.textSec),
+                            color: KoalaDS.inkSoft),
                       ),
               ),
             ),
@@ -300,10 +309,10 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
                 ],
               ),
             ),
-            if (isAdmin) _badge('Admin', KoalaColors.accent),
+            if (isAdmin) _badge('Admin', KoalaDS.accent),
             if (isPro) ...[
               const SizedBox(width: 6),
-              _badge('Pro', const Color(0xFF16A34A)),
+              _badge('Pro', KoalaDS.cta),
             ],
           ],
         ),
@@ -328,7 +337,7 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
         : '';
     showModalBottomSheet(
       context: context,
-      backgroundColor: KoalaColors.surface,
+      backgroundColor: KoalaDS.surface,
       shape: const RoundedRectangleBorder(
         borderRadius:
             BorderRadius.vertical(top: Radius.circular(KoalaRadius.xl)),
@@ -355,7 +364,7 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
             Text(
               'Profesyonel yapma / kaldırma, banlama ve silme yakında bu '
               'ekrana eklenecek.',
-              style: KoalaText.bodySmall.copyWith(color: KoalaColors.textTer),
+              style: KoalaText.bodySmall.copyWith(color: KoalaDS.inkFaint),
             ),
           ],
         ),

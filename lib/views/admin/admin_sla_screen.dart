@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' hide User;
+import '../../core/theme/koala_ds.dart';
 import '../../core/theme/koala_tokens.dart';
 import '../../core/utils/format_utils.dart';
 import '../../widgets/koala_widgets.dart';
@@ -108,10 +109,10 @@ class _AdminSlaScreenState extends State<AdminSlaScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: KoalaColors.bg,
+      backgroundColor: KoalaDS.bg,
       appBar: AppBar(
-        backgroundColor: KoalaColors.bg,
-        surfaceTintColor: KoalaColors.bg,
+        backgroundColor: KoalaDS.bg,
+        surfaceTintColor: KoalaDS.bg,
         elevation: 0,
         title: const Text('SLA İzleme', style: KoalaText.h2),
         automaticallyImplyLeading: false,
@@ -120,7 +121,7 @@ class _AdminSlaScreenState extends State<AdminSlaScreen> {
           ? const LoadingState()
           : RefreshIndicator(
               onRefresh: _load,
-              color: KoalaColors.accent,
+              color: KoalaDS.accent,
               child: ListView(
                 padding: const EdgeInsets.all(KoalaSpacing.lg),
                 children: [
@@ -141,11 +142,11 @@ class _AdminSlaScreenState extends State<AdminSlaScreen> {
   Widget _summary() {
     return Row(
       children: [
-        _stat('24s+ aşıldı', _count(_Bucket.breached), KoalaColors.error),
+        _stat('24s+ aşıldı', _count(_Bucket.breached), KoalaDS.danger),
         const SizedBox(width: KoalaSpacing.sm),
-        _stat('Uyarı (12-24s)', _count(_Bucket.warning), KoalaColors.warning),
+        _stat('Uyarı (12-24s)', _count(_Bucket.warning), KoalaDS.star),
         const SizedBox(width: KoalaSpacing.sm),
-        _stat('Eskale', _count(_Bucket.escalated), KoalaColors.blue),
+        _stat('Eskale', _count(_Bucket.escalated), KoalaDS.clay),
       ],
     );
   }
@@ -158,7 +159,7 @@ class _AdminSlaScreenState extends State<AdminSlaScreen> {
           horizontal: KoalaSpacing.sm,
         ),
         decoration: BoxDecoration(
-          color: KoalaColors.surface,
+          color: KoalaDS.surface,
           borderRadius: BorderRadius.circular(KoalaRadius.md),
           border: Border.all(color: color.withValues(alpha: 0.25)),
         ),
@@ -188,7 +189,7 @@ class _AdminSlaScreenState extends State<AdminSlaScreen> {
     return Container(
       padding: const EdgeInsets.all(KoalaSpacing.lg),
       decoration: BoxDecoration(
-        color: KoalaColors.error.withValues(alpha: 0.08),
+        color: KoalaDS.danger.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(KoalaRadius.md),
       ),
       child: Text('Yüklenemedi: $msg', style: KoalaText.bodySec),
@@ -201,7 +202,7 @@ class _AdminSlaScreenState extends State<AdminSlaScreen> {
       child: Column(
         children: [
           const Icon(Icons.check_circle_rounded,
-              size: 56, color: KoalaColors.green),
+              size: 56, color: KoalaDS.cta),
           const SizedBox(height: KoalaSpacing.md),
           Text('Bekleyen konuşma yok', style: KoalaText.h3),
           const SizedBox(height: KoalaSpacing.xs),
@@ -214,13 +215,13 @@ class _AdminSlaScreenState extends State<AdminSlaScreen> {
   Color _bucketColor(_Bucket b) {
     switch (b) {
       case _Bucket.breached:
-        return KoalaColors.error;
+        return KoalaDS.danger;
       case _Bucket.warning:
-        return KoalaColors.warning;
+        return KoalaDS.star;
       case _Bucket.escalated:
-        return KoalaColors.blue;
+        return KoalaDS.clay;
       case _Bucket.fresh:
-        return KoalaColors.green;
+        return KoalaDS.cta;
     }
   }
 
@@ -251,7 +252,7 @@ class _AdminSlaScreenState extends State<AdminSlaScreen> {
         margin: const EdgeInsets.only(bottom: KoalaSpacing.sm),
         padding: const EdgeInsets.all(KoalaSpacing.md),
         decoration: BoxDecoration(
-          color: KoalaColors.surface,
+          color: KoalaDS.surface,
           borderRadius: BorderRadius.circular(KoalaRadius.md),
           border: Border.all(color: color.withValues(alpha: 0.3)),
         ),
@@ -291,7 +292,7 @@ class _AdminSlaScreenState extends State<AdminSlaScreen> {
                 _tag(_bucketLabel(r.bucket), color),
                 if (r.escalated && r.bucket != _Bucket.escalated) ...[
                   const SizedBox(width: KoalaSpacing.xs),
-                  _tag('eskale ✓', KoalaColors.blue),
+                  _tag('eskale ✓', KoalaDS.clay),
                 ],
               ],
             ),
@@ -306,7 +307,7 @@ class _AdminSlaScreenState extends State<AdminSlaScreen> {
             Row(
               children: [
                 Icon(Icons.person_outline_rounded,
-                    size: 13, color: KoalaColors.textTer),
+                    size: 13, color: KoalaDS.inkFaint),
                 const SizedBox(width: 3),
                 Text(
                   r.userId.substring(0, r.userId.length.clamp(0, 8)),
@@ -342,7 +343,7 @@ class _AdminSlaScreenState extends State<AdminSlaScreen> {
   void _openThread(_SlaRow r) {
     showModalBottomSheet<void>(
       context: context,
-      backgroundColor: KoalaColors.surface,
+      backgroundColor: KoalaDS.surface,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(KoalaRadius.xl)),
@@ -407,7 +408,7 @@ class _ThreadSheetState extends State<_ThreadSheet> {
               width: 36,
               height: 4,
               decoration: BoxDecoration(
-                color: KoalaColors.borderMed,
+                color: KoalaDS.line,
                 borderRadius: BorderRadius.circular(KoalaRadius.pill),
               ),
             ),
@@ -428,13 +429,13 @@ class _ThreadSheetState extends State<_ThreadSheet> {
                   ),
                   IconButton(
                     icon: const Icon(Icons.close_rounded),
-                    color: KoalaColors.textSec,
+                    color: KoalaDS.inkSoft,
                     onPressed: () => Navigator.of(context).pop(),
                   ),
                 ],
               ),
             ),
-            const Divider(height: 1, color: KoalaColors.border),
+            const Divider(height: 1, color: KoalaDS.line),
             Expanded(
               child: _loading
                   ? const LoadingState()
@@ -465,10 +466,10 @@ class _ThreadSheetState extends State<_ThreadSheet> {
                             ),
                             decoration: BoxDecoration(
                               color: isEscalation
-                                  ? KoalaColors.blue.withValues(alpha: 0.08)
+                                  ? KoalaDS.clay.withValues(alpha: 0.08)
                                   : isUser
-                                      ? KoalaColors.surfaceAlt
-                                      : KoalaColors.accentLight,
+                                      ? KoalaDS.surfaceMuted
+                                      : KoalaDS.accentTint,
                               borderRadius:
                                   BorderRadius.circular(KoalaRadius.md),
                             ),
@@ -484,8 +485,8 @@ class _ThreadSheetState extends State<_ThreadSheet> {
                                   style: KoalaText.labelSmall.copyWith(
                                     fontWeight: FontWeight.w600,
                                     color: isEscalation
-                                        ? KoalaColors.blue
-                                        : KoalaColors.textSec,
+                                        ? KoalaDS.clay
+                                        : KoalaDS.inkSoft,
                                   ),
                                 ),
                                 const SizedBox(height: 3),

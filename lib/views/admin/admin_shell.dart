@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' hide User;
 
 import '../../core/config/env.dart';
+import '../../core/theme/koala_ds.dart';
 import '../../core/theme/koala_tokens.dart';
 import '../../widgets/koala_widgets.dart';
 import '../auth_common.dart';
@@ -96,7 +97,7 @@ class _AdminShellState extends State<AdminShell> {
 
   Widget _adminLoginScreen() {
     return Scaffold(
-      backgroundColor: KoalaColors.bg,
+      backgroundColor: KoalaDS.bg,
       body: Center(
         child: Padding(
           padding: const EdgeInsets.all(28),
@@ -104,7 +105,7 @@ class _AdminShellState extends State<AdminShell> {
             mainAxisSize: MainAxisSize.min,
             children: [
               const Icon(Icons.shield_rounded,
-                  size: 56, color: KoalaColors.accentDeep),
+                  size: 56, color: KoalaDS.accentDeep),
               const SizedBox(height: 16),
               const Text('Koala Admin', style: KoalaText.h2),
               const SizedBox(height: 6),
@@ -119,7 +120,7 @@ class _AdminShellState extends State<AdminShell> {
                   _loginError!,
                   textAlign: TextAlign.center,
                   style: const TextStyle(
-                      color: Color(0xFFC2410C),
+                      color: KoalaDS.danger,
                       fontSize: 13,
                       fontWeight: FontWeight.w600),
                 ),
@@ -138,11 +139,11 @@ class _AdminShellState extends State<AdminShell> {
                       : const Icon(Icons.login_rounded, size: 18),
                   label: Text(_loggingIn ? 'Giriş yapılıyor…' : 'Google ile giriş yap'),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: KoalaColors.accentDeep,
-                    foregroundColor: Colors.white,
+                    backgroundColor: KoalaDS.accentDeep,
+                    foregroundColor: KoalaDS.onAccent,
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12)),
+                        borderRadius: BorderRadius.circular(KoalaR.md)),
                     elevation: 0,
                   ),
                 ),
@@ -158,7 +159,7 @@ class _AdminShellState extends State<AdminShell> {
   Widget build(BuildContext context) {
     if (_checking) {
       return const Scaffold(
-        backgroundColor: KoalaColors.bg,
+        backgroundColor: KoalaDS.bg,
         body: const LoadingState(),
       );
     }
@@ -170,16 +171,16 @@ class _AdminShellState extends State<AdminShell> {
 
     if (!_isAdmin) {
       return Scaffold(
-        backgroundColor: KoalaColors.bg,
+        backgroundColor: KoalaDS.bg,
         appBar: AppBar(
-          backgroundColor: KoalaColors.bg,
-          surfaceTintColor: KoalaColors.bg,
+          backgroundColor: KoalaDS.bg,
+          surfaceTintColor: KoalaDS.bg,
         ),
         body: const Center(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.lock_rounded, size: 64, color: KoalaColors.textTer),
+              Icon(Icons.lock_rounded, size: 64, color: KoalaDS.inkFaint),
               SizedBox(height: KoalaSpacing.lg),
               Text('Yetkisiz Erişim', style: KoalaText.h2),
               SizedBox(height: KoalaSpacing.sm),
@@ -210,8 +211,8 @@ class _AdminShellState extends State<AdminShell> {
       ),
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
-          color: KoalaColors.surface,
-          border: Border(top: BorderSide(color: KoalaColors.border, width: 0.5)),
+          color: KoalaDS.surface,
+          border: Border(top: BorderSide(color: KoalaDS.line, width: 0.5)),
         ),
         child: SafeArea(
           child: Padding(
@@ -253,14 +254,14 @@ class _Tab extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 22, color: active ? KoalaColors.accent : KoalaColors.textTer),
+            Icon(icon, size: 22, color: active ? KoalaDS.accent : KoalaDS.inkFaint),
             const SizedBox(height: 2),
             Text(
               label,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 9, fontWeight: active ? FontWeight.w600 : FontWeight.w500, color: active ? KoalaColors.accent : KoalaColors.textTer),
+              style: TextStyle(fontSize: 9, fontWeight: active ? FontWeight.w600 : FontWeight.w500, color: active ? KoalaDS.accent : KoalaDS.inkFaint),
             ),
           ],
         ),

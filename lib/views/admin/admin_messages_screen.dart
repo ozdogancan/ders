@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' hide User;
+import '../../core/theme/koala_ds.dart';
 import '../../core/theme/koala_tokens.dart';
 import '../../core/utils/format_utils.dart';
 import '../../widgets/koala_widgets.dart';
@@ -81,10 +82,10 @@ class _AdminMessagesScreenState extends State<AdminMessagesScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: KoalaColors.bg,
+      backgroundColor: KoalaDS.bg,
       appBar: AppBar(
-        backgroundColor: KoalaColors.bg,
-        surfaceTintColor: KoalaColors.bg,
+        backgroundColor: KoalaDS.bg,
+        surfaceTintColor: KoalaDS.bg,
         elevation: 0,
         title: const Text('Mesaj Moderasyonu', style: KoalaText.h2),
         automaticallyImplyLeading: false,
@@ -93,7 +94,7 @@ class _AdminMessagesScreenState extends State<AdminMessagesScreen> {
           ? const LoadingState()
           : RefreshIndicator(
               onRefresh: () => _load(),
-              color: KoalaColors.accent,
+              color: KoalaDS.accent,
               child: ListView.builder(
                 padding: const EdgeInsets.all(KoalaSpacing.lg),
                 itemCount: _messages.length + 1,
@@ -104,7 +105,7 @@ class _AdminMessagesScreenState extends State<AdminMessagesScreen> {
                       child: Center(
                         child: GestureDetector(
                           onTap: () { _offset += _limit; _load(reset: false); },
-                          child: Text('Daha fazla', style: KoalaText.label.copyWith(color: KoalaColors.accent)),
+                          child: Text('Daha fazla', style: KoalaText.label.copyWith(color: KoalaDS.accent)),
                         ),
                       ),
                     );
@@ -121,10 +122,10 @@ class _AdminMessagesScreenState extends State<AdminMessagesScreen> {
                     margin: const EdgeInsets.only(bottom: KoalaSpacing.sm),
                     padding: const EdgeInsets.all(KoalaSpacing.md),
                     decoration: BoxDecoration(
-                      color: KoalaColors.surface,
+                      color: KoalaDS.surface,
                       borderRadius: BorderRadius.circular(KoalaRadius.md),
                       border: Border.all(
-                        color: convStatus == 'blocked' ? KoalaColors.error.withOpacity(0.3) : KoalaColors.border,
+                        color: convStatus == 'blocked' ? KoalaDS.danger.withValues(alpha: 0.3) : KoalaDS.line,
                       ),
                     ),
                     child: Column(
@@ -154,13 +155,13 @@ class _AdminMessagesScreenState extends State<AdminMessagesScreen> {
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                               decoration: BoxDecoration(
-                                color: convStatus == 'active' ? KoalaColors.greenLight : KoalaColors.error.withOpacity(0.1),
+                                color: convStatus == 'active' ? KoalaDS.ctaTint : KoalaDS.danger.withValues(alpha: 0.1),
                                 borderRadius: BorderRadius.circular(KoalaRadius.pill),
                               ),
                               child: Text(
                                 convStatus,
                                 style: KoalaText.labelSmall.copyWith(
-                                  color: convStatus == 'active' ? KoalaColors.green : KoalaColors.error,
+                                  color: convStatus == 'active' ? KoalaDS.cta : KoalaDS.danger,
                                 ),
                               ),
                             ),
@@ -176,7 +177,7 @@ class _AdminMessagesScreenState extends State<AdminMessagesScreen> {
                                 child: Icon(
                                   convStatus == 'active' ? Icons.block_rounded : Icons.check_circle_rounded,
                                   size: 20,
-                                  color: convStatus == 'active' ? KoalaColors.error : KoalaColors.green,
+                                  color: convStatus == 'active' ? KoalaDS.danger : KoalaDS.cta,
                                 ),
                               ),
                             ),
@@ -185,7 +186,7 @@ class _AdminMessagesScreenState extends State<AdminMessagesScreen> {
                               onTap: () => _deleteMessage(msg['id'] as String, index),
                               child: const Padding(
                                 padding: EdgeInsets.all(4),
-                                child: Icon(Icons.delete_rounded, size: 20, color: KoalaColors.error),
+                                child: Icon(Icons.delete_rounded, size: 20, color: KoalaDS.danger),
                               ),
                             ),
                           ],

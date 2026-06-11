@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' hide User;
+import '../../core/theme/koala_ds.dart';
 import '../../core/theme/koala_tokens.dart';
 
 /// Admin — Toplu bildirim gönderme
@@ -117,10 +118,10 @@ class _AdminBroadcastScreenState extends State<AdminBroadcastScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: KoalaColors.bg,
+      backgroundColor: KoalaDS.bg,
       appBar: AppBar(
-        backgroundColor: KoalaColors.bg,
-        surfaceTintColor: KoalaColors.bg,
+        backgroundColor: KoalaDS.bg,
+        surfaceTintColor: KoalaDS.bg,
         elevation: 0,
         title: const Text('Bildirim Gönder', style: KoalaText.h2),
         automaticallyImplyLeading: false,
@@ -175,12 +176,12 @@ class _AdminBroadcastScreenState extends State<AdminBroadcastScreen> {
             child: Container(
               padding: const EdgeInsets.symmetric(vertical: KoalaSpacing.lg),
               decoration: BoxDecoration(
-                color: _sending ? KoalaColors.accentLight : KoalaColors.accent,
-                borderRadius: BorderRadius.circular(KoalaRadius.md),
+                color: _sending ? KoalaDS.accentTint : KoalaDS.accent,
+                borderRadius: BorderRadius.circular(KoalaR.md),
               ),
               child: Center(
                 child: _sending
-                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: KoalaDS.accent))
                     : const Text('Gönder', style: KoalaText.button),
               ),
             ),
@@ -200,14 +201,14 @@ class _AdminBroadcastScreenState extends State<AdminBroadcastScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: KoalaSpacing.md, vertical: KoalaSpacing.sm),
         decoration: BoxDecoration(
-          color: active ? KoalaColors.accent : KoalaColors.surface,
+          color: active ? KoalaDS.accent : KoalaDS.surface,
           borderRadius: BorderRadius.circular(KoalaRadius.pill),
-          border: Border.all(color: active ? KoalaColors.accent : KoalaColors.border),
+          border: Border.all(color: active ? KoalaDS.accent : KoalaDS.line),
         ),
         child: Text(label, style: TextStyle(
           fontSize: 13,
           fontWeight: FontWeight.w600,
-          color: active ? Colors.white : KoalaColors.text,
+          color: active ? KoalaDS.onAccent : KoalaDS.ink,
         )),
       ),
     );
@@ -217,18 +218,18 @@ class _AdminBroadcastScreenState extends State<AdminBroadcastScreen> {
     hintText: hint,
     hintStyle: KoalaText.hint,
     filled: true,
-    fillColor: KoalaColors.surface,
+    fillColor: KoalaDS.surface,
     border: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(KoalaRadius.md),
-      borderSide: BorderSide(color: KoalaColors.border),
+      borderRadius: BorderRadius.circular(KoalaR.md),
+      borderSide: BorderSide(color: KoalaDS.line),
     ),
     enabledBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(KoalaRadius.md),
-      borderSide: BorderSide(color: KoalaColors.border),
+      borderRadius: BorderRadius.circular(KoalaR.md),
+      borderSide: BorderSide(color: KoalaDS.line),
     ),
     focusedBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(KoalaRadius.md),
-      borderSide: BorderSide(color: KoalaColors.accent),
+      borderRadius: BorderRadius.circular(KoalaR.md),
+      borderSide: BorderSide(color: KoalaDS.accent),
     ),
     contentPadding: const EdgeInsets.symmetric(horizontal: KoalaSpacing.lg, vertical: KoalaSpacing.md),
   );

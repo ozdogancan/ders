@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' hide User;
+import '../../core/theme/koala_ds.dart';
 import '../../core/theme/koala_tokens.dart';
 import '../../core/utils/format_utils.dart';
 import '../../widgets/koala_widgets.dart';
@@ -99,10 +100,10 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: KoalaColors.bg,
+      backgroundColor: KoalaDS.bg,
       appBar: AppBar(
-        backgroundColor: KoalaColors.bg,
-        surfaceTintColor: KoalaColors.bg,
+        backgroundColor: KoalaDS.bg,
+        surfaceTintColor: KoalaDS.bg,
         elevation: 0,
         title: const Text('Ayarlar', style: KoalaText.h2),
         automaticallyImplyLeading: false,
@@ -111,7 +112,7 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
           ? const LoadingState()
           : RefreshIndicator(
               onRefresh: _load,
-              color: KoalaColors.accent,
+              color: KoalaDS.accent,
               child: ListView(
                 padding: const EdgeInsets.all(KoalaSpacing.lg),
                 children: [
@@ -134,7 +135,7 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
                         Text(
                           e.value < 0 ? 'Hata' : '${e.value} satır',
                           style: KoalaText.label.copyWith(
-                            color: e.value > 100000 ? KoalaColors.error : KoalaColors.text,
+                            color: e.value > 100000 ? KoalaDS.danger : KoalaDS.ink,
                           ),
                         ),
                       ],
@@ -164,7 +165,7 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
                       margin: const EdgeInsets.only(bottom: KoalaSpacing.xs),
                       padding: const EdgeInsets.all(KoalaSpacing.sm),
                       decoration: BoxDecoration(
-                        color: KoalaColors.surface,
+                        color: KoalaDS.surface,
                         borderRadius: BorderRadius.circular(KoalaRadius.sm),
                       ),
                       child: Row(
@@ -196,7 +197,7 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
               margin: const EdgeInsets.only(right: KoalaSpacing.sm),
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: ok ? KoalaColors.green : KoalaColors.error,
+                color: ok ? KoalaDS.cta : KoalaDS.danger,
               ),
             ),
           Text(label, style: KoalaText.label),
@@ -213,16 +214,16 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: KoalaSpacing.md, horizontal: KoalaSpacing.lg),
         decoration: BoxDecoration(
-          color: KoalaColors.surface,
+          color: KoalaDS.surface,
           borderRadius: BorderRadius.circular(KoalaRadius.md),
-          border: Border.all(color: KoalaColors.border),
+          border: Border.all(color: KoalaDS.line),
         ),
         child: Row(
           children: [
-            const Icon(Icons.cleaning_services_rounded, size: 18, color: KoalaColors.warning),
+            const Icon(Icons.cleaning_services_rounded, size: 18, color: KoalaDS.star),
             const SizedBox(width: KoalaSpacing.md),
             Expanded(child: Text(label, style: KoalaText.label)),
-            const Icon(Icons.chevron_right_rounded, size: 18, color: KoalaColors.textTer),
+            const Icon(Icons.chevron_right_rounded, size: 18, color: KoalaDS.inkFaint),
           ],
         ),
       ),
