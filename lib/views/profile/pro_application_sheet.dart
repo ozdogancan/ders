@@ -16,6 +16,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
+import '../../core/theme/koala_ds.dart';
 import '../../core/theme/koala_tokens.dart';
 import '../../services/user_profile_service.dart';
 
@@ -1591,7 +1592,7 @@ class _ProTermsSheet extends StatelessWidget {
                               height: 5,
                               child: DecoratedBox(
                                 decoration: BoxDecoration(
-                                  color: Color(0xFF6C63FF),
+                                  color: KoalaDS.accent,
                                   shape: BoxShape.circle,
                                 ),
                               ),

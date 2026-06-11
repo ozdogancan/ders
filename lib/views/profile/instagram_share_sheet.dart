@@ -15,6 +15,7 @@ import 'package:lucide_icons/lucide_icons.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../core/theme/koala_ds.dart';
 import '../../core/theme/koala_tokens.dart';
 
 /// IG-tarzı paylaş sheet'i.
@@ -176,13 +177,13 @@ class _InstagramShareBody extends StatelessWidget {
                 _channel(
                   icon: LucideIcons.link,
                   label: 'Linki kopyala',
-                  gradient: const [Color(0xFF6366F1), Color(0xFF4F46E5)],
+                  gradient: const [KoalaDS.accent, KoalaDS.accentDeep],
                   onTap: () => _copyLink(context),
                 ),
                 _channel(
                   icon: LucideIcons.share2,
                   label: 'Daha fazla',
-                  gradient: const [Color(0xFF94A3B8), Color(0xFF475569)],
+                  gradient: const [KoalaDS.inkFaint, KoalaDS.inkSoft],
                   onTap: () => _systemShare(context),
                 ),
               ],
