@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../core/theme/koala_ds.dart';
 import '../core/theme/koala_tokens.dart';
 import '../services/collections_service.dart';
 import 'package:lucide_icons/lucide_icons.dart';
@@ -81,7 +82,7 @@ class _CollectionBottomSheetState extends State<CollectionBottomSheet> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(err, maxLines: 3),
-          backgroundColor: KoalaColors.error,
+          backgroundColor: KoalaDS.danger,
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -107,7 +108,7 @@ class _CollectionBottomSheetState extends State<CollectionBottomSheet> {
     return Container(
       margin: EdgeInsets.only(bottom: bottomPad),
       decoration: const BoxDecoration(
-        color: KoalaColors.surface,
+        color: KoalaDS.surface,
         borderRadius: BorderRadius.vertical(top: Radius.circular(KoalaRadius.xl)),
       ),
       child: Column(
@@ -119,7 +120,7 @@ class _CollectionBottomSheetState extends State<CollectionBottomSheet> {
             width: 40,
             height: 4,
             decoration: BoxDecoration(
-              color: KoalaColors.textTer,
+              color: KoalaDS.line,
               borderRadius: BorderRadius.circular(2),
             ),
           ),
@@ -143,15 +144,15 @@ class _CollectionBottomSheetState extends State<CollectionBottomSheet> {
                         vertical: KoalaSpacing.sm,
                       ),
                       decoration: BoxDecoration(
-                        color: KoalaColors.accentLight,
+                        color: KoalaDS.accentTint,
                         borderRadius: BorderRadius.circular(KoalaRadius.pill),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(LucideIcons.plus, size: 16, color: KoalaColors.accent),
+                          Icon(LucideIcons.plus, size: 16, color: KoalaDS.accent),
                           const SizedBox(width: 4),
-                          Text('Yeni', style: KoalaText.label.copyWith(color: KoalaColors.accent)),
+                          Text('Yeni', style: KoalaText.label.copyWith(color: KoalaDS.accent)),
                         ],
                       ),
                     ),
@@ -184,18 +185,18 @@ class _CollectionBottomSheetState extends State<CollectionBottomSheet> {
               hintText: 'Koleksiyon adı',
               hintStyle: KoalaText.hint,
               filled: true,
-              fillColor: KoalaColors.bg,
+              fillColor: KoalaDS.bg,
               border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(KoalaRadius.md),
-                borderSide: BorderSide(color: KoalaColors.border),
+                borderRadius: BorderRadius.circular(KoalaR.md),
+                borderSide: BorderSide(color: KoalaDS.line),
               ),
               enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(KoalaRadius.md),
-                borderSide: BorderSide(color: KoalaColors.border),
+                borderRadius: BorderRadius.circular(KoalaR.md),
+                borderSide: BorderSide(color: KoalaDS.line),
               ),
               focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(KoalaRadius.md),
-                borderSide: BorderSide(color: KoalaColors.accent),
+                borderRadius: BorderRadius.circular(KoalaR.md),
+                borderSide: BorderSide(color: KoalaDS.accent),
               ),
               contentPadding: const EdgeInsets.symmetric(
                 horizontal: KoalaSpacing.lg,
@@ -214,18 +215,18 @@ class _CollectionBottomSheetState extends State<CollectionBottomSheet> {
               hintText: 'Açıklama (opsiyonel)',
               hintStyle: KoalaText.hint,
               filled: true,
-              fillColor: KoalaColors.bg,
+              fillColor: KoalaDS.bg,
               border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(KoalaRadius.md),
-                borderSide: BorderSide(color: KoalaColors.border),
+                borderRadius: BorderRadius.circular(KoalaR.md),
+                borderSide: BorderSide(color: KoalaDS.line),
               ),
               enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(KoalaRadius.md),
-                borderSide: BorderSide(color: KoalaColors.border),
+                borderRadius: BorderRadius.circular(KoalaR.md),
+                borderSide: BorderSide(color: KoalaDS.line),
               ),
               focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(KoalaRadius.md),
-                borderSide: BorderSide(color: KoalaColors.accent),
+                borderRadius: BorderRadius.circular(KoalaR.md),
+                borderSide: BorderSide(color: KoalaDS.accent),
               ),
               contentPadding: const EdgeInsets.symmetric(
                 horizontal: KoalaSpacing.lg,
@@ -245,7 +246,7 @@ class _CollectionBottomSheetState extends State<CollectionBottomSheet> {
                     padding: const EdgeInsets.symmetric(vertical: KoalaSpacing.md),
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(KoalaRadius.md),
-                      border: Border.all(color: KoalaColors.border),
+                      border: Border.all(color: KoalaDS.line),
                     ),
                     child: Center(
                       child: Text('İptal', style: KoalaText.label),
@@ -260,7 +261,11 @@ class _CollectionBottomSheetState extends State<CollectionBottomSheet> {
                   onTap: _creating ? null : _createCollection,
                   child: Container(
                     padding: const EdgeInsets.symmetric(vertical: KoalaSpacing.md),
-                    decoration: KoalaDeco.greenButton,
+                    decoration: BoxDecoration(
+                      color: KoalaDS.cta,
+                      borderRadius: BorderRadius.circular(KoalaR.md),
+                      boxShadow: KoalaElev.ctaGlow,
+                    ),
                     child: Center(
                       child: _creating
                           ? const SizedBox(
@@ -290,7 +295,7 @@ class _CollectionBottomSheetState extends State<CollectionBottomSheet> {
         child: Center(
           child: CircularProgressIndicator(
             strokeWidth: 2,
-            color: KoalaColors.accent,
+            color: KoalaDS.accent,
           ),
         ),
       );
@@ -302,7 +307,7 @@ class _CollectionBottomSheetState extends State<CollectionBottomSheet> {
         child: Column(
           children: [
             Icon(LucideIcons.folderHeart,
-                size: 48, color: KoalaColors.textTer),
+                size: 48, color: KoalaDS.inkFaint),
             const SizedBox(height: KoalaSpacing.md),
             Text('Henüz koleksiyonun yok', style: KoalaText.bodySec),
             const SizedBox(height: KoalaSpacing.sm),
@@ -326,19 +331,23 @@ class _CollectionBottomSheetState extends State<CollectionBottomSheet> {
             onTap: () => _selectCollection(col['id'] as String),
             child: Container(
               padding: const EdgeInsets.all(KoalaSpacing.lg),
-              decoration: KoalaDeco.card,
+              decoration: BoxDecoration(
+                color: KoalaDS.surface,
+                borderRadius: BorderRadius.circular(KoalaR.lg),
+                border: Border.all(color: KoalaDS.line, width: 0.5),
+              ),
               child: Row(
                 children: [
                   Container(
                     width: 44,
                     height: 44,
                     decoration: BoxDecoration(
-                      color: KoalaColors.accentSoft,
+                      color: KoalaDS.accentTint,
                       borderRadius: BorderRadius.circular(KoalaRadius.sm),
                     ),
                     child: const Icon(
                       LucideIcons.folder,
-                      color: KoalaColors.accent,
+                      color: KoalaDS.accent,
                       size: 22,
                     ),
                   ),
@@ -363,7 +372,7 @@ class _CollectionBottomSheetState extends State<CollectionBottomSheet> {
                   ),
                   const Icon(
                     LucideIcons.chevronRight,
-                    color: KoalaColors.textTer,
+                    color: KoalaDS.inkFaint,
                   ),
                 ],
               ),

@@ -4,7 +4,7 @@ import 'package:lucide_icons/lucide_icons.dart';
 
 import 'package:go_router/go_router.dart';
 
-import '../core/theme/koala_tokens.dart';
+import '../core/theme/koala_ds.dart';
 import '../services/messaging_service.dart';
 import '../services/evlumba_live_service.dart';
 import '../services/saved_items_service.dart';
@@ -103,8 +103,8 @@ class _ShareSheetBody extends StatelessWidget {
       child: Container(
         margin: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
+          color: KoalaDS.surface,
+          borderRadius: BorderRadius.circular(KoalaR.lg),
         ),
         padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 18),
         child: Column(
@@ -117,7 +117,7 @@ class _ShareSheetBody extends StatelessWidget {
                 height: 4,
                 margin: const EdgeInsets.only(bottom: 14),
                 decoration: BoxDecoration(
-                  color: Colors.grey.shade300,
+                  color: KoalaDS.line,
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
@@ -127,7 +127,7 @@ class _ShareSheetBody extends StatelessWidget {
               style: TextStyle(
                 fontSize: 17,
                 fontWeight: FontWeight.w700,
-                color: KoalaColors.text,
+                color: KoalaDS.ink,
               ),
             ),
             if (title != null && title!.isNotEmpty) ...[
@@ -136,7 +136,7 @@ class _ShareSheetBody extends StatelessWidget {
                 title!,
                 style: TextStyle(
                   fontSize: 13,
-                  color: Colors.grey.shade600,
+                  color: KoalaDS.inkSoft,
                 ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
@@ -147,21 +147,21 @@ class _ShareSheetBody extends StatelessWidget {
               icon: LucideIcons.messageCircle,
               label: 'Sohbette paylaş',
               subtitle: 'Tasarımcıyla dahili mesaj olarak gönder',
-              color: KoalaColors.accent,
+              color: KoalaDS.accent,
               onTap: () => _chatShare(context),
             ),
             _ShareAction(
               icon: LucideIcons.link,
               label: 'Bağlantıyı kopyala',
               subtitle: 'URL panoya alınır',
-              color: KoalaColors.greenAlt,
+              color: KoalaDS.cta,
               onTap: () => _copyLink(context),
             ),
             _ShareAction(
               icon: LucideIcons.share2,
               label: 'Diğer uygulamalar',
               subtitle: 'WhatsApp, e-posta, sistem paylaş',
-              color: const Color(0xFF6366F1),
+              color: KoalaDS.accentDeep,
               onTap: () => _systemShare(context),
             ),
           ],
@@ -220,7 +220,7 @@ class _ShareAction extends StatelessWidget {
                       style: const TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w600,
-                        color: KoalaColors.text,
+                        color: KoalaDS.ink,
                       ),
                     ),
                     const SizedBox(height: 2),
@@ -228,14 +228,14 @@ class _ShareAction extends StatelessWidget {
                       subtitle,
                       style: TextStyle(
                         fontSize: 11,
-                        color: Colors.grey.shade500,
+                        color: KoalaDS.inkFaint,
                       ),
                     ),
                   ],
                 ),
               ),
               Icon(LucideIcons.chevronRight,
-                  size: 18, color: Colors.grey.shade400),
+                  size: 18, color: KoalaDS.inkFaint),
             ],
           ),
         ),
@@ -345,7 +345,7 @@ class _ConversationPickerSheetState extends State<_ConversationPickerSheet> {
       ..hideCurrentSnackBar()
       ..showSnackBar(SnackBar(
         content: Text(ok ? 'Sohbete iletildi' : 'Gönderilemedi, tekrar dene'),
-        backgroundColor: ok ? KoalaColors.greenAlt : Colors.red.shade700,
+        backgroundColor: ok ? KoalaDS.cta : KoalaDS.danger,
         duration: const Duration(seconds: 3),
       ));
   }
@@ -360,8 +360,8 @@ class _ConversationPickerSheetState extends State<_ConversationPickerSheet> {
           maxHeight: MediaQuery.of(context).size.height * 0.72,
         ),
         decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
+          color: KoalaDS.surface,
+          borderRadius: BorderRadius.circular(KoalaR.lg),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -371,7 +371,7 @@ class _ConversationPickerSheetState extends State<_ConversationPickerSheet> {
               width: 44,
               height: 4,
               decoration: BoxDecoration(
-                color: Colors.grey.shade300,
+                color: KoalaDS.line,
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
@@ -384,7 +384,7 @@ class _ConversationPickerSheetState extends State<_ConversationPickerSheet> {
                   style: TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.w700,
-                    color: KoalaColors.text,
+                    color: KoalaDS.ink,
                   ),
                 ),
               ),
@@ -409,21 +409,21 @@ class _ConversationPickerSheetState extends State<_ConversationPickerSheet> {
             mainAxisSize: MainAxisSize.min,
             children: [
               Icon(LucideIcons.messageCircle,
-                  size: 40, color: Colors.grey.shade400),
+                  size: 40, color: KoalaDS.inkFaint),
               const SizedBox(height: 12),
               const Text(
                 'Henüz bir sohbet yok',
                 style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
-                  color: KoalaColors.text,
+                  color: KoalaDS.ink,
                 ),
               ),
               const SizedBox(height: 4),
               Text(
                 'Önce bir tasarımcıya mesaj at,\nsonra buradan paylaşabilirsin.',
                 textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
+                style: TextStyle(fontSize: 12, color: KoalaDS.inkFaint),
               ),
             ],
           ),
@@ -462,7 +462,7 @@ class _ConversationPickerSheetState extends State<_ConversationPickerSheet> {
                   decoration: const BoxDecoration(
                     shape: BoxShape.circle,
                     gradient: LinearGradient(
-                      colors: [KoalaColors.accent, KoalaColors.accentMuted],
+                      colors: [KoalaDS.accent, KoalaDS.accentDeep],
                     ),
                   ),
                   alignment: Alignment.center,
@@ -500,7 +500,7 @@ class _ConversationPickerSheetState extends State<_ConversationPickerSheet> {
                         style: const TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w600,
-                          color: KoalaColors.text,
+                          color: KoalaDS.ink,
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
@@ -510,7 +510,7 @@ class _ConversationPickerSheetState extends State<_ConversationPickerSheet> {
                           (c['last_message'] ?? '').toString().trim(),
                           style: TextStyle(
                             fontSize: 12,
-                            color: Colors.grey.shade500,
+                            color: KoalaDS.inkFaint,
                           ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
@@ -518,7 +518,7 @@ class _ConversationPickerSheetState extends State<_ConversationPickerSheet> {
                     ],
                   ),
                 ),
-                Icon(LucideIcons.send, size: 16, color: KoalaColors.accent),
+                Icon(LucideIcons.send, size: 16, color: KoalaDS.accent),
               ],
             ),
           ),

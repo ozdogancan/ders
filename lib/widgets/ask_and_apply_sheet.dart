@@ -11,6 +11,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../core/theme/koala_ds.dart';
 import '../core/theme/koala_tokens.dart';
 import '../services/evlumba_live_service.dart';
 import 'free_consult_sheet.dart';
@@ -37,11 +38,11 @@ Future<void> showAskAndApplySheet(
   HapticFeedback.selectionClick();
   await showModalBottomSheet<void>(
     context: context,
-    backgroundColor: KoalaColors.bg,
-    barrierColor: Colors.black54,
+    backgroundColor: KoalaDS.bg,
+    barrierColor: KoalaDS.ink.withValues(alpha: 0.54),
     isScrollControlled: false,
     shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      borderRadius: BorderRadius.vertical(top: Radius.circular(KoalaR.xl)),
     ),
     builder: (ctx) => _AskAndApplySheet(
       designId: designId,
@@ -145,7 +146,7 @@ class _AskAndApplySheetState extends ConsumerState<_AskAndApplySheet> {
                 width: 36,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: KoalaColors.border,
+                  color: KoalaDS.line,
                   borderRadius: BorderRadius.circular(100),
                 ),
               ),
@@ -240,8 +241,8 @@ class _AskAndApplySheetState extends ConsumerState<_AskAndApplySheet> {
       padding: const EdgeInsets.symmetric(vertical: 5),
       child: Material(
         color: highlight
-            ? KoalaColors.accentDeep.withValues(alpha: 0.06)
-            : KoalaColors.surface,
+            ? KoalaDS.accentDeep.withValues(alpha: 0.06)
+            : KoalaDS.surface,
         borderRadius: BorderRadius.circular(18),
         child: InkWell(
           borderRadius: BorderRadius.circular(18),
@@ -252,7 +253,7 @@ class _AskAndApplySheetState extends ConsumerState<_AskAndApplySheet> {
               borderRadius: BorderRadius.circular(18),
               border: highlight
                   ? Border.all(
-                      color: KoalaColors.accentDeep.withValues(alpha: 0.35),
+                      color: KoalaDS.accentDeep.withValues(alpha: 0.35),
                       width: 1)
                   : null,
             ),
@@ -272,8 +273,8 @@ class _AskAndApplySheetState extends ConsumerState<_AskAndApplySheet> {
                 ),
                 Icon(Icons.chevron_right_rounded,
                     color: highlight
-                        ? KoalaColors.accentDeep
-                        : KoalaColors.textMuted,
+                        ? KoalaDS.accentDeep
+                        : KoalaDS.inkFaint,
                     size: 20),
               ],
             ),
@@ -306,23 +307,23 @@ class _AskLeading extends StatelessWidget {
             ? const LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
-                colors: [KoalaColors.accentDeep, KoalaColors.accent],
+                colors: [KoalaDS.accentDeep, KoalaDS.accent],
               )
             : (tintGold && !hasImage
                 ? const LinearGradient(
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
-                    colors: [Color(0xFFFFD66B), Color(0xFFEFA01F)],
+                    colors: [KoalaDS.star, KoalaDS.clay],
                   )
                 : null),
         color: hasImage
             ? null
-            : ((gradient || tintGold) ? null : KoalaColors.accentSoft),
+            : ((gradient || tintGold) ? null : KoalaDS.accentTint),
         boxShadow: [
           BoxShadow(
             color: (tintGold
-                    ? const Color(0xFFEFA01F)
-                    : KoalaColors.accent)
+                    ? KoalaDS.clay
+                    : KoalaDS.accent)
                 .withValues(alpha: 0.18),
             blurRadius: 8,
             offset: const Offset(0, 3),
@@ -334,12 +335,12 @@ class _AskLeading extends StatelessWidget {
           ? CachedNetworkImage(
               imageUrl: imageUrl!,
               fit: BoxFit.cover,
-              placeholder: (_, _) => Container(color: KoalaColors.accentSoft),
+              placeholder: (_, _) => Container(color: KoalaDS.accentTint),
               errorWidget: (_, _, _) => Container(
-                color: KoalaColors.accentSoft,
+                color: KoalaDS.accentTint,
                 child: Icon(
                   icon ?? Icons.person_rounded,
-                  color: KoalaColors.accentDeep,
+                  color: KoalaDS.accentDeep,
                   size: 22,
                 ),
               ),
@@ -350,7 +351,7 @@ class _AskLeading extends StatelessWidget {
                 size: 22,
                 color: (gradient || tintGold)
                     ? Colors.white
-                    : KoalaColors.accentDeep,
+                    : KoalaDS.accentDeep,
               ),
             ),
     );

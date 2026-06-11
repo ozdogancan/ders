@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
+import '../core/theme/koala_ds.dart';
 import '../core/theme/koala_tokens.dart';
 import '../services/messaging_service.dart';
 import '../services/saved_items_service.dart';
@@ -30,7 +31,7 @@ class ProjectsGalleryPopup {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      barrierColor: Colors.black87,
+      barrierColor: KoalaDS.overlay,
       builder: (_) => _ProjectsGalleryBody(
         projects: projects,
         initialIndex: safeIndex,
@@ -271,7 +272,7 @@ class _ProjectsGalleryBodyState extends State<_ProjectsGalleryBody> {
       ..hideCurrentSnackBar()
       ..showSnackBar(SnackBar(
         content: Text(msg),
-        backgroundColor: ok ? KoalaColors.greenAlt : Colors.red.shade700,
+        backgroundColor: ok ? KoalaDS.cta : KoalaDS.danger,
         duration: const Duration(seconds: 2),
       ));
   }
@@ -297,8 +298,8 @@ class _ProjectsGalleryBodyState extends State<_ProjectsGalleryBody> {
       height: media.size.height * 0.95,
       child: Container(
         decoration: const BoxDecoration(
-          color: KoalaColors.bg,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          color: KoalaDS.bg,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(KoalaR.xl)),
         ),
         child: SafeArea(
           top: false,
@@ -323,12 +324,12 @@ class _ProjectsGalleryBodyState extends State<_ProjectsGalleryBody> {
                         borderRadius: BorderRadius.circular(20),
                         child: url.isEmpty
                             ? Container(
-                                color: KoalaColors.surfaceAlt,
+                                color: KoalaDS.surfaceMuted,
                                 alignment: Alignment.center,
                                 child: const Icon(
                                   LucideIcons.image,
                                   size: 48,
-                                  color: KoalaColors.textTer,
+                                  color: KoalaDS.inkFaint,
                                 ),
                               )
                             : CachedNetworkImage(
@@ -336,15 +337,15 @@ class _ProjectsGalleryBodyState extends State<_ProjectsGalleryBody> {
                                 fit: BoxFit.cover,
                                 width: double.infinity,
                                 placeholder: (_, __) => Container(
-                                  color: KoalaColors.surfaceAlt,
+                                  color: KoalaDS.surfaceMuted,
                                 ),
                                 errorWidget: (_, __, ___) => Container(
-                                  color: KoalaColors.surfaceAlt,
+                                  color: KoalaDS.surfaceMuted,
                                   alignment: Alignment.center,
                                   child: const Icon(
                                     LucideIcons.imageOff,
                                     size: 36,
-                                    color: KoalaColors.textTer,
+                                    color: KoalaDS.inkFaint,
                                   ),
                                 ),
                               ),
@@ -374,22 +375,22 @@ class _ProjectsGalleryBodyState extends State<_ProjectsGalleryBody> {
         children: [
           IconButton(
             onPressed: () => Navigator.of(context).pop(),
-            icon: const Icon(LucideIcons.x, color: KoalaColors.ink, size: 22),
+            icon: const Icon(LucideIcons.x, color: KoalaDS.ink, size: 22),
           ),
           const Spacer(),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
             decoration: BoxDecoration(
-              color: KoalaColors.surface,
+              color: KoalaDS.surface,
               borderRadius: BorderRadius.circular(KoalaRadius.pill),
-              border: Border.all(color: KoalaColors.border),
+              border: Border.all(color: KoalaDS.line),
             ),
             child: Text(
               '${_currentIndex + 1}/${widget.projects.length}',
               style: const TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w700,
-                color: KoalaColors.textMed,
+                color: KoalaDS.inkSoft,
               ),
             ),
           ),
@@ -407,7 +408,7 @@ class _ProjectsGalleryBodyState extends State<_ProjectsGalleryBody> {
         '${_currentIndex + 1}/$total',
         style: const TextStyle(
           fontSize: 11,
-          color: KoalaColors.textSec,
+          color: KoalaDS.inkSoft,
           fontWeight: FontWeight.w600,
         ),
       );
@@ -422,7 +423,7 @@ class _ProjectsGalleryBodyState extends State<_ProjectsGalleryBody> {
           width: active ? 18 : 6,
           height: 6,
           decoration: BoxDecoration(
-            color: active ? KoalaColors.accentDeep : KoalaColors.border,
+            color: active ? KoalaDS.accentDeep : KoalaDS.line,
             borderRadius: BorderRadius.circular(3),
           ),
         );
@@ -442,7 +443,7 @@ class _ProjectsGalleryBodyState extends State<_ProjectsGalleryBody> {
             style: const TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.w700,
-              color: KoalaColors.ink,
+              color: KoalaDS.ink,
             ),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
@@ -453,7 +454,7 @@ class _ProjectsGalleryBodyState extends State<_ProjectsGalleryBody> {
               designerName,
               style: const TextStyle(
                 fontSize: 13,
-                color: KoalaColors.textSec,
+                color: KoalaDS.inkSoft,
               ),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
@@ -516,7 +517,7 @@ class _PrimaryActionButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: KoalaColors.accentDeep,
+      color: KoalaDS.accentDeep,
       borderRadius: BorderRadius.circular(14),
       child: InkWell(
         borderRadius: BorderRadius.circular(14),
@@ -574,9 +575,9 @@ class _IconActionButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bg = active ? KoalaColors.accentSoft : KoalaColors.surface;
-    final fg = active ? KoalaColors.accentDeep : KoalaColors.textMed;
-    final border = active ? KoalaColors.accentDeep : KoalaColors.border;
+    final bg = active ? KoalaDS.accentTint : KoalaDS.surface;
+    final fg = active ? KoalaDS.accentDeep : KoalaDS.inkSoft;
+    final border = active ? KoalaDS.accentDeep : KoalaDS.line;
     return Tooltip(
       message: tooltip,
       child: Material(
