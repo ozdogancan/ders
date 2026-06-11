@@ -9,6 +9,7 @@ import '../core/router/app_router.dart';
 import '../core/theme/koala_ds.dart';
 import '../core/theme/koala_tokens.dart';
 import '../services/analytics_service.dart';
+import '../widgets/koala_pressable.dart';
 
 // ════════════════════════════════════════════════════════════════════════════
 // OnboardingScreen — premium 3-page intro (2026-05 redesign).
@@ -227,7 +228,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               child: SizedBox(
                 width: double.infinity,
                 height: 56,
-                child: Semantics(
+                child: KoalaPressable(
+                  enabled: !_busy,
+                  child: Semantics(
                   button: true,
                   enabled: !_busy,
                   label: _idx == _pages.length - 1 ? 'Başla' : 'Devam et',
@@ -261,6 +264,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                             letterSpacing: 0.2,
                           ),
                         ),
+                ),
                 ),
                 ),
               ),

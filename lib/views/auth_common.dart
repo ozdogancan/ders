@@ -20,6 +20,7 @@ import '../core/config/env.dart';
 import '../core/router/app_router.dart';
 import '../core/theme/koala_ds.dart';
 import '../core/theme/koala_tokens.dart';
+import '../widgets/koala_pressable.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
 const String _kTermsUrl = 'https://www.evlumba.com/terms';
@@ -564,7 +565,9 @@ class AuthActionButton extends StatelessWidget {
     final Color fg = foregroundColor ?? KoalaDS.ink;
     final Color sp = spinnerColor ?? KoalaDS.accentDeep;
 
-    return AnimatedOpacity(
+    return KoalaPressable(
+      enabled: enabled,
+      child: AnimatedOpacity(
       duration: const Duration(milliseconds: 180),
       opacity: enabled || loading ? 1 : 0.6,
       child: Material(
@@ -644,6 +647,7 @@ class AuthActionButton extends StatelessWidget {
             ),
           ),
         ),
+      ),
       ),
     );
   }

@@ -30,6 +30,7 @@ import '../../../helpers/paywall_router.dart';
 import '../../../services/analytics_service.dart';
 import '../../../services/quota_service.dart';
 import '../../../services/usage_limit_service.dart';
+import '../../../widgets/koala_pressable.dart';
 import '../mekan_constants.dart';
 import '../mekan_flow_screen.dart';
 
@@ -2067,7 +2068,9 @@ class _ContinueBar extends StatelessWidget {
                   ]
                 : null,
           ),
-          child: Semantics(
+          child: KoalaPressable(
+            enabled: enabled,
+            child: Semantics(
             button: true,
             enabled: enabled,
             label: isLast ? 'Tasarımı Oluştur' : 'Devam Et',
@@ -2103,6 +2106,7 @@ class _ContinueBar extends StatelessWidget {
                 ),
               ],
             ),
+          ),
           ),
           ),
         ),

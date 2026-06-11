@@ -33,6 +33,7 @@ import '../../providers/pro_status_provider.dart';
 import '../../services/analytics_service.dart';
 import '../../services/billing_service.dart';
 import '../../services/usage_limit_service.dart';
+import '../../widgets/koala_pressable.dart';
 
 enum _PlanKind { weekly, monthly, yearly }
 
@@ -751,7 +752,9 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
   }
 
   Widget _buildCta() {
-    final button = Semantics(
+    final button = KoalaPressable(
+      enabled: !_purchasing,
+      child: Semantics(
       button: true,
       enabled: !_purchasing,
       label: _purchasing ? 'Satın alma işleniyor' : 'Devam et — Pro satın al',
@@ -802,6 +805,7 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
             ),
           ),
         ),
+      ),
       ),
       ),
     );
