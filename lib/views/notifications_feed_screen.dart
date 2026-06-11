@@ -1,5 +1,6 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
@@ -29,6 +30,9 @@ class _NotificationsFeedScreenState
     extends ConsumerState<NotificationsFeedScreen> {
   List<KoalaNotification> _items = const [];
   bool _loading = true;
+  // Giriş animasyonu sadece ilk içerik build'inde oynar (refresh/okundu
+  // işaretleme tekrar tetiklemez).
+  bool _entryAnimPlayed = false;
 
   @override
   void initState() {
@@ -301,25 +305,44 @@ class _NotificationsFeedScreenState
   Widget _buildList({required String firstUnreadId}) {
     final g = _grouped();
     final children = <Widget>[];
+    // Staggered giriş yalnızca ilk içerik build'inde — okundu işaretleme
+    // ve refresh setState'lerinde tekrar oynamaz.
+    final animateEntry = !_entryAnimPlayed;
+    _entryAnimPlayed = true;
+    var tileIndex = 0;
+
+    Widget entry(Widget tile) {
+      final i = tileIndex++;
+      if (!animateEntry || i >= 8) return tile;
+      return tile
+          .animate(delay: Duration(milliseconds: 45 * i))
+          .fadeIn(duration: KoalaMotion.base, curve: KoalaMotion.enter)
+          .slideY(
+            begin: 0.05,
+            end: 0,
+            duration: KoalaMotion.base,
+            curve: KoalaMotion.enter,
+          );
+    }
 
     if (g.today.isNotEmpty) {
       children.add(const _SectionLabel(label: 'Bugün'));
       for (final n in g.today) {
-        children.add(_NotifTile(
+        children.add(entry(_NotifTile(
           notif: n,
           highlightFirst: n.id == firstUnreadId,
           onTap: () => _onTap(n),
-        ));
+        )));
       }
     }
     if (g.earlier.isNotEmpty) {
       children.add(const _SectionLabel(label: 'Daha önce'));
       for (final n in g.earlier) {
-        children.add(_NotifTile(
+        children.add(entry(_NotifTile(
           notif: n,
           highlightFirst: n.id == firstUnreadId,
           onTap: () => _onTap(n),
-        ));
+        )));
       }
     }
     children.add(const SizedBox(height: 24));

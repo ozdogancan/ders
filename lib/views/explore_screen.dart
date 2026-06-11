@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
 import '../core/theme/koala_ds.dart';
 import '../core/theme/koala_tokens.dart';
@@ -31,6 +32,9 @@ class _ExploreScreenState extends State<ExploreScreen> {
   final _scrollCtrl = ScrollController();
   String _searchQuery = '';
   Timer? _searchDebounce;
+  // Grid giriş animasyonu sadece ilk veri build'inde oynar (scroll/filter
+  // tekrar tetiklemez).
+  bool _entryAnimPlayed = false;
 
   final _rooms = [
     {'key': null, 'label': 'Tümü'},
@@ -240,29 +244,50 @@ class _ExploreScreenState extends State<ExploreScreen> {
                     : RefreshIndicator(
                         onRefresh: _load,
                         color: KoalaDS.accent,
-                        child: GridView.builder(
-                          controller: _scrollCtrl,
-                          padding: const EdgeInsets.symmetric(horizontal: KoalaSpacing.lg),
-                          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: 2,
-                            mainAxisSpacing: KoalaSpacing.md,
-                            crossAxisSpacing: KoalaSpacing.md,
-                            childAspectRatio: 0.75,
-                          ),
-                          itemCount: _projects.length,
-                          itemBuilder: (context, index) => _ProjectCard(
-                            project: _projects[index],
-                            onTap: () => ProjectsGalleryPopup.show(
-                              context,
-                              projects: _projects,
-                              initialIndex: index,
-                            ),
-                          ),
-                        ),
+                        child: _buildGrid(),
                       ),
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildGrid() {
+    // İlk içerik build'inde hafif staggered giriş; sonraki build'lerde
+    // (loadMore, filter, scroll) animasyonsuz — jank/tekrar yok.
+    final animateEntry = !_entryAnimPlayed;
+    _entryAnimPlayed = true;
+    return GridView.builder(
+      controller: _scrollCtrl,
+      padding: const EdgeInsets.symmetric(horizontal: KoalaSpacing.lg),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        mainAxisSpacing: KoalaSpacing.md,
+        crossAxisSpacing: KoalaSpacing.md,
+        childAspectRatio: 0.75,
+      ),
+      itemCount: _projects.length,
+      itemBuilder: (context, index) {
+        final Widget card = _ProjectCard(
+          project: _projects[index],
+          onTap: () => ProjectsGalleryPopup.show(
+            context,
+            projects: _projects,
+            initialIndex: index,
+          ),
+        );
+        // Sadece ilk 8 item — viewport dolusu; geç build edilenler animasyonsuz.
+        if (!animateEntry || index >= 8) return card;
+        return card
+            .animate(delay: Duration(milliseconds: 45 * index))
+            .fadeIn(duration: KoalaMotion.base, curve: KoalaMotion.enter)
+            .slideY(
+              begin: 0.05,
+              end: 0,
+              duration: KoalaMotion.base,
+              curve: KoalaMotion.enter,
+            );
+      },
     );
   }
 

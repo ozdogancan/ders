@@ -86,6 +86,8 @@ class _ChatListScreenV2State extends State<ChatListScreenV2> {
   bool _loading = true;
   bool _hasError = false;
   bool _showAllAi = false;
+  // Liste giriş animasyonu yalnızca ilk içerik build'inde oynar.
+  bool _entryAnimPlayed = false;
 
   final Map<String, Map<String, String?>> _designerCache = {};
 
@@ -448,64 +450,90 @@ class _ChatListScreenV2State extends State<ChatListScreenV2> {
                             onRefresh: _manualSync,
                             color: _V2.rust,
                             backgroundColor: _V2.paper,
-                            child: CustomScrollView(
-                              physics: const AlwaysScrollableScrollPhysics(
-                                parent: BouncingScrollPhysics(),
-                              ),
-                              slivers: [
-                                _buildHeader(),
-                                _buildKoalaAiRow(),
-                                _buildEvlumbaStrip(),
-                                if (_conversations.isNotEmpty) ...[
-                                  _buildSectionLabel('Tasarımcılar', count: _conversations.length),
-                                  SliverList.separated(
-                                    itemCount: _conversations.length,
-                                    separatorBuilder: (_, __) => const _HairLine(indent: 72),
-                                    itemBuilder: (_, i) => _buildConversationTile(_conversations[i]),
-                                  ),
-                                ],
-                                if (_aiChats.isNotEmpty) ...[
-                                  _buildSectionLabel(
-                                    'AI Geçmişi',
-                                    count: _aiChats.length,
-                                    trailing: _aiChats.length > 3 && !_showAllAi
-                                        ? GestureDetector(
-                                            onTap: () => setState(() => _showAllAi = true),
-                                            child: Text(
-                                              'tümünü aç',
-                                              style: _V2.body(
-                                                size: 11,
-                                                weight: FontWeight.w600,
-                                                color: _V2.rust,
-                                              ),
-                                            ),
-                                          )
-                                        : null,
-                                  ),
-                                  SliverList.separated(
-                                    itemCount: _showAllAi
-                                        ? _aiChats.length
-                                        : (_aiChats.length > 3 ? 3 : _aiChats.length),
-                                    separatorBuilder: (_, __) => const _HairLine(indent: 24),
-                                    itemBuilder: (_, i) => _buildAiChatRow(_aiChats[i]),
-                                  ),
-                                ],
-                                SliverToBoxAdapter(
-                                  // Yüzen alt nav + sistem gesture bar —
-                                  // son sohbet satırı kesilmesin.
-                                  child: SizedBox(
-                                      height: 96 +
-                                          MediaQuery.of(context)
-                                              .viewPadding
-                                              .bottom),
-                                ),
-                              ],
-                            ),
+                            child: _buildContent(),
                           ),
           ),
         ],
       ),
     );
+  }
+
+  Widget _buildContent() {
+    // Staggered giriş yalnızca ilk içerik build'inde — setState'lerde
+    // (realtime mesaj, tümünü aç vb.) tekrar oynamaz.
+    final animateEntry = !_entryAnimPlayed;
+    _entryAnimPlayed = true;
+    return CustomScrollView(
+      physics: const AlwaysScrollableScrollPhysics(
+        parent: BouncingScrollPhysics(),
+      ),
+      slivers: [
+        _buildHeader(),
+        _buildKoalaAiRow(),
+        _buildEvlumbaStrip(),
+        if (_conversations.isNotEmpty) ...[
+          _buildSectionLabel('Tasarımcılar', count: _conversations.length),
+          SliverList.separated(
+            itemCount: _conversations.length,
+            separatorBuilder: (_, __) => const _HairLine(indent: 72),
+            itemBuilder: (_, i) => _entryAnimated(
+              _buildConversationTile(_conversations[i]),
+              index: i,
+              animate: animateEntry,
+            ),
+          ),
+        ],
+        if (_aiChats.isNotEmpty) ...[
+          _buildSectionLabel(
+            'AI Geçmişi',
+            count: _aiChats.length,
+            trailing: _aiChats.length > 3 && !_showAllAi
+                ? GestureDetector(
+                    onTap: () => setState(() => _showAllAi = true),
+                    child: Text(
+                      'tümünü aç',
+                      style: _V2.body(
+                        size: 11,
+                        weight: FontWeight.w600,
+                        color: _V2.rust,
+                      ),
+                    ),
+                  )
+                : null,
+          ),
+          SliverList.separated(
+            itemCount: _showAllAi
+                ? _aiChats.length
+                : (_aiChats.length > 3 ? 3 : _aiChats.length),
+            separatorBuilder: (_, __) => const _HairLine(indent: 24),
+            itemBuilder: (_, i) => _buildAiChatRow(_aiChats[i]),
+          ),
+        ],
+        SliverToBoxAdapter(
+          // Yüzen alt nav + sistem gesture bar —
+          // son sohbet satırı kesilmesin.
+          child: SizedBox(
+              height: 96 +
+                  MediaQuery.of(context)
+                      .viewPadding
+                      .bottom),
+        ),
+      ],
+    );
+  }
+
+  /// Hafif staggered fade+slide — sadece ilk içerik build'inde, ilk 8 satır.
+  Widget _entryAnimated(Widget child, {required int index, required bool animate}) {
+    if (!animate || index >= 8) return child;
+    return child
+        .animate(delay: Duration(milliseconds: 45 * index))
+        .fadeIn(duration: KoalaMotion.base, curve: KoalaMotion.enter)
+        .slideY(
+          begin: 0.05,
+          end: 0,
+          duration: KoalaMotion.base,
+          curve: KoalaMotion.enter,
+        );
   }
 
   // ─── Header (serif title + back) ───
