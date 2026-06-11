@@ -679,7 +679,7 @@ class _DesignRailCardState extends State<_DesignRailCard> {
       onTap: () {
         Navigator.of(context).push(
           PageRouteBuilder(
-            transitionDuration: const Duration(milliseconds: 420),
+            transitionDuration: KoalaMotion.slow,
             pageBuilder: (_, _, _) =>
                 DesignDetailScreen(item: widget.item),
             transitionsBuilder: (_, anim, _, child) =>

@@ -442,17 +442,18 @@ PageRouteBuilder<T> buildAuthRoute<T>(
 }) {
   return PageRouteBuilder<T>(
     pageBuilder: (_, _, _) => child,
-    transitionDuration: const Duration(milliseconds: 420),
-    reverseTransitionDuration: const Duration(milliseconds: 280),
+    // KoalaMotion bandı: giriş slow (360ms), çıkış base (240ms).
+    transitionDuration: KoalaMotion.slow,
+    reverseTransitionDuration: KoalaMotion.base,
     transitionsBuilder: (_, Animation<double> animation, _, Widget page) {
       final Animation<double> fade = CurvedAnimation(
         parent: animation,
-        curve: Curves.easeOutCubic,
+        curve: KoalaMotion.enter,
       );
       final Animation<Offset> slide = Tween<Offset>(
         begin: begin,
         end: Offset.zero,
-      ).animate(CurvedAnimation(parent: animation, curve: Curves.easeOutCubic));
+      ).animate(CurvedAnimation(parent: animation, curve: KoalaMotion.enter));
       return FadeTransition(
         opacity: fade,
         child: SlideTransition(position: slide, child: page),

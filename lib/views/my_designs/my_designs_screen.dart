@@ -2,6 +2,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
+import '../../core/theme/koala_ds.dart';
 import '../../core/theme/koala_tokens.dart';
 import '../../services/saved_items_service.dart';
 import 'design_detail_screen.dart';
@@ -512,8 +513,8 @@ class _DesignCardState extends State<_DesignCard> {
   void _open(BuildContext context) {
     Navigator.of(context).push(
       PageRouteBuilder(
-        transitionDuration: const Duration(milliseconds: 420),
-        reverseTransitionDuration: const Duration(milliseconds: 320),
+        transitionDuration: KoalaMotion.slow,
+        reverseTransitionDuration: KoalaMotion.base,
         pageBuilder: (_, _, _) => DesignDetailScreen(item: widget.item),
         transitionsBuilder: (_, anim, _, child) {
           return FadeTransition(opacity: anim, child: child);

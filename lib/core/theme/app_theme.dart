@@ -19,6 +19,21 @@ class AppTheme {
       useMaterial3: true,
       textTheme: GoogleFonts.interTextTheme(),
       colorScheme: colorScheme,
+      // Sayfa geçişleri — "popüler uygulama hissi" (v2 G2).
+      // iOS/macOS: platform-native Cupertino slide korunur.
+      // Android/web/desktop: FadeUpwards yerine Zoom (fade-through hissi,
+      // ~300ms, abartısız). Süre/eğri framework default'u — KoalaMotion
+      // bandı (≤400ms, easeOutCubic ailesi) ile uyumlu.
+      pageTransitionsTheme: const PageTransitionsTheme(
+        builders: <TargetPlatform, PageTransitionsBuilder>{
+          TargetPlatform.android: ZoomPageTransitionsBuilder(),
+          TargetPlatform.fuchsia: ZoomPageTransitionsBuilder(),
+          TargetPlatform.linux: ZoomPageTransitionsBuilder(),
+          TargetPlatform.windows: ZoomPageTransitionsBuilder(),
+          TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
+          TargetPlatform.macOS: CupertinoPageTransitionsBuilder(),
+        },
+      ),
       // Single source of truth for app-wide screen background.
       // Chat screens override explicitly (see chat_detail_screen.dart:1298).
       scaffoldBackgroundColor: KoalaColors.bg,
