@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
-import '../core/theme/koala_tokens.dart';
+import '../core/theme/koala_ds.dart';
 
 /// Uygulama içi yasal belge görüntüleyici — aşağıdan yukarı kayan, tamamen
 /// kaydırılabilir ve kolayca kapatılabilen (kapat butonu, aşağı sürükleme,
@@ -15,7 +15,7 @@ Future<void> showLegalSheet(BuildContext context, LegalDoc doc) {
     isScrollControlled: true,
     useSafeArea: true,
     backgroundColor: Colors.transparent,
-    barrierColor: Colors.black.withValues(alpha: 0.45),
+    barrierColor: KoalaDS.ink.withValues(alpha: 0.45),
     builder: (_) => _LegalSheet(doc: doc),
   );
 }
@@ -30,14 +30,14 @@ class _LegalSheet extends StatelessWidget {
     final c = doc == LegalDoc.privacy
         ? _privacy
         : doc == LegalDoc.terms
-            ? _terms
-            : _kvkk;
+        ? _terms
+        : _kvkk;
 
     return Container(
       height: size.height * 0.9,
       decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        color: KoalaDS.surface,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(KoalaR.xl)),
       ),
       child: Column(
         children: [
@@ -47,7 +47,7 @@ class _LegalSheet extends StatelessWidget {
             width: 40,
             height: 4,
             decoration: BoxDecoration(
-              color: const Color(0xFFD9D9E3),
+              color: KoalaDS.line,
               borderRadius: BorderRadius.circular(99),
             ),
           ),
@@ -56,35 +56,27 @@ class _LegalSheet extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(20, 8, 12, 8),
             child: Row(
               children: [
-                Expanded(
-                  child: Text(
-                    c.title,
-                    style: const TextStyle(
-                      fontFamily: 'Manrope',
-                      fontSize: 20,
-                      fontWeight: FontWeight.w800,
-                      color: KoalaColors.text,
-                      letterSpacing: -0.3,
-                    ),
-                  ),
-                ),
+                Expanded(child: Text(c.title, style: KoalaType.display3())),
                 GestureDetector(
                   onTap: () => Navigator.of(context).pop(),
                   child: Container(
                     width: 34,
                     height: 34,
                     decoration: const BoxDecoration(
-                      color: Color(0xFFF3F4F6),
+                      color: KoalaDS.surfaceMuted,
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(LucideIcons.x,
-                        size: 18, color: KoalaColors.text),
+                    child: const Icon(
+                      LucideIcons.x,
+                      size: 18,
+                      color: KoalaDS.ink,
+                    ),
                   ),
                 ),
               ],
             ),
           ),
-          const Divider(height: 1, color: Color(0xFFEDEDF2)),
+          const Divider(height: 1, color: KoalaDS.line),
           // Kaydırılabilir içerik.
           Expanded(
             child: ListView(
@@ -93,10 +85,9 @@ class _LegalSheet extends StatelessWidget {
                 Text(
                   'Son güncelleme: ${c.updated}',
                   style: const TextStyle(
-                    fontFamily: 'Manrope',
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
-                    color: KoalaColors.textTer,
+                    color: KoalaDS.inkFaint,
                   ),
                 ),
                 const SizedBox(height: 18),
@@ -114,10 +105,9 @@ class _LegalSheet extends StatelessWidget {
       Text(
         s.heading,
         style: const TextStyle(
-          fontFamily: 'Manrope',
           fontSize: 15.5,
           fontWeight: FontWeight.w800,
-          color: KoalaColors.text,
+          color: KoalaDS.ink,
           letterSpacing: -0.2,
         ),
       ),
@@ -133,11 +123,10 @@ class _LegalSheet extends StatelessWidget {
     final textWidget = Text(
       body,
       style: const TextStyle(
-        fontFamily: 'Manrope',
         fontSize: 13.5,
         height: 1.55,
         fontWeight: FontWeight.w500,
-        color: KoalaColors.textMed,
+        color: KoalaDS.inkSoft,
       ),
     );
     if (!isBullet) {
@@ -158,7 +147,7 @@ class _LegalSheet extends StatelessWidget {
               height: 5,
               child: DecoratedBox(
                 decoration: BoxDecoration(
-                  color: Color(0xFF6C63FF),
+                  color: KoalaDS.accent,
                   shape: BoxShape.circle,
                 ),
               ),
