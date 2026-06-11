@@ -164,10 +164,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: KoalaColors.bg,
+      backgroundColor: KoalaDS.bg,
       appBar: AppBar(
-        backgroundColor: KoalaColors.bg,
-        surfaceTintColor: KoalaColors.bg,
+        backgroundColor: KoalaDS.bg,
+        surfaceTintColor: KoalaDS.bg,
         elevation: 0,
         title: const Text('Bildirimler', style: KoalaText.h2),
         actions: [
@@ -176,7 +176,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               onPressed: _markAllRead,
               child: Text(
                 'Tümünü Oku',
-                style: KoalaText.label.copyWith(color: KoalaColors.accent),
+                style: KoalaText.label.copyWith(color: KoalaDS.accent),
               ),
             ),
         ],
@@ -191,7 +191,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Icon(LucideIcons.bell,
-                          size: 64, color: KoalaColors.textTer),
+                          size: 64, color: KoalaDS.inkFaint),
                       SizedBox(height: KoalaSpacing.lg),
                       Text('Bildirim yok', style: KoalaText.bodySec),
                     ],
@@ -199,7 +199,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                 )
               : RefreshIndicator(
                   onRefresh: _load,
-                  color: KoalaColors.accent,
+                  color: KoalaDS.accent,
                   child: ListView.builder(
                     padding: const EdgeInsets.symmetric(
                       horizontal: KoalaSpacing.lg,
@@ -227,12 +227,12 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                           padding: const EdgeInsets.all(KoalaSpacing.lg),
                           decoration: BoxDecoration(
                             color: isRead
-                                ? KoalaColors.surface
-                                : KoalaColors.accentLight.withValues(alpha:0.5),
+                                ? KoalaDS.surface
+                                : KoalaDS.accentTint.withValues(alpha:0.5),
                             borderRadius:
                                 BorderRadius.circular(KoalaRadius.lg),
                             border:
-                                Border.all(color: KoalaColors.border, width: 0.5),
+                                Border.all(color: KoalaDS.line, width: 0.5),
                           ),
                           child: Row(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -292,7 +292,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                                   height: 8,
                                   margin: const EdgeInsets.only(top: 6),
                                   decoration: const BoxDecoration(
-                                    color: KoalaColors.accent,
+                                    color: KoalaDS.accent,
                                     shape: BoxShape.circle,
                                   ),
                                 ),
