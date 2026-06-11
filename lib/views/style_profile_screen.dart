@@ -6,7 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' hide User;
 
 import '../core/config/env.dart';
-import '../core/theme/koala_tokens.dart';
+import '../core/theme/koala_ds.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
 class StyleProfileScreen extends StatefulWidget {
@@ -24,12 +24,12 @@ class _StyleProfileScreenState extends State<StyleProfileScreen> {
   bool _saved = false;
 
   static const _styles = [
-    {'name': 'Minimalist', 'emoji': '⬜', 'color': KoalaColors.surfaceCool, 'desc': 'Sade, temiz hatlar'},
-    {'name': 'Modern', 'emoji': '🔲', 'color': KoalaColors.accentLight, 'desc': 'Sik ve cesur cizgiler'},
-    {'name': 'Japandi', 'emoji': '🎋', 'color': Color(0xFFF0FDF4), 'desc': 'Japon-Iskandinav uyumu'},
-    {'name': 'Bohem', 'emoji': '🌿', 'color': Color(0xFFFEF3C7), 'desc': 'Renkli, katmanli, ozgur'},
-    {'name': 'Skandinav', 'emoji': '❄️', 'color': Color(0xFFEFF6FF), 'desc': 'Isik, ahsap, huzur'},
-    {'name': 'Endüstriyel', 'emoji': '⚙️', 'color': KoalaColors.surfaceCool, 'desc': 'Metal, tugla, ham'},
+    {'name': 'Minimalist', 'emoji': '⬜', 'color': KoalaDS.surfaceMuted, 'desc': 'Sade, temiz hatlar'},
+    {'name': 'Modern', 'emoji': '🔲', 'color': KoalaDS.accentTint, 'desc': 'Sik ve cesur cizgiler'},
+    {'name': 'Japandi', 'emoji': '🎋', 'color': KoalaDS.ctaTint, 'desc': 'Japon-Iskandinav uyumu'},
+    {'name': 'Bohem', 'emoji': '🌿', 'color': KoalaDS.clayTint, 'desc': 'Renkli, katmanli, ozgur'},
+    {'name': 'Skandinav', 'emoji': '❄️', 'color': KoalaDS.bgSand, 'desc': 'Isik, ahsap, huzur'},
+    {'name': 'Endüstriyel', 'emoji': '⚙️', 'color': KoalaDS.surfaceMuted, 'desc': 'Metal, tugla, ham'},
   ];
 
   static const _colors = [
@@ -77,12 +77,12 @@ class _StyleProfileScreenState extends State<StyleProfileScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: KoalaDS.bg,
       appBar: AppBar(
-        backgroundColor: Colors.white, elevation: 0,
-        leading: IconButton(icon: const Icon(LucideIcons.x, color: KoalaColors.ink),
+        backgroundColor: KoalaDS.bg, surfaceTintColor: KoalaDS.bg, elevation: 0,
+        leading: IconButton(icon: const Icon(LucideIcons.x, color: KoalaDS.ink),
           onPressed: () => Navigator.pop(context)),
-        title: const Text('Stil Profilim', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: KoalaColors.ink)),
+        title: const Text('Stil Profilim', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: KoalaDS.ink)),
       ),
       body: Column(children: [
         // Progress
@@ -90,7 +90,7 @@ class _StyleProfileScreenState extends State<StyleProfileScreen> {
           child: Row(children: List.generate(4, (i) => Expanded(
             child: Container(height: 3, margin: const EdgeInsets.symmetric(horizontal: 2),
               decoration: BoxDecoration(borderRadius: BorderRadius.circular(2),
-                color: i <= _step ? KoalaColors.accentDeep : KoalaColors.borderMed)))))),
+                color: i <= _step ? KoalaDS.accentDeep : KoalaDS.line)))))),
         
         Expanded(child: Padding(padding: const EdgeInsets.all(24),
           child: _buildStep())),
@@ -104,10 +104,10 @@ class _StyleProfileScreenState extends State<StyleProfileScreen> {
                   child: OutlinedButton(
                     onPressed: () { HapticFeedback.lightImpact(); setState(() => _step--); },
                     style: OutlinedButton.styleFrom(
-                      side: const BorderSide(color: KoalaColors.borderMed),
+                      side: const BorderSide(color: KoalaDS.line),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                       padding: EdgeInsets.zero),
-                    child: const Icon(LucideIcons.arrowLeft, color: KoalaColors.accentDeep)))),
+                    child: const Icon(LucideIcons.arrowLeft, color: KoalaDS.accentDeep)))),
             Expanded(child: SizedBox(height: 52,
               child: ElevatedButton(
                 onPressed: _canProceed() ? () {
@@ -116,8 +116,8 @@ class _StyleProfileScreenState extends State<StyleProfileScreen> {
                   else { _save(); }
                 } : null,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: KoalaColors.accentDeep, foregroundColor: Colors.white,
-                  disabledBackgroundColor: KoalaColors.borderMed,
+                  backgroundColor: KoalaDS.accentDeep, foregroundColor: Colors.white,
+                  disabledBackgroundColor: KoalaDS.line,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                   elevation: 0),
                 child: Text(_step < 3 ? 'Devam' : (_saved ? 'Kaydedildi!' : 'Kaydet'),
@@ -147,9 +147,9 @@ class _StyleProfileScreenState extends State<StyleProfileScreen> {
   }
 
   Widget _stepStyle() => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-    const Text('Hangi tarz seni yansıtıyor?', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: KoalaColors.ink)),
+    Text('Hangi tarz seni yansıtıyor?', style: KoalaType.display3()),
     const SizedBox(height: 6),
-    Text('Birini seç', style: TextStyle(fontSize: 14, color: Colors.grey.shade500)),
+    Text('Birini seç', style: TextStyle(fontSize: 14, color: KoalaDS.inkFaint)),
     const SizedBox(height: 24),
     Expanded(child: GridView.count(crossAxisCount: 2, mainAxisSpacing: 10, crossAxisSpacing: 10, childAspectRatio: 2.2,
       children: _styles.map((s) {
@@ -159,22 +159,22 @@ class _StyleProfileScreenState extends State<StyleProfileScreen> {
           child: AnimatedContainer(duration: const Duration(milliseconds: 200),
             decoration: BoxDecoration(borderRadius: BorderRadius.circular(14),
               color: s['color'] as Color,
-              border: Border.all(color: selected ? KoalaColors.accentDeep : Colors.transparent, width: 2)),
+              border: Border.all(color: selected ? KoalaDS.accentDeep : KoalaDS.line, width: selected ? 2 : 1)),
             child: Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
               Text('${s['emoji']}  ${s['name']}',
                 style: TextStyle(fontSize: 15, fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                  color: selected ? KoalaColors.accentDeep : KoalaColors.textMed)),
+                  color: selected ? KoalaDS.accentDeep : KoalaDS.inkSoft)),
               const SizedBox(height: 4),
               Text(s['desc'] as String,
-                style: TextStyle(fontSize: 11, color: selected ? KoalaColors.accentDeep.withValues(alpha: 0.7) : Colors.grey.shade500)),
+                style: TextStyle(fontSize: 11, color: selected ? KoalaDS.accentDeep.withValues(alpha: 0.7) : KoalaDS.inkFaint)),
             ]))));
       }).toList())),
   ]);
 
   Widget _stepColors() => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-    const Text('Hangi renkler hoşuna gider?', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: KoalaColors.ink)),
+    Text('Hangi renkler hoşuna gider?', style: KoalaType.display3()),
     const SizedBox(height: 6),
-    Text('Birden fazla seçebilirsin', style: TextStyle(fontSize: 14, color: Colors.grey.shade500)),
+    Text('Birden fazla seçebilirsin', style: TextStyle(fontSize: 14, color: KoalaDS.inkFaint)),
     const SizedBox(height: 24),
     Expanded(child: GridView.count(crossAxisCount: 4, mainAxisSpacing: 10, crossAxisSpacing: 10,
       children: _colors.map((c) {
@@ -191,18 +191,18 @@ class _StyleProfileScreenState extends State<StyleProfileScreen> {
             AnimatedContainer(duration: const Duration(milliseconds: 200),
               width: 56, height: 56,
               decoration: BoxDecoration(borderRadius: BorderRadius.circular(16), color: color,
-                border: Border.all(color: selected ? KoalaColors.accentDeep : KoalaColors.borderMed, width: selected ? 3 : 1)),
-              child: selected ? const Icon(LucideIcons.check, color: KoalaColors.accentDeep, size: 22) : null),
+                border: Border.all(color: selected ? KoalaDS.accentDeep : KoalaDS.line, width: selected ? 3 : 1)),
+              child: selected ? const Icon(LucideIcons.check, color: KoalaDS.accentDeep, size: 22) : null),
             const SizedBox(height: 4),
-            Text(c['name'] as String, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: Colors.grey.shade600)),
+            Text(c['name'] as String, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: KoalaDS.inkSoft)),
           ]));
       }).toList())),
   ]);
 
   Widget _stepRoom() => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-    const Text('Öncelikli odan hangisi?', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: KoalaColors.ink)),
+    Text('Öncelikli odan hangisi?', style: KoalaType.display3()),
     const SizedBox(height: 6),
-    Text('Hangi odanı tasarlamak istiyorsun?', style: TextStyle(fontSize: 14, color: Colors.grey.shade500)),
+    Text('Hangi odanı tasarlamak istiyorsun?', style: TextStyle(fontSize: 14, color: KoalaDS.inkFaint)),
     const SizedBox(height: 24),
     Expanded(child: ListView(children: _rooms.map((r) {
       final selected = _selectedRoom == r;
@@ -211,17 +211,17 @@ class _StyleProfileScreenState extends State<StyleProfileScreen> {
         child: AnimatedContainer(duration: const Duration(milliseconds: 200),
           margin: const EdgeInsets.only(bottom: 10), padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(borderRadius: BorderRadius.circular(14),
-            color: selected ? KoalaColors.accentSoft : KoalaColors.surfaceMuted,
-            border: Border.all(color: selected ? KoalaColors.accentDeep : Colors.transparent, width: 2)),
+            color: selected ? KoalaDS.accentTint : KoalaDS.surface,
+            border: Border.all(color: selected ? KoalaDS.accentDeep : KoalaDS.line, width: selected ? 2 : 1)),
           child: Text(r, style: TextStyle(fontSize: 16, fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-            color: selected ? KoalaColors.accentDeep : KoalaColors.textMed))));
+            color: selected ? KoalaDS.accentDeep : KoalaDS.inkSoft))));
     }).toList())),
   ]);
 
   Widget _stepBudget() => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-    const Text('Bütçen ne kadar?', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: KoalaColors.ink)),
+    Text('Bütçen ne kadar?', style: KoalaType.display3()),
     const SizedBox(height: 6),
-    Text('Yaklaşık bir aralık seç', style: TextStyle(fontSize: 14, color: Colors.grey.shade500)),
+    Text('Yaklaşık bir aralık seç', style: TextStyle(fontSize: 14, color: KoalaDS.inkFaint)),
     const SizedBox(height: 24),
     Expanded(child: ListView(children: _budgets.map((b) {
       final selected = _selectedBudget == b;
@@ -230,10 +230,10 @@ class _StyleProfileScreenState extends State<StyleProfileScreen> {
         child: AnimatedContainer(duration: const Duration(milliseconds: 200),
           margin: const EdgeInsets.only(bottom: 10), padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(borderRadius: BorderRadius.circular(14),
-            color: selected ? KoalaColors.accentSoft : KoalaColors.surfaceMuted,
-            border: Border.all(color: selected ? KoalaColors.accentDeep : Colors.transparent, width: 2)),
+            color: selected ? KoalaDS.accentTint : KoalaDS.surface,
+            border: Border.all(color: selected ? KoalaDS.accentDeep : KoalaDS.line, width: selected ? 2 : 1)),
           child: Text(b, style: TextStyle(fontSize: 16, fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-            color: selected ? KoalaColors.accentDeep : KoalaColors.textMed))));
+            color: selected ? KoalaDS.accentDeep : KoalaDS.inkSoft))));
     }).toList())),
   ]);
 }
