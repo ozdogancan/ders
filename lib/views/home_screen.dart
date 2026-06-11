@@ -26,6 +26,7 @@ import '../services/saved_items_service.dart';
 import '../services/evlumba_live_service.dart';
 import 'chat_detail_screen.dart';
 import 'chat_list_screen.dart';
+import 'mekan/mekan_constants.dart';
 import 'mekan/mekan_flow_screen.dart';
 import 'mekan/wizard/mekan_wizard_screen.dart';
 import 'product_entry_screen.dart';
@@ -95,6 +96,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     _requestNotificationPermission();
     _kickInboundSync();
     _loadShowcase();
+    // G2 (2026-06-11): AI sekmesi vitrini — "Son dönüşümün" kartı için
+    // kullanıcının en güncel AI tasarımını yükle (sadece embedded/AI tab).
+    if (widget.embedded) {
+      _loadLastProject();
+      SavedItemsService.projectsTick.addListener(_onProjectsTickVitrin);
+    }
     // Inbound polling ARTIK burada yapılmıyor — GlobalMessageListener
     // merkezi olarak adaptif interval (fg 15s / bg 60s) ile sync yapıyor.
     // Her tick sonrası syncTick.value değişiyor → _onGlobalSyncTick badge
@@ -179,6 +186,46 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       if (mounted) setState(() => _showcaseUrls = urls);
     } catch (_) {
       if (mounted) setState(() => _showcaseUrls = const []);
+    }
+  }
+
+  // ── G2: "Son dönüşümün" kartı ─────────────────────────────────────
+  // Kullanıcının en güncel AI tasarımı (saved_items item_type='project').
+  // null → yok/yüklenmedi → bölüm hiç render edilmez.
+  Map<String, dynamic>? _lastProject;
+
+  /// Önce warm RAM cache (prefetchedProjects, 0ms), yoksa tek network fetch.
+  /// Sessiz başarısızlık — bölüm gizli kalır, ekran asla bozulmaz.
+  Future<void> _loadLastProject() async {
+    try {
+      var rows = SavedItemsService.prefetchedProjects;
+      if (rows == null || rows.isEmpty) {
+        rows = await SavedItemsService.getByType(
+          SavedItemType.project,
+          limit: 6,
+        );
+      }
+      final hit = rows.firstWhere(
+        (r) => (r['image_url'] ?? '').toString().isNotEmpty,
+        orElse: () => const <String, dynamic>{},
+      );
+      if (mounted && hit.isNotEmpty) {
+        setState(() => _lastProject = Map<String, dynamic>.from(hit));
+      }
+    } catch (_) {/* sessiz — bölüm gizli kalır */}
+  }
+
+  /// Yeni tasarım kaydedildiğinde (projectsTick bump) kartı tazele.
+  void _onProjectsTickVitrin() {
+    if (!mounted) return;
+    final rows = SavedItemsService.prefetchedProjects;
+    if (rows == null || rows.isEmpty) return;
+    final hit = rows.firstWhere(
+      (r) => (r['image_url'] ?? '').toString().isNotEmpty,
+      orElse: () => const <String, dynamic>{},
+    );
+    if (hit.isNotEmpty) {
+      setState(() => _lastProject = Map<String, dynamic>.from(hit));
     }
   }
 
@@ -339,6 +386,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     _authSub?.cancel();
     GlobalMessageListener.syncTick.removeListener(_onGlobalSyncTick);
     MainShell.activeTab.removeListener(_onActiveTabChanged);
+    if (widget.embedded) {
+      SavedItemsService.projectsTick.removeListener(_onProjectsTickVitrin);
+    }
     try {
       MessagingService.unsubscribeFromConversations(listener: _convListener);
     } catch (_) {}
@@ -440,6 +490,49 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
         builder: (_) => MekanWizardScreen(photoBytes: bytes),
       ),
     );
+  }
+
+  /// G2 (2026-06-11): AI sekmesi vitrin bölümleri.
+  /// Sıra: Stiller şeridi → İlham (interaktif Önce/Sonra wipe) →
+  /// Topluluktan dönüşümler (EvlumbaLiveService, veri varsa) →
+  /// Son dönüşümün (kullanıcının kayıtlı AI tasarımı varsa).
+  /// Hepsi KoalaDS dilinde, staggered flutter_animate girişiyle.
+  List<Widget> _buildAiVitrin() {
+    final community = _showcaseUrls;
+    final last = _lastProject;
+    return [
+      const SizedBox(height: KoalaGap.lg),
+      _VitrinReveal(
+        index: 0,
+        // Stil çipi tıklaması mevcut mekan akışını açar (hero "Başla" ile
+        // aynı hedef). Wizard stil parametresi almıyor — kullanıcı stili
+        // akış içindeki stil adımında seçiyor; burada akışa giriş hızlanır.
+        child: _StylesStrip(onStyleTap: (_) => _showPicker()),
+      ),
+      const SizedBox(height: KoalaGap.xxl),
+      const _VitrinReveal(index: 1, child: _InspoWipeSection()),
+      // Topluluk şeridi: null = yükleniyor (skeleton), boş = gizle.
+      if (community == null || community.isNotEmpty) ...[
+        const SizedBox(height: KoalaGap.xxl),
+        _VitrinReveal(
+          index: 2,
+          child: _CommunityStrip(
+            urls: community,
+            onExplore: () => MainShell.of()?.switchTab(KoalaTab.home),
+          ),
+        ),
+      ],
+      if (last != null) ...[
+        const SizedBox(height: KoalaGap.xxl),
+        _VitrinReveal(
+          index: 3,
+          child: _LastDesignCard(
+            item: last,
+            onTap: () => MainShell.of()?.switchTab(KoalaTab.projeler),
+          ),
+        ),
+      ],
+    ];
   }
 
   Widget _staggered(int index, Widget child) {
@@ -684,6 +777,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
             ),
 
             const SizedBox(height: 12),
+
+            // ─── G2 (2026-06-11): AI sekmesi vitrini ───
+            // Hero altı artık boş bej değil — Stiller şeridi, interaktif
+            // Önce/Sonra ilham kartı, topluluktan dönüşümler (Evlumba) ve
+            // varsa kullanıcının son dönüşümü. Sadece embedded (AI tab);
+            // veri gelmese bile Stiller + İlham statik bölümleri ekranı
+            // doldurur (boş-durum yok).
+            if (widget.embedded) ..._buildAiVitrin(),
 
             // 2026-04-30: "Devam Et" kartı kaldırıldı — kullanıcı istemedi,
             // ContinueDesignCard widget dosyada duruyor ama artık render edilmiyor.
@@ -2969,3 +3070,530 @@ class _InspirationGalleryState extends State<_InspirationGallery> {
     );
   }
 }
+
+// ═══════════════════════════════════════════════════════════════════════
+// G2 — AI SEKMESİ VİTRİNİ (2026-06-11)
+//
+// Hero kartın altını dolduran bölümler. Tamamı KoalaDS dilinde (renk /
+// spacing / radius / elevation / motion token'ları). Bölümler:
+//   _StylesStrip       → mekan_constants stillerinden yatay mini kartlar
+//   _InspoWipeSection  → assets/showcase before/after interaktif wipe
+//   _CommunityStrip    → EvlumbaLiveService projeleri + Keşfet CTA
+//   _LastDesignCard    → kullanıcının son AI dönüşümü (varsa)
+// ═══════════════════════════════════════════════════════════════════════
+
+/// Staggered giriş — fadeIn + hafif yukarı kayma. index × 80ms gecikme,
+/// süre KoalaMotion.slow (360ms) → ilk frame'de jank yok, tek seferlik.
+class _VitrinReveal extends StatelessWidget {
+  const _VitrinReveal({required this.index, required this.child});
+  final int index;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return child
+        .animate(delay: Duration(milliseconds: 80 * index))
+        .fadeIn(duration: KoalaMotion.slow, curve: KoalaMotion.enter)
+        .slideY(
+          begin: 0.05,
+          end: 0,
+          duration: KoalaMotion.slow,
+          curve: KoalaMotion.enter,
+        );
+  }
+}
+
+/// Bölüm başlığı — serif display (vitrin hissi) + opsiyonel alt yazı.
+class _VitrinHeader extends StatelessWidget {
+  const _VitrinHeader({required this.title, this.subtitle});
+  final String title;
+  final String? subtitle;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: KoalaGap.xl),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title, style: KoalaType.display3().copyWith(fontSize: 21)),
+          if (subtitle != null) ...[
+            const SizedBox(height: KoalaGap.xs),
+            Text(subtitle!, style: KoalaType.bodySm),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// "Stiller" yatay şeridi — kThemes'ten mini kartlar. Görseli olan stiller
+/// CachedNetworkImage, Pro stiller (görselsiz) swatch gradient'ına düşer.
+/// Tıklama mevcut mekan akışını açar (hero "Başla" hedefi ile aynı).
+class _StylesStrip extends StatelessWidget {
+  const _StylesStrip({required this.onStyleTap});
+  final void Function(ThemeOption) onStyleTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const _VitrinHeader(
+          title: 'Stiller',
+          subtitle: 'Bir stil seç, mekanını o tarza dönüştürelim',
+        ),
+        const SizedBox(height: KoalaGap.md),
+        SizedBox(
+          height: 148,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: KoalaGap.lg),
+            physics: const BouncingScrollPhysics(),
+            itemCount: kThemes.length,
+            separatorBuilder: (_, _) =>
+                const SizedBox(width: KoalaGap.sm + KoalaGap.xs),
+            itemBuilder: (_, i) => _StyleMiniCard(
+              theme: kThemes[i],
+              onTap: () => onStyleTap(kThemes[i]),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _StyleMiniCard extends StatelessWidget {
+  const _StyleMiniCard({required this.theme, required this.onTap});
+  final ThemeOption theme;
+  final VoidCallback onTap;
+
+  /// Swatch gradient — görsel yoksa / yüklenemezse fallback.
+  Widget _swatchFill() {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [for (final c in theme.swatch) Color(c)],
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final imgUrl = theme.imageFor(kRoomKeyLiving);
+    return _Pressable(
+      onTap: onTap,
+      child: Container(
+        width: 116,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(KoalaR.md),
+          color: KoalaDS.surfaceMuted,
+          boxShadow: KoalaElev.card,
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            if (imgUrl.isEmpty)
+              _swatchFill()
+            else
+              CachedNetworkImage(
+                imageUrl: imgUrl,
+                fit: BoxFit.cover,
+                memCacheWidth: 280,
+                fadeInDuration: KoalaMotion.base,
+                placeholder: (_, _) =>
+                    const ColoredBox(color: KoalaDS.surfaceMuted),
+                errorWidget: (_, _, _) => _swatchFill(),
+              ),
+            // Alt scrim — stil adı okunabilirliği.
+            Positioned.fill(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    stops: const [0.45, 1.0],
+                    colors: [
+                      KoalaDS.overlay.withValues(alpha: 0),
+                      KoalaDS.overlay,
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            Positioned(
+              left: KoalaGap.sm + 2,
+              right: KoalaGap.sm,
+              bottom: KoalaGap.sm + 2,
+              child: Text(
+                theme.tr,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: KoalaType.label.copyWith(color: KoalaDS.onAccent),
+              ),
+            ),
+            if (theme.isPro)
+              Positioned(
+                top: KoalaGap.sm,
+                right: KoalaGap.sm,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: KoalaGap.sm - 1,
+                    vertical: KoalaGap.xs - 1,
+                  ),
+                  decoration: BoxDecoration(
+                    color: KoalaDS.clay,
+                    borderRadius: BorderRadius.circular(KoalaR.pill),
+                  ),
+                  child: Text(
+                    'PRO',
+                    style: KoalaType.caption.copyWith(
+                      color: KoalaDS.onAccent,
+                      fontSize: 9.5,
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// "İlham: Önce / Sonra" — başlık + interaktif wipe kartı.
+class _InspoWipeSection extends StatelessWidget {
+  const _InspoWipeSection();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _VitrinHeader(
+          title: 'İlham: Önce / Sonra',
+          subtitle: 'Tutamacı kaydır, farkı kendin gör',
+        ),
+        SizedBox(height: KoalaGap.md),
+        Padding(
+          padding: EdgeInsets.symmetric(horizontal: KoalaGap.lg),
+          child: _InspoWipeCard(),
+        ),
+      ],
+    );
+  }
+}
+
+/// İnteraktif before/after wipe — hero'daki otomatik showcase'in aksine
+/// burada kullanıcı tutamacı PARMAĞIYLA sürükler. Aynı curated asset çifti
+/// (assets/showcase before/after) ve aynı _LeftClipper yeniden kullanılır.
+class _InspoWipeCard extends StatefulWidget {
+  const _InspoWipeCard();
+
+  @override
+  State<_InspoWipeCard> createState() => _InspoWipeCardState();
+}
+
+class _InspoWipeCardState extends State<_InspoWipeCard> {
+  double _pos = 0.5;
+
+  void _update(Offset local, double width) {
+    if (width <= 0) return;
+    setState(() => _pos = (local.dx / width).clamp(0.06, 0.94));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (ctx, c) {
+        final w = c.maxWidth;
+        return GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTapDown: (d) => _update(d.localPosition, w),
+          onHorizontalDragStart: (d) => _update(d.localPosition, w),
+          onHorizontalDragUpdate: (d) => _update(d.localPosition, w),
+          child: Container(
+            height: 200,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(KoalaR.lg),
+              color: KoalaDS.surfaceMuted,
+              boxShadow: KoalaElev.card,
+            ),
+            clipBehavior: Clip.antiAlias,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                // Alt katman: SONRA (Koala dokunuşlu oda)
+                Image.asset(
+                  _kCuratedPair.after,
+                  fit: BoxFit.cover,
+                  gaplessPlayback: true,
+                ),
+                // Üst katman: ÖNCE — _pos'a kadar soldan clip
+                ClipRect(
+                  clipper: _LeftClipper(_pos),
+                  child: Image.asset(
+                    _kCuratedPair.before,
+                    fit: BoxFit.cover,
+                    gaplessPlayback: true,
+                  ),
+                ),
+                // Ayraç çizgisi + tutamaç
+                Positioned(
+                  left: w * _pos - 1,
+                  top: 0,
+                  bottom: 0,
+                  width: 2,
+                  child: ColoredBox(
+                    color: KoalaDS.surface.withValues(alpha: 0.95),
+                  ),
+                ),
+                Positioned(
+                  left: w * _pos - 16,
+                  top: 0,
+                  bottom: 0,
+                  child: Center(
+                    child: Container(
+                      width: 32,
+                      height: 32,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: KoalaDS.surface,
+                        boxShadow: KoalaElev.card,
+                      ),
+                      child: const Icon(
+                        LucideIcons.arrowLeftRight,
+                        size: 14,
+                        color: KoalaDS.ink,
+                      ),
+                    ),
+                  ),
+                ),
+                const Positioned(
+                  top: KoalaGap.md,
+                  left: KoalaGap.md,
+                  child: _GlassBadge(icon: LucideIcons.image, label: 'Önce'),
+                ),
+                const Positioned(
+                  top: KoalaGap.md,
+                  right: KoalaGap.md,
+                  child:
+                      _GlassBadge(icon: LucideIcons.sparkles, label: 'Sonra'),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// "Topluluktan dönüşümler" — EvlumbaLiveService'ten gelen gerçek tasarımcı
+/// proje görselleri + sonda "Keşfet'e git" CTA kartı.
+/// urls == null → yükleniyor (skeleton); boş liste parent'ta gizlenir.
+class _CommunityStrip extends StatelessWidget {
+  const _CommunityStrip({required this.urls, required this.onExplore});
+  final List<String>? urls;
+  final VoidCallback onExplore;
+
+  @override
+  Widget build(BuildContext context) {
+    final items = urls;
+    final shown = items == null ? 0 : (items.length > 6 ? 6 : items.length);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const _VitrinHeader(
+          title: 'Topluluktan dönüşümler',
+          subtitle: 'Gerçek tasarımcıların yayınladığı projeler',
+        ),
+        const SizedBox(height: KoalaGap.md),
+        SizedBox(
+          height: 168,
+          child: items == null
+              // Skeleton — krem-tinted placeholder'lar (DS: surfaceMuted).
+              ? ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: KoalaGap.lg),
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: 3,
+                  separatorBuilder: (_, _) =>
+                      const SizedBox(width: KoalaGap.md),
+                  itemBuilder: (_, _) => Container(
+                    width: 136,
+                    decoration: BoxDecoration(
+                      color: KoalaDS.surfaceMuted,
+                      borderRadius: BorderRadius.circular(KoalaR.md),
+                    ),
+                  ),
+                )
+              : ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: KoalaGap.lg),
+                  physics: const BouncingScrollPhysics(),
+                  itemCount: shown + 1,
+                  separatorBuilder: (_, _) =>
+                      const SizedBox(width: KoalaGap.md),
+                  itemBuilder: (_, i) {
+                    if (i == shown) {
+                      return _ExploreCtaCard(onTap: onExplore);
+                    }
+                    return ClipRRect(
+                      borderRadius: BorderRadius.circular(KoalaR.md),
+                      child: SizedBox(
+                        width: 136,
+                        child: CachedNetworkImage(
+                          imageUrl: items[i],
+                          fit: BoxFit.cover,
+                          memCacheWidth: 320,
+                          fadeInDuration: KoalaMotion.base,
+                          placeholder: (_, _) =>
+                              const ColoredBox(color: KoalaDS.surfaceMuted),
+                          errorWidget: (_, _, _) =>
+                              const ColoredBox(color: KoalaDS.surfaceMuted),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Şeridin sonundaki "Keşfet'e git" CTA kartı — swipe/keşfet sekmesine atar.
+class _ExploreCtaCard extends StatelessWidget {
+  const _ExploreCtaCard({required this.onTap});
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return _Pressable(
+      onTap: onTap,
+      child: Container(
+        width: 136,
+        decoration: BoxDecoration(
+          color: KoalaDS.accentTint,
+          borderRadius: BorderRadius.circular(KoalaR.md),
+          border: Border.all(color: KoalaDS.line, width: 0.8),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: const BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: KoalaDS.accentGradient,
+              ),
+              child: const Icon(
+                LucideIcons.arrowRight,
+                size: 20,
+                color: KoalaDS.onAccent,
+              ),
+            ),
+            const SizedBox(height: KoalaGap.sm),
+            Text(
+              "Keşfet'e git",
+              style: KoalaType.label.copyWith(color: KoalaDS.accentDeep),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// "Son dönüşümün" — kullanıcının en güncel AI tasarımı. Tıklayınca
+/// Projeler sekmesine geçer. Sadece kayıtlı tasarım varsa render edilir.
+class _LastDesignCard extends StatelessWidget {
+  const _LastDesignCard({required this.item, required this.onTap});
+  final Map<String, dynamic> item;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final img = (item['image_url'] ?? '').toString();
+    final title = (item['title'] ?? '').toString();
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: KoalaGap.lg),
+      child: _Pressable(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.all(KoalaGap.md),
+          decoration: BoxDecoration(
+            color: KoalaDS.surface,
+            borderRadius: BorderRadius.circular(KoalaR.lg),
+            boxShadow: KoalaElev.card,
+          ),
+          child: Row(
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(KoalaR.sm),
+                child: SizedBox(
+                  width: 64,
+                  height: 64,
+                  child: CachedNetworkImage(
+                    imageUrl: img,
+                    fit: BoxFit.cover,
+                    memCacheWidth: 160,
+                    placeholder: (_, _) =>
+                        const ColoredBox(color: KoalaDS.surfaceMuted),
+                    errorWidget: (_, _, _) =>
+                        const ColoredBox(color: KoalaDS.surfaceMuted),
+                  ),
+                ),
+              ),
+              const SizedBox(width: KoalaGap.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('SON DÖNÜŞÜMÜN', style: KoalaType.caption),
+                    const SizedBox(height: KoalaGap.xs),
+                    Text(
+                      title.isEmpty ? 'AI tasarımın hazır' : title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: KoalaType.h4,
+                    ),
+                    const SizedBox(height: KoalaGap.xs / 2),
+                    const Text(
+                      'Projelerinde görüntüle',
+                      style: KoalaType.labelSm,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: KoalaGap.sm),
+              Container(
+                width: 34,
+                height: 34,
+                decoration: const BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: KoalaDS.accentTint,
+                ),
+                child: const Icon(
+                  LucideIcons.arrowRight,
+                  size: 16,
+                  color: KoalaDS.accentDeep,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
